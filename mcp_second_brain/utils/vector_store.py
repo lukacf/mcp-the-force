@@ -2,6 +2,10 @@ from typing import List
 from pathlib import Path
 from openai import OpenAI
 from ..config import get_settings
+import logging
+import time
+
+logger = logging.getLogger(__name__)
 
 # OpenAI supported file extensions for vector stores
 OPENAI_SUPPORTED_EXTENSIONS = {
@@ -19,10 +23,6 @@ def get_client():
         _client = OpenAI(api_key=get_settings().openai_api_key)
     return _client
 
-def _upload(file_path: str) -> str:
-    """Upload a file to OpenAI and return the file ID."""
-    with open(file_path, "rb") as fp:
-        return get_client().files.create(file=fp, purpose="assistants").id
 
 def _is_supported_for_vector_store(file_path: str) -> bool:
     """Check if file extension is supported by OpenAI vector stores."""
@@ -51,33 +51,62 @@ def create_vector_store(paths: List[str]) -> str:
     if not paths:
         return ""
     
+    start_time = time.time()
+    logger.info(f"create_vector_store called with {len(paths)} paths")
+    
     # Filter for supported file extensions
     supported_paths = [p for p in paths if _is_supported_for_vector_store(p)]
+    logger.info(f"Filtered to {len(supported_paths)} supported files")
     
     if not supported_paths:
         # No supported files to upload
         return ""
     
-    # Create vector store
-    vs = get_client().vector_stores.create(name="mcp-second-brain-vs")
-    
-    # Upload supported files
-    uploaded_count = 0
-    for file_path in supported_paths:
-        try:
-            file_id = _upload(file_path)
-            get_client().vector_stores.files.create(vector_store_id=vs.id, file_id=file_id)
-            uploaded_count += 1
-        except Exception as e:
-            # Skip files that fail to upload
-            continue
-    
-    if uploaded_count == 0:
-        # No files were successfully uploaded, clean up the empty vector store
-        try:
-            get_client().vector_stores.delete(vs.id)
-        except:
-            pass
+    try:
+        # Create vector store
+        vs = get_client().beta.vector_stores.create(name="mcp-second-brain-vs")
+        logger.info(f"Created vector store {vs.id}")
+        
+        # Open all files
+        file_streams = []
+        for path in supported_paths:
+            try:
+                file_streams.append(open(path, "rb"))
+            except Exception as e:
+                logger.warning(f"Failed to open {path}: {e}")
+        
+        if not file_streams:
+            # No files could be opened
+            get_client().beta.vector_stores.delete(vs.id)
+            return ""
+        
+        logger.info(f"Starting batch upload of {len(file_streams)} files")
+        
+        # Use batch upload API
+        file_batch = get_client().beta.vector_stores.file_batches.upload_and_poll(
+            vector_store_id=vs.id,
+            files=file_streams
+        )
+        
+        # Close all file streams
+        for stream in file_streams:
+            try:
+                stream.close()
+            except:
+                pass
+        
+        logger.info(f"Batch upload completed in {time.time() - start_time:.2f}s - Status: {file_batch.status}, File counts: {file_batch.file_counts}")
+        
+        if file_batch.file_counts.completed == 0:
+            # No files were successfully uploaded
+            try:
+                get_client().beta.vector_stores.delete(vs.id)
+            except:
+                pass
+            return ""
+        
+        return vs.id
+        
+    except Exception as e:
+        logger.error(f"Error creating vector store: {e}")
         return ""
-    
-    return vs.id
