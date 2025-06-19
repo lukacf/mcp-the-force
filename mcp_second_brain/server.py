@@ -53,7 +53,9 @@ def deep_multimodal_reasoner(
 ) -> str:
     """Deep multimodal reasoner for bug fixing and complex reasoning (Gemini 2.5 Pro, ctx≈2000k).
     
-    Example: {"instructions":"Fix bug","output_format":"diffs","context":["src/"]}
+    Example: {"instructions":"Fix bug","output_format":"diffs","context":["/absolute/path/to/src/"]}
+    
+    Note: Use absolute paths in context and attachments for reliable results.
     """
     adapter, error = get_adapter("deep-multimodal-reasoner")
     if not adapter:
@@ -82,7 +84,9 @@ def flash_summary_sprinter(
 ) -> str:
     """Flash summary sprinter for fast summarization (Gemini 2.5 Flash, ctx≈2000k).
     
-    Example: {"instructions":"Summarise logs","output_format":"bullets","context":["logs/"]}
+    Example: {"instructions":"Summarise logs","output_format":"bullets","context":["/absolute/path/to/logs/"]}
+    
+    Note: Use absolute paths in context and attachments for reliable results.
     """
     adapter, error = get_adapter("flash-summary-sprinter")
     if not adapter:
@@ -109,7 +113,9 @@ def chain_of_thought_helper(
 ) -> str:
     """Chain-of-thought helper for algorithm design (OpenAI o3, ctx≈200k).
     
-    Example: {"instructions":"Design algo","output_format":"steps","context":[]}
+    Example: {"instructions":"Design algo","output_format":"steps","context":["/absolute/path/to/project/"]}
+    
+    Note: Use absolute paths in context and attachments for reliable results.
     """
     adapter, error = get_adapter("chain-of-thought-helper")
     if not adapter:
@@ -140,7 +146,9 @@ def slow_and_sure_thinker(
 ) -> str:
     """Slow and sure thinker for formal proofs and deep analysis (OpenAI o3-pro, ctx≈200k).
     
-    Example: {"instructions":"Prove X","output_format":"proof","context":["doc.md"]}
+    Example: {"instructions":"Prove X","output_format":"proof","context":["/absolute/path/to/doc.md"]}
+    
+    Note: Use absolute paths in context and attachments for reliable results.
     """
     adapter, error = get_adapter("slow-and-sure-thinker")
     if not adapter:
@@ -169,7 +177,9 @@ def fast_long_context_assistant(
 ) -> str:
     """Fast long-context assistant for large-scale refactoring (GPT-4.1, ctx≈1000k).
     
-    Example: {"instructions":"Refactor","output_format":"patches","context":["src/"]}
+    Example: {"instructions":"Refactor","output_format":"patches","context":["/absolute/path/to/src/"]}
+    
+    Note: Use absolute paths in context and attachments for reliable results.
     """
     adapter, error = get_adapter("fast-long-context-assistant")
     if not adapter:

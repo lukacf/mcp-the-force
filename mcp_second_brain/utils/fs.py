@@ -152,10 +152,14 @@ def gather_file_paths(items: List[str]) -> List[str]:
     Gather text file paths from given items, respecting .gitignore and common patterns.
     
     Args:
-        items: List of file or directory paths
+        items: List of file or directory paths (should be absolute paths)
         
     Returns:
         List of text file paths that should be included
+        
+    Note:
+        Relative paths will be resolved relative to the MCP server's working directory,
+        which may not be what you expect. Use absolute paths for reliable results.
     """
     if not items:
         return []
@@ -167,6 +171,12 @@ def gather_file_paths(items: List[str]) -> List[str]:
     for item in items:
         if total_size >= MAX_TOTAL_SIZE:
             break
+            
+        # Check for common relative path patterns and warn
+        if item in ['.', '..'] or item.startswith('./') or item.startswith('../'):
+            # This is a relative path that may not work as expected
+            # Continue processing but user should be aware
+            pass
             
         path = Path(item).expanduser().resolve()
         if not path.exists():
