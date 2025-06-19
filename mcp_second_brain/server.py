@@ -13,7 +13,7 @@ _logging.setLevel(logging.INFO)
 
 from .adapters import OpenAIAdapter, VertexAdapter
 from .utils.prompt_builder import build_prompt
-from .utils.vector_store import create_vector_store
+from .utils.vector_store import create_vector_store, delete_vector_store
 from .config import get_settings
 
 # Set up file logging with non-blocking handler
@@ -203,10 +203,15 @@ async def chain_of_thought_helper(
     if max_reasoning_tokens:
         extra["max_reasoning_tokens"] = max_reasoning_tokens
     
-    return await asyncio.wait_for(
-        adapter.generate(prompt, vector_store_ids=vs, **extra),
-        timeout=30
-    )
+    try:
+        return await asyncio.wait_for(
+            adapter.generate(prompt, vector_store_ids=vs, **extra),
+            timeout=30
+        )
+    finally:
+        # Clean up vector store
+        if vs_id:
+            delete_vector_store(vs_id)
 
 @mcp.tool()
 async def slow_and_sure_thinker(
@@ -245,10 +250,15 @@ async def slow_and_sure_thinker(
     if max_reasoning_tokens:
         extra["max_reasoning_tokens"] = max_reasoning_tokens
     
-    return await asyncio.wait_for(
-        adapter.generate(prompt, vector_store_ids=vs, **extra),
-        timeout=30
-    )
+    try:
+        return await asyncio.wait_for(
+            adapter.generate(prompt, vector_store_ids=vs, **extra),
+            timeout=30
+        )
+    finally:
+        # Clean up vector store
+        if vs_id:
+            delete_vector_store(vs_id)
 
 @mcp.tool()
 async def fast_long_context_assistant(
@@ -294,14 +304,18 @@ async def fast_long_context_assistant(
     
     gen_start = time.time()
     logger.info(f"Sending request to OpenAI API...")
-    result = await asyncio.wait_for(
-        adapter.generate(prompt, vector_store_ids=vs, **extra),
-        timeout=30
-    )
-    logger.info(f"Generation completed in {time.time() - gen_start:.2f}s")
-    logger.info(f"Total time: {time.time() - start_time:.2f}s")
-    
-    return result
+    try:
+        result = await asyncio.wait_for(
+            adapter.generate(prompt, vector_store_ids=vs, **extra),
+            timeout=30
+        )
+        logger.info(f"Generation completed in {time.time() - gen_start:.2f}s")
+        logger.info(f"Total time: {time.time() - start_time:.2f}s")
+        return result
+    finally:
+        # Clean up vector store
+        if vs_id:
+            delete_vector_store(vs_id)
 
 def main():
     """Main entry point for the MCP server."""
