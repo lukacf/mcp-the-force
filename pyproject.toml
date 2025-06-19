@@ -1,0 +1,22 @@
+[project]
+name = "mcp_second_brain"
+version = "0.3.2"
+description = "Local MCP \"Second-Brain\" server with prompt-safe file inlining and vector-store attachments."
+authors = [{name = "Your Name"}]
+readme = "README.md"
+requires-python = ">=3.10"
+
+dependencies = [
+    "fastapi>=0.111.0",
+    "uvicorn[standard]>=0.30.0",
+    "pydantic>=2.7.1",
+    "python-dotenv>=1.0.1",
+    "tiktoken>=0.6.0",
+    "openai>=1.30.0",
+    "google-genai>=0.1.0",
+    "requests>=2.32.3",
+    "lxml>=5.2.1"
+]
+
+[project.scripts]
+mcp-second-brain = "mcp_second_brain.server:main"
