@@ -1,5 +1,4 @@
 from __future__ import annotations
-import html
 from pathlib import Path
 from typing import List, Tuple
 from lxml import etree as ET
@@ -9,10 +8,10 @@ from .fs import gather_file_paths
 
 _set = get_settings()
 
-def _tag(path: str, content: str) -> str:
+def _create_file_element(path: str, content: str) -> ET.Element:
     el = ET.Element("file", path=path)
     el.text = content
-    return ET.tostring(el, encoding="unicode")
+    return el
 
 def build_prompt(instr: str, out_fmt: str, ctx: List[str], attach: List[str] | None = None) -> Tuple[str, List[str]]:
     # Short circuit if no context provided
@@ -27,14 +26,14 @@ def build_prompt(instr: str, out_fmt: str, ctx: List[str], attach: List[str] | N
     ctx_files = gather_file_paths(ctx) if ctx else []
     extras = gather_file_paths(attach) if attach else []
     
-    inline, attachments, used = [], [], 0
+    inline_elements, attachments, used = [], [], 0
     
     for f in ctx_files:
         txt = Path(f).read_text(encoding="utf-8", errors="ignore")
         tok = count_tokens([txt])
         
         if used + tok <= _set.max_inline_tokens:
-            inline.append(_tag(f, html.escape(txt)))
+            inline_elements.append(_create_file_element(f, txt))
             used += tok
         else:
             attachments.append(f)
@@ -47,13 +46,10 @@ def build_prompt(instr: str, out_fmt: str, ctx: List[str], attach: List[str] | N
     ET.SubElement(task, "Instructions").text = instr
     ET.SubElement(task, "OutputFormat").text = out_fmt
     CTX = ET.SubElement(task, "CONTEXT")
-    if inline:
-        # Parse the XML strings and append as children
-        for xml_str in inline:
-            file_elem = ET.fromstring(xml_str)
-            CTX.append(file_elem)
-    else:
-        CTX.text = ""
+    
+    # Append file elements directly (no parsing needed)
+    for elem in inline_elements:
+        CTX.append(elem)
     
     prompt = ET.tostring(task, encoding="unicode")
     if attachments:
