@@ -12,5 +12,5 @@ class BaseAdapter(ABC):
             raise ValueError("Prompt too large")
     
     @abstractmethod
-    def generate(self, prompt: str, vector_store_ids: List[str] | None = None, **kw: Any) -> str:
+    async def generate(self, prompt: str, vector_store_ids: List[str] | None = None, **kw: Any) -> str:
         ...
