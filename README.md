@@ -207,11 +207,14 @@ Add to your MCP client configuration:
         "OPENAI_API_KEY": "your_openai_api_key_here",
         "VERTEX_PROJECT": "your_gcp_project_id",
         "VERTEX_LOCATION": "your_gcp_location"
-      }
+      },
+      "timeout": 3600000
     }
   }
 }
 ```
+
+**Important**: Set `timeout` to 3600000 (1 hour) for o3-pro models which can take 10-30 minutes to respond.
 
 ## 🏗️ Architecture
 

@@ -100,6 +100,14 @@ The Second-Brain server addresses key limitations when working with Claude:
 - **chain-of-thought-helper**: Algorithm design, step-by-step problem solving
 - **slow-and-sure-thinker**: When you need maximum intelligence, formal proofs, complex debugging
 
+### Important: Timeout Configuration
+
+For o3-pro models (slow-and-sure-thinker), set timeout to 3600000ms (1 hour) in your MCP config:
+```json
+"timeout": 3600000
+```
+These models can take 10-30 minutes to generate responses due to their deep reasoning capabilities.
+
 ## Development Notes
 
 - Python 3.10+ required

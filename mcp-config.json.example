@@ -14,7 +14,7 @@
         "DEFAULT_TEMPERATURE": "0.2",
         "LOG_LEVEL": "INFO"
       },
-      "timeout": 60000,
+      "timeout": 3600000,
       "description": "MCP Second-Brain server - AI model orchestrator with intelligent context management"
     }
   }
