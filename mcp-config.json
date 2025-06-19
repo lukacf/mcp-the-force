@@ -4,17 +4,17 @@
       "command": "uv",
       "args": ["run", "--", "mcp-second-brain"],
       "env": {
-        "OPENAI_API_KEY": "your_openai_api_key_here",
-        "VERTEX_PROJECT": "your_gcp_project_id",
-        "VERTEX_LOCATION": "your_gcp_location",
-        "VERTEX_ACCOUNT": "your_gcp_account",
+        "OPENAI_API_KEY": "sk-proj-BW5TqqLuFTOynS8ZI45AT3BlbkFJBG3HVTd7c0xYMCzpbRkK",
+        "VERTEX_PROJECT": "king-ai-gpts-luka-dev",
+        "VERTEX_LOCATION": "europe-west4",
+        "VERTEX_ACCOUNT": "luka.crnkovicfriis@king.com",
         "HOST": "127.0.0.1",
         "PORT": "8000",
         "MAX_INLINE_TOKENS": "12000",
         "DEFAULT_TEMPERATURE": "0.2",
         "LOG_LEVEL": "INFO"
       },
-      "timeout": 60000,
+      "timeout": 3600000,
       "description": "MCP Second-Brain server - AI model orchestrator with intelligent context management"
     }
   }

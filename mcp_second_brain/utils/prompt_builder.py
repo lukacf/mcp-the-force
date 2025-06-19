@@ -47,7 +47,13 @@ def build_prompt(instr: str, out_fmt: str, ctx: List[str], attach: List[str] | N
     ET.SubElement(task, "Instructions").text = instr
     ET.SubElement(task, "OutputFormat").text = out_fmt
     CTX = ET.SubElement(task, "CONTEXT")
-    CTX.text = "\n".join(inline)
+    if inline:
+        # Parse the XML strings and append as children
+        for xml_str in inline:
+            file_elem = ET.fromstring(xml_str)
+            CTX.append(file_elem)
+    else:
+        CTX.text = ""
     
     prompt = ET.tostring(task, encoding="unicode")
     if attachments:
