@@ -1,6 +1,6 @@
 from __future__ import annotations
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 from lxml import etree as ET
 import time
 import logging
@@ -12,12 +12,21 @@ logger = logging.getLogger(__name__)
 
 _set = get_settings()
 
+# Model context windows (conservative estimates leaving room for output)
+MODEL_CONTEXT_LIMITS = {
+    "gemini-2.5-pro": 800_000,        # 1M actual
+    "gemini-2.5-flash": 800_000,      # 1M actual  
+    "gpt-4.1": 800_000,               # 1M actual
+    "o3": 150_000,                    # 200k actual
+    "o3-pro": 150_000,                # 200k actual
+}
+
 def _create_file_element(path: str, content: str) -> ET.Element:
     el = ET.Element("file", path=path)
     el.text = content
     return el
 
-def build_prompt(instr: str, out_fmt: str, ctx: List[str], attach: List[str] | None = None) -> Tuple[str, List[str]]:
+def build_prompt(instr: str, out_fmt: str, ctx: List[str], attach: List[str] | None = None, model: Optional[str] = None) -> Tuple[str, List[str]]:
     # Short circuit if no context provided
     if not ctx and not attach:
         task = ET.Element("Task")
@@ -34,21 +43,27 @@ def build_prompt(instr: str, out_fmt: str, ctx: List[str], attach: List[str] | N
     extras = gather_file_paths(attach) if attach else []
     logger.info(f"Gathered {len(extras)} attachment files")
     
+    # Get context limit based on model
+    max_tokens = MODEL_CONTEXT_LIMITS.get(model, _set.max_inline_tokens)
+    logger.info(f"Using context limit of {max_tokens:,} tokens for model {model}")
+    
     inline_elements, attachments, used = [], [], 0
     
-    for f in ctx_files:
+    # For large context models, try to inline everything
+    all_files = ctx_files + [f for f in extras if f not in ctx_files]
+    
+    for f in all_files:
         txt = Path(f).read_text(encoding="utf-8", errors="ignore")
         tok = count_tokens([txt])
         
-        if used + tok <= _set.max_inline_tokens:
+        if used + tok <= max_tokens:
             inline_elements.append(_create_file_element(f, txt))
             used += tok
         else:
+            # Only use vector store if we exceed model's context limit
             attachments.append(f)
     
-    for f in extras:
-        if f not in attachments and f not in ctx_files:
-            attachments.append(f)
+    logger.info(f"Inlined {len(inline_elements)} files ({used:,} tokens), {len(attachments)} files for vector store")
     
     task = ET.Element("Task")
     ET.SubElement(task, "Instructions").text = instr
