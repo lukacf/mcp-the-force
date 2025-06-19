@@ -114,3 +114,20 @@ def create_vector_store(paths: List[str]) -> str:
     except Exception as e:
         logger.error(f"Error creating vector store: {e}")
         return ""
+
+
+def delete_vector_store(vector_store_id: str) -> None:
+    """
+    Delete a vector store after use to clean up resources.
+    
+    Args:
+        vector_store_id: The ID of the vector store to delete
+    """
+    if not vector_store_id or not vector_store_id.startswith("vs_"):
+        return
+    
+    try:
+        get_client().beta.vector_stores.delete(vector_store_id)
+        logger.info(f"Deleted vector store {vector_store_id}")
+    except Exception as e:
+        logger.warning(f"Failed to delete vector store {vector_store_id}: {e}")
