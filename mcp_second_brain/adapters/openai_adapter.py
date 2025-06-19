@@ -27,7 +27,8 @@ class OpenAIAdapter(BaseAdapter):
         self.description_snippet = "Fast long-context assistant" if model == "gpt-4.1" else "Chain-of-thought helper"
     
     async def generate(self, prompt: str, vector_store_ids: List[str] | None = None,
-                       temperature: float | None = None, reasoning_effort: str | None = None, **kwargs: Any) -> str:
+                       temperature: float | None = None, reasoning_effort: str | None = None, 
+                       timeout: float = 300, **kwargs: Any) -> str:
         self._ensure(prompt)
         
         msgs = [{"role": "user", "content": prompt}]
@@ -52,14 +53,14 @@ class OpenAIAdapter(BaseAdapter):
             
         client = AsyncOpenAI(
             api_key=api_key,
-            timeout=30.0,
+            timeout=timeout + 60,  # Client timeout should be longer than request timeout
             max_retries=0
         )
         
         try:
             response = await asyncio.wait_for(
                 client.responses.create(**params),
-                timeout=25
+                timeout=timeout
             )
             return response.output_text  # type: ignore[attr-defined]
         finally:
