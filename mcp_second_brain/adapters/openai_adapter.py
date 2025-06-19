@@ -12,7 +12,11 @@ def get_client():
         api_key = get_settings().openai_api_key
         if not api_key:
             raise ValueError("OPENAI_API_KEY not configured")
-        _client = OpenAI(api_key=api_key)
+        _client = OpenAI(
+            api_key=api_key,
+            timeout=600.0,  # 10 minute timeout for responses
+            max_retries=0   # Disable automatic retries to avoid blocking
+        )
     return _client
 
 class OpenAIAdapter(BaseAdapter):
