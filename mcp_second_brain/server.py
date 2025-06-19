@@ -2,11 +2,16 @@
 """MCP Second-Brain Server using FastMCP."""
 from mcp.server.fastmcp import FastMCP
 from typing import List, Dict, Any, Optional
+import time
+import logging
 
 from .adapters import OpenAIAdapter, VertexAdapter
 from .utils.prompt_builder import build_prompt
 from .utils.vector_store import create_vector_store
 from .config import get_settings
+
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 # Initialize FastMCP server
 mcp = FastMCP("mcp-second-brain")
@@ -181,18 +186,34 @@ def fast_long_context_assistant(
     
     Note: Use absolute paths in context and attachments for reliable results.
     """
+    start_time = time.time()
+    logger.info(f"fast_long_context_assistant called with context: {context}, attachments: {attachments}")
+    
     adapter, error = get_adapter("fast-long-context-assistant")
     if not adapter:
         return f"Error: Failed to initialize OpenAI adapter. {error}"
     
+    logger.info(f"Adapter initialized in {time.time() - start_time:.2f}s")
+    
+    build_start = time.time()
     prompt, attach = build_prompt(instructions, output_format, context, attachments)
+    logger.info(f"Prompt built in {time.time() - build_start:.2f}s, attach files: {len(attach) if attach else 0}")
+    logger.debug(f"Prompt length: {len(prompt)} chars")
+    
+    vs_start = time.time()
     vs = [create_vector_store(attach)] if attach else None
+    logger.info(f"Vector store created in {time.time() - vs_start:.2f}s")
     
     extra = {}
     if temperature is not None:
         extra["temperature"] = temperature
     
-    return adapter.generate(prompt, vector_store_ids=vs, **extra)
+    gen_start = time.time()
+    result = adapter.generate(prompt, vector_store_ids=vs, **extra)
+    logger.info(f"Generation completed in {time.time() - gen_start:.2f}s")
+    logger.info(f"Total time: {time.time() - start_time:.2f}s")
+    
+    return result
 
 def main():
     """Main entry point for the MCP server."""
