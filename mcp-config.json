@@ -1,0 +1,21 @@
+{
+  "mcpServers": {
+    "second-brain": {
+      "command": "uv",
+      "args": ["run", "--", "mcp-second-brain"],
+      "env": {
+        "OPENAI_API_KEY": "your_openai_api_key_here",
+        "VERTEX_PROJECT": "your_gcp_project_id",
+        "VERTEX_LOCATION": "your_gcp_location",
+        "VERTEX_ACCOUNT": "your_gcp_account",
+        "HOST": "127.0.0.1",
+        "PORT": "8000",
+        "MAX_INLINE_TOKENS": "12000",
+        "DEFAULT_TEMPERATURE": "0.2",
+        "LOG_LEVEL": "INFO"
+      },
+      "timeout": 60000,
+      "description": "MCP Second-Brain server - AI model orchestrator with intelligent context management"
+    }
+  }
+}
