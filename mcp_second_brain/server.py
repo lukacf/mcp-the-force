@@ -10,8 +10,19 @@ from .utils.prompt_builder import build_prompt
 from .utils.vector_store import create_vector_store
 from .config import get_settings
 
-logging.basicConfig(level=logging.DEBUG)
+# Set up file logging
+import os
+log_file = os.path.expanduser("~/mcp-second-brain-debug.log")
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(log_file),
+        logging.StreamHandler()  # Also log to console
+    ]
+)
 logger = logging.getLogger(__name__)
+logger.info(f"MCP Second-Brain server starting, logs written to {log_file}")
 
 # Initialize FastMCP server
 mcp = FastMCP("mcp-second-brain")
