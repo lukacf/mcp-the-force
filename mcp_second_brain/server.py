@@ -30,6 +30,15 @@ mcp = FastMCP("mcp-second-brain")
 # Lazy adapter initialization
 adapters = {}
 
+# Tool name to model mapping
+TOOL_TO_MODEL = {
+    "deep-multimodal-reasoner": "gemini-2.5-pro",
+    "flash-summary-sprinter": "gemini-2.5-flash",
+    "chain-of-thought-helper": "o3",
+    "slow-and-sure-thinker": "o3-pro",
+    "fast-long-context-assistant": "gpt-4.1"
+}
+
 def get_adapter(name: str):
     """Get or create an adapter lazily."""
     if name not in adapters:
@@ -77,7 +86,7 @@ def deep_multimodal_reasoner(
     if not adapter:
         return f"Error: Failed to initialize Vertex AI adapter. {error}"
     
-    prompt, attach = build_prompt(instructions, output_format, context, attachments)
+    prompt, attach = build_prompt(instructions, output_format, context, attachments, model=TOOL_TO_MODEL["deep-multimodal-reasoner"])
     vs = [create_vector_store(attach)] if attach else None
     
     extra = {}
@@ -108,7 +117,7 @@ def flash_summary_sprinter(
     if not adapter:
         return f"Error: Failed to initialize Vertex AI adapter. {error}"
     
-    prompt, attach = build_prompt(instructions, output_format, context, attachments)
+    prompt, attach = build_prompt(instructions, output_format, context, attachments, model=TOOL_TO_MODEL["flash-summary-sprinter"])
     vs = [create_vector_store(attach)] if attach else None
     
     extra = {}
@@ -137,7 +146,7 @@ def chain_of_thought_helper(
     if not adapter:
         return f"Error: Failed to initialize OpenAI adapter. {error}"
     
-    prompt, attach = build_prompt(instructions, output_format, context, attachments)
+    prompt, attach = build_prompt(instructions, output_format, context, attachments, model=TOOL_TO_MODEL["chain-of-thought-helper"])
     vs = [create_vector_store(attach)] if attach else None
     
     extra = {}
@@ -170,7 +179,7 @@ def slow_and_sure_thinker(
     if not adapter:
         return f"Error: Failed to initialize OpenAI adapter. {error}"
     
-    prompt, attach = build_prompt(instructions, output_format, context, attachments)
+    prompt, attach = build_prompt(instructions, output_format, context, attachments, model=TOOL_TO_MODEL["slow-and-sure-thinker"])
     vs = [create_vector_store(attach)] if attach else None
     
     extra = {}
@@ -207,7 +216,7 @@ def fast_long_context_assistant(
     logger.info(f"Adapter initialized in {time.time() - start_time:.2f}s")
     
     build_start = time.time()
-    prompt, attach = build_prompt(instructions, output_format, context, attachments)
+    prompt, attach = build_prompt(instructions, output_format, context, attachments, model="gpt-4.1")
     logger.info(f"Prompt built in {time.time() - build_start:.2f}s, attach files: {len(attach) if attach else 0}")
     logger.debug(f"Prompt length: {len(prompt)} chars")
     
