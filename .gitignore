@@ -55,7 +55,9 @@ uv.lock
 htmlcov/
 
 # Credentials and secrets
+.env
 .env.local
+mcp-config.json
 credentials.json
 service-account.json
 
