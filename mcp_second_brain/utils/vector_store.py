@@ -66,7 +66,7 @@ def create_vector_store(paths: List[str]) -> str:
     
     try:
         # Create vector store
-        vs = get_client().beta.vector_stores.create(name="mcp-second-brain-vs")
+        vs = get_client().vector_stores.create(name="mcp-second-brain-vs")
         logger.info(f"Created vector store {vs.id}")
         
         # Open all files
@@ -80,13 +80,13 @@ def create_vector_store(paths: List[str]) -> str:
         if not file_streams:
             # No files could be opened
             logger.warning("No files could be opened for vector store")
-            get_client().beta.vector_stores.delete(vs.id)
+            get_client().vector_stores.delete(vs.id)
             return ""
         
         logger.info(f"Starting batch upload of {len(file_streams)} files")
         
         # Use batch upload API
-        file_batch = get_client().beta.vector_stores.file_batches.upload_and_poll(
+        file_batch = get_client().vector_stores.file_batches.upload_and_poll(
             vector_store_id=vs.id,
             files=file_streams
         )
@@ -104,7 +104,7 @@ def create_vector_store(paths: List[str]) -> str:
             # No files were successfully uploaded
             logger.warning(f"No files successfully uploaded. Failed: {file_batch.file_counts.failed}, Cancelled: {file_batch.file_counts.cancelled}")
             try:
-                get_client().beta.vector_stores.delete(vs.id)
+                get_client().vector_stores.delete(vs.id)
             except:
                 pass
             return ""
@@ -127,7 +127,7 @@ def delete_vector_store(vector_store_id: str) -> None:
         return
     
     try:
-        get_client().beta.vector_stores.delete(vector_store_id)
+        get_client().vector_stores.delete(vector_store_id)
         logger.info(f"Deleted vector store {vector_store_id}")
     except Exception as e:
         logger.warning(f"Failed to delete vector store {vector_store_id}: {e}")
