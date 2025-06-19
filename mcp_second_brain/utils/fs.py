@@ -3,6 +3,10 @@ import os
 import fnmatch
 from pathlib import Path
 from typing import List, Set, Optional
+import logging
+import time
+
+logger = logging.getLogger(__name__)
 
 # Common binary/generated file extensions to skip
 BINARY_EXTENSIONS = {
@@ -164,6 +168,9 @@ def gather_file_paths(items: List[str]) -> List[str]:
     if not items:
         return []
     
+    start_time = time.time()
+    logger.info(f"gather_file_paths called with {len(items)} items: {items}")
+    
     seen: Set[str] = set()
     out: List[str] = []
     total_size = 0
@@ -244,4 +251,6 @@ def gather_file_paths(items: List[str]) -> List[str]:
                 # Skip directories we can't read
                 continue
     
-    return sorted(out)  # Return sorted for consistent ordering
+    result = sorted(out)  # Return sorted for consistent ordering
+    logger.info(f"gather_file_paths completed in {time.time() - start_time:.2f}s - found {len(result)} files, total size: {total_size / 1024 / 1024:.2f}MB")
+    return result
