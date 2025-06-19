@@ -114,8 +114,8 @@ async def deep_multimodal_reasoner(
         ),
         timeout=5
     )
-    vs_id = create_vector_store(attach) if attach else None
-    vs = [vs_id] if vs_id else None
+    # Gemini models don't support vector stores - attachments are inlined in prompt
+    vs = None
     
     extra = {}
     if temperature is not None:
@@ -154,8 +154,8 @@ async def flash_summary_sprinter(
         ),
         timeout=5
     )
-    vs_id = create_vector_store(attach) if attach else None
-    vs = [vs_id] if vs_id else None
+    # Gemini models don't support vector stores - attachments are inlined in prompt
+    vs = None
     
     extra = {}
     if temperature is not None:
