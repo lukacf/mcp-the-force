@@ -229,6 +229,7 @@ def fast_long_context_assistant(
         extra["temperature"] = temperature
     
     gen_start = time.time()
+    logger.info(f"Sending request to OpenAI API...")
     result = adapter.generate(prompt, vector_store_ids=vs, **extra)
     logger.info(f"Generation completed in {time.time() - gen_start:.2f}s")
     logger.info(f"Total time: {time.time() - start_time:.2f}s")
