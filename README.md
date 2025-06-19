@@ -85,6 +85,52 @@ The server intelligently handles large codebases through a two-tier approach:
 
 ## 📖 Usage Examples
 
+### When to Use MCP Second-Brain
+
+The Second-Brain server is designed to overcome Claude's context limitations and provide access to more specialized AI models. Use it when:
+
+- **Context Overflow**: Your codebase is too large for Claude's context window
+- **Need Specialized Models**: Tasks requiring o3-pro's deep reasoning or Gemini's multimodal capabilities  
+- **Speed vs Intelligence Trade-offs**: Fast analysis followed by deep reasoning
+- **RAG Requirements**: Semantic search across large document sets
+
+### Multi-Stage Debugging Workflow
+
+Here's a powerful chaining pattern for complex debugging:
+
+#### Step 1: Capture Verbose Output
+```bash
+# Run failing tests with maximum verbosity
+npm test --verbose --reporter=verbose > test_output.log 2>&1
+```
+
+#### Step 2: Fast Triage with Long Context
+```json
+{
+  "tool": "fast-long-context-assistant",
+  "instructions": "Analyze the test failures and identify the 3-5 most critical files that likely contain the root cause",
+  "output_format": "prioritized list with file paths and reasoning",
+  "context": ["/Users/username/project/test_output.log"],
+  "attachments": ["/Users/username/project/src/", "/Users/username/project/tests/"]
+}
+```
+
+#### Step 3: Deep Analysis with o3-pro
+```json
+{
+  "tool": "slow-and-sure-thinker", 
+  "instructions": "Perform deep root cause analysis of the test failures. Provide specific fix recommendations with code changes.",
+  "output_format": "detailed technical analysis with fix proposals",
+  "reasoning_effort": "high",
+  "context": [
+    "/Users/username/project/src/auth/core.py",
+    "/Users/username/project/src/database/connection.py", 
+    "/Users/username/project/tests/auth_test.py"
+  ],
+  "attachments": ["/Users/username/project/"]
+}
+```
+
 ### Basic Analysis
 ```json
 {
@@ -104,13 +150,24 @@ The server intelligently handles large codebases through a two-tier approach:
 }
 ```
 
-### Mixed Context Approach
+### Performance Investigation Chain
 ```json
 {
-  "instructions": "Refactor the user authentication system",
-  "output_format": "code patches with explanations",
-  "context": ["/Users/username/project/auth/core.py"],
-  "attachments": ["/Users/username/project/"]
+  "tool": "flash-summary-sprinter",
+  "instructions": "Identify performance bottlenecks in this React application",
+  "output_format": "quick summary of potential issues",
+  "context": ["/Users/username/react-app/src/"]
+}
+```
+
+Then follow up with:
+```json
+{
+  "tool": "deep-multimodal-reasoner", 
+  "instructions": "Deep dive into the identified performance issues. Analyze render patterns, state updates, and provide optimization strategies.",
+  "output_format": "comprehensive performance audit with actionable fixes",
+  "context": ["/Users/username/react-app/src/components/Dashboard.tsx"],
+  "attachments": ["/Users/username/react-app/"]
 }
 ```
 

@@ -59,6 +59,47 @@ Environment variables (via `.env` file):
 - `DEFAULT_TEMPERATURE`: AI model temperature setting
 - `LOG_LEVEL`: Logging verbosity
 
+## Usage Patterns and When to Use Second-Brain
+
+### Why Use MCP Second-Brain?
+
+The Second-Brain server addresses key limitations when working with Claude:
+
+1. **Context Limitations**: Claude's context window gets consumed quickly with large codebases
+2. **Model Diversity**: Access to specialized models (o3-pro for deep reasoning, Gemini for multimodal)
+3. **Speed vs Intelligence**: Choose the right tool for each task phase
+4. **RAG Capabilities**: Semantic search across large document sets
+
+### Recommended Chaining Workflows
+
+#### Complex Debugging Pattern
+```
+1. Capture verbose output → save to file
+2. fast-long-context-assistant → identify key files (context: output + large codebase)
+3. slow-and-sure-thinker → deep analysis (context: key files, attachments: full codebase)
+```
+
+#### Performance Analysis Pattern
+```
+1. flash-summary-sprinter → quick bottleneck identification
+2. deep-multimodal-reasoner → comprehensive analysis with optimization strategies
+```
+
+#### Code Architecture Review
+```
+1. fast-long-context-assistant → overall structure analysis
+2. chain-of-thought-helper → design pattern evaluation
+3. slow-and-sure-thinker → formal architecture recommendations
+```
+
+### When to Use Each Tool
+
+- **flash-summary-sprinter**: Initial triage, quick summaries, fast insights
+- **fast-long-context-assistant**: Code navigation, file identification, large-scale refactoring
+- **deep-multimodal-reasoner**: Bug fixing, complex reasoning, multimodal analysis
+- **chain-of-thought-helper**: Algorithm design, step-by-step problem solving
+- **slow-and-sure-thinker**: When you need maximum intelligence, formal proofs, complex debugging
+
 ## Development Notes
 
 - Python 3.10+ required
