@@ -23,7 +23,10 @@ MODEL_CONTEXT_LIMITS = {
 
 def _create_file_element(path: str, content: str) -> ET.Element:
     el = ET.Element("file", path=path)
-    el.text = content
+    # Ensure content is safe for XML
+    # Remove any remaining control characters except tab, newline, carriage return
+    safe_content = ''.join(char for char in content if ord(char) >= 32 or char in '\t\n\r')
+    el.text = safe_content
     return el
 
 def build_prompt(instr: str, out_fmt: str, ctx: List[str], attach: List[str] | None = None, model: Optional[str] = None) -> Tuple[str, List[str]]:
@@ -53,14 +56,23 @@ def build_prompt(instr: str, out_fmt: str, ctx: List[str], attach: List[str] | N
     all_files = ctx_files + [f for f in extras if f not in ctx_files]
     
     for f in all_files:
-        txt = Path(f).read_text(encoding="utf-8", errors="ignore")
-        tok = count_tokens([txt])
-        
-        if used + tok <= max_tokens:
-            inline_elements.append(_create_file_element(f, txt))
-            used += tok
-        else:
-            # Only use vector store if we exceed model's context limit
+        try:
+            txt = Path(f).read_text(encoding="utf-8", errors="ignore")
+            # Remove NULL bytes which are not allowed in XML
+            if '\x00' in txt:
+                txt = txt.replace('\x00', '')
+                logger.debug(f"Removed NULL bytes from {f}")
+                
+            tok = count_tokens([txt])
+            
+            if used + tok <= max_tokens:
+                inline_elements.append(_create_file_element(f, txt))
+                used += tok
+            else:
+                # Only use vector store if we exceed model's context limit
+                attachments.append(f)
+        except Exception as e:
+            logger.warning(f"Error reading file {f}: {e}")
             attachments.append(f)
     
     logger.info(f"Inlined {len(inline_elements)} files ({used:,} tokens), {len(attachments)} files for vector store")
