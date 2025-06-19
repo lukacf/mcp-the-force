@@ -114,7 +114,8 @@ async def deep_multimodal_reasoner(
         ),
         timeout=5
     )
-    vs = [create_vector_store(attach)] if attach else None
+    vs_id = create_vector_store(attach) if attach else None
+    vs = [vs_id] if vs_id else None
     
     extra = {}
     if temperature is not None:
@@ -153,7 +154,8 @@ async def flash_summary_sprinter(
         ),
         timeout=5
     )
-    vs = [create_vector_store(attach)] if attach else None
+    vs_id = create_vector_store(attach) if attach else None
+    vs = [vs_id] if vs_id else None
     
     extra = {}
     if temperature is not None:
@@ -190,7 +192,8 @@ async def chain_of_thought_helper(
         ),
         timeout=5
     )
-    vs = [create_vector_store(attach)] if attach else None
+    vs_id = create_vector_store(attach) if attach else None
+    vs = [vs_id] if vs_id else None
     
     extra = {}
     if temperature is not None:
@@ -231,7 +234,8 @@ async def slow_and_sure_thinker(
         ),
         timeout=5
     )
-    vs = [create_vector_store(attach)] if attach else None
+    vs_id = create_vector_store(attach) if attach else None
+    vs = [vs_id] if vs_id else None
     
     extra = {}
     if temperature is not None:
@@ -280,7 +284,8 @@ async def fast_long_context_assistant(
     logger.debug(f"Prompt length: {len(prompt)} chars")
     
     vs_start = time.time()
-    vs = [create_vector_store(attach)] if attach else None
+    vs_id = create_vector_store(attach) if attach else None
+    vs = [vs_id] if vs_id else None
     logger.info(f"Vector store created in {time.time() - vs_start:.2f}s")
     
     extra = {}

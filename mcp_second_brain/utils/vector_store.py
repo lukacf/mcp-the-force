@@ -49,6 +49,7 @@ def create_vector_store(paths: List[str]) -> str:
         Unsupported files will be silently skipped.
     """
     if not paths:
+        logger.warning("No paths provided to create_vector_store")
         return ""
     
     start_time = time.time()
@@ -60,6 +61,7 @@ def create_vector_store(paths: List[str]) -> str:
     
     if not supported_paths:
         # No supported files to upload
+        logger.warning(f"No supported files found. Provided extensions: {set(Path(p).suffix.lower() for p in paths)}")
         return ""
     
     try:
@@ -77,6 +79,7 @@ def create_vector_store(paths: List[str]) -> str:
         
         if not file_streams:
             # No files could be opened
+            logger.warning("No files could be opened for vector store")
             get_client().beta.vector_stores.delete(vs.id)
             return ""
         
@@ -99,6 +102,7 @@ def create_vector_store(paths: List[str]) -> str:
         
         if file_batch.file_counts.completed == 0:
             # No files were successfully uploaded
+            logger.warning(f"No files successfully uploaded. Failed: {file_batch.file_counts.failed}, Cancelled: {file_batch.file_counts.cancelled}")
             try:
                 get_client().beta.vector_stores.delete(vs.id)
             except:
