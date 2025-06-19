@@ -61,6 +61,15 @@ TOOL_TO_MODEL = {
     "fast-long-context-assistant": "gpt-4.1"
 }
 
+# Model-specific timeouts (in seconds)
+MODEL_TIMEOUTS = {
+    "gemini-2.5-pro": 600,      # 10 minutes
+    "gemini-2.5-flash": 300,    # 5 minutes
+    "gpt-4.1": 300,             # 5 minutes
+    "o3": 600,                  # 10 minutes
+    "o3-pro": 2700,             # 45 minutes
+}
+
 def get_adapter(name: str):
     """Get or create an adapter lazily."""
     if name not in adapters:
@@ -125,9 +134,12 @@ async def deep_multimodal_reasoner(
     if max_reasoning_tokens:
         extra["max_reasoning_tokens"] = max_reasoning_tokens
     
+    
+    model = TOOL_TO_MODEL["deep-multimodal-reasoner"]
+    timeout = MODEL_TIMEOUTS.get(model, 600)
     return await asyncio.wait_for(
         adapter.generate(prompt, vector_store_ids=vs, **extra),
-        timeout=30
+        timeout=timeout
     )
 
 @mcp.tool()
@@ -161,9 +173,12 @@ async def flash_summary_sprinter(
     if temperature is not None:
         extra["temperature"] = temperature
     
+    
+    model = TOOL_TO_MODEL["flash-summary-sprinter"]
+    timeout = MODEL_TIMEOUTS.get(model, 300)
     return await asyncio.wait_for(
         adapter.generate(prompt, vector_store_ids=vs, **extra),
-        timeout=30
+        timeout=timeout
     )
 
 @mcp.tool()
@@ -204,9 +219,12 @@ async def chain_of_thought_helper(
         extra["max_reasoning_tokens"] = max_reasoning_tokens
     
     try:
+        model = TOOL_TO_MODEL["chain-of-thought-helper"]
+        timeout = MODEL_TIMEOUTS.get(model, 600)
+        
         return await asyncio.wait_for(
             adapter.generate(prompt, vector_store_ids=vs, **extra),
-            timeout=30
+            timeout=timeout
         )
     finally:
         # Clean up vector store
@@ -251,9 +269,12 @@ async def slow_and_sure_thinker(
         extra["max_reasoning_tokens"] = max_reasoning_tokens
     
     try:
+        model = TOOL_TO_MODEL["slow-and-sure-thinker"]
+        timeout = MODEL_TIMEOUTS.get(model, 2700)
+        
         return await asyncio.wait_for(
             adapter.generate(prompt, vector_store_ids=vs, **extra),
-            timeout=30
+            timeout=timeout
         )
     finally:
         # Clean up vector store
@@ -305,9 +326,12 @@ async def fast_long_context_assistant(
     gen_start = time.time()
     logger.info(f"Sending request to OpenAI API...")
     try:
+        model = TOOL_TO_MODEL["fast-long-context-assistant"]
+        timeout = MODEL_TIMEOUTS.get(model, 300)
+        
         result = await asyncio.wait_for(
             adapter.generate(prompt, vector_store_ids=vs, **extra),
-            timeout=30
+            timeout=timeout
         )
         logger.info(f"Generation completed in {time.time() - gen_start:.2f}s")
         logger.info(f"Total time: {time.time() - start_time:.2f}s")
