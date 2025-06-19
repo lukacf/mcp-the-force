@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     openai_api_key: str = Field("", env="OPENAI_API_KEY")
     vertex_project: str = Field("", env="VERTEX_PROJECT")
     vertex_location: str = Field("", env="VERTEX_LOCATION")
-    max_inline_tokens: PositiveInt = Field(12000, env="MAX_INLINE_TOKENS")
+    max_inline_tokens: PositiveInt | None = Field(None, env="MAX_INLINE_TOKENS")  # Override model defaults if set
     default_temperature: float = Field(0.2, env="DEFAULT_TEMPERATURE")
     
     class Config:

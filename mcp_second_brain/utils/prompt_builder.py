@@ -12,13 +12,13 @@ logger = logging.getLogger(__name__)
 
 _set = get_settings()
 
-# Model context windows (conservative estimates leaving room for output)
+# Model context windows (actual limits)
 MODEL_CONTEXT_LIMITS = {
-    "gemini-2.5-pro": 800_000,        # 1M actual
-    "gemini-2.5-flash": 800_000,      # 1M actual  
-    "gpt-4.1": 800_000,               # 1M actual
-    "o3": 150_000,                    # 200k actual
-    "o3-pro": 150_000,                # 200k actual
+    "gemini-2.5-pro": 1_000_000,      # 1M tokens
+    "gemini-2.5-flash": 1_000_000,    # 1M tokens  
+    "gpt-4.1": 1_000_000,             # 1M tokens
+    "o3": 200_000,                    # 200k tokens
+    "o3-pro": 200_000,                # 200k tokens
 }
 
 def _create_file_element(path: str, content: str) -> ET.Element:
@@ -46,9 +46,15 @@ def build_prompt(instr: str, out_fmt: str, ctx: List[str], attach: List[str] | N
     extras = gather_file_paths(attach) if attach else []
     logger.info(f"Gathered {len(extras)} attachment files")
     
-    # Get context limit based on model
-    max_tokens = MODEL_CONTEXT_LIMITS.get(model, _set.max_inline_tokens)
-    logger.info(f"Using context limit of {max_tokens:,} tokens for model {model}")
+    # Get context limit based on model, using 90% to leave room for output
+    model_limit = MODEL_CONTEXT_LIMITS.get(model, 150_000)  # Default to smallest limit
+    # Allow environment variable override if set
+    if _set.max_inline_tokens:
+        max_tokens = _set.max_inline_tokens
+        logger.info(f"Using overridden context limit of {max_tokens:,} tokens")
+    else:
+        max_tokens = int(model_limit * 0.9)  # Use 90% of limit, leaving 10% for output
+        logger.info(f"Using context limit of {max_tokens:,} tokens for model {model} (90% of {model_limit:,})")
     
     inline_elements, attachments, used = [], [], 0
     

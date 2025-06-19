@@ -1,7 +1,8 @@
 from typing import Any, Dict, List
-from openai import OpenAI
+from openai import AsyncOpenAI
 from ..config import get_settings
 from .base import BaseAdapter
+import asyncio
 
 # Initialize client lazily to avoid errors on startup
 _client = None
@@ -12,10 +13,10 @@ def get_client():
         api_key = get_settings().openai_api_key
         if not api_key:
             raise ValueError("OPENAI_API_KEY not configured")
-        _client = OpenAI(
+        _client = AsyncOpenAI(
             api_key=api_key,
-            timeout=600.0,  # 10 minute timeout for responses
-            max_retries=0   # Disable automatic retries to avoid blocking
+            timeout=30.0,
+            max_retries=0
         )
     return _client
 
@@ -25,8 +26,8 @@ class OpenAIAdapter(BaseAdapter):
         self.context_window = 1_000_000 if model == "gpt-4.1" else 200_000
         self.description_snippet = "Fast long-context assistant" if model == "gpt-4.1" else "Chain-of-thought helper"
     
-    def generate(self, prompt: str, vector_store_ids: List[str] | None = None,
-                 temperature: float | None = None, reasoning_effort: str | None = None, **kwargs: Any) -> str:
+    async def generate(self, prompt: str, vector_store_ids: List[str] | None = None,
+                       temperature: float | None = None, reasoning_effort: str | None = None, **kwargs: Any) -> str:
         self._ensure(prompt)
         
         msgs = [{"role": "user", "content": prompt}]
@@ -44,4 +45,23 @@ class OpenAIAdapter(BaseAdapter):
         if reasoning_effort:
             params["reasoning"] = {"effort": reasoning_effort}
         
-        return get_client().responses.create(**params).output_text  # type: ignore[attr-defined]
+        # Create a fresh client for each request to avoid state corruption
+        api_key = get_settings().openai_api_key
+        if not api_key:
+            raise ValueError("OPENAI_API_KEY not configured")
+            
+        client = AsyncOpenAI(
+            api_key=api_key,
+            timeout=30.0,
+            max_retries=0
+        )
+        
+        try:
+            response = await asyncio.wait_for(
+                client.responses.create(**params),
+                timeout=25
+            )
+            return response.output_text  # type: ignore[attr-defined]
+        finally:
+            # Ensure proper cleanup
+            await asyncio.wait_for(client.close(), timeout=5)

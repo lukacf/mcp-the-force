@@ -4,22 +4,44 @@ from mcp.server.fastmcp import FastMCP
 from typing import List, Dict, Any, Optional
 import time
 import logging
+import asyncio
+
+# Enable asyncio debug mode
+asyncio.get_event_loop().set_debug(True)
+_logging = logging.getLogger("asyncio")
+_logging.setLevel(logging.INFO)
 
 from .adapters import OpenAIAdapter, VertexAdapter
 from .utils.prompt_builder import build_prompt
 from .utils.vector_store import create_vector_store
 from .config import get_settings
 
-# Set up file logging
+# Set up file logging with non-blocking handler
 import os
+from logging.handlers import QueueHandler, QueueListener
+import queue
+
 log_file = os.path.expanduser("~/mcp-second-brain-debug.log")
+
+# Create a queue for logging
+log_queue = queue.Queue()
+
+# Create file handler with delay=True to avoid blocking
+file_handler = logging.FileHandler(log_file, delay=True)
+file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+
+# Create console handler
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+
+# Create queue handler and listener
+queue_handler = QueueHandler(log_queue)
+queue_listener = QueueListener(log_queue, file_handler, console_handler)
+queue_listener.start()
+
 logging.basicConfig(
     level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(log_file),
-        logging.StreamHandler()  # Also log to console
-    ]
+    handlers=[queue_handler]
 )
 logger = logging.getLogger(__name__)
 logger.info(f"MCP Second-Brain server starting, logs written to {log_file}")
@@ -67,7 +89,7 @@ tool_descriptions = {
 }
 
 @mcp.tool()
-def deep_multimodal_reasoner(
+async def deep_multimodal_reasoner(
     instructions: str,
     output_format: str,
     context: List[str],
@@ -86,7 +108,12 @@ def deep_multimodal_reasoner(
     if not adapter:
         return f"Error: Failed to initialize Vertex AI adapter. {error}"
     
-    prompt, attach = build_prompt(instructions, output_format, context, attachments, model=TOOL_TO_MODEL["deep-multimodal-reasoner"])
+    prompt, attach = await asyncio.wait_for(
+        asyncio.to_thread(
+            build_prompt, instructions, output_format, context, attachments, model=TOOL_TO_MODEL["deep-multimodal-reasoner"]
+        ),
+        timeout=5
+    )
     vs = [create_vector_store(attach)] if attach else None
     
     extra = {}
@@ -97,10 +124,13 @@ def deep_multimodal_reasoner(
     if max_reasoning_tokens:
         extra["max_reasoning_tokens"] = max_reasoning_tokens
     
-    return adapter.generate(prompt, vector_store_ids=vs, **extra)
+    return await asyncio.wait_for(
+        adapter.generate(prompt, vector_store_ids=vs, **extra),
+        timeout=30
+    )
 
 @mcp.tool()
-def flash_summary_sprinter(
+async def flash_summary_sprinter(
     instructions: str,
     output_format: str,
     context: List[str],
@@ -117,17 +147,25 @@ def flash_summary_sprinter(
     if not adapter:
         return f"Error: Failed to initialize Vertex AI adapter. {error}"
     
-    prompt, attach = build_prompt(instructions, output_format, context, attachments, model=TOOL_TO_MODEL["flash-summary-sprinter"])
+    prompt, attach = await asyncio.wait_for(
+        asyncio.to_thread(
+            build_prompt, instructions, output_format, context, attachments, model=TOOL_TO_MODEL["flash-summary-sprinter"]
+        ),
+        timeout=5
+    )
     vs = [create_vector_store(attach)] if attach else None
     
     extra = {}
     if temperature is not None:
         extra["temperature"] = temperature
     
-    return adapter.generate(prompt, vector_store_ids=vs, **extra)
+    return await asyncio.wait_for(
+        adapter.generate(prompt, vector_store_ids=vs, **extra),
+        timeout=30
+    )
 
 @mcp.tool()
-def chain_of_thought_helper(
+async def chain_of_thought_helper(
     instructions: str,
     output_format: str,
     context: List[str],
@@ -146,7 +184,12 @@ def chain_of_thought_helper(
     if not adapter:
         return f"Error: Failed to initialize OpenAI adapter. {error}"
     
-    prompt, attach = build_prompt(instructions, output_format, context, attachments, model=TOOL_TO_MODEL["chain-of-thought-helper"])
+    prompt, attach = await asyncio.wait_for(
+        asyncio.to_thread(
+            build_prompt, instructions, output_format, context, attachments, model=TOOL_TO_MODEL["chain-of-thought-helper"]
+        ),
+        timeout=5
+    )
     vs = [create_vector_store(attach)] if attach else None
     
     extra = {}
@@ -157,10 +200,13 @@ def chain_of_thought_helper(
     if max_reasoning_tokens:
         extra["max_reasoning_tokens"] = max_reasoning_tokens
     
-    return adapter.generate(prompt, vector_store_ids=vs, **extra)
+    return await asyncio.wait_for(
+        adapter.generate(prompt, vector_store_ids=vs, **extra),
+        timeout=30
+    )
 
 @mcp.tool()
-def slow_and_sure_thinker(
+async def slow_and_sure_thinker(
     instructions: str,
     output_format: str,
     context: List[str],
@@ -179,7 +225,12 @@ def slow_and_sure_thinker(
     if not adapter:
         return f"Error: Failed to initialize OpenAI adapter. {error}"
     
-    prompt, attach = build_prompt(instructions, output_format, context, attachments, model=TOOL_TO_MODEL["slow-and-sure-thinker"])
+    prompt, attach = await asyncio.wait_for(
+        asyncio.to_thread(
+            build_prompt, instructions, output_format, context, attachments, model=TOOL_TO_MODEL["slow-and-sure-thinker"]
+        ),
+        timeout=5
+    )
     vs = [create_vector_store(attach)] if attach else None
     
     extra = {}
@@ -190,10 +241,13 @@ def slow_and_sure_thinker(
     if max_reasoning_tokens:
         extra["max_reasoning_tokens"] = max_reasoning_tokens
     
-    return adapter.generate(prompt, vector_store_ids=vs, **extra)
+    return await asyncio.wait_for(
+        adapter.generate(prompt, vector_store_ids=vs, **extra),
+        timeout=30
+    )
 
 @mcp.tool()
-def fast_long_context_assistant(
+async def fast_long_context_assistant(
     instructions: str,
     output_format: str,
     context: List[str],
@@ -216,7 +270,12 @@ def fast_long_context_assistant(
     logger.info(f"Adapter initialized in {time.time() - start_time:.2f}s")
     
     build_start = time.time()
-    prompt, attach = build_prompt(instructions, output_format, context, attachments, model="gpt-4.1")
+    prompt, attach = await asyncio.wait_for(
+        asyncio.to_thread(
+            build_prompt, instructions, output_format, context, attachments, model="gpt-4.1"
+        ),
+        timeout=5
+    )
     logger.info(f"Prompt built in {time.time() - build_start:.2f}s, attach files: {len(attach) if attach else 0}")
     logger.debug(f"Prompt length: {len(prompt)} chars")
     
@@ -230,7 +289,10 @@ def fast_long_context_assistant(
     
     gen_start = time.time()
     logger.info(f"Sending request to OpenAI API...")
-    result = adapter.generate(prompt, vector_store_ids=vs, **extra)
+    result = await asyncio.wait_for(
+        adapter.generate(prompt, vector_store_ids=vs, **extra),
+        timeout=30
+    )
     logger.info(f"Generation completed in {time.time() - gen_start:.2f}s")
     logger.info(f"Total time: {time.time() - start_time:.2f}s")
     

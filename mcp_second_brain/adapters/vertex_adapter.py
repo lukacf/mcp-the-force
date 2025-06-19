@@ -27,8 +27,8 @@ class VertexAdapter(BaseAdapter):
         self.context_window = 2_000_000  # Gemini 2.5 supports up to 2M tokens
         self.description_snippet = "Deep multimodal reasoner" if "pro" in model else "Flash summary sprinter"
     
-    def generate(self, prompt: str, vector_store_ids: List[str] | None = None,
-                 max_reasoning_tokens: int | None = None, temperature: float | None = None, **kwargs: Any) -> str:
+    async def generate(self, prompt: str, vector_store_ids: List[str] | None = None,
+                       max_reasoning_tokens: int | None = None, temperature: float | None = None, **kwargs: Any) -> str:
         self._ensure(prompt)
         
         # Build content
