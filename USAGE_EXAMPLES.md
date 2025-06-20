@@ -13,7 +13,7 @@ result = await mcp.call_tool("list_models", {})
 ### 2. Simple Analysis with Gemini Flash
 ```python
 result = await mcp.call_tool(
-    "vertex_gemini25_flash",
+    "chat_with_gemini25_flash",
     instructions="What is 2+2? Be brief.",
     output_format="Just the number",
     context=[]
@@ -24,7 +24,7 @@ result = await mcp.call_tool(
 ### 3. Creative Generation with Temperature
 ```python
 result = await mcp.call_tool(
-    "vertex_gemini25_pro",
+    "chat_with_gemini25_pro",
     instructions="Write a haiku about Python descriptors",
     output_format="Standard haiku format (5-7-5 syllables)",
     context=[],
@@ -37,7 +37,7 @@ result = await mcp.call_tool(
 ### 4. File Context Analysis
 ```python
 result = await mcp.call_tool(
-    "vertex_gemini25_flash",
+    "chat_with_gemini25_flash",
     instructions="Summarize what the RouteDescriptor class does",
     output_format="Brief technical summary",
     context=["/path/to/descriptors.py"]
@@ -47,11 +47,12 @@ result = await mcp.call_tool(
 ### 5. Deep Reasoning with o3
 ```python
 result = await mcp.call_tool(
-    "open_aio3_reasoning",
+    "chat_with_o3",
     instructions="Prove that for any positive integer n, the sum 1+2+3+...+n equals n(n+1)/2",
     output_format="Mathematical proof with clear steps",
     context=[],
-    reasoning_effort="low"  # Can be "low", "medium", or "high"
+    reasoning_effort="low",  # Can be "low", "medium", or "high"
+    session_id="proof-session-1"  # Required for OpenAI models
 )
 ```
 
@@ -59,20 +60,20 @@ result = await mcp.call_tool(
 ```python
 # First message
 result1 = await mcp.call_tool(
-    "open_aio3_reasoning",
+    "chat_with_o3",
     instructions="Let's debug a Python issue. I have a function that sometimes returns None...",
     output_format="Analysis and initial thoughts",
     context=[],
-    session_id="debug-session-1"
+    session_id="debug-session-1"  # Required for OpenAI models
 )
 
 # Follow-up in same session
 result2 = await mcp.call_tool(
-    "open_aio3_reasoning",
+    "chat_with_o3",
     instructions="Good analysis! I found that user_id is a string but database keys are integers.",
     output_format="Recommended fix with code",
     context=[],
-    session_id="debug-session-1"  # Same session ID continues the conversation
+    session_id="debug-session-1"  # Required for OpenAI models - continues the conversation
 )
 ```
 
@@ -88,11 +89,12 @@ vs_result = await mcp.call_tool(
 
 # Use with attachments for RAG
 result = await mcp.call_tool(
-    "open_aigpt4_long_context",
+    "chat_with_gpt4_1",
     instructions="Find all code that handles mutable defaults",
     output_format="List each file and specific code sections",
     context=[],  # Empty context
-    attachments=["/path/to/codebase/"]  # Will create vector store automatically
+    attachments=["/path/to/codebase/"],  # Will create vector store automatically
+    session_id="code-search-1"  # Required for OpenAI models
 )
 ```
 
@@ -102,7 +104,7 @@ result = await mcp.call_tool(
 ```python
 # Step 1: Quick triage with Gemini Flash
 triage = await mcp.call_tool(
-    "flash-summary-sprinter",  # Using alias
+    "chat_with_gemini25_flash",
     instructions="Identify performance bottlenecks in this React app",
     output_format="Quick list of potential issues",
     context=["/path/to/src/"]
@@ -110,7 +112,7 @@ triage = await mcp.call_tool(
 
 # Step 2: Deep analysis with Gemini Pro
 analysis = await mcp.call_tool(
-    "deep-multimodal-reasoner",  # Using alias
+    "chat_with_gemini25_pro",
     instructions="Deep dive into the render performance issues identified",
     output_format="Detailed analysis with optimization strategies",
     context=["/path/to/Dashboard.tsx"],
@@ -119,12 +121,13 @@ analysis = await mcp.call_tool(
 
 # Step 3: If needed, escalate to o3-pro
 deep_analysis = await mcp.call_tool(
-    "slow-and-sure-thinker",  # Using alias
+    "chat_with_o3_pro",
     instructions="Prove the optimization will work without side effects",
     output_format="Formal analysis with guarantees",
     context=["/path/to/Dashboard.tsx"],
     reasoning_effort="high",
-    max_reasoning_tokens=100000
+    max_reasoning_tokens=100000,
+    session_id="optimization-proof-1"  # Required for OpenAI models
 )
 ```
 
@@ -132,11 +135,12 @@ deep_analysis = await mcp.call_tool(
 ```python
 # For large codebases that exceed context limits
 review = await mcp.call_tool(
-    "open_aigpt4_long_context",
+    "chat_with_gpt4_1",
     instructions="Review this codebase for security vulnerabilities",
     output_format="Categorized list of issues with severity",
     context=[],  # No inline context
-    attachments=["/path/to/large-project/"]  # Automatic vector store
+    attachments=["/path/to/large-project/"],  # Automatic vector store
+    session_id="security-review-1"  # Required for OpenAI models
 )
 ```
 
@@ -152,7 +156,7 @@ Each parameter is routed to the appropriate subsystem:
 | `temperature` | adapter | Model creativity (0-1) | `0.7` |
 | `reasoning_effort` | adapter | o3/o3-pro reasoning depth | `"high"` |
 | `attachments` | vector_store | Files for RAG search | `["/large/codebase/"]` |
-| `session_id` | session | Conversation continuity | `"debug-123"` |
+| `session_id` | session | Conversation continuity (required for OpenAI) | `"debug-123"` |
 
 ## Important Notes
 
@@ -162,5 +166,5 @@ Each parameter is routed to the appropriate subsystem:
    - Gemini models: ~1M tokens
    - o3/o3-pro: ~200k tokens
    - GPT-4.1: ~1M tokens
-4. **Session support** only available for OpenAI models
+4. **Session ID required** for OpenAI models (o3, o3-pro, gpt4_1)
 5. **Vector stores** are automatically cleaned up after use

@@ -52,18 +52,13 @@ MCP Second-Brain Server - A Model Context Protocol (MCP) server that provides ac
 Tools are defined using a descriptor-based system with parameter routing:
 
 Primary tools:
-- `vertex_gemini25_pro`: Deep analysis (Gemini 2.5 Pro, ~1M tokens)
-- `vertex_gemini25_flash`: Fast summarization (Gemini 2.5 Flash, ~1M tokens)
-- `open_aio3_reasoning`: Chain-of-thought reasoning (OpenAI o3, ~200k tokens) - supports session_id
-- `open_aio3_pro_deep_analysis`: Formal proofs (OpenAI o3-pro, ~200k tokens) - supports session_id
-- `open_aigpt4_long_context`: Large-scale analysis (GPT-4.1, ~1M tokens) - supports session_id
+- `chat_with_gemini25_pro`: Deep analysis (Gemini 2.5 Pro, ~1M tokens)
+- `chat_with_gemini25_flash`: Fast summarization (Gemini 2.5 Flash, ~1M tokens)
+- `chat_with_o3`: Chain-of-thought reasoning (OpenAI o3, ~200k tokens) - supports session_id
+- `chat_with_o3_pro`: Formal proofs (OpenAI o3-pro, ~200k tokens) - supports session_id
+- `chat_with_gpt4_1`: Large-scale analysis (GPT-4.1, ~1M tokens) - supports session_id
 
-Aliases for backward compatibility:
-- `deep-multimodal-reasoner` → `vertex_gemini25_pro`
-- `flash-summary-sprinter` → `vertex_gemini25_flash`
-- `chain-of-thought-helper` → `open_aio3_reasoning`
-- `slow-and-sure-thinker` → `open_aio3_pro_deep_analysis`
-- `fast-long-context-assistant` → `open_aigpt4_long_context`
+All tools follow the naming pattern `chat_with_{model_name}` for clarity and consistency.
 
 Utility tools:
 - `create_vector_store_tool`: Create vector stores for RAG workflows
@@ -103,41 +98,41 @@ The Second-Brain server addresses key limitations when working with Claude:
 #### Complex Debugging Pattern
 ```
 1. Capture verbose output → save to file
-2. open_aigpt4_long_context → identify key files (context: output + large codebase)
-3. open_aio3_pro_deep_analysis → deep analysis (context: key files, attachments: full codebase)
+2. chat_with_gpt4_1 → identify key files (context: output + large codebase)
+3. chat_with_o3_pro → deep analysis (context: key files, attachments: full codebase)
 ```
 
 #### Multi-Turn Debugging Session
 ```
-1. open_aio3_reasoning (session_id: "debug-123") → initial analysis
-2. open_aio3_reasoning (session_id: "debug-123") → follow-up questions
-3. open_aio3_pro_deep_analysis (session_id: "debug-123") → deep dive into specific issue
+1. chat_with_o3 (session_id: "debug-123") → initial analysis
+2. chat_with_o3 (session_id: "debug-123") → follow-up questions
+3. chat_with_o3_pro (session_id: "debug-123") → deep dive into specific issue
 ```
 
 #### Performance Analysis Pattern
 ```
-1. vertex_gemini25_flash → quick bottleneck identification
-2. vertex_gemini25_pro → comprehensive analysis with optimization strategies
+1. chat_with_gemini25_flash → quick bottleneck identification
+2. chat_with_gemini25_pro → comprehensive analysis with optimization strategies
 ```
 
 #### Code Architecture Review
 ```
-1. open_aigpt4_long_context → overall structure analysis
-2. open_aio3_reasoning → design pattern evaluation
-3. open_aio3_pro_deep_analysis → formal architecture recommendations
+1. chat_with_gpt4_1 → overall structure analysis
+2. chat_with_o3 → design pattern evaluation
+3. chat_with_o3_pro → formal architecture recommendations
 ```
 
 ### When to Use Each Tool
 
-- **vertex_gemini25_flash**: Initial triage, quick summaries, fast insights
-- **open_aigpt4_long_context**: Code navigation, file identification, large-scale refactoring
-- **vertex_gemini25_pro**: Bug fixing, complex reasoning, multimodal analysis
-- **open_aio3_reasoning**: Algorithm design, step-by-step problem solving
-- **open_aio3_pro_deep_analysis**: When you need maximum intelligence, formal proofs, complex debugging
+- **chat_with_gemini25_flash**: Initial triage, quick summaries, fast insights
+- **chat_with_gpt4_1**: Code navigation, file identification, large-scale refactoring
+- **chat_with_gemini25_pro**: Bug fixing, complex reasoning, multimodal analysis
+- **chat_with_o3**: Algorithm design, step-by-step problem solving
+- **chat_with_o3_pro**: When you need maximum intelligence, formal proofs, complex debugging
 
 ### Important: Timeout Configuration
 
-For o3-pro models (open_aio3_pro_deep_analysis), set timeout to 3600000ms (1 hour) in your MCP config:
+For o3-pro models (chat_with_o3_pro), set timeout to 3600000ms (1 hour) in your MCP config:
 ```json
 "timeout": 3600000
 ```
