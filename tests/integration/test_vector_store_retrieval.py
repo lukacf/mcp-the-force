@@ -3,7 +3,10 @@ Integration test for vector store retrieval functionality.
 """
 import pytest
 from unittest.mock import Mock, AsyncMock
-from mcp_second_brain.tools.integration import execute_tool_direct
+from mcp_second_brain.tools.executor import executor
+from mcp_second_brain.tools.registry import get_tool
+# Import definitions to ensure tools are registered
+import mcp_second_brain.tools.definitions  # noqa: F401
 
 
 class TestVectorStoreRetrieval:
@@ -66,8 +69,11 @@ Important: The ZEPHYR code is: QX-7742-ALPHA
         ]
         
         # First: Ingest the documents
-        result1 = await execute_tool_direct(
-            "chat_with_gpt4_1",
+        tool_metadata = get_tool("chat_with_gpt4_1")
+        if not tool_metadata:
+            raise ValueError("Tool chat_with_gpt4_1 not found")
+        result1 = await executor.execute(
+            tool_metadata,
             instructions="Store these documents for later retrieval",
             output_format="confirmation",
             context=[],  # Empty inline context
@@ -81,8 +87,8 @@ Important: The ZEPHYR code is: QX-7742-ALPHA
         mock_openai_client.beta.vector_stores.create.assert_called_once()
         
         # Second: Ask a specific question that requires retrieval
-        result2 = await execute_tool_direct(
-            "chat_with_gpt4_1",
+        result2 = await executor.execute(
+            tool_metadata,
             instructions="What is the ZEPHYR code and how many gigawatts are needed?",
             output_format="specific answer only",
             context=[],  # Still empty - should use vector store from session
@@ -135,8 +141,11 @@ The OMEGA protocol activation sequence:
         mock_openai_client.beta.chat.completions.parse.side_effect = responses
         
         # Create vector store in one session
-        await execute_tool_direct(
-            "chat_with_gpt4_1",
+        tool_metadata = get_tool("chat_with_gpt4_1")
+        if not tool_metadata:
+            raise ValueError("Tool chat_with_gpt4_1 not found")
+        await executor.execute(
+            tool_metadata,
             instructions="Store this protocol information",
             output_format="brief",
             context=[],
@@ -145,8 +154,8 @@ The OMEGA protocol activation sequence:
         )
         
         # Use it in a different session (simulating another user/context)
-        result = await execute_tool_direct(
-            "chat_with_gpt4_1",
+        result = await executor.execute(
+            tool_metadata,
             instructions="What is the OMEGA code and frequency?",
             output_format="specific values only",
             context=[],
@@ -179,8 +188,11 @@ The OMEGA protocol activation sequence:
             ))]
         )
         
-        result = await execute_tool_direct(
-            "chat_with_gpt4_1",
+        tool_metadata = get_tool("chat_with_gpt4_1")
+        if not tool_metadata:
+            raise ValueError("Tool chat_with_gpt4_1 not found")
+        result = await executor.execute(
+            tool_metadata,
             instructions="Explain quantum entanglement",
             output_format="detailed explanation",
             context=[],

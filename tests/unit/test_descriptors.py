@@ -36,7 +36,7 @@ class TestRouteDescriptor:
             param = desc
         
         # Name should be set when class is created
-        assert desc.name == "param"
+        assert desc.field_name == "param"
 
 
 class TestRoute:
@@ -89,15 +89,21 @@ class TestDescriptorIntegration:
     def test_descriptor_get_on_instance(self):
         """Test descriptor __get__ on instance returns value."""
         class TestTool(ToolSpec):
-            value = Route.prompt(pos=0, default="default_value")
+            value = Route.prompt(pos=0)
+            temp = Route.adapter(default=0.7)
         
         tool = TestTool()
-        # Should return default value
-        assert tool.value == "default_value"
+        # Prompt params don't have defaults
+        assert tool.value is None
         
-        # Set a value
+        # Adapter params can have defaults
+        assert tool.temp == 0.7
+        
+        # Set values
         tool.value = "new_value"
+        tool.temp = 0.9
         assert tool.value == "new_value"
+        assert tool.temp == 0.9
     
     def test_all_descriptors_get_names(self):
         """Test that all descriptors in a class get their names set."""
@@ -110,9 +116,9 @@ class TestDescriptorIntegration:
             sess = Route.session()
         
         # All descriptors should have their names set
-        assert ComplexTool.inst.name == "inst"
-        assert ComplexTool.fmt.name == "fmt"
-        assert ComplexTool.ctx.name == "ctx"
-        assert ComplexTool.temp.name == "temp"
-        assert ComplexTool.attach.name == "attach"
-        assert ComplexTool.sess.name == "sess"
+        assert ComplexTool.inst.field_name == "inst"
+        assert ComplexTool.fmt.field_name == "fmt"
+        assert ComplexTool.ctx.field_name == "ctx"
+        assert ComplexTool.temp.field_name == "temp"
+        assert ComplexTool.attach.field_name == "attach"
+        assert ComplexTool.sess.field_name == "sess"

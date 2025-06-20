@@ -5,7 +5,10 @@ import pytest
 from pathlib import Path
 from unittest.mock import Mock, patch, AsyncMock
 from mcp_second_brain.tools.vector_store_manager import VectorStoreManager
-from mcp_second_brain.tools.integration import execute_tool_direct
+from mcp_second_brain.tools.executor import executor
+from mcp_second_brain.tools.registry import get_tool
+# Import definitions to ensure tools are registered
+import mcp_second_brain.tools.definitions  # noqa: F401
 
 
 class TestVectorStoreIntegration:
@@ -67,8 +70,11 @@ class TestVectorStoreIntegration:
         mock_openai_client.beta.chat.completions.parse.return_value = mock_response
         
         # Execute tool with attachments
-        result = await execute_tool_direct(
-            "chat_with_gpt4_1",
+        tool_metadata = get_tool("chat_with_gpt4_1")
+        if not tool_metadata:
+            raise ValueError("Tool chat_with_gpt4_1 not found")
+        result = await executor.execute(
+            tool_metadata,
             instructions="Analyze the documentation",
             output_format="summary",
             context=[str(temp_project / "src")],  # Small context
@@ -133,8 +139,11 @@ class TestVectorStoreIntegration:
         )
         
         # Should handle gracefully
-        result = await execute_tool_direct(
-            "chat_with_gpt4_1",
+        tool_metadata = get_tool("chat_with_gpt4_1")
+        if not tool_metadata:
+            raise ValueError("Tool chat_with_gpt4_1 not found")
+        result = await executor.execute(
+            tool_metadata,
             instructions="Analyze",
             output_format="text",
             context=[],
@@ -157,8 +166,11 @@ class TestVectorStoreIntegration:
         
         # Should raise appropriate error
         with pytest.raises(Exception, match="creation failed|vector store"):
-            await execute_tool_direct(
-                "chat_with_gpt4_1",
+            tool_metadata = get_tool("chat_with_gpt4_1")
+            if not tool_metadata:
+                raise ValueError("Tool chat_with_gpt4_1 not found")
+            await executor.execute(
+                tool_metadata,
                 instructions="Test",
                 output_format="text",
                 context=[],
@@ -185,8 +197,11 @@ class TestVectorStoreIntegration:
         )
         
         # Should handle without timeout
-        result = await execute_tool_direct(
-            "chat_with_gpt4_1",
+        tool_metadata = get_tool("chat_with_gpt4_1")
+        if not tool_metadata:
+            raise ValueError("Tool chat_with_gpt4_1 not found")
+        result = await executor.execute(
+            tool_metadata,
             instructions="Analyze all files",
             output_format="summary",
             context=[],
