@@ -21,6 +21,7 @@ uv run -- mcp-second-brain
 
 ## 🔧 Configuration
 
+### Environment Variables
 Create a `.env` file with your API credentials:
 
 ```env
@@ -33,34 +34,47 @@ MAX_INLINE_TOKENS=12000
 DEFAULT_TEMPERATURE=0.2
 ```
 
+### Model Configuration
+Models are configured in `mcp_second_brain/config/models.yaml`. To add a new model, simply add an entry:
+
+```yaml
+- id: your_provider_model_capability
+  provider: your_provider
+  adapter: adapter_name
+  model_name: actual-model-name
+  description: What this model excels at
+  context_window: 200000
+  default_timeout: 600
+  supports_session: true
+  supports_vector_store: true
+```
+
 ## 🛠️ Available Tools
 
-The server exposes 5 specialized AI tools, each optimized for different tasks. OpenAI tools (o3, o3-pro, gpt-4.1) support optional conversation continuity via `session_id`:
+The server dynamically generates tools from configuration. All tool names follow the pattern: `{provider}_{model}_{capability}`.
 
-### 🧠 **deep-multimodal-reasoner** (Gemini 2.5 Pro)
-- **Purpose**: Bug fixing, complex reasoning, multimodal analysis
-- **Context**: ~2M tokens
-- **Features**: Advanced reasoning with thinking budget control
+### Primary Tools
 
-### ⚡ **flash-summary-sprinter** (Gemini 2.5 Flash)
-- **Purpose**: Fast summarization, quick analysis
-- **Context**: ~2M tokens  
-- **Features**: High-speed processing for rapid insights
+| Tool Name | Model | Purpose | Context | Session Support |
+|-----------|-------|---------|---------|------------------|
+| `vertex_gemini25_pro_multimodal` | Gemini 2.5 Pro | Deep multimodal analysis, bug fixing | ~2M tokens | ❌ |
+| `vertex_gemini25_flash_summary` | Gemini 2.5 Flash | Fast summarization, quick insights | ~2M tokens | ❌ |
+| `openai_o3_reasoning` | OpenAI o3 | Chain-of-thought reasoning, algorithms | ~200k tokens | ✅ |
+| `openai_o3_pro_deep_analysis` | OpenAI o3-pro | Formal proofs, complex debugging | ~200k tokens | ✅ |
+| `openai_gpt4_longcontext` | GPT-4.1 | Large-scale refactoring, RAG workflows | ~1M tokens | ✅ |
 
-### 🔗 **chain-of-thought-helper** (OpenAI o3)
-- **Purpose**: Algorithm design, step-by-step reasoning
-- **Context**: ~200k tokens
-- **Features**: Reasoning effort control (low/medium/high)
+### Legacy Aliases (for backward compatibility)
 
-### 🎯 **slow-and-sure-thinker** (OpenAI o3-pro)
-- **Purpose**: Formal proofs, deep analysis, complex problems
-- **Context**: ~200k tokens
-- **Features**: Maximum reasoning capability with effort control
+- `deep-multimodal-reasoner` → `vertex_gemini25_pro_multimodal`
+- `flash-summary-sprinter` → `vertex_gemini25_flash_summary`
+- `chain-of-thought-helper` → `openai_o3_reasoning`
+- `slow-and-sure-thinker` → `openai_o3_pro_deep_analysis`
+- `fast-long-context-assistant` → `openai_gpt4_longcontext`
 
-### 🏃 **fast-long-context-assistant** (OpenAI gpt-4.1)
-- **Purpose**: Large-scale refactoring, long document analysis
-- **Context**: ~1M tokens
-- **Features**: Fast processing with extensive context support
+### Additional Tools
+
+- `create_vector_store_tool` - Create vector stores for RAG workflows
+- `list_models` - List all available models and their capabilities
 
 ## 📁 Smart Context Management
 
@@ -90,7 +104,7 @@ OpenAI models (o3, o3-pro, gpt-4.1) now support multi-turn conversations through
 ### Basic Usage
 ```json
 {
-  "tool": "chain-of-thought-helper",
+  "tool": "openai_o3_reasoning",
   "session_id": "debug-session-123",
   "instructions": "Analyze this function",
   "output_format": "explanation",
@@ -101,7 +115,7 @@ OpenAI models (o3, o3-pro, gpt-4.1) now support multi-turn conversations through
 Follow-up in the same session:
 ```json
 {
-  "tool": "chain-of-thought-helper", 
+  "tool": "openai_o3_reasoning", 
   "session_id": "debug-session-123",
   "instructions": "Now optimize it for performance",
   "output_format": "code",

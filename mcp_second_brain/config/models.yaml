@@ -1,0 +1,77 @@
+# Model configuration for MCP Second-Brain Server
+models:
+  - id: vertex_gemini25_pro_multimodal
+    aliases: [deep-multimodal-reasoner]
+    provider: vertex
+    adapter: vertex
+    model_name: gemini-2.5-pro
+    description: |
+      Deep multimodal analysis and complex reasoning (Gemini 2.5 Pro, ~2M context).
+      Excels at: bug fixing, code analysis, multimodal understanding.
+    context_window: 2000000
+    default_timeout: 600
+    supports_session: false
+    supports_vector_store: false
+    default_params:
+      temperature: 0.2
+
+  - id: vertex_gemini25_flash_summary
+    aliases: [flash-summary-sprinter]
+    provider: vertex
+    adapter: vertex
+    model_name: gemini-2.5-flash
+    description: |
+      Fast summarization and quick analysis (Gemini 2.5 Flash, ~2M context).
+      Excels at: rapid insights, triage, quick summaries.
+    context_window: 2000000
+    default_timeout: 300
+    supports_session: false
+    supports_vector_store: false
+    default_params:
+      temperature: 0.3
+
+  - id: openai_o3_reasoning
+    aliases: [chain-of-thought-helper]
+    provider: openai
+    adapter: openai
+    model_name: o3
+    description: |
+      Chain-of-thought reasoning and algorithm design (OpenAI o3, ~200k context).
+      Excels at: step-by-step problem solving, algorithm design, code generation.
+    context_window: 200000
+    default_timeout: 600
+    supports_session: true
+    supports_vector_store: true
+    default_params:
+      temperature: 0.3
+
+  - id: openai_o3_pro_deep_analysis
+    aliases: [slow-and-sure-thinker]
+    provider: openai
+    adapter: openai
+    model_name: o3-pro
+    description: |
+      Deep analysis and formal reasoning (OpenAI o3-pro, ~200k context).
+      Excels at: formal proofs, complex debugging, architectural analysis.
+      Note: Can take 10-30 minutes for deep reasoning.
+    context_window: 200000
+    default_timeout: 2700  # 45 minutes
+    supports_session: true
+    supports_vector_store: true
+    default_params:
+      temperature: 0.2
+
+  - id: openai_gpt4_longcontext
+    aliases: [fast-long-context-assistant]
+    provider: openai
+    adapter: openai
+    model_name: gpt-4.1
+    description: |
+      Fast long-context processing (GPT-4.1, ~1M context).
+      Excels at: large-scale refactoring, codebase navigation, RAG workflows.
+    context_window: 1000000
+    default_timeout: 300
+    supports_session: true
+    supports_vector_store: true
+    default_params:
+      temperature: 0.2

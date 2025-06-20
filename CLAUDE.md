@@ -42,13 +42,20 @@ MCP Second-Brain Server - A Model Context Protocol (MCP) server that provides ac
 
 ### Available Tools
 
-Each tool is exposed via MCP protocol with specific use cases:
-- `deep-multimodal-reasoner`: Bug fixing, complex reasoning (Gemini 2.5 Pro, ~2M tokens)
-- `flash-summary-sprinter`: Fast summarization (Gemini 2.5 Flash, ~2M tokens)
-- `chain-of-thought-helper`: Algorithm design (OpenAI o3, ~200k tokens) - supports session_id
-- `slow-and-sure-thinker`: Formal proofs, deep analysis (OpenAI o3-pro, ~200k tokens) - supports session_id
-- `fast-long-context-assistant`: Large-scale refactoring (OpenAI gpt-4.1, ~1M tokens) - supports session_id
+Tools are dynamically generated from `config/models.yaml`. Primary tool names follow the pattern `{provider}_{model}_{capability}`:
+
+Primary tools:
+- `vertex_gemini25_pro_multimodal`: Deep analysis (Gemini 2.5 Pro, ~2M tokens)
+- `vertex_gemini25_flash_summary`: Fast summarization (Gemini 2.5 Flash, ~2M tokens)
+- `openai_o3_reasoning`: Chain-of-thought reasoning (OpenAI o3, ~200k tokens) - supports session_id
+- `openai_o3_pro_deep_analysis`: Formal proofs (OpenAI o3-pro, ~200k tokens) - supports session_id
+- `openai_gpt4_longcontext`: Large-scale analysis (GPT-4.1, ~1M tokens) - supports session_id
+
+Legacy aliases are maintained for backward compatibility.
+
+Utility tools:
 - `create_vector_store_tool`: Create vector stores for RAG workflows
+- `list_models`: Show all available models and capabilities
 
 ### Conversation Support
 
@@ -84,41 +91,41 @@ The Second-Brain server addresses key limitations when working with Claude:
 #### Complex Debugging Pattern
 ```
 1. Capture verbose output → save to file
-2. fast-long-context-assistant → identify key files (context: output + large codebase)
-3. slow-and-sure-thinker → deep analysis (context: key files, attachments: full codebase)
+2. openai_gpt4_longcontext → identify key files (context: output + large codebase)
+3. openai_o3_pro_deep_analysis → deep analysis (context: key files, attachments: full codebase)
 ```
 
 #### Multi-Turn Debugging Session
 ```
-1. chain-of-thought-helper (session_id: "debug-123") → initial analysis
-2. chain-of-thought-helper (session_id: "debug-123") → follow-up questions
-3. slow-and-sure-thinker (session_id: "debug-123") → deep dive into specific issue
+1. openai_o3_reasoning (session_id: "debug-123") → initial analysis
+2. openai_o3_reasoning (session_id: "debug-123") → follow-up questions
+3. openai_o3_pro_deep_analysis (session_id: "debug-123") → deep dive into specific issue
 ```
 
 #### Performance Analysis Pattern
 ```
-1. flash-summary-sprinter → quick bottleneck identification
-2. deep-multimodal-reasoner → comprehensive analysis with optimization strategies
+1. vertex_gemini25_flash_summary → quick bottleneck identification
+2. vertex_gemini25_pro_multimodal → comprehensive analysis with optimization strategies
 ```
 
 #### Code Architecture Review
 ```
-1. fast-long-context-assistant → overall structure analysis
-2. chain-of-thought-helper → design pattern evaluation
-3. slow-and-sure-thinker → formal architecture recommendations
+1. openai_gpt4_longcontext → overall structure analysis
+2. openai_o3_reasoning → design pattern evaluation
+3. openai_o3_pro_deep_analysis → formal architecture recommendations
 ```
 
 ### When to Use Each Tool
 
-- **flash-summary-sprinter**: Initial triage, quick summaries, fast insights
-- **fast-long-context-assistant**: Code navigation, file identification, large-scale refactoring
-- **deep-multimodal-reasoner**: Bug fixing, complex reasoning, multimodal analysis
-- **chain-of-thought-helper**: Algorithm design, step-by-step problem solving
-- **slow-and-sure-thinker**: When you need maximum intelligence, formal proofs, complex debugging
+- **vertex_gemini25_flash_summary**: Initial triage, quick summaries, fast insights
+- **openai_gpt4_longcontext**: Code navigation, file identification, large-scale refactoring
+- **vertex_gemini25_pro_multimodal**: Bug fixing, complex reasoning, multimodal analysis
+- **openai_o3_reasoning**: Algorithm design, step-by-step problem solving
+- **openai_o3_pro_deep_analysis**: When you need maximum intelligence, formal proofs, complex debugging
 
 ### Important: Timeout Configuration
 
-For o3-pro models (slow-and-sure-thinker), set timeout to 3600000ms (1 hour) in your MCP config:
+For o3-pro models (openai_o3_pro_deep_analysis), set timeout to 3600000ms (1 hour) in your MCP config:
 ```json
 "timeout": 3600000
 ```
