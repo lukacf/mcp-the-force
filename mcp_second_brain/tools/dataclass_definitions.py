@@ -5,9 +5,9 @@ from .dataclass_base import ToolSpec, RouteField
 from .registry import tool
 
 
-@tool(aliases=["deep-multimodal-reasoner"])
+@tool
 @dataclass
-class VertexGemini25ProDataclass(ToolSpec):
+class ChatWithGemini25ProDataclass(ToolSpec):
     """Deep multimodal analysis and complex reasoning (Gemini 2.5 Pro, ~1M context).
     Excels at: bug fixing, code analysis, multimodal understanding."""
     
@@ -38,9 +38,9 @@ class VertexGemini25ProDataclass(ToolSpec):
     session_id: Optional[str] = RouteField.session(description="Session ID (ignored for Gemini)", default=None)
 
 
-@tool(aliases=["chain-of-thought-helper"]) 
+@tool
 @dataclass
-class OpenAIO3ReasoningDataclass(ToolSpec):
+class ChatWithO3Dataclass(ToolSpec):
     """Chain-of-thought reasoning and algorithm design (OpenAI o3, ~200k context).
     Excels at: step-by-step problem solving, algorithm design, code generation."""
     
@@ -74,9 +74,8 @@ Please approach this task step-by-step, showing your reasoning process."""
         description="Controls reasoning effort",
         default="medium"
     )
-    session_id: Optional[str] = RouteField.session(
-        description="Session ID for multi-turn conversations",
-        default=None
+    session_id: str = RouteField.session(
+        description="Session ID for multi-turn conversations"
     )
 
 

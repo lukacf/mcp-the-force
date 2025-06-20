@@ -50,19 +50,15 @@ The server provides tools defined through a descriptor-based system. Each tool h
 
 | Tool Name | Model | Purpose | Context | Session Support |
 |-----------|-------|---------|---------|------------------|
-| `vertex_gemini25_pro` | Gemini 2.5 Pro | Deep multimodal analysis, bug fixing | ~1M tokens | ❌ |
-| `vertex_gemini25_flash` | Gemini 2.5 Flash | Fast summarization, quick insights | ~1M tokens | ❌ |
-| `openai_o3_reasoning` | OpenAI o3 | Chain-of-thought reasoning, algorithms | ~200k tokens | ✅ |
-| `openai_o3_pro_deep_analysis` | OpenAI o3-pro | Formal proofs, complex debugging | ~200k tokens | ✅ |
-| `open_aigpt4_long_context` | GPT-4.1 | Large-scale refactoring, RAG workflows | ~1M tokens | ✅ |
+| `chat_with_gemini25_pro` | Gemini 2.5 Pro | Deep multimodal analysis, bug fixing | ~1M tokens | ❌ |
+| `chat_with_gemini25_flash` | Gemini 2.5 Flash | Fast summarization, quick insights | ~1M tokens | ❌ |
+| `chat_with_o3` | OpenAI o3 | Chain-of-thought reasoning, algorithms | ~200k tokens | ✅ |
+| `chat_with_o3_pro` | OpenAI o3-pro | Formal proofs, complex debugging | ~200k tokens | ✅ |
+| `chat_with_gpt4_1` | GPT-4.1 | Large-scale refactoring, RAG workflows | ~1M tokens | ✅ |
 
-### Legacy Aliases (for backward compatibility)
+### Tool Naming Convention
 
-- `deep-multimodal-reasoner` → `vertex_gemini25_pro`
-- `flash-summary-sprinter` → `vertex_gemini25_flash`
-- `chain-of-thought-helper` → `open_aio3_reasoning`
-- `slow-and-sure-thinker` → `open_aio3_pro_deep_analysis`
-- `fast-long-context-assistant` → `open_aigpt4_long_context`
+All tools follow the pattern `chat_with_{model_name}` for clarity and consistency. This makes it clear that these tools enable chatting with specific AI models.
 
 ### Additional Tools
 
@@ -101,12 +97,12 @@ Call tools with their specific parameters:
 ```python
 # Example using the MCP protocol
 result = await mcp.call_tool(
-    "open_aio3_reasoning",
+    "chat_with_o3",
     instructions="Analyze this function for potential bugs",
     output_format="detailed analysis with recommendations",
     context=["/path/to/file.py"],
     reasoning_effort="medium",  # Optional: low, medium, high
-    session_id="debug-session-123"  # Optional: for conversation continuity
+    session_id="debug-session-123"  # Required for OpenAI models
 )
 ```
 
@@ -115,7 +111,7 @@ Follow-up in the same session:
 ```python
 # The session remembers previous context
 result = await mcp.call_tool(
-    "open_aio3_reasoning",
+    "chat_with_o3",
     instructions="Now optimize it for performance based on the issues we found",
     output_format="optimized code with explanations",
     context=["/path/to/file.py"],
@@ -172,7 +168,7 @@ npm test --verbose --reporter=verbose > test_output.log 2>&1
 ```python
 # Use GPT-4.1 for fast analysis of large contexts
 result = await mcp.call_tool(
-    "fast-long-context-assistant",
+    "chat_with_gpt4_1",
     instructions="Analyze the test failures and identify the 3-5 most critical files that likely contain the root cause",
     output_format="prioritized list with file paths and reasoning",
     context=["/Users/username/project/test_output.log"],
@@ -186,7 +182,7 @@ result = await mcp.call_tool(
 ```python
 # Use o3-pro for deep reasoning (can take 10-30 minutes)
 result = await mcp.call_tool(
-    "slow-and-sure-thinker",
+    "chat_with_o3_pro",
     instructions="Perform deep root cause analysis of the test failures. Provide specific fix recommendations with code changes.",
     output_format="detailed technical analysis with fix proposals",
     reasoning_effort="high",  # Maximum reasoning effort
@@ -222,7 +218,7 @@ result = await mcp.call_tool(
 ### Performance Investigation Chain
 ```json
 {
-  "tool": "flash-summary-sprinter",
+  "tool": "chat_with_gemini25_flash",
   "instructions": "Identify performance bottlenecks in this React application",
   "output_format": "quick summary of potential issues",
   "context": ["/Users/username/react-app/src/"]
@@ -232,7 +228,7 @@ result = await mcp.call_tool(
 Then follow up with:
 ```json
 {
-  "tool": "deep-multimodal-reasoner", 
+  "tool": "chat_with_gemini25_pro", 
   "instructions": "Deep dive into the identified performance issues. Analyze render patterns, state updates, and provide optimization strategies.",
   "output_format": "comprehensive performance audit with actionable fixes",
   "context": ["/Users/username/react-app/src/components/Dashboard.tsx"],
@@ -292,8 +288,8 @@ Add to your MCP client configuration:
 The server uses a sophisticated descriptor-based architecture:
 
 ```python
-@tool(aliases=["chain-of-thought-helper"])
-class OpenAIO3Reasoning(ToolSpec):
+@tool
+class ChatWithO3(ToolSpec):
     """Chain-of-thought reasoning and algorithm design."""
     
     # Model configuration
@@ -354,8 +350,8 @@ OpenAI-supported formats: `.c`, `.cpp`, `.css`, `.csv`, `.doc`, `.docx`, `.go`, 
 Create a new tool by defining a class with the `@tool` decorator:
 
 ```python
-@tool(aliases=["my-custom-assistant"])
-class MyCustomTool(ToolSpec):
+@tool
+class ChatWithMyModel(ToolSpec):
     """Description of what this tool does."""
     
     # Model configuration
