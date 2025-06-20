@@ -103,9 +103,11 @@ def tool(cls: Type[T] | None = None, *, aliases: List[str] | None = None) -> Typ
         logger.info(f"Registered tool: {tool_id}")
         
         # Register aliases
+        # Note: Aliases share the same metadata object reference as the primary tool.
+        # This is intentional - aliases are just alternative names for the same tool.
         if aliases:
             for alias in aliases:
-                TOOL_REGISTRY[alias] = metadata
+                TOOL_REGISTRY[alias] = metadata  # Same metadata object, not a copy
                 logger.info(f"Registered alias: {alias} -> {tool_id}")
         
         # Store metadata on the class for easy access

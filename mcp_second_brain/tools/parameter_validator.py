@@ -1,6 +1,6 @@
 """Parameter validation for tools."""
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, Union, get_origin, get_args
 from .registry import ToolMetadata
 from .base import ToolSpec
 
@@ -55,9 +55,14 @@ class ParameterValidator:
             if param_info.required and value is None:
                 raise ValueError(f"Required parameter '{name}' cannot be None")
             
-            # TODO: Add type validation here if needed
-            # if not isinstance(value, param_info.type):
-            #     raise TypeError(f"Parameter '{name}' expected {param_info.type}, got {type(value)}")
+            # Type validation for non-None values
+            if value is not None and hasattr(param_info, 'type') and param_info.type is not Any:
+                if not self._validate_type(value, param_info.type):
+                    expected = getattr(param_info, 'type_str', str(param_info.type))
+                    actual = type(value).__name__
+                    raise TypeError(
+                        f"Parameter '{name}' expected {expected}, got {actual}"
+                    )
             
             # Set on instance (descriptor will handle storage)
             setattr(tool_instance, name, value)
@@ -73,3 +78,53 @@ class ParameterValidator:
                 logger.warning(f"Unknown parameters will be ignored: {unknown}")
         
         return validated
+    
+    def _validate_type(self, value: Any, expected_type: type) -> bool:
+        """Validate that a value matches the expected type.
+        
+        Handles:
+        - Basic types (str, int, float, bool)
+        - Generic types (List[str], Optional[int], etc.)
+        - Union types
+        - Literal types
+        """
+        # Get origin for generic types
+        origin = get_origin(expected_type)
+        
+        # Handle None type
+        if expected_type is type(None):
+            return value is None
+        
+        # Handle Union types (including Optional)
+        if origin is Union:
+            args = get_args(expected_type)
+            return any(self._validate_type(value, arg) for arg in args)
+        
+        # Handle List types
+        if origin is list:
+            if not isinstance(value, list):
+                return False
+            # If parameterized, check element types
+            args = get_args(expected_type)
+            if args:
+                element_type = args[0]
+                return all(self._validate_type(elem, element_type) for elem in value)
+            return True
+        
+        # Handle Dict types
+        if origin is dict:
+            if not isinstance(value, dict):
+                return False
+            # Could add key/value type checking here if needed
+            return True
+        
+        # Handle Literal types
+        if hasattr(expected_type, '__origin__') and expected_type.__origin__.__name__ == 'Literal':
+            return value in get_args(expected_type)
+        
+        # Handle basic types
+        if origin is None:
+            return isinstance(value, expected_type)
+        
+        # For other generic types, just check the origin
+        return isinstance(value, origin)
