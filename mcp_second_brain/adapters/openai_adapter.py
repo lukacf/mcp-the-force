@@ -28,7 +28,8 @@ class OpenAIAdapter(BaseAdapter):
     
     async def generate(self, prompt: str, vector_store_ids: List[str] | None = None,
                        temperature: float | None = None, reasoning_effort: str | None = None, 
-                       timeout: float = 300, **kwargs: Any) -> str:
+                       timeout: float = 300, previous_response_id: str | None = None,
+                       **kwargs: Any) -> Dict[str, Any]:
         self._ensure(prompt)
         
         msgs = [{"role": "user", "content": prompt}]
@@ -46,6 +47,9 @@ class OpenAIAdapter(BaseAdapter):
         if reasoning_effort:
             params["reasoning"] = {"effort": reasoning_effort}
         
+        if previous_response_id:
+            params["previous_response_id"] = previous_response_id
+        
         # Create a fresh client for each request to avoid state corruption
         api_key = get_settings().openai_api_key
         if not api_key:
@@ -62,7 +66,10 @@ class OpenAIAdapter(BaseAdapter):
                 client.responses.create(**params),
                 timeout=timeout
             )
-            return response.output_text  # type: ignore[attr-defined]
+            return {
+                "content": response.output_text,  # type: ignore[attr-defined]
+                "response_id": response.id  # type: ignore[attr-defined]
+            }
         finally:
             # Ensure proper cleanup
             await asyncio.wait_for(client.close(), timeout=5)

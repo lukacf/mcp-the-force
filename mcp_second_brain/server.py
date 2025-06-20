@@ -52,6 +52,36 @@ mcp = FastMCP("mcp-second-brain")
 # Lazy adapter initialization
 adapters = {}
 
+# Simple session cache for OpenAI response IDs
+class SessionCache:
+    """Minimal ephemeral cache for OpenAI response IDs."""
+    def __init__(self, ttl=3600):
+        self._data = {}
+        self.ttl = ttl
+    
+    def get_response_id(self, session_id: str) -> Optional[str]:
+        """Get the previous response ID for a session."""
+        self._gc()
+        session = self._data.get(session_id)
+        if session and time.time() - session['updated'] < self.ttl:
+            return session.get('response_id')
+        return None
+    
+    def set_response_id(self, session_id: str, response_id: str):
+        """Store a response ID for a session."""
+        self._data[session_id] = {
+            'response_id': response_id,
+            'updated': time.time()
+        }
+    
+    def _gc(self):
+        """Garbage collect expired sessions."""
+        now = time.time()
+        self._data = {k: v for k, v in self._data.items() 
+                      if now - v['updated'] < self.ttl}
+
+session_cache = SessionCache()
+
 # Tool name to model mapping
 TOOL_TO_MODEL = {
     "deep-multimodal-reasoner": "gemini-2.5-pro",
@@ -189,7 +219,8 @@ async def chain_of_thought_helper(
     attachments: Optional[List[str]] = None,
     temperature: Optional[float] = None,
     reasoning_effort: Optional[str] = None,
-    max_reasoning_tokens: Optional[int] = None
+    max_reasoning_tokens: Optional[int] = None,
+    session_id: Optional[str] = None
 ) -> str:
     """Chain-of-thought helper for algorithm design (OpenAI o3, ctx≈200k).
     
@@ -222,10 +253,27 @@ async def chain_of_thought_helper(
         model = TOOL_TO_MODEL["chain-of-thought-helper"]
         timeout = MODEL_TIMEOUTS.get(model, 600)
         
-        return await asyncio.wait_for(
-            adapter.generate(prompt, vector_store_ids=vs, **extra),
+        # Get previous response ID if session provided
+        previous_response_id = None
+        if session_id:
+            previous_response_id = session_cache.get_response_id(session_id)
+        
+        result = await asyncio.wait_for(
+            adapter.generate(prompt, vector_store_ids=vs, 
+                           previous_response_id=previous_response_id, **extra),
             timeout=timeout
         )
+        
+        # Handle the response based on type
+        if isinstance(result, dict):
+            content = result.get("content", "")
+            # Store response ID for next call if session provided
+            if session_id and "response_id" in result:
+                session_cache.set_response_id(session_id, result["response_id"])
+            return content
+        else:
+            # Vertex adapter returns string directly
+            return result
     finally:
         # Clean up vector store
         if vs_id:
@@ -239,7 +287,8 @@ async def slow_and_sure_thinker(
     attachments: Optional[List[str]] = None,
     temperature: Optional[float] = None,
     reasoning_effort: Optional[str] = None,
-    max_reasoning_tokens: Optional[int] = None
+    max_reasoning_tokens: Optional[int] = None,
+    session_id: Optional[str] = None
 ) -> str:
     """Slow and sure thinker for formal proofs and deep analysis (OpenAI o3-pro, ctx≈200k).
     
@@ -272,10 +321,27 @@ async def slow_and_sure_thinker(
         model = TOOL_TO_MODEL["slow-and-sure-thinker"]
         timeout = MODEL_TIMEOUTS.get(model, 2700)
         
-        return await asyncio.wait_for(
-            adapter.generate(prompt, vector_store_ids=vs, **extra),
+        # Get previous response ID if session provided
+        previous_response_id = None
+        if session_id:
+            previous_response_id = session_cache.get_response_id(session_id)
+        
+        result = await asyncio.wait_for(
+            adapter.generate(prompt, vector_store_ids=vs,
+                           previous_response_id=previous_response_id, **extra),
             timeout=timeout
         )
+        
+        # Handle the response based on type
+        if isinstance(result, dict):
+            content = result.get("content", "")
+            # Store response ID for next call if session provided
+            if session_id and "response_id" in result:
+                session_cache.set_response_id(session_id, result["response_id"])
+            return content
+        else:
+            # Vertex adapter returns string directly
+            return result
     finally:
         # Clean up vector store
         if vs_id:
@@ -287,7 +353,8 @@ async def fast_long_context_assistant(
     output_format: str,
     context: List[str],
     attachments: Optional[List[str]] = None,
-    temperature: Optional[float] = None
+    temperature: Optional[float] = None,
+    session_id: Optional[str] = None
 ) -> str:
     """Fast long-context assistant for large-scale refactoring (GPT-4.1, ctx≈1000k).
     
@@ -329,17 +396,58 @@ async def fast_long_context_assistant(
         model = TOOL_TO_MODEL["fast-long-context-assistant"]
         timeout = MODEL_TIMEOUTS.get(model, 300)
         
+        # Get previous response ID if session provided
+        previous_response_id = None
+        if session_id:
+            previous_response_id = session_cache.get_response_id(session_id)
+        
         result = await asyncio.wait_for(
-            adapter.generate(prompt, vector_store_ids=vs, **extra),
+            adapter.generate(prompt, vector_store_ids=vs,
+                           previous_response_id=previous_response_id, **extra),
             timeout=timeout
         )
         logger.info(f"Generation completed in {time.time() - gen_start:.2f}s")
         logger.info(f"Total time: {time.time() - start_time:.2f}s")
-        return result
+        
+        # Handle the response based on type
+        if isinstance(result, dict):
+            content = result.get("content", "")
+            # Store response ID for next call if session provided
+            if session_id and "response_id" in result:
+                session_cache.set_response_id(session_id, result["response_id"])
+            return content
+        else:
+            # Vertex adapter returns string directly
+            return result
     finally:
         # Clean up vector store
         if vs_id:
             delete_vector_store(vs_id)
+
+# Vector store management tools
+@mcp.tool()
+async def create_vector_store_tool(
+    files: List[str],
+    name: Optional[str] = None
+) -> Dict[str, str]:
+    """Create a vector store from files and return its ID.
+    
+    Args:
+        files: List of file paths to include in the vector store
+        name: Optional name for the vector store
+        
+    Returns:
+        Dictionary with vector_store_id
+    """
+    try:
+        vs_id = await asyncio.to_thread(create_vector_store, files)
+        if vs_id:
+            return {"vector_store_id": vs_id, "status": "created"}
+        else:
+            return {"vector_store_id": "", "status": "no_supported_files"}
+    except Exception as e:
+        logger.error(f"Error creating vector store: {e}")
+        return {"vector_store_id": "", "status": "error", "error": str(e)}
 
 def main():
     """Main entry point for the MCP server."""
