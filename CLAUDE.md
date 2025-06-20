@@ -45,8 +45,8 @@ MCP Second-Brain Server - A Model Context Protocol (MCP) server that provides ac
 Tools are dynamically generated from `config/models.yaml`. Primary tool names follow the pattern `{provider}_{model}_{capability}`:
 
 Primary tools:
-- `vertex_gemini25_pro_multimodal`: Deep analysis (Gemini 2.5 Pro, ~2M tokens)
-- `vertex_gemini25_flash_summary`: Fast summarization (Gemini 2.5 Flash, ~2M tokens)
+- `vertex_gemini25_pro_multimodal`: Deep analysis (Gemini 2.5 Pro, ~1M tokens)
+- `vertex_gemini25_flash_summary`: Fast summarization (Gemini 2.5 Flash, ~1M tokens)
 - `openai_o3_reasoning`: Chain-of-thought reasoning (OpenAI o3, ~200k tokens) - supports session_id
 - `openai_o3_pro_deep_analysis`: Formal proofs (OpenAI o3-pro, ~200k tokens) - supports session_id
 - `openai_gpt4_longcontext`: Large-scale analysis (GPT-4.1, ~1M tokens) - supports session_id

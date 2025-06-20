@@ -19,6 +19,7 @@ class ModelConfig(BaseModel):
     default_timeout: int
     supports_session: bool = False
     supports_vector_store: bool = False
+    supports_temperature: bool = True  # Most models support it, o3/o3-pro don't
     default_params: Dict[str, Any] = Field(default_factory=dict)
 
 def load_models(config_path: Optional[str | Path] = None) -> Dict[str, ModelConfig]:
