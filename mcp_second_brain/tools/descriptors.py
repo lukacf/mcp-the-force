@@ -7,11 +7,15 @@ T = TypeVar('T')
 
 @dataclass
 class RouteDescriptor:
-    """Descriptor that defines how a parameter is routed during execution."""
+    """Descriptor that defines how a parameter is routed during execution.
+    
+    Warning: Mutable default values (lists, dicts) will be shared between instances.
+    Use None as default and handle initialization in the tool if you need mutable defaults.
+    """
     
     route: str  # "prompt", "adapter", "vector_store", "session"
     position: Optional[int] = None
-    default: Any = field(default=None)
+    default: Any = field(default=None)  # Warning: mutable defaults are shared!
     description: Optional[str] = None
     
     def __set_name__(self, owner: Type, name: str) -> None:
