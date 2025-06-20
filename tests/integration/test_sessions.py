@@ -4,8 +4,11 @@ Integration tests for multi-turn session management.
 import pytest
 import asyncio
 from unittest.mock import Mock, AsyncMock
-from mcp_second_brain.tools.integration import execute_tool_direct
-from mcp_second_brain.session_cache import get_session_cache
+from mcp_second_brain.tools.executor import executor
+from mcp_second_brain.tools.registry import get_tool
+# Import definitions to ensure tools are registered
+import mcp_second_brain.tools.definitions  # noqa: F401
+from mcp_second_brain.session_cache import session_cache
 
 
 class TestSessionManagement:
@@ -14,10 +17,10 @@ class TestSessionManagement:
     @pytest.fixture(autouse=True)
     def clear_session_cache(self):
         """Clear session cache before each test."""
-        cache = get_session_cache()
-        cache._cache.clear()
+        cache = session_cache
+        cache._data.clear()
         yield
-        cache._cache.clear()
+        cache._data.clear()
     
     @pytest.mark.asyncio
     async def test_basic_session_continuity(self, mock_openai_client):
@@ -44,8 +47,11 @@ class TestSessionManagement:
         mock_openai_client.beta.chat.completions.parse.side_effect = [response1, response2]
         
         # First call
-        result1 = await execute_tool_direct(
-            "chat_with_o3",
+        tool_metadata = get_tool("chat_with_o3")
+        if not tool_metadata:
+            raise ValueError("Tool chat_with_o3 not found")
+        result1 = await executor.execute(
+            tool_metadata,
             instructions="I need help with Python decorators",
             output_format="explanation",
             context=[],
@@ -55,8 +61,8 @@ class TestSessionManagement:
         assert "Hello! I can help" in result1
         
         # Second call with same session
-        result2 = await execute_tool_direct(
-            "chat_with_o3",
+        result2 = await executor.execute(
+            tool_metadata,
             instructions="Can you show me a concrete example?",
             output_format="code",
             context=[],
@@ -83,30 +89,33 @@ class TestSessionManagement:
         mock_openai_client.beta.chat.completions.parse.side_effect = responses
         
         # Two parallel conversations
+        tool_metadata = get_tool("chat_with_o3")
+        if not tool_metadata:
+            raise ValueError("Tool chat_with_o3 not found")
         results = await asyncio.gather(
-            execute_tool_direct(
-                "chat_with_o3",
+            executor.execute(
+                tool_metadata,
                 instructions="First message session 1",
                 output_format="text",
                 context=[],
                 session_id="session-1"
             ),
-            execute_tool_direct(
-                "chat_with_o3",
+            executor.execute(
+                tool_metadata,
                 instructions="First message session 2",
                 output_format="text",
                 context=[],
                 session_id="session-2"
             ),
-            execute_tool_direct(
-                "chat_with_o3",
+            executor.execute(
+                tool_metadata,
                 instructions="Second message session 1",
                 output_format="text",
                 context=[],
                 session_id="session-1"
             ),
-            execute_tool_direct(
-                "chat_with_o3",
+            executor.execute(
+                tool_metadata,
                 instructions="Second message session 2",
                 output_format="text",
                 context=[],
@@ -137,8 +146,11 @@ class TestSessionManagement:
         mock_openai_client.beta.chat.completions.parse.side_effect = responses
         
         # Start with o3
-        result1 = await execute_tool_direct(
-            "chat_with_o3",
+        o3_metadata = get_tool("chat_with_o3")
+        if not o3_metadata:
+            raise ValueError("Tool chat_with_o3 not found")
+        result1 = await executor.execute(
+            o3_metadata,
             instructions="Start conversation",
             output_format="text",
             context=[],
@@ -148,8 +160,11 @@ class TestSessionManagement:
         assert "Response from o3" in result1
         
         # Continue with gpt4
-        result2 = await execute_tool_direct(
-            "chat_with_gpt4_1",
+        gpt4_metadata = get_tool("chat_with_gpt4_1")
+        if not gpt4_metadata:
+            raise ValueError("Tool chat_with_gpt4_1 not found")
+        result2 = await executor.execute(
+            gpt4_metadata,
             instructions="Continue conversation",
             output_format="text",
             context=[],
@@ -167,6 +182,7 @@ class TestSessionManagement:
     async def test_session_expiration(self, mock_openai_client):
         """Test that sessions expire after TTL."""
         from mcp_second_brain.session_cache import SessionCache
+        from unittest.mock import patch
         
         # Create cache with very short TTL for testing
         cache = SessionCache(ttl_seconds=0.1)  # 100ms TTL
@@ -182,8 +198,11 @@ class TestSessionManagement:
             mock_openai_client.beta.chat.completions.parse.return_value = response
             
             # First call
-            await execute_tool_direct(
-                "chat_with_o3",
+            tool_metadata = get_tool("chat_with_o3")
+            if not tool_metadata:
+                raise ValueError("Tool chat_with_o3 not found")
+            await executor.execute(
+                tool_metadata,
                 instructions="Start",
                 output_format="text",
                 context=[],
@@ -194,8 +213,8 @@ class TestSessionManagement:
             await asyncio.sleep(0.2)
             
             # Second call - should not have previous_response_id
-            await execute_tool_direct(
-                "chat_with_o3",
+            await executor.execute(
+                tool_metadata,
                 instructions="Continue",
                 output_format="text",
                 context=[],
@@ -213,8 +232,11 @@ class TestSessionManagement:
         mock_vertex_client.generate_content.return_value.text = "Gemini response"
         
         # Should work even with session_id (just ignored)
-        result = await execute_tool_direct(
-            "chat_with_gemini25_flash",
+        tool_metadata = get_tool("chat_with_gemini25_flash")
+        if not tool_metadata:
+            raise ValueError("Tool chat_with_gemini25_flash not found")
+        result = await executor.execute(
+            tool_metadata,
             instructions="Test",
             output_format="text",
             context=[],
@@ -251,9 +273,12 @@ class TestSessionManagement:
         ]
         
         # Launch three requests concurrently to same session
+        tool_metadata = get_tool("chat_with_o3")
+        if not tool_metadata:
+            raise ValueError("Tool chat_with_o3 not found")
         tasks = [
-            execute_tool_direct(
-                "chat_with_o3",
+            executor.execute(
+                tool_metadata,
                 instructions=f"Message {i}",
                 output_format="text",
                 context=[],
@@ -292,8 +317,11 @@ class TestSessionManagement:
         mock_openai_client.beta.chat.completions.parse.side_effect = [response1, response2]
         
         # First call with initial context
-        result1 = await execute_tool_direct(
-            "chat_with_o3",
+        tool_metadata = get_tool("chat_with_o3")
+        if not tool_metadata:
+            raise ValueError("Tool chat_with_o3 not found")
+        result1 = await executor.execute(
+            tool_metadata,
             instructions="Analyze this project",
             output_format="summary",
             context=[str(temp_project)],
@@ -304,8 +332,8 @@ class TestSessionManagement:
         (temp_project / "new_feature.py").write_text("def new_feature(): pass")
         
         # Second call with updated context
-        result2 = await execute_tool_direct(
-            "chat_with_o3",
+        result2 = await executor.execute(
+            tool_metadata,
             instructions="What changed?",
             output_format="diff",
             context=[str(temp_project)],

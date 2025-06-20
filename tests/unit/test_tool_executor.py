@@ -4,7 +4,9 @@ Unit tests for ToolExecutor orchestration.
 import pytest
 from unittest.mock import Mock, patch, AsyncMock
 from mcp_second_brain.tools.executor import ToolExecutor
-from mcp_second_brain.tools.definitions import ChatWithGemini25Flash, ChatWithO3
+from mcp_second_brain.tools.registry import get_tool
+# Import definitions to ensure tools are registered
+import mcp_second_brain.tools.definitions
 from mcp_second_brain.adapters.base import BaseAdapter
 
 
@@ -24,37 +26,48 @@ class TestToolExecutor:
         return adapter
     
     @pytest.mark.asyncio
-    async def test_execute_gemini_tool(self, executor, mock_adapter, tmp_path):
+    async def test_execute_gemini_tool(self, executor, mock_adapter, tmp_path, mock_env):
         """Test executing a Gemini tool with proper parameter routing."""
         # Create a test file
         test_file = tmp_path / "test.py"
         test_file.write_text("print('hello')")
         
+        # Clear adapter cache first
+        from mcp_second_brain.adapters import _ADAPTER_CACHE
+        _ADAPTER_CACHE.clear()
+        
         # Mock the adapter creation
         with patch('mcp_second_brain.adapters.get_adapter') as mock_get_adapter:
             mock_get_adapter.return_value = (mock_adapter, None)
             
-            result = await executor.execute_tool(
-                "chat_with_gemini25_flash",
-                instructions="Explain this code",
-                output_format="markdown",
-                context=[str(test_file)],
-                temperature=0.5
-            )
+            # Also ensure the vertex client is mocked
+            with patch('mcp_second_brain.adapters.vertex_adapter.get_client') as mock_get_client:
+                mock_get_client.return_value = Mock()  # Won't be used since we mock get_adapter
+                
+                metadata = get_tool("chat_with_gemini25_flash")
+                result = await executor.execute(
+                    metadata,
+                    instructions="Explain this code",
+                    output_format="markdown",
+                    context=[str(test_file)],
+                    temperature=0.5
+                )
+                
+                # Check that our mock was used
+                mock_get_adapter.assert_called_once()
         
         # Verify adapter was called with correct params
         mock_adapter.generate.assert_called_once()
         call_args = mock_adapter.generate.call_args
         
         # Check prompt was built
-        prompt = call_args[0][0]
+        prompt = call_args[1]["prompt"]
         assert "Explain this code" in prompt
         assert "markdown" in prompt
         assert "print('hello')" in prompt  # File content should be inlined
         
         # Check adapter params
-        adapter_params = call_args[1]
-        assert adapter_params.get("temperature") == 0.5
+        assert call_args[1].get("temperature") == 0.5
         
         # Check result
         assert result == "Mock response"
@@ -66,13 +79,12 @@ class TestToolExecutor:
             mock_get_adapter.return_value = (mock_adapter, None)
             
             # Mock session cache
-            with patch('mcp_second_brain.session_cache.get_session_cache') as mock_cache:
-                cache = Mock()
-                cache.get.return_value = "previous_response_id"
-                mock_cache.return_value = cache
+            with patch('mcp_second_brain.session_cache.session_cache') as mock_cache:
+                mock_cache.get_response_id.return_value = "previous_response_id"
                 
-                result = await executor.execute_tool(
-                    "chat_with_o3",
+                metadata = get_tool("chat_with_o3")
+                result = await executor.execute(
+                    metadata,
                     instructions="Continue our discussion",
                     output_format="text",
                     context=[],
@@ -81,7 +93,7 @@ class TestToolExecutor:
                 )
         
         # Verify session was used
-        cache.get.assert_called_with("test-session")
+        mock_cache.get_response_id.assert_called_with("test-session")
         
         # Verify adapter params include reasoning_effort
         call_args = mock_adapter.generate.call_args
@@ -98,13 +110,12 @@ class TestToolExecutor:
         with patch('mcp_second_brain.adapters.get_adapter') as mock_get_adapter:
             mock_get_adapter.return_value = (mock_adapter, None)
             
-            with patch('mcp_second_brain.tools.vector_store_manager.VectorStoreManager') as mock_vs:
-                vs_manager = Mock()
-                vs_manager.process_attachments = AsyncMock(return_value="vs_123")
-                mock_vs.return_value = vs_manager
+            with patch('mcp_second_brain.tools.vector_store_manager.vector_store_manager') as mock_vs_manager:
+                mock_vs_manager.create = AsyncMock(return_value="vs_123")
                 
-                result = await executor.execute_tool(
-                    "chat_with_gpt4_1",
+                metadata = get_tool("chat_with_gpt4_1")
+                result = await executor.execute(
+                    metadata,
                     instructions="Analyze this",
                     output_format="text",
                     context=[],
@@ -112,15 +123,19 @@ class TestToolExecutor:
                     session_id="test"
                 )
         
-        # Verify vector store was created
-        vs_manager.process_attachments.assert_called_once_with([str(large_file)])
+        # Verify vector store was created with attachments
+        mock_vs_manager.create.assert_called_once()
+        # The create method receives the routed vector_store params which include attachments
+        call_args = mock_vs_manager.create.call_args[0][0]
+        assert str(large_file) in call_args["attachments"]
     
     @pytest.mark.asyncio
     async def test_missing_required_parameter(self, executor):
         """Test that missing required parameter raises appropriate error."""
         with pytest.raises(ValueError, match="Missing required parameter"):
-            await executor.execute_tool(
-                "chat_with_gemini25_flash",
+            metadata = get_tool("chat_with_gemini25_flash")
+            await executor.execute(
+                metadata,
                 instructions="Test"
                 # Missing output_format and context
             )
@@ -129,12 +144,9 @@ class TestToolExecutor:
     async def test_invalid_tool_name(self, executor):
         """Test that invalid tool name raises appropriate error."""
         with pytest.raises(ValueError, match="Unknown tool"):
-            await executor.execute_tool(
-                "invalid_tool_name",
-                instructions="Test",
-                output_format="text",
-                context=[]
-            )
+            # Test that get_tool returns None for invalid tools
+            metadata = get_tool("invalid_tool_name")
+            assert metadata is None
     
     @pytest.mark.asyncio
     async def test_adapter_error_handling(self, executor):
@@ -143,10 +155,12 @@ class TestToolExecutor:
             # Simulate adapter creation failure
             mock_get_adapter.return_value = (None, "Failed to create adapter: Invalid API key")
             
-            with pytest.raises(RuntimeError, match="Failed to create adapter"):
-                await executor.execute_tool(
-                    "chat_with_gemini25_flash",
-                    instructions="Test",
-                    output_format="text",
-                    context=[]
-                )
+            # The executor returns error message instead of raising
+            metadata = get_tool("chat_with_gemini25_flash")
+            result = await executor.execute(
+                metadata,
+                instructions="Test",
+                output_format="text",
+                context=[]
+            )
+            assert "Error: Failed to initialize adapter" in result

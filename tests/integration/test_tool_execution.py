@@ -5,7 +5,8 @@ import pytest
 from pathlib import Path
 from unittest.mock import patch, AsyncMock
 from mcp_second_brain.tools.executor import ToolExecutor
-from mcp_second_brain.tools.integration import execute_tool_direct
+from mcp_second_brain.tools.executor import executor
+from mcp_second_brain.tools.registry import get_tool
 
 
 class TestToolExecutionIntegration:
@@ -18,8 +19,9 @@ class TestToolExecutionIntegration:
         mock_vertex_client.generate_content.return_value.text = "Analysis of your Python code:\n- Uses print function\n- Simple structure"
         
         # Execute tool with real file context
-        result = await execute_tool_direct(
-            "chat_with_gemini25_flash",
+        metadata = get_tool("chat_with_gemini25_flash")
+        result = await executor.execute(
+            metadata,
             instructions="Analyze the Python files in this project",
             output_format="bullet points",
             context=[str(temp_project)]
@@ -58,8 +60,9 @@ class TestToolExecutionIntegration:
         mock_openai_client.beta.chat.completions.parse.return_value = mock_response
         
         # First call
-        result1 = await execute_tool_direct(
-            "chat_with_o3",
+        metadata = get_tool("chat_with_o3")
+        result1 = await executor.execute(
+            metadata,
             instructions="I need help with Python async programming",
             output_format="explanation",
             context=[],
@@ -79,8 +82,8 @@ class TestToolExecutionIntegration:
         mock_response2.id = "resp_124"
         mock_openai_client.beta.chat.completions.parse.return_value = mock_response2
         
-        result2 = await execute_tool_direct(
-            "chat_with_o3",
+        result2 = await executor.execute(
+            metadata,
             instructions="Show me an example",
             output_format="code",
             context=[],
@@ -115,8 +118,9 @@ class TestToolExecutionIntegration:
         )]
         mock_openai_client.beta.chat.completions.parse.return_value = mock_response
         
-        result = await execute_tool_direct(
-            "chat_with_gpt4_1",
+        metadata = get_tool("chat_with_gpt4_1")
+        result = await executor.execute(
+            metadata,
             instructions="Analyze this large codebase",
             output_format="summary",
             context=[str(temp_project)],
@@ -141,8 +145,9 @@ class TestToolExecutionIntegration:
         )]
         mock_openai_client.beta.chat.completions.parse.return_value = mock_response
         
-        result = await execute_tool_direct(
-            "chat_with_gpt4_1",
+        metadata = get_tool("chat_with_gpt4_1")
+        result = await executor.execute(
+            metadata,
             instructions="Test with all param types",
             output_format="json",
             context=[],
@@ -161,21 +166,17 @@ class TestToolExecutionIntegration:
     async def test_error_propagation(self):
         """Test that errors are properly propagated."""
         # Test with missing required parameter
+        metadata = get_tool("chat_with_gemini25_flash")
         with pytest.raises(ValueError, match="Missing required parameter"):
-            await execute_tool_direct(
-                "chat_with_gemini25_flash",
+            await executor.execute(
+                metadata,
                 instructions="Test"
                 # Missing output_format and context
             )
         
         # Test with invalid tool
-        with pytest.raises(ValueError, match="Unknown tool"):
-            await execute_tool_direct(
-                "invalid_tool_name",
-                instructions="Test",
-                output_format="text",
-                context=[]
-            )
+        with pytest.raises(ValueError, match="Tool not found"):
+            get_tool("invalid_tool_name")
     
     @pytest.mark.asyncio
     @pytest.mark.timeout(30)  # Override default 10s timeout
@@ -193,9 +194,12 @@ class TestToolExecutionIntegration:
         mock_vertex_client.generate_content.return_value.text = "Vertex response"
         
         # Execute multiple tools concurrently
+        o3_metadata = get_tool("chat_with_o3")
+        gemini_metadata = get_tool("chat_with_gemini25_flash")
+        
         tasks = [
-            execute_tool_direct(
-                "chat_with_o3",
+            executor.execute(
+                o3_metadata,
                 instructions=f"Task {i}",
                 output_format="text",
                 context=[],
@@ -203,8 +207,8 @@ class TestToolExecutionIntegration:
             )
             for i in range(3)
         ] + [
-            execute_tool_direct(
-                "chat_with_gemini25_flash",
+            executor.execute(
+                gemini_metadata,
                 instructions=f"Task {i}",
                 output_format="text",
                 context=[]

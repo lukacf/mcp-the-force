@@ -3,7 +3,10 @@ Integration tests for error handling scenarios.
 """
 import pytest
 from unittest.mock import patch, Mock
-from mcp_second_brain.tools.integration import execute_tool_direct
+from mcp_second_brain.tools.executor import executor
+from mcp_second_brain.tools.registry import get_tool
+# Import definitions to ensure tools are registered
+import mcp_second_brain.tools.definitions  # noqa: F401
 from mcp_second_brain.adapters import get_adapter
 
 
@@ -16,8 +19,11 @@ class TestErrorHandlingIntegration:
         with patch.dict('os.environ', {'OPENAI_API_KEY': ''}, clear=False):
             # Try to use OpenAI tool without key
             with pytest.raises(RuntimeError, match="API key|credentials"):
-                await execute_tool_direct(
-                    "chat_with_o3",
+                tool_metadata = get_tool("chat_with_o3")
+                if not tool_metadata:
+                    raise ValueError("Tool chat_with_o3 not found")
+                await executor.execute(
+                    tool_metadata,
                     instructions="Test",
                     output_format="text",
                     context=[],
@@ -30,8 +36,11 @@ class TestErrorHandlingIntegration:
         # This would happen if someone modified the tool definitions incorrectly
         with patch('mcp_second_brain.tools.definitions.ChatWithO3.model_name', 'invalid-model'):
             with pytest.raises(Exception):  # Specific exception depends on implementation
-                await execute_tool_direct(
-                    "chat_with_o3",
+                tool_metadata = get_tool("chat_with_o3")
+                if not tool_metadata:
+                    raise ValueError("Tool chat_with_o3 not found")
+                await executor.execute(
+                    tool_metadata,
                     instructions="Test",
                     output_format="text",
                     context=[],
@@ -45,8 +54,11 @@ class TestErrorHandlingIntegration:
         mock_openai_client.beta.chat.completions.parse.side_effect = TimeoutError("Request timed out")
         
         with pytest.raises(TimeoutError):
-            await execute_tool_direct(
-                "chat_with_o3",
+            tool_metadata = get_tool("chat_with_o3")
+            if not tool_metadata:
+                raise ValueError("Tool chat_with_o3 not found")
+            await executor.execute(
+                tool_metadata,
                 instructions="Test",
                 output_format="text",
                 context=[],
@@ -62,8 +74,11 @@ class TestErrorHandlingIntegration:
         mock_openai_client.beta.chat.completions.parse.side_effect = error
         
         with pytest.raises(Exception, match="Rate limit"):
-            await execute_tool_direct(
-                "chat_with_o3",
+            tool_metadata = get_tool("chat_with_o3")
+            if not tool_metadata:
+                raise ValueError("Tool chat_with_o3 not found")
+            await executor.execute(
+                tool_metadata,
                 instructions="Test",
                 output_format="text",
                 context=[],
@@ -75,8 +90,11 @@ class TestErrorHandlingIntegration:
         """Test type validation for parameters."""
         # Wrong type for context (should be list)
         with pytest.raises(ValueError, match="Invalid type|context"):
-            await execute_tool_direct(
-                "chat_with_gemini25_flash",
+            tool_metadata = get_tool("chat_with_gemini25_flash")
+            if not tool_metadata:
+                raise ValueError("Tool chat_with_gemini25_flash not found")
+            await executor.execute(
+                tool_metadata,
                 instructions="Test",
                 output_format="text",
                 context="not-a-list"  # Should be list
@@ -84,8 +102,11 @@ class TestErrorHandlingIntegration:
         
         # Wrong type for temperature
         with pytest.raises(ValueError, match="Invalid type|temperature"):
-            await execute_tool_direct(
-                "chat_with_gemini25_flash",
+            tool_metadata = get_tool("chat_with_gemini25_flash")
+            if not tool_metadata:
+                raise ValueError("Tool chat_with_gemini25_flash not found")
+            await executor.execute(
+                tool_metadata,
                 instructions="Test",
                 output_format="text",
                 context=[],
@@ -96,8 +117,11 @@ class TestErrorHandlingIntegration:
     async def test_file_not_found_in_context(self):
         """Test handling of non-existent files in context."""
         # This should not crash, just skip the file
-        result = await execute_tool_direct(
-            "chat_with_gemini25_flash",
+        tool_metadata = get_tool("chat_with_gemini25_flash")
+        if not tool_metadata:
+            raise ValueError("Tool chat_with_gemini25_flash not found")
+        result = await executor.execute(
+            tool_metadata,
             instructions="Analyze these files",
             output_format="text",
             context=["/path/that/does/not/exist.py"]
@@ -125,8 +149,11 @@ class TestErrorHandlingIntegration:
         # But should NOT crash or hang
         
         try:
-            result = await execute_tool_direct(
-                "chat_with_o3",
+            tool_metadata = get_tool("chat_with_o3")
+            if not tool_metadata:
+                raise ValueError("Tool chat_with_o3 not found")
+            result = await executor.execute(
+                tool_metadata,
                 instructions="Analyze",
                 output_format="text",
                 context=[str(huge_file)],
@@ -145,8 +172,11 @@ class TestErrorHandlingIntegration:
         mock_openai_client.beta.chat.completions.parse.return_value = None
         
         with pytest.raises(Exception):  # Should raise some error
-            await execute_tool_direct(
-                "chat_with_o3",
+            tool_metadata = get_tool("chat_with_o3")
+            if not tool_metadata:
+                raise ValueError("Tool chat_with_o3 not found")
+            await executor.execute(
+                tool_metadata,
                 instructions="Test",
                 output_format="text",
                 context=[],
@@ -160,8 +190,11 @@ class TestErrorHandlingIntegration:
             mock_init.side_effect = Exception("Failed to initialize Vertex client")
             
             with pytest.raises(RuntimeError, match="Failed to create adapter"):
-                await execute_tool_direct(
-                    "chat_with_gemini25_flash",
+                tool_metadata = get_tool("chat_with_gemini25_flash")
+                if not tool_metadata:
+                    raise ValueError("Tool chat_with_gemini25_flash not found")
+                await executor.execute(
+                    tool_metadata,
                     instructions="Test",
                     output_format="text",
                     context=[]
@@ -179,16 +212,21 @@ class TestErrorHandlingIntegration:
         mock_vertex_client.generate_content.side_effect = Exception("Vertex failed")
         
         # Run both concurrently
+        o3_metadata = get_tool("chat_with_o3")
+        gemini_metadata = get_tool("chat_with_gemini25_flash")
+        if not o3_metadata or not gemini_metadata:
+            raise ValueError("Required tools not found")
+        
         tasks = [
-            execute_tool_direct(
-                "chat_with_o3",
+            executor.execute(
+                o3_metadata,
                 instructions="Should succeed",
                 output_format="text",
                 context=[],
                 session_id="test"
             ),
-            execute_tool_direct(
-                "chat_with_gemini25_flash",
+            executor.execute(
+                gemini_metadata,
                 instructions="Should fail",
                 output_format="text",
                 context=[]

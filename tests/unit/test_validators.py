@@ -38,43 +38,71 @@ class TestParameterValidator:
         return TestTool
     
     @pytest.fixture
-    def tool_metadata(self):
+    def tool_metadata(self, sample_tool_class):
         """Create metadata for the test tool."""
         return ToolMetadata(
-            name="test_tool",
-            description="Test tool",
+            id="test_tool",
+            spec_class=sample_tool_class,
+            model_config={
+                "description": "Test tool",
+                "adapter_class": "test_adapter",
+                "model_name": "test_model",
+                "context_window": 100000,
+                "timeout": 300
+            },
             parameters={
                 "instructions": ParameterInfo(
                     name="instructions",
-                    type="str",
+                    type=str,
+                    type_str="str",
+                    route="prompt",
+                    position=0,
+                    default=None,
                     required=True,
                     description="Instructions"
                 ),
                 "output_format": ParameterInfo(
                     name="output_format",
-                    type="str",
+                    type=str,
+                    type_str="str",
+                    route="prompt",
+                    position=1,
+                    default=None,
                     required=True,
                     description="Format"
                 ),
                 "context": ParameterInfo(
                     name="context",
-                    type="List[str]",
+                    type=List[str],
+                    type_str="List[str]",
+                    route="prompt",
+                    position=2,
+                    default=None,
                     required=True,
                     description="Context files"
                 ),
                 "temperature": ParameterInfo(
                     name="temperature",
-                    type="Optional[float]",
+                    type=Optional[float],
+                    type_str="Optional[float]",
+                    route="adapter",
+                    position=None,
+                    default=0.7,
                     required=False,
                     description="Temperature"
                 ),
                 "session_id": ParameterInfo(
                     name="session_id",
-                    type="Optional[str]",
+                    type=Optional[str],
+                    type_str="Optional[str]",
+                    route="session",
+                    position=None,
+                    default=None,
                     required=False,
                     description="Session ID"
                 ),
-            }
+            },
+            aliases=[]
         )
     
     def test_validate_all_required_params(self, validator, sample_tool_class, tool_metadata):
@@ -165,7 +193,7 @@ class TestParameterValidator:
         }
         
         # Should raise in strict mode
-        with pytest.raises(ValueError, match="Unknown parameter: unknown_param"):
+        with pytest.raises(ValueError, match="Unknown parameters:"):
             strict_validator.validate(tool, tool_metadata, kwargs)
     
     def test_type_validation_basic(self, validator, sample_tool_class, tool_metadata):
@@ -180,7 +208,7 @@ class TestParameterValidator:
             "temperature": "high"  # Should be float
         }
         
-        with pytest.raises(ValueError, match="Invalid type for parameter temperature"):
+        with pytest.raises(TypeError, match="Parameter 'temperature' expected"):
             validator.validate(tool, tool_metadata, kwargs)
     
     def test_list_type_validation(self, validator, sample_tool_class, tool_metadata):
@@ -194,7 +222,7 @@ class TestParameterValidator:
             "context": "file.py"  # Should be list
         }
         
-        with pytest.raises(ValueError, match="Invalid type for parameter context"):
+        with pytest.raises(TypeError, match="Parameter 'context' expected"):
             validator.validate(tool, tool_metadata, kwargs)
     
     def test_empty_kwargs(self, validator, sample_tool_class, tool_metadata):

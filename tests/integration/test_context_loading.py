@@ -128,11 +128,10 @@ class TestContextLoadingIntegration:
         # All text files should be included
         assert len(files) == 3
     
-    @pytest.mark.asyncio
-    async def test_prompt_building_with_real_files(self, temp_project):
+    def test_prompt_building_with_real_files(self, temp_project):
         """Test building prompts with real file content."""
         # Build prompt with inline files
-        prompt = await build_prompt(
+        prompt = build_prompt(
             instructions="Analyze this code",
             output_format="markdown",
             context=[str(temp_project)],
@@ -152,8 +151,7 @@ class TestContextLoadingIntegration:
         # Should not include ignored files
         assert "debug.log" not in prompt
     
-    @pytest.mark.asyncio
-    async def test_token_limit_handling(self, tmp_path):
+    def test_token_limit_handling(self, tmp_path):
         """Test handling of files that exceed token limits."""
         # Create files that will exceed inline limit
         for i in range(20):
@@ -161,7 +159,7 @@ class TestContextLoadingIntegration:
             large_file.write_text("# Large file\n" + "x" * 5000)
         
         # Build prompt - should handle gracefully
-        prompt = await build_prompt(
+        prompt = build_prompt(
             instructions="Analyze",
             output_format="text",
             context=[str(tmp_path)],

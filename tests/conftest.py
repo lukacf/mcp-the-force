@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 from typing import Dict, Any
 import pytest
-from unittest.mock import MagicMock, Mock
+from unittest.mock import MagicMock, Mock, AsyncMock
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -16,6 +16,10 @@ sys.path.insert(0, str(PROJECT_ROOT))
 @pytest.fixture
 def mock_env(monkeypatch):
     """Set up test environment variables."""
+    # Clear the cached settings first
+    from mcp_second_brain.config import get_settings
+    get_settings.cache_clear()
+    
     test_env = {
         "OPENAI_API_KEY": "test-openai-key",
         "VERTEX_PROJECT": "test-project",
@@ -25,6 +29,10 @@ def mock_env(monkeypatch):
     }
     for key, value in test_env.items():
         monkeypatch.setenv(key, value)
+    
+    # Clear cache again to force reload with new env
+    get_settings.cache_clear()
+    
     return test_env
 
 
@@ -48,24 +56,27 @@ def temp_project(tmp_path):
 
 @pytest.fixture
 def mock_openai_client():
-    """Mock OpenAI client for testing."""
+    """Mock AsyncOpenAI client conforming to Responses API."""
     mock = MagicMock()
     
-    # Mock the Responses API structure
-    mock.beta.chat.completions.parse.return_value = MagicMock(
-        choices=[MagicMock(
-            message=MagicMock(
-                parsed=MagicMock(response="Test response"),
-                refusal=None
-            )
-        )]
-    )
+    # Mock the Responses API - this is what we actually use
+    fake_response = MagicMock()
+    fake_response.output_text = "Test response"
+    fake_response.id = "resp_mock_123"
+    mock.responses.create = AsyncMock(return_value=fake_response)
+    
+    # Mock async close method
+    mock.close = AsyncMock()
     
     # Mock vector store operations
-    mock.beta.vector_stores.create.return_value = MagicMock(
+    mock.beta.vector_stores.create.return_value = AsyncMock(
         id="vs_test123",
         status="completed"
     )
+    mock.beta.vector_stores.file_batches.upload_and_poll = AsyncMock(
+        return_value=AsyncMock(status="completed")
+    )
+    mock.beta.vector_stores.delete = AsyncMock()
     
     return mock
 
@@ -122,12 +133,19 @@ def assert_no_secrets_in_logs(caplog, secrets: list[str]):
 @pytest.fixture(autouse=True)
 def mock_external_sdks(monkeypatch, mock_openai_client, mock_vertex_client):
     """Automatically mock external SDKs to prevent real API calls."""
-    # Mock OpenAI
-    mock_openai_module = Mock()
-    mock_openai_module.OpenAI = Mock(return_value=mock_openai_client)
-    monkeypatch.setitem(sys.modules, "openai", mock_openai_module)
+    import types
     
-    # Mock Google Vertex AI / genai
+    # ----- OpenAI -----
+    openai_mod = types.ModuleType("openai")
+    openai_mod.AsyncOpenAI = MagicMock(return_value=mock_openai_client)
+    monkeypatch.setitem(sys.modules, "openai", openai_mod)
+    
+    # The adapter already did `from openai import AsyncOpenAI` at import time,
+    # so we need to patch that symbol too:
+    import mcp_second_brain.adapters.openai_adapter as oa
+    monkeypatch.setattr(oa, "AsyncOpenAI", openai_mod.AsyncOpenAI, raising=False)
+    
+    # ----- Google Vertex -----
     mock_genai_module = Mock()
     mock_genai_module.Client = Mock(return_value=mock_vertex_client)
     monkeypatch.setitem(sys.modules, "google.genai", mock_genai_module)
@@ -135,3 +153,15 @@ def mock_external_sdks(monkeypatch, mock_openai_client, mock_vertex_client):
     # Also mock the aiplatform module if needed
     mock_aiplatform = Mock()
     monkeypatch.setitem(sys.modules, "google.cloud.aiplatform", mock_aiplatform)
+
+
+@pytest.fixture
+async def run_tool():
+    """Convenience helper that executes a tool by name using the real executor."""
+    from mcp_second_brain.tools.executor import executor
+    from mcp_second_brain.tools.registry import list_tools
+
+    async def _inner(tool_name: str, **kwargs):
+        metadata = list_tools()[tool_name]
+        return await executor.execute(metadata, **kwargs)
+    return _inner
