@@ -6,9 +6,9 @@ models:
     adapter: vertex
     model_name: gemini-2.5-pro
     description: |
-      Deep multimodal analysis and complex reasoning (Gemini 2.5 Pro, ~2M context).
+      Deep multimodal analysis and complex reasoning (Gemini 2.5 Pro, ~1M context).
       Excels at: bug fixing, code analysis, multimodal understanding.
-    context_window: 2000000
+    context_window: 1000000
     default_timeout: 600
     supports_session: false
     supports_vector_store: false
@@ -21,9 +21,9 @@ models:
     adapter: vertex
     model_name: gemini-2.5-flash
     description: |
-      Fast summarization and quick analysis (Gemini 2.5 Flash, ~2M context).
+      Fast summarization and quick analysis (Gemini 2.5 Flash, ~1M context).
       Excels at: rapid insights, triage, quick summaries.
-    context_window: 2000000
+    context_window: 1000000
     default_timeout: 300
     supports_session: false
     supports_vector_store: false
@@ -42,8 +42,9 @@ models:
     default_timeout: 600
     supports_session: true
     supports_vector_store: true
+    supports_temperature: false
     default_params:
-      temperature: 0.3
+      reasoning_effort: medium
 
   - id: openai_o3_pro_deep_analysis
     aliases: [slow-and-sure-thinker]
@@ -58,8 +59,9 @@ models:
     default_timeout: 2700  # 45 minutes
     supports_session: true
     supports_vector_store: true
+    supports_temperature: false
     default_params:
-      temperature: 0.2
+      reasoning_effort: high
 
   - id: openai_gpt4_longcontext
     aliases: [fast-long-context-assistant]
