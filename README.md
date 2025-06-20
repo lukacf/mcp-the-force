@@ -1,6 +1,6 @@
 # MCP Second‑Brain Server
 
-An intelligent Model Context Protocol (MCP) server that orchestrates multiple AI models with advanced context management for large codebases. Supports both OpenAI (o3, o3-pro, gpt-4.1) and Google Gemini (2.5-pro, 2.5-flash) models with smart file inlining and vector store integration.
+An intelligent Model Context Protocol (MCP) server that orchestrates multiple AI models with advanced context management for large codebases. Built with a sophisticated descriptor-based tool system, it supports both OpenAI (o3, o3-pro, gpt-4.1) and Google Gemini (2.5-pro, 2.5-flash) models with smart file inlining and vector store integration.
 
 ## 🚀 Quick Start
 
@@ -34,42 +34,35 @@ MAX_INLINE_TOKENS=12000
 DEFAULT_TEMPERATURE=0.2
 ```
 
-### Model Configuration
-Models are configured in `mcp_second_brain/config/models.yaml`. To add a new model, simply add an entry:
+### Architecture Overview
 
-```yaml
-- id: your_provider_model_capability
-  provider: your_provider
-  adapter: adapter_name
-  model_name: actual-model-name
-  description: What this model excels at
-  context_window: 200000
-  default_timeout: 600
-  supports_session: true
-  supports_vector_store: true
-```
+The server uses a descriptor-based tool system that provides:
+- **Type-safe parameter routing** to different subsystems (prompt, adapter, vector_store, session)
+- **Automatic validation** of inputs with helpful error messages
+- **Custom prompt templates** per model for optimal performance
+- **Dynamic tool generation** from Python dataclasses
 
 ## 🛠️ Available Tools
 
-The server dynamically generates tools from configuration. All tool names follow the pattern: `{provider}_{model}_{capability}`.
+The server provides tools defined through a descriptor-based system. Each tool has specific parameters routed to different subsystems for optimal processing.
 
 ### Primary Tools
 
 | Tool Name | Model | Purpose | Context | Session Support |
 |-----------|-------|---------|---------|------------------|
-| `vertex_gemini25_pro_multimodal` | Gemini 2.5 Pro | Deep multimodal analysis, bug fixing | ~2M tokens | ❌ |
-| `vertex_gemini25_flash_summary` | Gemini 2.5 Flash | Fast summarization, quick insights | ~2M tokens | ❌ |
+| `vertex_gemini25_pro` | Gemini 2.5 Pro | Deep multimodal analysis, bug fixing | ~1M tokens | ❌ |
+| `vertex_gemini25_flash` | Gemini 2.5 Flash | Fast summarization, quick insights | ~1M tokens | ❌ |
 | `openai_o3_reasoning` | OpenAI o3 | Chain-of-thought reasoning, algorithms | ~200k tokens | ✅ |
 | `openai_o3_pro_deep_analysis` | OpenAI o3-pro | Formal proofs, complex debugging | ~200k tokens | ✅ |
-| `openai_gpt4_longcontext` | GPT-4.1 | Large-scale refactoring, RAG workflows | ~1M tokens | ✅ |
+| `open_aigpt4_long_context` | GPT-4.1 | Large-scale refactoring, RAG workflows | ~1M tokens | ✅ |
 
 ### Legacy Aliases (for backward compatibility)
 
-- `deep-multimodal-reasoner` → `vertex_gemini25_pro_multimodal`
-- `flash-summary-sprinter` → `vertex_gemini25_flash_summary`
-- `chain-of-thought-helper` → `openai_o3_reasoning`
-- `slow-and-sure-thinker` → `openai_o3_pro_deep_analysis`
-- `fast-long-context-assistant` → `openai_gpt4_longcontext`
+- `deep-multimodal-reasoner` → `vertex_gemini25_pro`
+- `flash-summary-sprinter` → `vertex_gemini25_flash`
+- `chain-of-thought-helper` → `open_aio3_reasoning`
+- `slow-and-sure-thinker` → `open_aio3_pro_deep_analysis`
+- `fast-long-context-assistant` → `open_aigpt4_long_context`
 
 ### Additional Tools
 
@@ -102,25 +95,32 @@ The server intelligently handles large codebases through a two-tier approach:
 OpenAI models (o3, o3-pro, gpt-4.1) now support multi-turn conversations through a simple `session_id` parameter:
 
 ### Basic Usage
-```json
-{
-  "tool": "openai_o3_reasoning",
-  "session_id": "debug-session-123",
-  "instructions": "Analyze this function",
-  "output_format": "explanation",
-  "context": ["/path/to/file.py"]
-}
+
+Call tools with their specific parameters:
+
+```python
+# Example using the MCP protocol
+result = await mcp.call_tool(
+    "open_aio3_reasoning",
+    instructions="Analyze this function for potential bugs",
+    output_format="detailed analysis with recommendations",
+    context=["/path/to/file.py"],
+    reasoning_effort="medium",  # Optional: low, medium, high
+    session_id="debug-session-123"  # Optional: for conversation continuity
+)
 ```
 
 Follow-up in the same session:
-```json
-{
-  "tool": "openai_o3_reasoning", 
-  "session_id": "debug-session-123",
-  "instructions": "Now optimize it for performance",
-  "output_format": "code",
-  "context": ["/path/to/file.py"]
-}
+
+```python
+# The session remembers previous context
+result = await mcp.call_tool(
+    "open_aio3_reasoning",
+    instructions="Now optimize it for performance based on the issues we found",
+    output_format="optimized code with explanations",
+    context=["/path/to/file.py"],
+    session_id="debug-session-123"  # Same session ID continues conversation
+)
 ```
 
 ### How It Works
@@ -131,13 +131,17 @@ Follow-up in the same session:
 - Gemini models remain single-shot (no session support)
 
 ### Vector Store Management
+
 Create persistent vector stores for RAG:
-```json
-{
-  "tool": "create_vector_store_tool",
-  "files": ["/path/to/docs/", "/path/to/src/"],
-  "name": "project-knowledge-base"
-}
+
+```python
+# Create a vector store from your codebase
+result = await mcp.call_tool(
+    "create_vector_store_tool",
+    files=["/path/to/docs/", "/path/to/src/"],
+    name="project-knowledge-base"
+)
+# Returns: {"vector_store_id": "vs_...", "status": "created"}
 ```
 
 Then use the returned `vector_store_id` with any OpenAI tool by passing it in the `attachments` parameter.
@@ -164,30 +168,36 @@ npm test --verbose --reporter=verbose > test_output.log 2>&1
 ```
 
 #### Step 2: Fast Triage with Long Context
-```json
-{
-  "tool": "fast-long-context-assistant",
-  "instructions": "Analyze the test failures and identify the 3-5 most critical files that likely contain the root cause",
-  "output_format": "prioritized list with file paths and reasoning",
-  "context": ["/Users/username/project/test_output.log"],
-  "attachments": ["/Users/username/project/src/", "/Users/username/project/tests/"]
-}
+
+```python
+# Use GPT-4.1 for fast analysis of large contexts
+result = await mcp.call_tool(
+    "fast-long-context-assistant",
+    instructions="Analyze the test failures and identify the 3-5 most critical files that likely contain the root cause",
+    output_format="prioritized list with file paths and reasoning",
+    context=["/Users/username/project/test_output.log"],
+    attachments=["/Users/username/project/src/", "/Users/username/project/tests/"],
+    temperature=0.3  # Lower temperature for more focused analysis
+)
 ```
 
 #### Step 3: Deep Analysis with o3-pro
-```json
-{
-  "tool": "slow-and-sure-thinker", 
-  "instructions": "Perform deep root cause analysis of the test failures. Provide specific fix recommendations with code changes.",
-  "output_format": "detailed technical analysis with fix proposals",
-  "reasoning_effort": "high",
-  "context": [
-    "/Users/username/project/src/auth/core.py",
-    "/Users/username/project/src/database/connection.py", 
-    "/Users/username/project/tests/auth_test.py"
-  ],
-  "attachments": ["/Users/username/project/"]
-}
+
+```python
+# Use o3-pro for deep reasoning (can take 10-30 minutes)
+result = await mcp.call_tool(
+    "slow-and-sure-thinker",
+    instructions="Perform deep root cause analysis of the test failures. Provide specific fix recommendations with code changes.",
+    output_format="detailed technical analysis with fix proposals",
+    reasoning_effort="high",  # Maximum reasoning effort
+    max_reasoning_tokens=100000,  # Allow extensive reasoning
+    context=[
+        "/Users/username/project/src/auth/core.py",
+        "/Users/username/project/src/database/connection.py", 
+        "/Users/username/project/tests/auth_test.py"
+    ],
+    attachments=["/Users/username/project/"]
+)
 ```
 
 ### Basic Analysis
@@ -277,11 +287,34 @@ Add to your MCP client configuration:
 
 ## 🏗️ Architecture
 
+### Descriptor-Based Tool System
+
+The server uses a sophisticated descriptor-based architecture:
+
+```python
+@tool(aliases=["chain-of-thought-helper"])
+class OpenAIO3Reasoning(ToolSpec):
+    """Chain-of-thought reasoning and algorithm design."""
+    
+    # Model configuration
+    model_name = "o3"
+    adapter_class = "openai"
+    context_window = 200_000
+    
+    # Parameters with routing descriptors
+    instructions: str = Route.prompt(pos=0)
+    output_format: str = Route.prompt(pos=1)
+    context: List[str] = Route.prompt(pos=2)
+    reasoning_effort: Optional[Literal["low", "medium", "high"]] = Route.adapter()
+    session_id: Optional[str] = Route.session()
+```
+
 ### Core Components
-- **Server**: FastMCP-based MCP protocol implementation
-- **Adapters**: Pluggable AI model integrations (OpenAI, Vertex AI)
-- **Context Manager**: Smart file gathering and token management
-- **Vector Store**: RAG integration for large document sets
+- **Tool Definitions**: Dataclass-like specifications with parameter routing
+- **Parameter Router**: Routes parameters to appropriate handlers (prompt, adapter, vector_store, session)
+- **Adapters**: Model-specific integrations (OpenAI, Vertex AI)
+- **Vector Store Manager**: Handles RAG lifecycle for large contexts
+- **Session Manager**: Maintains conversation continuity for supported models
 
 ### File Processing Pipeline
 1. **Path Resolution**: Convert relative to absolute paths
@@ -316,15 +349,37 @@ OpenAI-supported formats: `.c`, `.cpp`, `.css`, `.csv`, `.doc`, `.docx`, `.go`, 
 
 ## 🔧 Extending the System
 
-To add a new AI model adapter:
+### Adding a New Tool
 
-1. **Create adapter class** inheriting from `BaseAdapter`
-2. **Implement `generate()` method** with model-specific logic
-3. **Add configuration** variables in `config.py`
-4. **Register in server.py** with a new tool function
-5. **Update imports** in `adapters/__init__.py`
+Create a new tool by defining a class with the `@tool` decorator:
 
-See the existing `OpenAIAdapter` and `VertexAdapter` classes for reference implementations.
+```python
+@tool(aliases=["my-custom-assistant"])
+class MyCustomTool(ToolSpec):
+    """Description of what this tool does."""
+    
+    # Model configuration
+    model_name = "gpt-4"
+    adapter_class = "openai"
+    context_window = 100_000
+    timeout = 300
+    
+    # Define parameters with routing
+    instructions: str = Route.prompt(pos=0, description="Task instructions")
+    output_format: str = Route.prompt(pos=1)
+    context: List[str] = Route.prompt(pos=2)
+    temperature: float = Route.adapter(default=0.7)
+    session_id: Optional[str] = Route.session()
+```
+
+### Adding a New Adapter
+
+1. Create adapter class inheriting from `BaseAdapter`
+2. Implement the `generate()` method
+3. Add configuration in environment variables
+4. Register adapter class in the tool definition
+
+See `OpenAIAdapter` and `VertexAdapter` for reference implementations.
 
 ## 📄 License
 
