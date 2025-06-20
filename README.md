@@ -35,7 +35,7 @@ DEFAULT_TEMPERATURE=0.2
 
 ## 🛠️ Available Tools
 
-The server exposes 5 specialized AI tools, each optimized for different tasks:
+The server exposes 5 specialized AI tools, each optimized for different tasks. OpenAI tools (o3, o3-pro, gpt-4.1) support optional conversation continuity via `session_id`:
 
 ### 🧠 **deep-multimodal-reasoner** (Gemini 2.5 Pro)
 - **Purpose**: Bug fixing, complex reasoning, multimodal analysis
@@ -82,6 +82,51 @@ The server intelligently handles large codebases through a two-tier approach:
 - **Text file detection**: Smart binary vs text identification
 - **Size limits**: 500KB per file, 50MB total maximum
 - **Extension filtering**: Supports 60+ text file formats
+
+## 💬 Conversation Support (NEW)
+
+OpenAI models (o3, o3-pro, gpt-4.1) now support multi-turn conversations through a simple `session_id` parameter:
+
+### Basic Usage
+```json
+{
+  "tool": "chain-of-thought-helper",
+  "session_id": "debug-session-123",
+  "instructions": "Analyze this function",
+  "output_format": "explanation",
+  "context": ["/path/to/file.py"]
+}
+```
+
+Follow-up in the same session:
+```json
+{
+  "tool": "chain-of-thought-helper", 
+  "session_id": "debug-session-123",
+  "instructions": "Now optimize it for performance",
+  "output_format": "code",
+  "context": ["/path/to/file.py"]
+}
+```
+
+### How It Works
+- The server maintains a lightweight ephemeral cache (1 hour TTL)
+- Only stores the `previous_response_id` from OpenAI's Responses API
+- No conversation history is stored - OpenAI maintains the full context
+- Sessions expire automatically after 1 hour of inactivity
+- Gemini models remain single-shot (no session support)
+
+### Vector Store Management
+Create persistent vector stores for RAG:
+```json
+{
+  "tool": "create_vector_store_tool",
+  "files": ["/path/to/docs/", "/path/to/src/"],
+  "name": "project-knowledge-base"
+}
+```
+
+Then use the returned `vector_store_id` with any OpenAI tool by passing it in the `attachments` parameter.
 
 ## 📖 Usage Examples
 

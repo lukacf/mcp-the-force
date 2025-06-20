@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, List
+from typing import Any, List, Dict, Union
 from ..utils.token_counter import count_tokens
 
 class BaseAdapter(ABC):
@@ -12,5 +12,5 @@ class BaseAdapter(ABC):
             raise ValueError("Prompt too large")
     
     @abstractmethod
-    async def generate(self, prompt: str, vector_store_ids: List[str] | None = None, **kw: Any) -> str:
+    async def generate(self, prompt: str, vector_store_ids: List[str] | None = None, **kw: Any) -> Union[str, Dict[str, Any]]:
         ...
