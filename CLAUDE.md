@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-MCP Second-Brain Server - A Model Context Protocol (MCP) server that provides access to multiple AI models (OpenAI o-series and Google Gemini 2.5) with intelligent context management for large codebases. Uses FastMCP framework with smart file inlining and vector store integration for RAG. Supports optional multi-turn conversations for OpenAI models.
+MCP Second-Brain Server - A Model Context Protocol (MCP) server that provides access to multiple AI models (OpenAI o-series and Google Gemini 2.5) with intelligent context management for large codebases. Built with a sophisticated descriptor-based tool system using Python descriptors for parameter routing. Uses FastMCP framework with smart file inlining and vector store integration for RAG. Supports optional multi-turn conversations for OpenAI models.
 
 ## Commands
 
@@ -22,12 +22,19 @@ MCP Second-Brain Server - A Model Context Protocol (MCP) server that provides ac
    - `openai_adapter.py`: OpenAI models integration (o3, o3-pro, gpt-4.1) via Responses API
    - `vertex_adapter.py`: Google Vertex AI integration (Gemini 2.5 pro/flash) via google-genai SDK
 
-2. **Server** (`mcp_second_brain/server.py`)
-   - FastMCP-based MCP protocol implementation
-   - Exposes 5 AI tools with different model specializations
-   - Lazy adapter initialization for better error handling
+2. **Tool System** (`mcp_second_brain/tools/`)
+   - `descriptors.py`: Route descriptors for parameter routing
+   - `base.py`: ToolSpec base class with dataclass-like definitions
+   - `definitions.py`: Tool definitions for all models
+   - `executor.py`: Orchestrates tool execution with component delegation
+   - `integration.py`: FastMCP integration layer
 
-3. **Context Management** (`mcp_second_brain/utils/`)
+3. **Server** (`mcp_second_brain/server.py`)
+   - FastMCP-based MCP protocol implementation
+   - Registers dataclass-based tools dynamically
+   - Minimal orchestration logic
+
+4. **Context Management** (`mcp_second_brain/utils/`)
    - `fs.py`: Intelligent file gathering with gitignore support and filtering
    - `prompt_builder.py`: Smart context inlining vs vector store routing
    - `vector_store.py`: OpenAI vector store integration for RAG
@@ -42,16 +49,21 @@ MCP Second-Brain Server - A Model Context Protocol (MCP) server that provides ac
 
 ### Available Tools
 
-Tools are dynamically generated from `config/models.yaml`. Primary tool names follow the pattern `{provider}_{model}_{capability}`:
+Tools are defined using a descriptor-based system with parameter routing:
 
 Primary tools:
-- `vertex_gemini25_pro_multimodal`: Deep analysis (Gemini 2.5 Pro, ~1M tokens)
-- `vertex_gemini25_flash_summary`: Fast summarization (Gemini 2.5 Flash, ~1M tokens)
-- `openai_o3_reasoning`: Chain-of-thought reasoning (OpenAI o3, ~200k tokens) - supports session_id
-- `openai_o3_pro_deep_analysis`: Formal proofs (OpenAI o3-pro, ~200k tokens) - supports session_id
-- `openai_gpt4_longcontext`: Large-scale analysis (GPT-4.1, ~1M tokens) - supports session_id
+- `vertex_gemini25_pro`: Deep analysis (Gemini 2.5 Pro, ~1M tokens)
+- `vertex_gemini25_flash`: Fast summarization (Gemini 2.5 Flash, ~1M tokens)
+- `open_aio3_reasoning`: Chain-of-thought reasoning (OpenAI o3, ~200k tokens) - supports session_id
+- `open_aio3_pro_deep_analysis`: Formal proofs (OpenAI o3-pro, ~200k tokens) - supports session_id
+- `open_aigpt4_long_context`: Large-scale analysis (GPT-4.1, ~1M tokens) - supports session_id
 
-Legacy aliases are maintained for backward compatibility.
+Aliases for backward compatibility:
+- `deep-multimodal-reasoner` → `vertex_gemini25_pro`
+- `flash-summary-sprinter` → `vertex_gemini25_flash`
+- `chain-of-thought-helper` → `open_aio3_reasoning`
+- `slow-and-sure-thinker` → `open_aio3_pro_deep_analysis`
+- `fast-long-context-assistant` → `open_aigpt4_long_context`
 
 Utility tools:
 - `create_vector_store_tool`: Create vector stores for RAG workflows
@@ -91,41 +103,41 @@ The Second-Brain server addresses key limitations when working with Claude:
 #### Complex Debugging Pattern
 ```
 1. Capture verbose output → save to file
-2. openai_gpt4_longcontext → identify key files (context: output + large codebase)
-3. openai_o3_pro_deep_analysis → deep analysis (context: key files, attachments: full codebase)
+2. open_aigpt4_long_context → identify key files (context: output + large codebase)
+3. open_aio3_pro_deep_analysis → deep analysis (context: key files, attachments: full codebase)
 ```
 
 #### Multi-Turn Debugging Session
 ```
-1. openai_o3_reasoning (session_id: "debug-123") → initial analysis
-2. openai_o3_reasoning (session_id: "debug-123") → follow-up questions
-3. openai_o3_pro_deep_analysis (session_id: "debug-123") → deep dive into specific issue
+1. open_aio3_reasoning (session_id: "debug-123") → initial analysis
+2. open_aio3_reasoning (session_id: "debug-123") → follow-up questions
+3. open_aio3_pro_deep_analysis (session_id: "debug-123") → deep dive into specific issue
 ```
 
 #### Performance Analysis Pattern
 ```
-1. vertex_gemini25_flash_summary → quick bottleneck identification
-2. vertex_gemini25_pro_multimodal → comprehensive analysis with optimization strategies
+1. vertex_gemini25_flash → quick bottleneck identification
+2. vertex_gemini25_pro → comprehensive analysis with optimization strategies
 ```
 
 #### Code Architecture Review
 ```
-1. openai_gpt4_longcontext → overall structure analysis
-2. openai_o3_reasoning → design pattern evaluation
-3. openai_o3_pro_deep_analysis → formal architecture recommendations
+1. open_aigpt4_long_context → overall structure analysis
+2. open_aio3_reasoning → design pattern evaluation
+3. open_aio3_pro_deep_analysis → formal architecture recommendations
 ```
 
 ### When to Use Each Tool
 
-- **vertex_gemini25_flash_summary**: Initial triage, quick summaries, fast insights
-- **openai_gpt4_longcontext**: Code navigation, file identification, large-scale refactoring
-- **vertex_gemini25_pro_multimodal**: Bug fixing, complex reasoning, multimodal analysis
-- **openai_o3_reasoning**: Algorithm design, step-by-step problem solving
-- **openai_o3_pro_deep_analysis**: When you need maximum intelligence, formal proofs, complex debugging
+- **vertex_gemini25_flash**: Initial triage, quick summaries, fast insights
+- **open_aigpt4_long_context**: Code navigation, file identification, large-scale refactoring
+- **vertex_gemini25_pro**: Bug fixing, complex reasoning, multimodal analysis
+- **open_aio3_reasoning**: Algorithm design, step-by-step problem solving
+- **open_aio3_pro_deep_analysis**: When you need maximum intelligence, formal proofs, complex debugging
 
 ### Important: Timeout Configuration
 
-For o3-pro models (openai_o3_pro_deep_analysis), set timeout to 3600000ms (1 hour) in your MCP config:
+For o3-pro models (open_aio3_pro_deep_analysis), set timeout to 3600000ms (1 hour) in your MCP config:
 ```json
 "timeout": 3600000
 ```
@@ -136,8 +148,10 @@ These models can take 10-30 minutes to generate responses due to their deep reas
 - Python 3.10+ required
 - Uses `uv` package manager
 - FastMCP framework for MCP protocol handling
-- Pydantic with pydantic-settings for configuration
+- Descriptor-based tool system with parameter routing
 - All adapters must implement `BaseAdapter.generate()` method
+- Tools defined as dataclasses with `@tool` decorator
+- Parameters use `Route.prompt()`, `Route.adapter()`, etc. for routing
 - **Critical**: Always use absolute paths in context/attachments parameters
 
 ## File Paths
@@ -153,6 +167,8 @@ Relative paths will be resolved relative to the MCP server's working directory, 
 - **Basic functionality**: Use tools with small context arrays
 - **RAG capabilities**: Test with empty context and large attachments arrays
 - **File filtering**: Verify .gitignore patterns and binary file exclusion work correctly
+- **Parameter routing**: Verify prompt, adapter, vector_store, and session parameters route correctly
+- **Multi-turn conversations**: Test session_id continuity with OpenAI models
 
 ## Key Dependencies
 
@@ -162,3 +178,4 @@ Relative paths will be resolved relative to the MCP server's working directory, 
 - `tiktoken`: Token counting
 - `lxml`: XML processing for prompts
 - `pydantic-settings`: Configuration management
+- Python descriptors for parameter routing system
