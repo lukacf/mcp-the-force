@@ -15,6 +15,15 @@ logger = logging.getLogger(__name__)
 class ToolExecutor:
     """Handles execution of tools based on their metadata."""
     
+    def __init__(self, strict_mode: bool = False):
+        """Initialize executor.
+        
+        Args:
+            strict_mode: If True, raise errors for unknown parameters.
+                        If False (default), log warnings only.
+        """
+        self.strict_mode = strict_mode
+    
     async def execute(self, metadata: ToolMetadata, **kwargs) -> str:
         """Execute a tool with the given arguments.
         
@@ -27,6 +36,7 @@ class ToolExecutor:
         """
         start_time = asyncio.get_event_loop().time()
         tool_id = metadata.id
+        vs_id: Optional[str] = None  # Initialize to avoid UnboundLocalError
         
         try:
             # 1. Create tool instance and validate inputs
@@ -131,7 +141,10 @@ class ToolExecutor:
         known_params = set(metadata.parameters.keys())
         unknown = set(kwargs.keys()) - known_params
         if unknown:
-            logger.warning(f"Unknown parameters will be ignored: {unknown}")
+            if self.strict_mode:
+                raise ValueError(f"Unknown parameters: {unknown}")
+            else:
+                logger.warning(f"Unknown parameters will be ignored: {unknown}")
         
         return validated
     
@@ -183,7 +196,7 @@ class ToolExecutor:
     
     async def _build_prompt(self, prompt_params: Dict[str, Any]) -> str:
         """Build prompt from parameters."""
-        # Extract standard prompt components
+        # Extract known prompt components for backward compatibility
         instructions = prompt_params.get("instructions", "")
         output_format = prompt_params.get("output_format", "")
         context = prompt_params.get("context", [])
@@ -196,6 +209,14 @@ class ToolExecutor:
             context,
             None  # Attachments handled separately via vector store
         )
+        
+        # If there are additional prompt parameters, append them
+        # This allows for future extensibility without code changes
+        extra_params = {k: v for k, v in prompt_params.items() 
+                       if k not in ["instructions", "output_format", "context"]}
+        if extra_params:
+            extra_text = "\n".join(f"<{k}>{v}</{k}>" for k, v in extra_params.items())
+            prompt = f"{prompt}\n{extra_text}"
         
         return prompt
     
@@ -215,4 +236,5 @@ class ToolExecutor:
 
 
 # Global executor instance
-executor = ToolExecutor()
+# Set strict_mode=True if you want to reject unknown parameters
+executor = ToolExecutor(strict_mode=False)

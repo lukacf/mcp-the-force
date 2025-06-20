@@ -1,5 +1,6 @@
 """Base class for tool specifications."""
 from typing import Dict, Any, Type, get_type_hints, get_origin, get_args
+import inspect
 from .descriptors import RouteDescriptor
 
 
@@ -70,19 +71,45 @@ class ToolSpec:
 
 def _type_to_string(type_hint: Type) -> str:
     """Convert a type hint to a string representation."""
-    if hasattr(type_hint, "__name__"):
-        return type_hint.__name__
+    from typing import Union, Literal
     
     origin = get_origin(type_hint)
-    if origin is None:
-        return str(type_hint)
-    
     args = get_args(type_hint)
-    if not args:
-        return str(origin.__name__)
     
-    arg_strs = [_type_to_string(arg) for arg in args]
-    return f"{origin.__name__}[{', '.join(arg_strs)}]"
+    # Handle parameterized generics first (they have an origin)
+    if origin is not None:
+        # Special handling for Optional (Union with None)
+        if origin is Union and type(None) in args:
+            non_none_args = [arg for arg in args if arg is not type(None)]
+            if len(non_none_args) == 1:
+                # Simple Optional[T]
+                return f"Optional[{_type_to_string(non_none_args[0])}]"
+            else:
+                # Union with multiple non-None types
+                arg_strs = [_type_to_string(arg) for arg in args]
+                return f"Union[{', '.join(arg_strs)}]"
+        
+        # Special handling for Literal types
+        if origin is Literal:
+            literal_values = ", ".join(repr(arg) for arg in args)
+            return f"Literal[{literal_values}]"
+        
+        # Other generics (List[int], Dict[str, float], etc.)
+        if args:
+            arg_strs = [_type_to_string(arg) for arg in args]
+            origin_str = origin.__name__ if hasattr(origin, "__name__") else str(origin)
+            return f"{origin_str}[{', '.join(arg_strs)}]"
+        else:
+            # Generic without args
+            return origin.__name__ if hasattr(origin, "__name__") else str(origin)
+    
+    # Non-parameterized types
+    if isinstance(type_hint, type):
+        # Plain class (int, str, etc.)
+        return type_hint.__name__
+    
+    # Fallback for other typing constructs
+    return str(type_hint).replace("typing.", "")
 
 
 def _is_optional(type_hint: Type) -> bool:
@@ -96,5 +123,12 @@ def _is_optional(type_hint: Type) -> bool:
     if origin is Union:
         args = get_args(type_hint)
         return type(None) in args
+    
+    # Handle Python 3.10+ union syntax (str | None)
+    import sys
+    if sys.version_info >= (3, 10):
+        import types
+        if isinstance(type_hint, types.UnionType):
+            return type(None) in get_args(type_hint)
     
     return False
