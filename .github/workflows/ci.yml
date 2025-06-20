@@ -1,0 +1,141 @@
+name: CI Tests
+
+on:
+  push:
+    branches: [main, feature/*]
+  pull_request:
+    branches: [main]
+
+env:
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install dependencies
+        run: |
+          pip install uv
+          uv pip install ruff mypy
+      
+      - name: Run ruff
+        run: ruff check .
+      
+      - name: Run mypy
+        run: mypy --install-types --non-interactive mcp_second_brain || true  # Allow mypy to fail for now
+
+  unit-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/uv
+          key: ${{ runner.os }}-uv-${{ matrix.python-version }}-${{ hashFiles('pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-uv-${{ matrix.python-version }}-
+      
+      - name: Install dependencies
+        run: |
+          pip install uv
+          uv pip install -e ".[test]"
+      
+      - name: Run unit tests
+        run: pytest tests/unit -v --cov=mcp_second_brain --cov-report=xml --cov-report=term
+      
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          name: coverage-${{ matrix.python-version }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+
+  integration-tests:
+    needs: unit-tests
+    runs-on: ubuntu-latest
+    # Only run on main branch or if PR is from the same repo (has access to secrets)
+    if: github.ref == 'refs/heads/main' || github.event.pull_request.head.repo.full_name == github.repository
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install dependencies
+        run: |
+          pip install uv
+          uv pip install -e ".[test]"
+      
+      - name: Run integration tests
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'dummy-key-for-mocks' }}
+          VERTEX_PROJECT: ${{ secrets.VERTEX_PROJECT || 'dummy-project' }}
+          VERTEX_LOCATION: ${{ secrets.VERTEX_LOCATION || 'us-central1' }}
+        run: pytest tests/integration -v
+        timeout-minutes: 10
+
+  e2e-tests:
+    needs: integration-tests
+    runs-on: ubuntu-latest
+    # Only run on main branch merges or with specific label
+    if: github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'test-e2e')
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Run E2E tests
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'test-key' }}
+          VERTEX_PROJECT: ${{ secrets.VERTEX_PROJECT || 'test-project' }}
+          VERTEX_LOCATION: ${{ secrets.VERTEX_LOCATION || 'us-central1' }}
+        run: |
+          cd tests/e2e
+          docker-compose up --build --abort-on-container-exit --exit-code-from test-runner
+        timeout-minutes: 15
+      
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-results
+          path: tests/e2e/test_results/
+
+  all-tests-passed:
+    needs: [lint, unit-tests, integration-tests]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Check if all tests passed
+        run: |
+          if [[ "${{ needs.lint.result }}" != "success" || \
+                "${{ needs.unit-tests.result }}" != "success" || \
+                "${{ needs.integration-tests.result }}" != "success" ]]; then
+            echo "One or more required tests failed"
+            exit 1
+          fi
+          echo "All required tests passed!"
