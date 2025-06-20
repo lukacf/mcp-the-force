@@ -4,7 +4,7 @@ services:
   mcp-server:
     build:
       context: ../..
-      dockerfile: tests/e2e/Dockerfile
+      dockerfile: tests/e2e/Dockerfile.server
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-test-key}
       - VERTEX_PROJECT=${VERTEX_PROJECT:-test-project}

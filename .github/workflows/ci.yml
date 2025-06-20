@@ -29,7 +29,7 @@ jobs:
         run: ruff check .
       
       - name: Run mypy
-        run: mypy --install-types --non-interactive mcp_second_brain || true  # Allow mypy to fail for now
+        run: mypy --install-types --non-interactive mcp_second_brain || echo "::warning::MyPy check failed - fix before 1.0 release"
 
   unit-tests:
     runs-on: ubuntu-latest
@@ -65,7 +65,8 @@ jobs:
         uses: codecov/codecov-action@v4
         with:
           file: ./coverage.xml
-          name: coverage-${{ matrix.python-version }}
+          flags: unit,py${{ matrix.python-version }}
+          name: coverage-py${{ matrix.python-version }}
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
 
@@ -99,8 +100,8 @@ jobs:
   e2e-tests:
     needs: integration-tests
     runs-on: ubuntu-latest
-    # Only run on main branch merges or with specific label
-    if: github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'test-e2e')
+    # Run on main branch, same-repo PRs, or with specific label
+    if: github.ref == 'refs/heads/main' || github.event.pull_request.head.repo.full_name == github.repository || contains(github.event.pull_request.labels.*.name, 'test-e2e')
     
     steps:
       - uses: actions/checkout@v4
