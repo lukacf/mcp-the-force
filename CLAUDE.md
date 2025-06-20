@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-MCP Second-Brain Server - A Model Context Protocol (MCP) server that provides access to multiple AI models (OpenAI o-series and Google Gemini 2.5) with intelligent context management for large codebases. Uses FastMCP framework with smart file inlining and vector store integration for RAG.
+MCP Second-Brain Server - A Model Context Protocol (MCP) server that provides access to multiple AI models (OpenAI o-series and Google Gemini 2.5) with intelligent context management for large codebases. Uses FastMCP framework with smart file inlining and vector store integration for RAG. Supports optional multi-turn conversations for OpenAI models.
 
 ## Commands
 
@@ -45,9 +45,18 @@ MCP Second-Brain Server - A Model Context Protocol (MCP) server that provides ac
 Each tool is exposed via MCP protocol with specific use cases:
 - `deep-multimodal-reasoner`: Bug fixing, complex reasoning (Gemini 2.5 Pro, ~2M tokens)
 - `flash-summary-sprinter`: Fast summarization (Gemini 2.5 Flash, ~2M tokens)
-- `chain-of-thought-helper`: Algorithm design (OpenAI o3, ~200k tokens)
-- `slow-and-sure-thinker`: Formal proofs, deep analysis (OpenAI o3-pro, ~200k tokens)
-- `fast-long-context-assistant`: Large-scale refactoring (OpenAI gpt-4.1, ~1M tokens)
+- `chain-of-thought-helper`: Algorithm design (OpenAI o3, ~200k tokens) - supports session_id
+- `slow-and-sure-thinker`: Formal proofs, deep analysis (OpenAI o3-pro, ~200k tokens) - supports session_id
+- `fast-long-context-assistant`: Large-scale refactoring (OpenAI gpt-4.1, ~1M tokens) - supports session_id
+- `create_vector_store_tool`: Create vector stores for RAG workflows
+
+### Conversation Support
+
+OpenAI tools (o3, o3-pro, gpt-4.1) support optional multi-turn conversations:
+- Pass `session_id` parameter to maintain conversation continuity
+- Server maintains ephemeral cache (1 hour TTL) of OpenAI response IDs
+- No conversation history stored - OpenAI maintains full context
+- Gemini models remain single-shot (no session support)
 
 ### Configuration
 
@@ -77,6 +86,13 @@ The Second-Brain server addresses key limitations when working with Claude:
 1. Capture verbose output → save to file
 2. fast-long-context-assistant → identify key files (context: output + large codebase)
 3. slow-and-sure-thinker → deep analysis (context: key files, attachments: full codebase)
+```
+
+#### Multi-Turn Debugging Session
+```
+1. chain-of-thought-helper (session_id: "debug-123") → initial analysis
+2. chain-of-thought-helper (session_id: "debug-123") → follow-up questions
+3. slow-and-sure-thinker (session_id: "debug-123") → deep dive into specific issue
 ```
 
 #### Performance Analysis Pattern
