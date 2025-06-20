@@ -10,6 +10,7 @@ class ToolSpec:
     Subclasses should define:
     - Class attributes for model configuration
     - Instance attributes with Route descriptors for parameters
+    - Optional prompt_template for custom prompt formatting
     """
     
     # Model configuration (to be overridden by subclasses)
@@ -18,6 +19,9 @@ class ToolSpec:
     context_window: int = 0
     timeout: int = 300
     description: str = ""
+    
+    # Prompt template (optional, uses default if not provided)
+    prompt_template: str | None = None
     
     @classmethod
     def get_model_config(cls) -> Dict[str, Any]:
