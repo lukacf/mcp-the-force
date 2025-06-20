@@ -5,7 +5,7 @@ from .descriptors import Route
 from .registry import tool
 
 
-@tool
+@tool(aliases=["deep-multimodal-reasoner"])
 class VertexGemini25Pro(ToolSpec):
     """Deep multimodal analysis and complex reasoning (Gemini 2.5 Pro, ~1M context).
     Excels at: bug fixing, code analysis, multimodal understanding."""
@@ -15,6 +15,19 @@ class VertexGemini25Pro(ToolSpec):
     context_window = 1_000_000
     timeout = 600
     
+    # Custom prompt template for Gemini models
+    prompt_template = """<task_instructions>
+{instructions}
+</task_instructions>
+
+<expected_output_format>
+{output_format}
+</expected_output_format>
+
+<context_information>
+{context}
+</context_information>"""
+    
     # Parameters
     instructions: str = Route.prompt(pos=0, description="Task instructions for the model")
     output_format: str = Route.prompt(pos=1, description="Desired output format")
@@ -22,7 +35,7 @@ class VertexGemini25Pro(ToolSpec):
     temperature: Optional[float] = Route.adapter(default=0.2, description="Sampling temperature")
 
 
-@tool
+@tool(aliases=["flash-summary-sprinter"])
 class VertexGemini25Flash(ToolSpec):
     """Fast summarization and quick analysis (Gemini 2.5 Flash, ~1M context).
     Excels at: rapid insights, triage, quick summaries."""
@@ -39,7 +52,7 @@ class VertexGemini25Flash(ToolSpec):
     temperature: Optional[float] = Route.adapter(default=0.3, description="Sampling temperature")
 
 
-@tool
+@tool(aliases=["chain-of-thought-helper"])
 class OpenAIO3Reasoning(ToolSpec):
     """Chain-of-thought reasoning and algorithm design (OpenAI o3, ~200k context).
     Excels at: step-by-step problem solving, algorithm design, code generation."""
@@ -48,6 +61,18 @@ class OpenAIO3Reasoning(ToolSpec):
     adapter_class = "openai"
     context_window = 200_000
     timeout = 600
+    
+    # Custom prompt template for o3 reasoning models
+    prompt_template = """## Task Instructions
+{instructions}
+
+## Output Requirements
+{output_format}
+
+## Provided Context
+{context}
+
+Please approach this task step-by-step, showing your reasoning process."""
     
     # Parameters
     instructions: str = Route.prompt(pos=0, description="Task instructions for the model")
@@ -61,7 +86,7 @@ class OpenAIO3Reasoning(ToolSpec):
     session_id: Optional[str] = Route.session(description="Session ID for multi-turn conversations")
 
 
-@tool
+@tool(aliases=["slow-and-sure-thinker"])
 class OpenAIO3ProDeepAnalysis(ToolSpec):
     """Deep analysis and formal reasoning (OpenAI o3-pro, ~200k context).
     Excels at: formal proofs, complex debugging, architectural analysis.
@@ -85,7 +110,7 @@ class OpenAIO3ProDeepAnalysis(ToolSpec):
     session_id: Optional[str] = Route.session(description="Session ID for multi-turn conversations")
 
 
-@tool
+@tool(aliases=["fast-long-context-assistant"])
 class OpenAIGPT4LongContext(ToolSpec):
     """Fast long-context processing (GPT-4.1, ~1M context).
     Excels at: large-scale refactoring, codebase navigation, RAG workflows."""
@@ -104,5 +129,3 @@ class OpenAIGPT4LongContext(ToolSpec):
     session_id: Optional[str] = Route.session(description="Session ID for multi-turn conversations")
 
 
-# For now, we'll handle aliases differently - in the integration layer
-# rather than creating duplicate classes

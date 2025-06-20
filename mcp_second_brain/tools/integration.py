@@ -67,29 +67,23 @@ def register_all_tools(mcp: FastMCP) -> None:
     """Register all tools with FastMCP server."""
     tools = list_tools()
     
-    # Define legacy aliases
-    aliases = {
-        "vertex_gemini25_pro": ["deep-multimodal-reasoner"],
-        "vertex_gemini25_flash": ["flash-summary-sprinter"],
-        "open_aio3_reasoning": ["chain-of-thought-helper"],
-        "open_aio3_pro_deep_analysis": ["slow-and-sure-thinker"],
-        "open_aigpt4_long_context": ["fast-long-context-assistant"]
-    }
-    
     for tool_id, metadata in tools.items():
         try:
+            # Skip aliases (they share the same metadata object)
+            if tool_id != metadata.id:
+                continue
+                
             # Create function with proper signature
             tool_func = create_tool_function(metadata)
             
-            # Register with FastMCP
+            # Register with FastMCP under primary name
             mcp.tool(name=tool_id)(tool_func)
             logger.info(f"Registered tool with FastMCP: {tool_id}")
             
-            # Register aliases if any
-            if tool_id in aliases:
-                for alias in aliases[tool_id]:
-                    mcp.tool(name=alias)(tool_func)
-                    logger.info(f"Registered alias: {alias} -> {tool_id}")
+            # Register aliases
+            for alias in metadata.aliases:
+                mcp.tool(name=alias)(tool_func)
+                logger.info(f"Registered alias: {alias} -> {tool_id}")
             
         except Exception as e:
             logger.error(f"Failed to register tool {tool_id}: {e}")
