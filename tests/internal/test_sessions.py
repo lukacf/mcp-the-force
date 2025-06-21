@@ -17,10 +17,9 @@ class TestSessionManagement:
     @pytest.fixture(autouse=True)
     def clear_session_cache(self):
         """Clear session cache before each test."""
-        cache = session_cache
-        cache._data.clear()
+        # The session_cache module now returns a new instance each time
+        # which uses SQLite with a unique temp file, so no explicit clearing needed
         yield
-        cache._data.clear()
     
     @pytest.fixture
     def parse_response(self):
@@ -176,11 +175,13 @@ class TestSessionManagement:
     @pytest.mark.asyncio
     async def test_session_expiration(self, parse_response, mock_openai_client):
         """Test that sessions expire after TTL."""
-        from mcp_second_brain.session_cache import SessionCache
+        from mcp_second_brain.session_cache import _SQLiteSessionCache
         from unittest.mock import patch
+        import tempfile
         
         # Create cache with very short TTL for testing
-        cache = SessionCache(ttl=0.1)  # 100ms TTL
+        db_path = tempfile.mktemp(suffix=".db")
+        cache = _SQLiteSessionCache(db_path=db_path, ttl=0.1)  # 100ms TTL
         
         with patch('mcp_second_brain.session_cache.session_cache', cache):
             response = Mock(id="resp_expire", output_text="Initial response")

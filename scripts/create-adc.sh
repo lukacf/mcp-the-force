@@ -7,10 +7,10 @@ set -euo pipefail
 # 1) Refresh token is required (from CI secrets or local .env)
 REFRESH_TOKEN=${GCLOUD_USER_REFRESH_TOKEN:?GCLOUD_USER_REFRESH_TOKEN is required}
 
-# 2) Use custom OAuth client or fall back to gcloud CLI's public client
-# These are the official gcloud CLI OAuth credentials - safe to use as defaults
-CLIENT_ID=${GCLOUD_OAUTH_CLIENT_ID:-764086051850-6qr4p6gpi6hn506pt8ejuq83di341hur.apps.googleusercontent.com}
-CLIENT_SECRET=${GCLOUD_OAUTH_CLIENT_SECRET:-d-FL95Q19q7MQmFpd7hHD0Ty}
+# 2) OAuth client credentials are required
+# Get these from your Google Cloud project or use gcloud CLI's credentials
+CLIENT_ID=${GCLOUD_OAUTH_CLIENT_ID:?GCLOUD_OAUTH_CLIENT_ID is required}
+CLIENT_SECRET=${GCLOUD_OAUTH_CLIENT_SECRET:?GCLOUD_OAUTH_CLIENT_SECRET is required}
 
 # 3) Create temporary ADC file
 ADC_PATH=${ADC_PATH:-$(mktemp -t gcp_adc_XXXXXX.json)}

@@ -2,7 +2,6 @@
 import os
 import pytest
 import subprocess
-import json
 import shlex
 from pathlib import Path
 
