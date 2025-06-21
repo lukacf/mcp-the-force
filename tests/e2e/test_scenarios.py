@@ -10,6 +10,7 @@ pytestmark = pytest.mark.e2e
 class TestE2EScenarios:
     """More complex scenarios testing tool interactions."""
     
+    @pytest.mark.timeout(300)  # 5 minutes
     def test_vector_store_workflow(self, claude_code):
         """Test creating and using a vector store."""
         # Use specific Python files from the project
@@ -33,6 +34,7 @@ class TestE2EScenarios:
             # If it failed, make sure it's for a valid reason
             assert "no_supported_files" in output.lower() or "error" in output.lower()
     
+    @pytest.mark.timeout(300)  # 5 minutes
     def test_model_comparison(self, claude_code):
         """Test comparing outputs from different models."""
         # Try with fast model
@@ -46,6 +48,7 @@ class TestE2EScenarios:
         assert "ANSWER: 4" in output
     
     @pytest.mark.skip(reason="o3 is expensive - enable manually for release testing")
+    @pytest.mark.timeout(600)  # 10 minutes for o3
     def test_o3_session(self, claude_code):
         """Test o3 with session continuity."""
         # First query

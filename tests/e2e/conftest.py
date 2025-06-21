@@ -37,8 +37,8 @@ def claude_config_path(tmp_path_factory):
 @pytest.fixture
 def claude_code(claude_config_path):
     """Helper to run Claude Code commands."""
-    def run_command(prompt: str, timeout: int = 180) -> str:
-        """Run claude-code with given prompt."""
+    def run_command(prompt: str, timeout: int = 300) -> str:
+        """Run claude-code with given prompt (default 5 minute timeout)."""
         cmd = f'claude -p --dangerously-skip-permissions {shlex.quote(prompt)}'
         
         env = os.environ.copy()
