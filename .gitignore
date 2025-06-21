@@ -60,6 +60,8 @@ htmlcov/
 mcp-config.json
 credentials.json
 service-account.json
+gcp-service-account-key.json
+*-service-account-key.json
 
 # Temporary files
 *.tmp

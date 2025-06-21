@@ -29,6 +29,11 @@ jobs:
     - name: Build E2E test image
       run: docker build -f Dockerfile.e2e -t mcp-e2e:latest .
     
+    - name: Set up Google Cloud credentials
+      if: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}
+      run: |
+        echo "${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}" > /tmp/gcloud-key.json
+    
     - name: Run E2E tests
       env:
         CI_E2E: "1"
@@ -37,14 +42,22 @@ jobs:
         VERTEX_PROJECT: ${{ secrets.VERTEX_PROJECT }}
         VERTEX_LOCATION: ${{ secrets.VERTEX_LOCATION }}
       run: |
-        docker run \
-          -e CI_E2E \
-          -e OPENAI_API_KEY \
-          -e ANTHROPIC_API_KEY \
-          -e VERTEX_PROJECT \
-          -e VERTEX_LOCATION \
-          mcp-e2e:latest \
-          pytest tests/e2e -v --tb=short
+        # Set up Docker run command
+        DOCKER_CMD="docker run --rm"
+        DOCKER_CMD="$DOCKER_CMD -e CI_E2E"
+        DOCKER_CMD="$DOCKER_CMD -e OPENAI_API_KEY"
+        DOCKER_CMD="$DOCKER_CMD -e ANTHROPIC_API_KEY"
+        DOCKER_CMD="$DOCKER_CMD -e VERTEX_PROJECT"
+        DOCKER_CMD="$DOCKER_CMD -e VERTEX_LOCATION"
+        
+        # Add Google credentials if available
+        if [ -f /tmp/gcloud-key.json ]; then
+          DOCKER_CMD="$DOCKER_CMD -e GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcloud/key.json"
+          DOCKER_CMD="$DOCKER_CMD -v /tmp/gcloud-key.json:/tmp/gcloud/key.json:ro"
+        fi
+        
+        # Run tests
+        $DOCKER_CMD mcp-e2e:latest pytest tests/e2e -v --tb=short
     
     - name: Upload test results
       if: always()
