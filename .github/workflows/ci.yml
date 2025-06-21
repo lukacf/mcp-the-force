@@ -23,7 +23,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install uv
-          uv pip install ruff mypy
+          uv pip install --system ruff mypy
       
       - name: Run ruff
         run: ruff check .
@@ -56,7 +56,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install uv
-          uv pip install -e ".[test]"
+          uv pip install --system -e ".[test]"
       
       - name: Run unit tests
         run: pytest tests/unit -v --cov=mcp_second_brain --cov-report=xml --cov-report=term
@@ -87,7 +87,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install uv
-          uv pip install -e ".[test]"
+          uv pip install --system -e ".[test]"
       
       - name: Install pytest-anyio
         run: pip install pytest-anyio
