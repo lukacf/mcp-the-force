@@ -10,6 +10,7 @@ claude mcp add-json second-brain "$(cat <<EOF
     "OPENAI_API_KEY": "${OPENAI_API_KEY}",
     "VERTEX_PROJECT": "${VERTEX_PROJECT}",
     "VERTEX_LOCATION": "${VERTEX_LOCATION}",
+    "GOOGLE_APPLICATION_CREDENTIALS": "${GOOGLE_APPLICATION_CREDENTIALS}",
     "MCP_ADAPTER_MOCK": "0"
   },
   "timeoutMs": 180000
