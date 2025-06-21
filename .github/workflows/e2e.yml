@@ -54,8 +54,8 @@ jobs:
         
         # Add Google credentials if available
         if [ -f /tmp/gcloud-key.json ]; then
-          DOCKER_CMD="$DOCKER_CMD -e GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcloud/key.json"
-          DOCKER_CMD="$DOCKER_CMD -v /tmp/gcloud-key.json:/tmp/gcloud/key.json:ro"
+          DOCKER_CMD="$DOCKER_CMD -e GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcloud-key.json"
+          DOCKER_CMD="$DOCKER_CMD -v /tmp/gcloud-key.json:/tmp/gcloud-key.json:ro"
         fi
         
         # Run tests

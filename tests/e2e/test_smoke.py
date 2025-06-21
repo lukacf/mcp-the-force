@@ -30,12 +30,9 @@ class TestE2ESmoke:
         
         # Should get some response
         assert len(output) > 10
-        # Don't fail on auth errors or transient network errors
-        if "error" in output.lower():
-            if any(x in output.lower() for x in ["network", "authentication", "credentials", "api key"]):
-                pytest.skip(f"Skipping due to error: {output}")
-            else:
-                assert False, f"Unexpected error: {output}"
+        # Don't fail on transient network errors
+        if "error" in output.lower() and "network" not in output.lower():
+            assert False, f"Unexpected error: {output}"
     
     def test_file_analysis(self, claude_code, test_file):
         """Test analyzing a file with context."""
@@ -45,9 +42,7 @@ class TestE2ESmoke:
             f'output_format "text", and context ["{test_file}"]'
         )
         
-        # Should recognize recursion or show auth error
-        if "authentication" in output.lower() or "credentials" in output.lower():
-            pytest.skip("Skipping due to missing/invalid API credentials")
+        # Should recognize recursion
         assert "yes" in output.lower()
     
     def test_error_handling(self, claude_code):
