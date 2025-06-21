@@ -62,6 +62,7 @@ credentials.json
 service-account.json
 gcp-service-account-key.json
 *-service-account-key.json
+*.adc.json
 
 # Temporary files
 *.tmp
