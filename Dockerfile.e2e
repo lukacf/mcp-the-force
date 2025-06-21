@@ -46,18 +46,12 @@ ENV XDG_CONFIG_HOME=$HOME/.config
 # Create Claude config directory
 RUN mkdir -p $HOME/.config/claude
 
-# Add MCP server using claude mcp add-json
-RUN claude mcp add-json second-brain '{ \
-  "command": "uv", \
-  "args": ["run", "--", "mcp-second-brain"], \
-  "env": { \
-    "OPENAI_API_KEY": "${OPENAI_API_KEY}", \
-    "VERTEX_PROJECT": "${VERTEX_PROJECT}", \
-    "VERTEX_LOCATION": "${VERTEX_LOCATION}", \
-    "MCP_ADAPTER_MOCK": "0" \
-  }, \
-  "timeoutMs": 180000 \
-}'
+# Copy entrypoint script
+COPY --chown=tester:tester tests/e2e/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# Use entrypoint to configure Claude Code at runtime
+ENTRYPOINT ["/entrypoint.sh"]
 
 # Default command runs tests
 CMD ["pytest", "tests/e2e", "-v"]
