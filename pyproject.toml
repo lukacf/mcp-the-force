@@ -46,6 +46,8 @@ asyncio_mode = "auto"
 timeout = 10  # 10 seconds default timeout for unit tests
 addopts = "--strict-markers --tb=short"
 markers = [
+    "asyncio: Mark test as requiring asyncio",
+    "anyio: Mark test as requiring anyio",
     "e2e: End-to-end tests that require Docker",
     "slow: Tests that take more than 10 seconds",
 ]

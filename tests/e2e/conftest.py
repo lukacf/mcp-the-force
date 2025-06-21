@@ -5,6 +5,9 @@ import subprocess
 import shlex
 from pathlib import Path
 
+# E2E tests should use real adapters, not mocks
+os.environ["MCP_ADAPTER_MOCK"] = "0"
+
 # Cost guards removed - no longer needed
 
 # Skip E2E tests if not explicitly enabled
