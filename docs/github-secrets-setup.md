@@ -30,11 +30,30 @@ Navigate to: Settings → Secrets and variables → Actions → New repository s
   - Required for: Integration tests, E2E tests
   - Used by: Gemini models
 
+### 3. Google Cloud Authentication (Choose One)
+
+#### Option A: Service Account (Recommended if you have permissions)
 - **`GOOGLE_APPLICATION_CREDENTIALS_JSON`**
   - The contents of a service account JSON file
   - Required for: E2E tests with Gemini models
   - Get by running: `./scripts/create-gcp-service-account.sh`
   - Copy contents: `cat gcp-service-account-key.json | pbcopy`
+
+#### Option B: User Refresh Token (If you can't create service accounts)
+- **`GCLOUD_USER_REFRESH_TOKEN`**
+  - Your Google Cloud refresh token
+  - Get from: `~/.config/gcloud/application_default_credentials.json` after running `gcloud auth application-default login`
+  - Required with: `GCLOUD_OAUTH_CLIENT_ID` and `GCLOUD_OAUTH_CLIENT_SECRET`
+
+- **`GCLOUD_OAUTH_CLIENT_ID`** (Optional)
+  - OAuth 2.0 client ID from Google Cloud Console
+  - Get from: [APIs & Services > Credentials](https://console.cloud.google.com/apis/credentials)
+  - If not provided, uses gcloud CLI's default client
+
+- **`GCLOUD_OAUTH_CLIENT_SECRET`** (Optional)
+  - OAuth 2.0 client secret
+  - Get from: Same OAuth client in Google Cloud Console
+  - If not provided, uses gcloud CLI's default client
 
 ## Setting Up Secrets
 
@@ -50,7 +69,9 @@ Navigate to: Settings → Secrets and variables → Actions → New repository s
    # Get from https://console.anthropic.com/account/keys
    ```
 
-3. **Google Cloud Credentials**:
+3. **Google Cloud Credentials** (Choose one method):
+   
+   **Option A - Service Account**:
    ```bash
    # Run the script to create service account
    ./scripts/create-gcp-service-account.sh
@@ -59,6 +80,17 @@ Navigate to: Settings → Secrets and variables → Actions → New repository s
    cat gcp-service-account-key.json | pbcopy
    
    # Add to GitHub secrets as GOOGLE_APPLICATION_CREDENTIALS_JSON
+   ```
+   
+   **Option B - Refresh Token**:
+   ```bash
+   # Get your refresh token
+   cat ~/.config/gcloud/application_default_credentials.json | jq -r .refresh_token
+   
+   # Add to GitHub secrets:
+   # - GCLOUD_USER_REFRESH_TOKEN (the refresh token)
+   # - GCLOUD_OAUTH_CLIENT_ID (optional, from Google Cloud Console)
+   # - GCLOUD_OAUTH_CLIENT_SECRET (optional, from Google Cloud Console)
    ```
 
 4. **Vertex AI Settings**:
