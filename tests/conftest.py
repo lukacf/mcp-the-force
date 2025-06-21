@@ -9,13 +9,44 @@ from unittest.mock import MagicMock, Mock, AsyncMock
 
 # Note: Adapter mocking is controlled per test suite:
 # - Unit tests: Don't need mocking (pure Python)
-# - Internal tests: Use adapter mocking (MCP_ADAPTER_MOCK=1)
-# - MCP integration tests: Use adapter mocking (MCP_ADAPTER_MOCK=1)
+# - Internal tests: Use adapter mocking (MCP_ADAPTER_MOCK=1 set before Python starts)
+# - MCP integration tests: Use adapter mocking (MCP_ADAPTER_MOCK=1 set before Python starts)  
 # - E2E tests: Use real adapters (MCP_ADAPTER_MOCK=0)
+#
+# IMPORTANT: MCP_ADAPTER_MOCK must be set before any imports happen.
+# For local testing, run: MCP_ADAPTER_MOCK=1 pytest tests/internal
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
+
+
+@pytest.fixture(scope="session", autouse=True)
+def verify_mock_adapter_for_integration():
+    """Verify MockAdapter is properly activated for integration tests."""
+    # Only check if we're in internal or MCP integration tests
+    if any(arg for arg in sys.argv if 'tests/internal' in arg or 'tests/integration_mcp' in arg):
+        if os.getenv("MCP_ADAPTER_MOCK") != "1":
+            pytest.fail(
+                "MCP_ADAPTER_MOCK=1 must be set before running integration tests.\n"
+                "Run: MCP_ADAPTER_MOCK=1 pytest tests/internal"
+            )
+        
+        # Verify the adapter was actually injected
+        try:
+            from mcp_second_brain.adapters import ADAPTER_REGISTRY
+            from mcp_second_brain.adapters.mock_adapter import MockAdapter
+            
+            for name, adapter_class in ADAPTER_REGISTRY.items():
+                if adapter_class is not MockAdapter:
+                    pytest.fail(
+                        f"Adapter '{name}' is not using MockAdapter! "
+                        f"Got {adapter_class} instead. "
+                        "This suggests MCP_ADAPTER_MOCK was set too late."
+                    )
+        except ImportError:
+            # If we can't import, tests will fail anyway
+            pass
 
 
 @pytest.fixture

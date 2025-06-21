@@ -1,25 +1,24 @@
-"""Configuration specific to internal integration tests."""
+"""
+Configuration for internal integration tests.
+"""
 import os
-import pytest
+import sys
 
+# This must be set BEFORE any imports of mcp_second_brain modules
+os.environ["MCP_ADAPTER_MOCK"] = "1"
 
-@pytest.fixture(scope="session", autouse=True)
-def verify_mock_adapter():
-    """Verify that MockAdapter is enabled for internal tests."""
-    if os.environ.get("MCP_ADAPTER_MOCK", "").lower() not in {"1", "true", "yes"}:
-        pytest.fail(
-            "MockAdapter not enabled! Internal tests require MCP_ADAPTER_MOCK=1. "
-            "This should be set by CI or manually when running tests locally."
-        )
+# Force early setup to ensure MockAdapter is used
+def pytest_configure(config):
+    """Configure pytest - runs before test collection."""
+    # Ensure MCP_ADAPTER_MOCK is set
+    os.environ["MCP_ADAPTER_MOCK"] = "1"
     
-    # Also verify the adapter was actually injected
-    from mcp_second_brain.adapters import ADAPTER_REGISTRY
-    from mcp_second_brain.adapters.mock_adapter import MockAdapter
-    
-    for name, adapter_class in ADAPTER_REGISTRY.items():
-        if adapter_class is not MockAdapter:
-            pytest.fail(
-                f"Adapter '{name}' is not using MockAdapter! "
-                f"Got {adapter_class} instead. "
-                "This suggests MCP_ADAPTER_MOCK was set too late."
-            )
+    # If adapters module was already imported, we need to reload it
+    if 'mcp_second_brain.adapters' in sys.modules:
+        import importlib
+        import mcp_second_brain.adapters
+        # Clear any cached adapters
+        if hasattr(mcp_second_brain.adapters, '_ADAPTER_CACHE'):
+            mcp_second_brain.adapters._ADAPTER_CACHE.clear()
+        # Reload to pick up MockAdapter
+        importlib.reload(mcp_second_brain.adapters)
