@@ -2,11 +2,9 @@
 import os
 import pytest
 import subprocess
+import json
 import shlex
 from pathlib import Path
-
-# E2E tests should use real adapters, not mocks
-os.environ["MCP_ADAPTER_MOCK"] = "0"
 
 # Cost guards removed - no longer needed
 
@@ -40,7 +38,7 @@ def claude_config_path(tmp_path_factory):
 def claude_code(claude_config_path):
     """Helper to run Claude Code commands."""
     def run_command(prompt: str, timeout: int = 300) -> str:
-        """Run claude-code with given prompt (default 5 minute timeout)."""
+        """Run claude-code with given prompt."""
         cmd = f'claude -p --dangerously-skip-permissions {shlex.quote(prompt)}'
         
         env = os.environ.copy()
