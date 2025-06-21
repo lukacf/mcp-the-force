@@ -9,7 +9,7 @@ def run_diagnostic():
     print("=== CI Diagnostic Report ===")
     print(f"Python version: {sys.version}")
     print(f"Platform: {sys.platform}")
-    print(f"Environment variables:")
+    print("Environment variables:")
     for key in sorted(os.environ):
         if any(x in key for x in ["MCP", "PYTEST", "PYTHON", "PATH"]):
             print(f"  {key}={os.environ[key]}")
@@ -44,7 +44,7 @@ print('Adapter types:', {k: v.__name__ for k, v in ADAPTER_REGISTRY.items()})
         capture_output=True,
         text=True
     )
-    print(f"\nAdapter registration check:")
+    print("\nAdapter registration check:")
     print(result.stdout)
     if result.stderr:
         print(f"Errors: {result.stderr}")

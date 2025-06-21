@@ -2,8 +2,8 @@
 Integration tests for error handling scenarios.
 """
 import pytest
-from unittest.mock import patch, Mock
 import json
+from unittest.mock import patch
 from mcp_second_brain.tools.executor import executor
 from mcp_second_brain.tools.registry import get_tool
 # Import definitions to ensure tools are registered
