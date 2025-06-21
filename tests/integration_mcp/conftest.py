@@ -3,12 +3,12 @@ Configuration for MCP integration tests.
 These tests use adapter-level mocking to test the MCP protocol interface.
 """
 import os
-
-# Set adapter mocking for MCP tests
-os.environ["MCP_ADAPTER_MOCK"] = "1"
-
-
 import pytest
+
+# For local development, ensure MCP_ADAPTER_MOCK is set
+# In CI, this is handled at the workflow level
+if "MCP_ADAPTER_MOCK" not in os.environ:
+    os.environ["MCP_ADAPTER_MOCK"] = "1"
 
 
 @pytest.fixture(scope="session", autouse=True)
