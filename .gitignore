@@ -67,3 +67,9 @@ gcp-service-account-key.json
 # Temporary files
 *.tmp
 *.temp
+
+# Session cache database
+.mcp_sessions.sqlite3
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm

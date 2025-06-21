@@ -63,7 +63,26 @@ The following secrets must be configured in GitHub repository settings for E2E t
 
 ### Running E2E Tests
 
-#### Locally
+#### Locally with Application Default Credentials (ADC)
+
+```bash
+# First, authenticate with Google Cloud
+gcloud auth application-default login
+
+# Set required environment variables
+export OPENAI_API_KEY="sk-..."
+export ANTHROPIC_API_KEY="sk-ant-..."
+export VERTEX_PROJECT="your-project"
+export VERTEX_LOCATION="us-central1"
+
+# Run with ADC mounted from your host machine
+./tests/e2e/run-local-docker.sh
+
+# Note: If you encounter permission errors, make your ADC file readable:
+chmod 644 ~/.config/gcloud/application_default_credentials.json
+```
+
+#### Locally with Service Account
 
 ```bash
 # Set required environment variables
@@ -71,6 +90,7 @@ export OPENAI_API_KEY="sk-..."
 export ANTHROPIC_API_KEY="sk-ant-..."
 export VERTEX_PROJECT="your-project"
 export VERTEX_LOCATION="us-central1"
+export GOOGLE_APPLICATION_CREDENTIALS_JSON="$(cat path/to/service-account-key.json)"
 export CI_E2E=1  # Required to enable E2E tests
 
 # Run with local script (includes Google Cloud auth check)
@@ -84,6 +104,7 @@ docker run --rm \
   -e ANTHROPIC_API_KEY \
   -e VERTEX_PROJECT \
   -e VERTEX_LOCATION \
+  -e GOOGLE_APPLICATION_CREDENTIALS_JSON \
   mcp-e2e:latest
 ```
 
