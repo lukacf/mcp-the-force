@@ -9,6 +9,7 @@ os.environ["MCP_ADAPTER_MOCK"] = "1"
 
 
 import pytest
+import asyncio
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -25,3 +26,13 @@ def verify_mock_adapter():
                 f"Got {adapter_class} instead. "
                 "This suggests MCP_ADAPTER_MOCK was set too late."
             )
+
+
+@pytest.fixture
+async def mcp_server():
+    """Create MCP server instance for testing."""
+    # Import here to ensure MCP_ADAPTER_MOCK is set first
+    from mcp_second_brain.server import mcp
+    
+    # Return the server instance
+    return mcp

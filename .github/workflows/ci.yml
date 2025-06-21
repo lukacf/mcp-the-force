@@ -89,31 +89,30 @@ jobs:
           pip install uv
           uv pip install --system -e ".[test]"
       
-      - name: Install pytest-anyio
-        run: pip install pytest-anyio
+      - name: Run CI diagnostics
+        run: |
+          echo "=== CI Environment Diagnostics ==="
+          python --version
+          echo "Python path: $(which python)"
+          echo "Pytest version: $(pytest --version)"
+          echo "Running diagnostic script..."
+          MCP_ADAPTER_MOCK=1 python tests/diagnose_ci.py || true
       
       - name: Run internal integration tests
-        env:
-          # Internal tests use MockAdapter - must be set before Python starts
-          MCP_ADAPTER_MOCK: "1"
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'dummy-key-for-mocks' }}
-          VERTEX_PROJECT: ${{ secrets.VERTEX_PROJECT || 'dummy-project' }}
-          VERTEX_LOCATION: ${{ secrets.VERTEX_LOCATION || 'us-central1' }}
         run: |
-          # Verify env var is set
-          echo "MCP_ADAPTER_MOCK=$MCP_ADAPTER_MOCK"
-          # Internal tests need asyncio support
-          pytest tests/internal -v
+          # Set env var and run tests in same command to ensure it's available
+          MCP_ADAPTER_MOCK=1 OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY || 'dummy-key-for-mocks' }}" \
+          VERTEX_PROJECT="${{ secrets.VERTEX_PROJECT || 'dummy-project' }}" \
+          VERTEX_LOCATION="${{ secrets.VERTEX_LOCATION || 'us-central1' }}" \
+          pytest tests/internal -v --tb=short
           
       - name: Run MCP integration tests
-        env:
-          MCP_ADAPTER_MOCK: "1"
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'dummy-key-for-mocks' }}
-          VERTEX_PROJECT: ${{ secrets.VERTEX_PROJECT || 'dummy-project' }}
-          VERTEX_LOCATION: ${{ secrets.VERTEX_LOCATION || 'us-central1' }}
         run: |
-          # MCP tests use anyio, so disable asyncio to avoid conflicts
-          pytest tests/integration_mcp -v -p no:asyncio
+          # Set env var and run tests in same command to ensure it's available
+          MCP_ADAPTER_MOCK=1 OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY || 'dummy-key-for-mocks' }}" \
+          VERTEX_PROJECT="${{ secrets.VERTEX_PROJECT || 'dummy-project' }}" \
+          VERTEX_LOCATION="${{ secrets.VERTEX_LOCATION || 'us-central1' }}" \
+          pytest tests/integration_mcp -v -p no:asyncio --tb=short
         timeout-minutes: 10
 
 

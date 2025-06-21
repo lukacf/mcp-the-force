@@ -25,6 +25,7 @@ mcp-second-brain = "mcp_second_brain.server:main"
 test = [
     "pytest>=7.4",
     "pytest-asyncio>=0.21",
+    "pytest-anyio>=0.8.0",
     "pytest-mock>=3.11",
     "pytest-timeout>=2.1",
     "pytest-cov>=4.0",
@@ -43,6 +44,7 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 timeout = 10  # 10 seconds default timeout for unit tests
 addopts = "--strict-markers --tb=short"
 markers = [
@@ -51,6 +53,7 @@ markers = [
     "e2e: End-to-end tests that require Docker",
     "slow: Tests that take more than 10 seconds",
 ]
+# Note: plugins loading moved to conftest.py for better compatibility
 
 [tool.coverage.run]
 source = ["mcp_second_brain"]
