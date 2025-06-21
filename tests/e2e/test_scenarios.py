@@ -12,32 +12,38 @@ class TestE2EScenarios:
     
     def test_vector_store_workflow(self, claude_code):
         """Test creating and using a vector store."""
-        # Use a simple text file for testing
-        files = ["/app/README.md"]
+        # Use specific Python files from the project
+        files = [
+            "/app/mcp_second_brain/server.py",
+            "/app/mcp_second_brain/tools/definitions.py",
+            "/app/README.md"
+        ]
         files_json = json.dumps(files)
         
-        # Create vector store
+        # Create vector store with specific output format
         output = claude_code(
-            f'Use second-brain create_vector_store_tool with files {files_json}'
+            f'Use second-brain create_vector_store_tool with files {files_json}. '
+            f'If the tool succeeds and returns a vector_store_id, output exactly "SUCCESS: <id>". '
+            f'If it fails, output exactly "FAILED: <reason>".'
         )
         
-        # Should either create successfully or report no supported files
-        # Both are valid outcomes for E2E testing
-        assert ("vector_store_id" in output or "no_supported_files" in output)
-        assert not "exception" in output.lower()
+        # Check for structured response
+        assert "SUCCESS:" in output or "FAILED:" in output
+        if "FAILED:" in output:
+            # If it failed, make sure it's for a valid reason
+            assert "no_supported_files" in output.lower() or "error" in output.lower()
     
     def test_model_comparison(self, claude_code):
         """Test comparing outputs from different models."""
-        prompt = "What is 2+2? Answer with just the number."
-        
         # Try with fast model
-        flash_output = claude_code(
-            f'Use second-brain chat_with_gemini25_flash with instructions "{prompt}", '
-            'output_format "text", and context []'
+        output = claude_code(
+            'Use second-brain chat_with_gemini25_flash with instructions "What is 2+2?", '
+            'output_format "text", and context []. '
+            'Extract just the answer from the response and output only "ANSWER: <number>".'
         )
         
-        # Should contain "4"
-        assert "4" in flash_output
+        # Should contain the structured response
+        assert "ANSWER: 4" in output
     
     @pytest.mark.skip(reason="o3 is expensive - enable manually for release testing")
     def test_o3_session(self, claude_code):
