@@ -5,6 +5,7 @@ import sys
 import os
 from pathlib import Path
 import pytest
+import pytest_asyncio
 from unittest.mock import MagicMock, Mock, AsyncMock
 
 # Note: Adapter mocking is controlled by MCP_ADAPTER_MOCK environment variable
@@ -155,7 +156,7 @@ def sample_tool_params():
 
 
 # Async fixtures
-@pytest.fixture
+@pytest_asyncio.fixture
 async def mock_tool_executor():
     """Mock ToolExecutor for integration tests."""
     from mcp_second_brain.tools.executor import ToolExecutor
@@ -209,7 +210,7 @@ def mock_vector_store_client(monkeypatch, mock_openai_client):
     monkeypatch.setattr(vs, "get_client", Mock(return_value=mock_openai_client))
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def run_tool():
     """Convenience helper that executes a tool by name using the real executor."""
     from mcp_second_brain.tools.executor import executor
