@@ -9,6 +9,7 @@ An intelligent Model Context Protocol (MCP) server that orchestrates multiple AI
 uv pip install -e .
 
 # Set up Google Cloud authentication (for Gemini models)
+# See docs/authentication-guide.md for all authentication options
 gcloud auth application-default login
 
 # Configure environment variables
@@ -33,6 +34,17 @@ PORT=8000
 MAX_INLINE_TOKENS=12000
 DEFAULT_TEMPERATURE=0.2
 ```
+
+### Google Cloud Authentication
+
+The server requires Google Cloud authentication for Gemini models. See [docs/authentication-guide.md](docs/authentication-guide.md) for detailed setup instructions.
+
+**Recommended methods:**
+- **Development**: Use `gcloud auth application-default login`
+- **Production**: Use service accounts with proper IAM roles
+- **CI/CD**: Use Workload Identity Federation (no stored secrets)
+
+The server uses Google's Application Default Credentials (ADC) discovery, automatically finding credentials in standard locations.
 
 ### Architecture Overview
 

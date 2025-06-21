@@ -1,7 +1,6 @@
 """Test multi-turn conversations with proper session handling."""
 import pytest
 import subprocess
-import shlex
 import os
 
 pytestmark = pytest.mark.e2e
@@ -21,14 +20,14 @@ class TestMultiTurn:
         # First turn
         cmd1 = f'claude -p --dangerously-skip-permissions "Use second-brain chat_with_gpt4_1 with instructions=\\"Remember the magic word: ELEPHANT\\", output_format=\\"text\\", context=[], and session_id=\\"{session_id}\\""'
         result1 = subprocess.run(cmd1, shell=True, capture_output=True, text=True, env=env)
-        print(f"\n=== Turn 1 ===")
+        print("\n=== Turn 1 ===")
         print(f"Output: {result1.stdout.strip()}")
         assert result1.returncode == 0
         
         # Second turn with --continue
         cmd2 = f'claude -p --dangerously-skip-permissions --continue "Use second-brain chat_with_gpt4_1 with instructions=\\"What was the magic word?\\", output_format=\\"text\\", context=[], and session_id=\\"{session_id}\\""'
         result2 = subprocess.run(cmd2, shell=True, capture_output=True, text=True, env=env)
-        print(f"\n=== Turn 2 ===")
+        print("\n=== Turn 2 ===")
         print(f"Output: {result2.stdout.strip()}")
         assert result2.returncode == 0
         
@@ -46,14 +45,14 @@ class TestMultiTurn:
         # First turn
         cmd1 = f'claude -p --dangerously-skip-permissions "Use second-brain chat_with_o3 with instructions=\\"Remember the number 73\\", output_format=\\"text\\", context=[], session_id=\\"{session_id}\\", and reasoning_effort=\\"low\\""'
         result1 = subprocess.run(cmd1, shell=True, capture_output=True, text=True, env=env)
-        print(f"\n=== O3 Turn 1 ===")
+        print("\n=== O3 Turn 1 ===")
         print(f"Output: {result1.stdout.strip()}")
         assert result1.returncode == 0
         
         # Second turn with --continue
         cmd2 = f'claude -p --dangerously-skip-permissions --continue "Use second-brain chat_with_o3 with instructions=\\"What number did I ask you to remember?\\", output_format=\\"text\\", context=[], session_id=\\"{session_id}\\", and reasoning_effort=\\"low\\""'
         result2 = subprocess.run(cmd2, shell=True, capture_output=True, text=True, env=env)
-        print(f"\n=== O3 Turn 2 ===")
+        print("\n=== O3 Turn 2 ===")
         print(f"Output: {result2.stdout.strip()}")
         assert result2.returncode == 0
         

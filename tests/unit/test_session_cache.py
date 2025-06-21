@@ -3,14 +3,12 @@ import os
 import tempfile
 import time
 import threading
-import sqlite3
 import pytest
 from unittest.mock import patch
 
 from mcp_second_brain.session_cache import (
     _SQLiteSessionCache,
-    _InMemorySessionCache,
-    SessionCache
+    _InMemorySessionCache
 )
 
 
@@ -72,7 +70,7 @@ class TestSQLiteSessionCache:
         cache.close()
         try:
             os.unlink(db_path)
-        except:
+        except Exception:
             pass
     
     def test_basic_set_get(self, cache):

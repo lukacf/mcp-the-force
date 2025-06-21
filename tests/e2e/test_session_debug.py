@@ -21,7 +21,7 @@ class TestSessionDebug:
             f'Use second-brain chat_with_gpt4_1 with instructions="Remember this: The secret word is BANANA. Just say OK.", '
             f'output_format="text", context=[], and session_id="{session_id}"'
         )
-        print(f"\n=== TURN 1 ===")
+        print("\n=== TURN 1 ===")
         print(f"Session ID: {session_id}")
         print(f"Output: {output1.strip()}")
         
@@ -30,7 +30,7 @@ class TestSessionDebug:
             f'Use second-brain chat_with_gpt4_1 with instructions="What is the secret word? Just say the word.", '
             f'output_format="text", context=[], and session_id="{session_id}"'
         )
-        print(f"\n=== TURN 2 ===")
+        print("\n=== TURN 2 ===")
         print(f"Session ID: {session_id}")
         print(f"Output: {output2.strip()}")
         
@@ -54,7 +54,7 @@ class TestSessionDebug:
         output1 = claude_code(
             f'Use second-brain chat_with_o3 with {json.dumps(args1)}'
         )
-        print(f"\n=== O3 TURN 1 ===")
+        print("\n=== O3 TURN 1 ===")
         print(f"Output: {output1.strip()}")
         
         # Second message - should remember
@@ -68,7 +68,7 @@ class TestSessionDebug:
         output2 = claude_code(
             f'Use second-brain chat_with_o3 with {json.dumps(args2)}'
         )
-        print(f"\n=== O3 TURN 2 ===")
+        print("\n=== O3 TURN 2 ===")
         print(f"Output: {output2.strip()}")
         
         # Check if it remembered

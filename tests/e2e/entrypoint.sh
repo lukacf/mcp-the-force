@@ -5,9 +5,9 @@ set -e
 if [ -n "$GCLOUD_USER_REFRESH_TOKEN" ]; then
     echo "Setting up Google Cloud auth from refresh token..."
     
-    # Use custom OAuth client or fall back to gcloud CLI's public client
-    CLIENT_ID=${GCLOUD_OAUTH_CLIENT_ID:-764086051850-6qr4p6gpi6hn506pt8ejuq83di341hur.apps.googleusercontent.com}
-    CLIENT_SECRET=${GCLOUD_OAUTH_CLIENT_SECRET:-d-FL95Q19q7MQmFpd7hHD0Ty}
+    # OAuth client credentials are required for refresh token auth
+    CLIENT_ID=${GCLOUD_OAUTH_CLIENT_ID:?GCLOUD_OAUTH_CLIENT_ID is required for refresh token auth}
+    CLIENT_SECRET=${GCLOUD_OAUTH_CLIENT_SECRET:?GCLOUD_OAUTH_CLIENT_SECRET is required for refresh token auth}
     
     # Create ADC file
     ADC_PATH="/tmp/adc.json"

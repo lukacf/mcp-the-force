@@ -14,13 +14,13 @@ Add these secrets to your repository (Settings → Secrets → Actions):
    - Get from your local gcloud setup: `cat ~/.config/gcloud/application_default_credentials.json | jq -r .refresh_token`
    - This allows the tests to use your personal Google account's Vertex AI permissions
 
-2. **GCLOUD_OAUTH_CLIENT_ID** (optional)
-   - Only needed if using a custom OAuth application
-   - If not provided, uses gcloud CLI's public OAuth client
+2. **GCLOUD_OAUTH_CLIENT_ID** (required for refresh token auth)
+   - Get from Google Cloud Console or use gcloud CLI's credentials
+   - See authentication-guide.md for details on obtaining these
 
-3. **GCLOUD_OAUTH_CLIENT_SECRET** (optional)
-   - Only needed if using a custom OAuth application
-   - If not provided, uses gcloud CLI's public OAuth secret
+3. **GCLOUD_OAUTH_CLIENT_SECRET** (required for refresh token auth)
+   - Pairs with the OAuth client ID
+   - Must be kept secure and never committed to the repository
 
 ### How It Works
 
@@ -60,7 +60,8 @@ Add these secrets to your repository (Settings → Secrets → Actions):
 
 - The `.env` file is gitignored and should NEVER be committed
 - Refresh tokens are user-specific and grant access to Google Cloud APIs
-- The default OAuth client ID/secret belong to gcloud CLI and are safe to use
+- OAuth client credentials should be obtained from your Google Cloud project or gcloud CLI
+- See authentication-guide.md for detailed authentication setup instructions
 - ADC files are created in temp directories and cleaned up after use
 
 ## Alternative: Service Account
