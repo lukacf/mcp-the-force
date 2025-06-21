@@ -33,9 +33,21 @@ jobs:
     - name: Set up Google Cloud credentials
       env:
         GOOGLE_CREDS_JSON: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}
+        GCLOUD_USER_REFRESH_TOKEN: ${{ secrets.GCLOUD_USER_REFRESH_TOKEN }}
       run: |
         if [ -n "$GOOGLE_CREDS_JSON" ]; then
           echo "$GOOGLE_CREDS_JSON" > /tmp/gcloud-key.json
+        elif [ -n "$GCLOUD_USER_REFRESH_TOKEN" ]; then
+          # Create ADC file with user credentials
+          mkdir -p /tmp/gcloud
+          cat > /tmp/gcloud/application_default_credentials.json <<EOF
+        {
+          "client_id": "764086051850-6qr4p6gpi6hn506pt8ejuq83di341hur.apps.googleusercontent.com",
+          "client_secret": "d-FL95Q19q7MQmFpd7hHD0Ty",
+          "refresh_token": "$GCLOUD_USER_REFRESH_TOKEN",
+          "type": "authorized_user"
+        }
+        EOF
         fi
     
     - name: Run E2E tests
@@ -58,6 +70,9 @@ jobs:
         if [ -f /tmp/gcloud-key.json ]; then
           DOCKER_CMD="$DOCKER_CMD -e GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcloud-key.json"
           DOCKER_CMD="$DOCKER_CMD -v /tmp/gcloud-key.json:/tmp/gcloud-key.json:ro"
+        elif [ -f /tmp/gcloud/application_default_credentials.json ]; then
+          DOCKER_CMD="$DOCKER_CMD -e GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcloud/application_default_credentials.json"
+          DOCKER_CMD="$DOCKER_CMD -v /tmp/gcloud/application_default_credentials.json:/tmp/gcloud/application_default_credentials.json:ro"
         fi
         
         # Run tests
