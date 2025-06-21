@@ -43,8 +43,8 @@ USER tester
 ENV HOME=/home/tester
 ENV XDG_CONFIG_HOME=$HOME/.config
 
-# Create Claude config directory
-RUN mkdir -p $HOME/.config/claude
+# Create Claude config and gcloud directories
+RUN mkdir -p $HOME/.config/claude $HOME/.config/gcloud
 
 # Copy entrypoint script
 COPY --chown=tester:tester tests/e2e/entrypoint.sh /entrypoint.sh
