@@ -8,10 +8,25 @@ import pytest
 from unittest.mock import MagicMock, Mock, AsyncMock
 
 
-def pytest_sessionstart():
-    """Set up test environment before session starts."""
-    # Default to mock mode for all tests unless explicitly disabled
-    os.environ.setdefault("MCP_ADAPTER_MOCK", "1")
+# Note: Adapter mocking is controlled per test suite:
+# - Unit tests: Don't need mocking (pure Python)
+# - Internal tests: Use adapter mocking (MCP_ADAPTER_MOCK=1)
+# - MCP integration tests: Use adapter mocking (MCP_ADAPTER_MOCK=1)
+# - E2E tests: Use real adapters (MCP_ADAPTER_MOCK=0)
+
+@pytest.fixture(autouse=True)
+def enable_adapter_mock_for_integration(request):
+    """Enable adapter mocking for MCP integration tests."""
+    # Only enable for MCP tests for now
+    # TODO: Enable for internal tests after refactoring them
+    test_path = str(request.fspath)
+    if '/tests/integration_mcp/' in test_path:
+        os.environ["MCP_ADAPTER_MOCK"] = "1"
+        yield
+        # Clean up after test
+        os.environ.pop("MCP_ADAPTER_MOCK", None)
+    else:
+        yield
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).parent.parent

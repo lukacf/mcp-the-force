@@ -94,7 +94,8 @@ jobs:
       
       - name: Run internal integration tests
         env:
-          MCP_ADAPTER_MOCK: "1"  # Use standardized adapter mocking
+          # TODO: Refactor internal tests to use adapter mocks
+          # For now, they use SDK mocks from fixtures
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'dummy-key-for-mocks' }}
           VERTEX_PROJECT: ${{ secrets.VERTEX_PROJECT || 'dummy-project' }}
           VERTEX_LOCATION: ${{ secrets.VERTEX_LOCATION || 'us-central1' }}
