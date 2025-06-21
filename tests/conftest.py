@@ -7,6 +7,9 @@ from pathlib import Path
 import pytest
 from unittest.mock import MagicMock, Mock, AsyncMock
 
+# Load our plugin to ensure environment variables are set early
+pytest_plugins = ["tests.pytest_plugins"]
+
 # Note: Adapter mocking is controlled per test suite:
 # - Unit tests: Don't need mocking (pure Python)
 # - Internal tests: Use adapter mocking (MCP_ADAPTER_MOCK=1 set before Python starts)
