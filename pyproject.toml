@@ -47,6 +47,8 @@ asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 timeout = 10  # 10 seconds default timeout for unit tests
 addopts = "--strict-markers --tb=short"
+# Configure anyio to only use asyncio backend (not trio)
+anyio_backends = ["asyncio"]
 markers = [
     "asyncio: Mark test as requiring asyncio",
     "anyio: Mark test as requiring anyio",
