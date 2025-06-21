@@ -8,6 +8,7 @@ on:
 
 env:
   PYTHON_VERSION: "3.11"
+  MCP_ADAPTER_MOCK: "1"  # Set globally to ensure all Python processes see it
 
 jobs:
   lint:
@@ -96,23 +97,21 @@ jobs:
           echo "Python path: $(which python)"
           echo "Pytest version: $(pytest --version)"
           echo "Running diagnostic script..."
-          MCP_ADAPTER_MOCK=1 python tests/diagnose_ci.py || true
+          python tests/diagnose_ci.py || true
       
       - name: Run internal integration tests
-        run: |
-          # Set env var and run tests in same command to ensure it's available
-          MCP_ADAPTER_MOCK=1 OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY || 'dummy-key-for-mocks' }}" \
-          VERTEX_PROJECT="${{ secrets.VERTEX_PROJECT || 'dummy-project' }}" \
-          VERTEX_LOCATION="${{ secrets.VERTEX_LOCATION || 'us-central1' }}" \
-          pytest tests/internal -v --tb=short
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'dummy-key-for-mocks' }}
+          VERTEX_PROJECT: ${{ secrets.VERTEX_PROJECT || 'dummy-project' }}
+          VERTEX_LOCATION: ${{ secrets.VERTEX_LOCATION || 'us-central1' }}
+        run: pytest tests/internal -v --tb=short
           
       - name: Run MCP integration tests
-        run: |
-          # Set env var and run tests in same command to ensure it's available
-          MCP_ADAPTER_MOCK=1 OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY || 'dummy-key-for-mocks' }}" \
-          VERTEX_PROJECT="${{ secrets.VERTEX_PROJECT || 'dummy-project' }}" \
-          VERTEX_LOCATION="${{ secrets.VERTEX_LOCATION || 'us-central1' }}" \
-          pytest tests/integration_mcp -v -p no:asyncio --tb=short
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'dummy-key-for-mocks' }}
+          VERTEX_PROJECT: ${{ secrets.VERTEX_PROJECT || 'dummy-project' }}
+          VERTEX_LOCATION: ${{ secrets.VERTEX_LOCATION || 'us-central1' }}
+        run: pytest tests/integration_mcp -v -p no:asyncio --tb=short
         timeout-minutes: 10
 
 
