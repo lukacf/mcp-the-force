@@ -1,18 +1,18 @@
-"""
-Configuration for MCP integration tests.
-These tests use adapter-level mocking to test the MCP protocol interface.
-"""
+"""Configuration specific to internal integration tests."""
 import os
 import pytest
-
-# Set adapter mocking for MCP tests
-os.environ["MCP_ADAPTER_MOCK"] = "1"
 
 
 @pytest.fixture(scope="session", autouse=True)
 def verify_mock_adapter():
-    """Verify that MockAdapter is enabled for MCP integration tests."""
-    # Verify the adapter was actually injected
+    """Verify that MockAdapter is enabled for internal tests."""
+    if os.environ.get("MCP_ADAPTER_MOCK", "").lower() not in {"1", "true", "yes"}:
+        pytest.fail(
+            "MockAdapter not enabled! Internal tests require MCP_ADAPTER_MOCK=1. "
+            "This should be set by CI or manually when running tests locally."
+        )
+    
+    # Also verify the adapter was actually injected
     from mcp_second_brain.adapters import ADAPTER_REGISTRY
     from mcp_second_brain.adapters.mock_adapter import MockAdapter
     

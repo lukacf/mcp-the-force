@@ -7,39 +7,11 @@ from pathlib import Path
 import pytest
 from unittest.mock import MagicMock, Mock, AsyncMock
 
-
 # Note: Adapter mocking is controlled per test suite:
 # - Unit tests: Don't need mocking (pure Python)
 # - Internal tests: Use adapter mocking (MCP_ADAPTER_MOCK=1)
 # - MCP integration tests: Use adapter mocking (MCP_ADAPTER_MOCK=1)
 # - E2E tests: Use real adapters (MCP_ADAPTER_MOCK=0)
-
-@pytest.fixture(autouse=True)
-def enable_adapter_mock_for_integration(request):
-    """Enable adapter mocking for internal and MCP integration tests."""
-    test_path = str(request.fspath)
-    if '/tests/internal/' in test_path or '/tests/integration_mcp/' in test_path:
-        os.environ["MCP_ADAPTER_MOCK"] = "1"
-        
-        # Force reload of adapters module to pick up the mock setting
-        import mcp_second_brain.adapters
-        import importlib
-        
-        # Clear the adapter cache before reload
-        mcp_second_brain.adapters._ADAPTER_CACHE.clear()
-        
-        importlib.reload(mcp_second_brain.adapters)
-        
-        yield
-        
-        # Clean up after test
-        os.environ.pop("MCP_ADAPTER_MOCK", None)
-        
-        # Clear cache and reload to restore normal adapters
-        mcp_second_brain.adapters._ADAPTER_CACHE.clear()
-        importlib.reload(mcp_second_brain.adapters)
-    else:
-        yield
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).parent.parent
