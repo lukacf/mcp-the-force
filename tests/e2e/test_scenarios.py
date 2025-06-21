@@ -37,6 +37,12 @@ class TestE2EScenarios:
     @pytest.mark.timeout(300)  # 5 minutes
     def test_model_comparison(self, claude_code):
         """Test comparing outputs from different models."""
+        import os
+        
+        # Skip Gemini tests in CI if no Google credentials
+        if os.getenv("CI") and not os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON"):
+            pytest.skip("Skipping Gemini test in CI without Google credentials")
+            
         # Try with fast model
         output = claude_code(
             'Use second-brain chat_with_gemini25_flash with instructions "What is 2+2?", '
