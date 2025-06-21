@@ -31,7 +31,7 @@ jobs:
       run: docker build -f Dockerfile.e2e -t mcp-e2e:latest .
     
     - name: Set up Google Cloud credentials
-      if: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}
+      if: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON != '' }}
       run: |
         echo "${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}" > /tmp/gcloud-key.json
     
