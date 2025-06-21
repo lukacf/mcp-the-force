@@ -1,0 +1,56 @@
+name: E2E Tests
+
+on:
+  schedule:
+    # Run nightly at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    # Allow manual trigger
+  push:
+    branches:
+      - main
+    paths:
+      - 'mcp_second_brain/**'
+      - 'tests/e2e/**'
+      - 'Dockerfile.e2e'
+      - '.github/workflows/e2e.yml'
+
+jobs:
+  e2e-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Build E2E test image
+      run: docker build -f Dockerfile.e2e -t mcp-e2e:latest .
+    
+    - name: Run E2E tests
+      env:
+        CI_E2E: "1"
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        VERTEX_PROJECT: ${{ secrets.VERTEX_PROJECT }}
+        VERTEX_LOCATION: ${{ secrets.VERTEX_LOCATION }}
+      run: |
+        docker run \
+          -e CI_E2E \
+          -e OPENAI_API_KEY \
+          -e ANTHROPIC_API_KEY \
+          -e VERTEX_PROJECT \
+          -e VERTEX_LOCATION \
+          mcp-e2e:latest \
+          pytest tests/e2e -v --tb=short
+    
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: e2e-test-results
+        path: |
+          **/pytest_report.xml
+          **/mcp-second-brain-debug.log
