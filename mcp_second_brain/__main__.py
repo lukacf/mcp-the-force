@@ -25,6 +25,14 @@ if __name__ == "__main__":
     if "--version" in sys.argv or "-V" in sys.argv:
         print(version("mcp_second_brain"))
         sys.exit(0)
+    
+    # Check for invalid arguments
+    valid_args = ["--help", "-h", "--version", "-V", "--host", "--port", "--log-level"]
+    for i, arg in enumerate(sys.argv[1:], 1):  # Skip script name
+        if arg.startswith("-") and not any(arg.startswith(valid) for valid in valid_args):
+            print(f"Error: Unknown option: {arg}", file=sys.stderr)
+            print("Try 'python -m mcp_second_brain --help' for more information.", file=sys.stderr)
+            sys.exit(2)
 
     # Fall through → run server
     main()

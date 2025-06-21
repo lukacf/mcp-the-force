@@ -16,11 +16,11 @@ class TestLoggingSecurity:
         caplog.set_level(logging.DEBUG)
         
         # Create settings which might log during init
-        settings = Settings()
+        _ = Settings()
         
         # Simulate some operations that might log
         logger = logging.getLogger("mcp_second_brain")
-        logger.debug(f"Settings loaded")
+        logger.debug("Settings loaded")
         logger.info("Server starting")
         
         # Check that secrets don't appear in logs

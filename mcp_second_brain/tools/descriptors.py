@@ -1,7 +1,6 @@
 """Route descriptors for parameter routing in tool definitions."""
 from typing import Any, Optional, TypeVar, Type, Callable
 from dataclasses import dataclass, field
-import copy
 
 T = TypeVar('T')
 

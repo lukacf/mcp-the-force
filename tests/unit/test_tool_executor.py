@@ -6,7 +6,6 @@ from unittest.mock import Mock, patch, AsyncMock
 from mcp_second_brain.tools.executor import ToolExecutor
 from mcp_second_brain.tools.registry import get_tool
 # Import definitions to ensure tools are registered
-import mcp_second_brain.tools.definitions
 from mcp_second_brain.adapters.base import BaseAdapter
 
 
@@ -83,7 +82,7 @@ class TestToolExecutor:
                 mock_cache.get_response_id.return_value = "previous_response_id"
                 
                 metadata = get_tool("chat_with_o3")
-                result = await executor.execute(
+                await executor.execute(
                     metadata,
                     instructions="Continue our discussion",
                     output_format="text",
@@ -103,31 +102,32 @@ class TestToolExecutor:
     @pytest.mark.asyncio
     async def test_vector_store_routing(self, executor, mock_adapter, tmp_path):
         """Test that attachments parameter triggers vector store creation."""
-        # Create large files to trigger vector store
-        large_file = tmp_path / "large.txt"
-        large_file.write_text("x" * 100_000)  # 100KB
+        # Create a file for attachment
+        test_file = tmp_path / "test.txt"
+        test_file.write_text("Test content")
         
         with patch('mcp_second_brain.adapters.get_adapter') as mock_get_adapter:
             mock_get_adapter.return_value = (mock_adapter, None)
             
-            with patch('mcp_second_brain.tools.vector_store_manager.vector_store_manager') as mock_vs_manager:
-                mock_vs_manager.create = AsyncMock(return_value="vs_123")
+            # Patch the vector store manager instance in the executor
+            with patch.object(executor.vector_store_manager, 'create', new_callable=AsyncMock) as mock_create:
+                mock_create.return_value = "vs_123"
                 
                 metadata = get_tool("chat_with_gpt4_1")
-                result = await executor.execute(
+                await executor.execute(
                     metadata,
                     instructions="Analyze this",
                     output_format="text",
                     context=[],
-                    attachments=[str(large_file)],
+                    attachments=[str(tmp_path)],  # Pass directory
                     session_id="test"
                 )
         
-        # Verify vector store was created with attachments
-        mock_vs_manager.create.assert_called_once()
-        # The create method receives the routed vector_store params which include attachments
-        call_args = mock_vs_manager.create.call_args[0][0]
-        assert str(large_file) in call_args["attachments"]
+        # Verify vector store was created
+        mock_create.assert_called_once()
+        # The create method receives gathered file paths
+        call_args = mock_create.call_args[0][0]
+        assert any("test.txt" in f for f in call_args)
     
     @pytest.mark.asyncio
     async def test_missing_required_parameter(self, executor):
@@ -142,11 +142,15 @@ class TestToolExecutor:
     
     @pytest.mark.asyncio
     async def test_invalid_tool_name(self, executor):
-        """Test that invalid tool name raises appropriate error."""
-        with pytest.raises(ValueError, match="Unknown tool"):
-            # Test that get_tool returns None for invalid tools
-            metadata = get_tool("invalid_tool_name")
-            assert metadata is None
+        """Test that invalid tool name returns None."""
+        # Test that get_tool returns None for invalid tools
+        metadata = get_tool("invalid_tool_name")
+        assert metadata is None
+        
+        # Can't execute with None metadata
+        if metadata is None:
+            # This is the expected behavior
+            pass
     
     @pytest.mark.asyncio
     async def test_adapter_error_handling(self, executor):

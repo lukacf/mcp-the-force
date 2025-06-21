@@ -1,7 +1,6 @@
 """
 Unit tests for the descriptor-based parameter routing system.
 """
-import pytest
 from mcp_second_brain.tools.descriptors import RouteDescriptor, Route
 from mcp_second_brain.tools.base import ToolSpec
 

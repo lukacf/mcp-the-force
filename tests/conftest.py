@@ -1,10 +1,8 @@
 """
 Shared test fixtures and configuration for MCP Second-Brain tests.
 """
-import os
 import sys
 from pathlib import Path
-from typing import Dict, Any
 import pytest
 from unittest.mock import MagicMock, Mock, AsyncMock
 
@@ -68,15 +66,22 @@ def mock_openai_client():
     # Mock async close method
     mock.close = AsyncMock()
     
-    # Mock vector store operations
-    mock.beta.vector_stores.create.return_value = AsyncMock(
-        id="vs_test123",
-        status="completed"
-    )
-    mock.beta.vector_stores.file_batches.upload_and_poll = AsyncMock(
-        return_value=AsyncMock(status="completed")
-    )
-    mock.beta.vector_stores.delete = AsyncMock()
+    # Mock vector store operations (sync, not async)
+    mock_vs = MagicMock()
+    mock_vs.id = "vs_test123"
+    mock_vs.status = "completed"
+    
+    # Mock both paths - some code uses client.vector_stores, some uses client.beta.vector_stores
+    mock.vector_stores.create = MagicMock(return_value=mock_vs)
+    mock.beta.vector_stores.create = MagicMock(return_value=mock_vs)
+    
+    mock_batch = MagicMock()
+    mock_batch.status = "completed"
+    mock.vector_stores.file_batches.upload_and_poll = MagicMock(return_value=mock_batch)
+    mock.beta.vector_stores.file_batches.upload_and_poll = MagicMock(return_value=mock_batch)
+    
+    mock.vector_stores.delete = MagicMock()
+    mock.beta.vector_stores.delete = MagicMock()
     
     return mock
 
@@ -90,6 +95,11 @@ def mock_vertex_client():
     mock_response = MagicMock()
     mock_response.text = "Test Gemini response"
     mock.generate_content.return_value = mock_response
+    
+    # Mock generate_content_stream for streaming responses
+    mock_chunk = MagicMock()
+    mock_chunk.text = "Test Gemini response"
+    mock.models.generate_content_stream.return_value = [mock_chunk]
     
     return mock
 
@@ -133,17 +143,17 @@ def assert_no_secrets_in_logs(caplog, secrets: list[str]):
 @pytest.fixture(autouse=True)
 def mock_external_sdks(monkeypatch, mock_openai_client, mock_vertex_client):
     """Automatically mock external SDKs to prevent real API calls."""
-    import types
     
     # ----- OpenAI -----
-    openai_mod = types.ModuleType("openai")
-    openai_mod.AsyncOpenAI = MagicMock(return_value=mock_openai_client)
-    monkeypatch.setitem(sys.modules, "openai", openai_mod)
+    # Don't replace the entire module, just patch the classes we use
+    import openai
+    monkeypatch.setattr(openai, "AsyncOpenAI", MagicMock(return_value=mock_openai_client))
+    monkeypatch.setattr(openai, "OpenAI", MagicMock(return_value=mock_openai_client))
     
     # The adapter already did `from openai import AsyncOpenAI` at import time,
     # so we need to patch that symbol too:
     import mcp_second_brain.adapters.openai_adapter as oa
-    monkeypatch.setattr(oa, "AsyncOpenAI", openai_mod.AsyncOpenAI, raising=False)
+    monkeypatch.setattr(oa, "AsyncOpenAI", MagicMock(return_value=mock_openai_client), raising=False)
     
     # ----- Google Vertex -----
     mock_genai_module = Mock()
@@ -153,6 +163,14 @@ def mock_external_sdks(monkeypatch, mock_openai_client, mock_vertex_client):
     # Also mock the aiplatform module if needed
     mock_aiplatform = Mock()
     monkeypatch.setitem(sys.modules, "google.cloud.aiplatform", mock_aiplatform)
+    
+    # Patch the vertex adapter's get_client function directly
+    import mcp_second_brain.adapters.vertex_adapter as va
+    monkeypatch.setattr(va, "get_client", Mock(return_value=mock_vertex_client))
+    
+    # Also patch the vector_store's get_client to return our mocked client
+    import mcp_second_brain.utils.vector_store as vs
+    monkeypatch.setattr(vs, "get_client", Mock(return_value=mock_openai_client))
 
 
 @pytest.fixture

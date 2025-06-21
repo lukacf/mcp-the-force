@@ -1,11 +1,10 @@
 """Executor for dataclass-based tools."""
 import asyncio
 import logging
-from typing import Dict, Any, Optional
+from typing import Optional
 from mcp_second_brain import adapters
 from mcp_second_brain import session_cache as session_cache_module
 from .registry import ToolMetadata
-from .base import ToolSpec
 from .vector_store_manager import vector_store_manager
 from .prompt_engine import prompt_engine
 from .parameter_validator import ParameterValidator
@@ -58,8 +57,12 @@ class ToolExecutor:
             vs_id = None
             vector_store_ids = None
             if routed_params["vector_store"]:
-                vs_id = await self.vector_store_manager.create(routed_params["vector_store"])
-                vector_store_ids = [vs_id] if vs_id else None
+                # Gather files from directories
+                from ..utils.fs import gather_file_paths
+                files = gather_file_paths(routed_params["vector_store"])
+                if files:
+                    vs_id = await self.vector_store_manager.create(files)
+                    vector_store_ids = [vs_id] if vs_id else None
             
             # 5. Get adapter
             adapter, error = adapters.get_adapter(
