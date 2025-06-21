@@ -1,5 +1,4 @@
 """Test that tools are actually registered when server starts."""
-import pytest
 import importlib
 import sys
 
@@ -11,7 +10,7 @@ class TestToolRegistration:
         """Test that importing the server registers all tools."""
         # Just import and check - don't try to manipulate module state
         # as other tests may have already imported these modules
-        from mcp_second_brain import server
+        from mcp_second_brain import server  # noqa: F401
         from mcp_second_brain.tools.registry import list_tools
         
         # Check tools are registered
@@ -39,7 +38,7 @@ class TestToolRegistration:
     
     def test_no_duplicate_registrations(self):
         """Test that multiple imports don't duplicate tool registrations."""
-        from mcp_second_brain import server
+        from mcp_second_brain import server  # noqa: F401
         from mcp_second_brain.tools.registry import list_tools
         
         # Get initial count

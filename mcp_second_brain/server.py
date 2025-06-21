@@ -7,7 +7,7 @@ from logging.handlers import QueueHandler, QueueListener
 import queue
 
 # Import all tool definitions to register them
-from .tools import definitions  # This import triggers the @tool decorators
+from .tools import definitions  # noqa: F401 # This import triggers the @tool decorators
 from .tools.integration import register_all_tools, create_list_models_tool, create_vector_store_tool
 
 # Set up logging
