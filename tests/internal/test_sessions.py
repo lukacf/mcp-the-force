@@ -8,7 +8,6 @@ from mcp_second_brain.tools.executor import executor
 from mcp_second_brain.tools.registry import get_tool
 # Import definitions to ensure tools are registered
 import mcp_second_brain.tools.definitions  # noqa: F401
-from mcp_second_brain.session_cache import session_cache
 
 
 class TestSessionManagement:
