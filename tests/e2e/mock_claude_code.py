@@ -7,9 +7,7 @@ without requiring the actual Claude Code binary.
 import sys
 import json
 import re
-import subprocess
 import os
-from pathlib import Path
 
 
 def main():
