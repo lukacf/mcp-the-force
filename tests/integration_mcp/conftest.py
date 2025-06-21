@@ -5,6 +5,12 @@ These tests use adapter-level mocking to test the MCP protocol interface.
 import os
 import pytest
 
+# Configure anyio to only use asyncio backend (not trio)
+def pytest_configure(config):
+    """Configure pytest-anyio to only use asyncio backend."""
+    # This prevents "ModuleNotFoundError: No module named 'trio'" errors
+    config.option.anyio_backends = ["asyncio"]
+
 # For local development, ensure MCP_ADAPTER_MOCK is set
 # In CI, this is handled at the workflow level
 if "MCP_ADAPTER_MOCK" not in os.environ:
