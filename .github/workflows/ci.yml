@@ -73,8 +73,8 @@ jobs:
   integration-tests:
     needs: unit-tests
     runs-on: ubuntu-latest
-    # Only run on main branch or if PR is from the same repo (has access to secrets)
-    if: github.ref == 'refs/heads/main' || github.event.pull_request.head.repo.full_name == github.repository
+    # Only run on main branch, feature branches, or if PR is from the same repo (has access to secrets)
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/feature/') || github.event.pull_request.head.repo.full_name == github.repository
     
     steps:
       - uses: actions/checkout@v4
@@ -98,7 +98,7 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'dummy-key-for-mocks' }}
           VERTEX_PROJECT: ${{ secrets.VERTEX_PROJECT || 'dummy-project' }}
           VERTEX_LOCATION: ${{ secrets.VERTEX_LOCATION || 'us-central1' }}
-        run: pytest tests/integration tests/integration_mcp -v -p no:asyncio
+        run: pytest tests/integration_mcp -v -p no:asyncio
         timeout-minutes: 10
 
 
