@@ -32,7 +32,7 @@ RUN uv pip install --system .
 COPY tests/e2e ./tests/e2e
 
 # Install test dependencies
-RUN pip install pytest pytest-anyio
+RUN pip install pytest pytest-anyio pytest-timeout
 
 # Create non-root user
 RUN useradd -m -u 1000 tester && \
