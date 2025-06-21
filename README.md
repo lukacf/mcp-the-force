@@ -54,6 +54,20 @@ The server uses a descriptor-based tool system that provides:
 - **Custom prompt templates** per model for optimal performance
 - **Dynamic tool generation** from Python dataclasses
 
+### Parameter Routing
+
+Each parameter is automatically routed to the appropriate subsystem:
+
+| Parameter | Route | Purpose | Example |
+|-----------|-------|---------|---------|
+| `instructions` | prompt | Main task description | `"Analyze this function"` |
+| `output_format` | prompt | Expected response format | `"Brief summary"` |
+| `context` | prompt | Files to inline in prompt | `["/path/to/file.py"]` |
+| `temperature` | adapter | Model creativity (0-1) | `0.7` |
+| `reasoning_effort` | adapter | o3/o3-pro reasoning depth | `"high"` |
+| `attachments` | vector_store | Files for RAG search | `["/large/codebase/"]` |
+| `session_id` | session | Conversation continuity | `"debug-123"` |
+
 ## 🛠️ Available Tools
 
 The server provides tools defined through a descriptor-based system. Each tool has specific parameters routed to different subsystems for optimal processing.
