@@ -9,7 +9,6 @@ os.environ["MCP_ADAPTER_MOCK"] = "1"
 
 
 import pytest
-import asyncio
 
 
 @pytest.fixture(scope="session", autouse=True)

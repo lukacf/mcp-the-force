@@ -2,7 +2,7 @@
 Integration tests for complete tool execution flows.
 """
 import pytest
-from unittest.mock import AsyncMock, patch, Mock
+from unittest.mock import Mock
 import json
 
 
@@ -21,7 +21,6 @@ class TestToolExecutionIntegration:
         )
         
         # With mock adapter, we get JSON metadata
-        import json
         data = json.loads(result)
         
         # Verify correct model was used
