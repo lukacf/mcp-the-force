@@ -1,4 +1,5 @@
 """Adapter module for AI model integrations."""
+import os
 from typing import Dict, Tuple, Type, Optional
 from .base import BaseAdapter
 from .openai_adapter import OpenAIAdapter
@@ -12,6 +13,14 @@ ADAPTER_REGISTRY: Dict[str, Type[BaseAdapter]] = {
     "openai": OpenAIAdapter,
     "vertex": VertexAdapter,
 }
+
+# Mock adapter injection for testing
+if os.getenv("MCP_ADAPTER_MOCK", "").lower() in {"1", "true", "yes"}:
+    from .mock_adapter import MockAdapter
+    # Replace all adapters with mock
+    for name in list(ADAPTER_REGISTRY):
+        ADAPTER_REGISTRY[name] = MockAdapter
+    logger.info("Mock adapter enabled for all models")
 
 # Adapter instance cache
 _ADAPTER_CACHE: Dict[Tuple[str, str], BaseAdapter] = {}

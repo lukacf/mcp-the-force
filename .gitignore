@@ -60,7 +60,16 @@ htmlcov/
 mcp-config.json
 credentials.json
 service-account.json
+gcp-service-account-key.json
+*-service-account-key.json
+*.adc.json
 
 # Temporary files
 *.tmp
 *.temp
+
+# Session cache database
+.mcp_sessions.sqlite3
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm

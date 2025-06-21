@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  mcp-server:
+    build:
+      context: ../..
+      dockerfile: tests/e2e/Dockerfile.server
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-test-key}
+      - VERTEX_PROJECT=${VERTEX_PROJECT:-test-project}
+      - VERTEX_LOCATION=${VERTEX_LOCATION:-us-central1}
+      - HOST=0.0.0.0
+      - PORT=8000
+      - LOG_LEVEL=INFO
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 5s
+      timeout: 10s
+      retries: 5
+    command: ["uv", "run", "mcp-second-brain"]
+
+  test-runner:
+    build:
+      context: ../..
+      dockerfile: tests/e2e/Dockerfile
+    depends_on:
+      mcp-server:
+        condition: service_healthy
+    environment:
+      - MCP_SERVER_URL=http://mcp-server:8000
+      - PYTHONPATH=/app
+    volumes:
+      - ./test_results:/app/test_results
+    command: ["pytest", "-xvs", "-m", "e2e", "--junit-xml=/app/test_results/junit.xml", "tests/e2e/"]
