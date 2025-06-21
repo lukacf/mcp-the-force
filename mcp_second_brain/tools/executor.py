@@ -38,6 +38,9 @@ class ToolExecutor:
         Returns:
             Response from the model as a string
         """
+        if metadata is None:
+            raise ValueError("Tool metadata is None - tool not found in registry")
+            
         start_time = asyncio.get_event_loop().time()
         tool_id = metadata.id
         vs_id: Optional[str] = None  # Initialize to avoid UnboundLocalError

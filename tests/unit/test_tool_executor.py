@@ -6,6 +6,7 @@ from unittest.mock import Mock, patch, AsyncMock
 from mcp_second_brain.tools.executor import ToolExecutor
 from mcp_second_brain.tools.registry import get_tool
 # Import definitions to ensure tools are registered
+from mcp_second_brain.tools import definitions  # noqa: F401
 from mcp_second_brain.adapters.base import BaseAdapter
 
 
