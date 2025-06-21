@@ -76,8 +76,9 @@ jobs:
         # Add refresh token auth if available
         if [ -n "$GCLOUD_USER_REFRESH_TOKEN" ]; then
           DOCKER_CMD="$DOCKER_CMD -e GCLOUD_USER_REFRESH_TOKEN"
-          DOCKER_CMD="$DOCKER_CMD -e GCLOUD_OAUTH_CLIENT_ID"
-          DOCKER_CMD="$DOCKER_CMD -e GCLOUD_OAUTH_CLIENT_SECRET"
+          # OAuth client ID/secret are optional - entrypoint.sh will use gcloud defaults if not provided
+          [ -n "$GCLOUD_OAUTH_CLIENT_ID" ] && DOCKER_CMD="$DOCKER_CMD -e GCLOUD_OAUTH_CLIENT_ID"
+          [ -n "$GCLOUD_OAUTH_CLIENT_SECRET" ] && DOCKER_CMD="$DOCKER_CMD -e GCLOUD_OAUTH_CLIENT_SECRET"
         fi
         
         # Add Google credentials file if available (service account)
