@@ -94,12 +94,14 @@ jobs:
       
       - name: Run internal integration tests
         env:
-          # Internal tests use MockAdapter via MCP_ADAPTER_MOCK=1
+          # Internal tests use MockAdapter - must be set before Python starts
           MCP_ADAPTER_MOCK: "1"
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'dummy-key-for-mocks' }}
           VERTEX_PROJECT: ${{ secrets.VERTEX_PROJECT || 'dummy-project' }}
           VERTEX_LOCATION: ${{ secrets.VERTEX_LOCATION || 'us-central1' }}
         run: |
+          # Verify env var is set
+          echo "MCP_ADAPTER_MOCK=$MCP_ADAPTER_MOCK"
           # Internal tests need asyncio support
           pytest tests/internal -v
           
