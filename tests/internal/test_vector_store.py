@@ -48,7 +48,7 @@ class TestVectorStoreIntegration:
         mock_openai_client.vector_stores.file_batches.upload_and_poll.assert_called_once()
     
     @pytest.mark.asyncio
-    async def test_vector_store_with_attachments(self, temp_project, mock_env, mock_openai_client):
+    async def test_vector_store_with_attachments(self, temp_project, mock_openai_client):
         """Test using attachments parameter to trigger vector store."""
         # Create additional files for attachments
         docs_dir = temp_project / "docs"
@@ -61,13 +61,6 @@ class TestVectorStoreIntegration:
         mock_openai_client.vector_stores.file_batches.upload_and_poll.return_value = Mock(
             status="completed"
         )
-        
-        # Mock response
-        mock_response = Mock(
-            id="resp_vs",
-            output_text="Analysis using vector store"
-        )
-        mock_openai_client.responses.create.return_value = mock_response
         
         # Execute tool with attachments
         tool_metadata = get_tool("chat_with_gpt4_1")
@@ -82,14 +75,17 @@ class TestVectorStoreIntegration:
             session_id="test-vs"
         )
         
-        assert "Analysis using vector store" in result
+        # Parse MockAdapter response
+        import json
+        data = json.loads(result)
+        assert data["mock"] is True
+        assert data["model"] == "gpt-4.1"
         
         # Verify vector store was created
         mock_openai_client.vector_stores.create.assert_called()
         
-        # Verify the model call included vector store ID
-        call_kwargs = mock_openai_client.responses.create.call_args[1]
-        assert "tools" in call_kwargs or "tool_resources" in call_kwargs
+        # MockAdapter should have received vector_store_ids
+        assert data["vector_store_ids"] == ["vs_attach"]
     
     @pytest.mark.asyncio
     async def test_vector_store_file_filtering(self, tmp_path, mock_env, mock_openai_client):
@@ -129,14 +125,11 @@ class TestVectorStoreIntegration:
         assert not any("debug.log" in name for name in uploaded_names)
     
     @pytest.mark.asyncio
-    async def test_empty_vector_store(self, tmp_path, mock_env, mock_openai_client):
+    async def test_empty_vector_store(self, tmp_path, mock_openai_client):
         """Test handling of empty directories for vector store."""
         # Empty directory
         empty_dir = tmp_path / "empty"
         empty_dir.mkdir()
-        
-        # Mock response
-        mock_openai_client.responses.create.return_value = Mock(output_text="No files", id="resp_test")
         
         # Should handle gracefully
         tool_metadata = get_tool("chat_with_gpt4_1")
@@ -151,25 +144,22 @@ class TestVectorStoreIntegration:
             session_id="test-empty"
         )
         
-        assert result == "No files"
+        # Parse MockAdapter response
+        import json
+        data = json.loads(result)
+        assert data["mock"] is True
         
         # Vector store might not be created for empty input
         # or created with no files - both are acceptable
+        # The key thing is the tool execution completes successfully
     
     @pytest.mark.asyncio
-    async def test_vector_store_error_handling(self, tmp_path, mock_env, mock_openai_client):
+    async def test_vector_store_error_handling(self, tmp_path, mock_openai_client):
         """Test handling of vector store creation failures."""
         (tmp_path / "file.txt").write_text("content")
         
         # Simulate vector store creation failure
         mock_openai_client.vector_stores.create.side_effect = Exception("VS creation failed")
-        
-        # Mock a successful response without vector store
-        mock_response = Mock(
-            id="resp_no_vs",
-            output_text="Processed without vector store"
-        )
-        mock_openai_client.responses.create.return_value = mock_response
         
         # Should handle gracefully - continue without vector store
         tool_metadata = get_tool("chat_with_gpt4_1")
@@ -184,18 +174,20 @@ class TestVectorStoreIntegration:
             session_id="test-fail"
         )
         
-        # Should still work, just without vector store
-        assert "Processed without vector store" in result
+        # Parse MockAdapter response
+        import json
+        data = json.loads(result)
+        assert data["mock"] is True
         
-        # Verify vector store creation was attempted but model was called without it
+        # Verify vector store creation was attempted
         mock_openai_client.vector_stores.create.assert_called()
-        call_kwargs = mock_openai_client.responses.create.call_args[1]
-        # Should not have vector store tools
-        assert "tools" not in call_kwargs or not call_kwargs.get("tools")
+        
+        # Vector store IDs should be None due to failure
+        assert data["vector_store_ids"] is None
     
     @pytest.mark.asyncio
     @pytest.mark.timeout(30)
-    async def test_large_attachment_handling(self, tmp_path, mock_env, mock_openai_client):
+    async def test_large_attachment_handling(self, tmp_path, mock_openai_client):
         """Test handling of large attachment sets."""
         # Create many files
         for i in range(100):
@@ -207,7 +199,6 @@ class TestVectorStoreIntegration:
             status="completed",
             file_counts=Mock(completed=100)
         )
-        mock_openai_client.responses.create.return_value = Mock(output_text="Processed large set", id="resp_test")
         
         # Should handle without timeout
         tool_metadata = get_tool("chat_with_gpt4_1")
@@ -222,4 +213,8 @@ class TestVectorStoreIntegration:
             session_id="test-large"
         )
         
-        assert "Processed large set" in result
+        # Parse MockAdapter response
+        import json
+        data = json.loads(result)
+        assert data["mock"] is True
+        assert data["vector_store_ids"] == ["vs_large"]

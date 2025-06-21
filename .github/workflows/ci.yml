@@ -94,8 +94,7 @@ jobs:
       
       - name: Run internal integration tests
         env:
-          # TODO: Refactor internal tests to use adapter mocks
-          # For now, they use SDK mocks from fixtures
+          # Internal tests use MockAdapter via MCP_ADAPTER_MOCK=1 (set by conftest.py)
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'dummy-key-for-mocks' }}
           VERTEX_PROJECT: ${{ secrets.VERTEX_PROJECT || 'dummy-project' }}
           VERTEX_LOCATION: ${{ secrets.VERTEX_LOCATION || 'us-central1' }}

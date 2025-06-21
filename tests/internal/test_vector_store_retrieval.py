@@ -13,7 +13,7 @@ class TestVectorStoreRetrieval:
     """Test that vector stores can be created AND used for retrieval."""
     
     @pytest.mark.asyncio
-    async def test_vector_store_create_and_retrieve(self, tmp_path, mock_env, mock_openai_client):
+    async def test_vector_store_create_and_retrieve(self, tmp_path, mock_openai_client):
         """Test creating a vector store and then using it to answer questions."""
         # Create specialized content that won't be in the model's training
         secret_file = tmp_path / "secret_process.md"
@@ -47,17 +47,6 @@ Important: The ZEPHYR code is: QX-7742-ALPHA
             file_counts=Mock(completed=2, failed=0)
         )
         
-        # First call - create vector store with the content
-        create_response = Mock(output_text="I've stored the documentation for future reference.", id="resp_test")
-        
-        # Second call - retrieve specific information
-        retrieve_response = Mock(output_text="The ZEPHYR code is QX-7742-ALPHA and the process requires exactly 7 steps including calibrating to 1.21 gigawatts.", id="resp_test")
-        
-        mock_openai_client.responses.create.side_effect = [
-            create_response,
-            retrieve_response
-        ]
-        
         # First: Ingest the documents
         tool_metadata = get_tool("chat_with_gpt4_1")
         if not tool_metadata:
@@ -71,7 +60,11 @@ Important: The ZEPHYR code is: QX-7742-ALPHA
             session_id="retrieval-test"
         )
         
-        assert "stored" in result1.lower()
+        # Parse MockAdapter response
+        import json
+        data1 = json.loads(result1)
+        assert data1["mock"] is True
+        assert data1["vector_store_ids"] == ["vs_retrieval_test"]
         
         # Verify vector store was created
         mock_openai_client.vector_stores.create.assert_called_once()
@@ -88,15 +81,17 @@ Important: The ZEPHYR code is: QX-7742-ALPHA
             session_id="retrieval-test"  # Same session
         )
         
-        # Should retrieve the specific information
-        assert "QX-7742-ALPHA" in result2
-        assert "1.21 gigawatts" in result2
+        # Parse second response
+        data2 = json.loads(result2)
+        assert data2["mock"] is True
+        assert "ZEPHYR code" in data2["prompt_preview"]
+        assert data2["vector_store_ids"] is not None
         
         # Verify both calls created vector stores
         assert mock_openai_client.vector_stores.create.call_count == 2
     
     @pytest.mark.asyncio
-    async def test_vector_store_cross_session_retrieval(self, tmp_path, mock_env, mock_openai_client):
+    async def test_vector_store_cross_session_retrieval(self, tmp_path, mock_openai_client):
         """Test that vector stores can be used across different sessions."""
         # Create unique content
         (tmp_path / "protocol.txt").write_text("""
@@ -112,22 +107,11 @@ The OMEGA protocol activation sequence:
             status="completed"
         )
         
-        # Mock responses
-        responses = [
-            Mock(choices=[Mock(message=Mock(
-                parsed=Mock(response="OMEGA protocol stored", vector_store_id="vs_shared"),
-                refusal=None
-            ))]),
-            Mock(output_text="The OMEGA code is OMEGA-2024-SECURE with frequency 742.5 MHz", id="resp_test")
-        ]
-        
-        mock_openai_client.responses.create.side_effect = responses
-        
         # Create vector store in one session
         tool_metadata = get_tool("chat_with_gpt4_1")
         if not tool_metadata:
             raise ValueError("Tool chat_with_gpt4_1 not found")
-        await executor.execute(
+        result1 = await executor.execute(
             tool_metadata,
             instructions="Store this protocol information",
             output_format="brief",
@@ -136,9 +120,15 @@ The OMEGA protocol activation sequence:
             session_id="session-1"
         )
         
+        # Parse first response
+        import json
+        data1 = json.loads(result1)
+        assert data1["mock"] is True
+        assert data1["vector_store_ids"] == ["vs_shared"]
+        
         # Use it in a different session (simulating another user/context)
         # Note: Current implementation requires providing attachments again
-        result = await executor.execute(
+        result2 = await executor.execute(
             tool_metadata,
             instructions="What is the OMEGA code and frequency?",
             output_format="specific values only",
@@ -147,11 +137,14 @@ The OMEGA protocol activation sequence:
             session_id="session-2"  # Different session
         )
         
-        assert "OMEGA-2024-SECURE" in result
-        assert "742.5 MHz" in result
+        # Parse second response
+        data2 = json.loads(result2)
+        assert data2["mock"] is True
+        assert "OMEGA code" in data2["prompt_preview"]
+        assert data2["vector_store_ids"] is not None
     
     @pytest.mark.asyncio
-    async def test_vector_store_with_no_relevant_content(self, tmp_path, mock_env, mock_openai_client):
+    async def test_vector_store_with_no_relevant_content(self, tmp_path, mock_openai_client):
         """Test vector store behavior when query has no relevant content."""
         # Create files with irrelevant content
         (tmp_path / "recipes.txt").write_text("How to make chocolate cake...")
@@ -162,9 +155,6 @@ The OMEGA protocol activation sequence:
         mock_openai_client.vector_stores.file_batches.upload_and_poll.return_value = Mock(
             status="completed"
         )
-        
-        # Mock response indicating no relevant content found
-        mock_openai_client.responses.create.return_value = Mock(output_text="I couldn't find information about quantum physics in the provided documents.", id="resp_test")
         
         tool_metadata = get_tool("chat_with_gpt4_1")
         if not tool_metadata:
@@ -178,5 +168,9 @@ The OMEGA protocol activation sequence:
             session_id="test-irrelevant"
         )
         
-        # Should indicate the information wasn't found
-        assert "couldn't find" in result.lower() or "not found" in result.lower()
+        # Parse MockAdapter response
+        import json
+        data = json.loads(result)
+        assert data["mock"] is True
+        assert data["vector_store_ids"] == ["vs_irrelevant"]
+        assert "quantum entanglement" in data["prompt_preview"]

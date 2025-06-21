@@ -16,15 +16,28 @@ from unittest.mock import MagicMock, Mock, AsyncMock
 
 @pytest.fixture(autouse=True)
 def enable_adapter_mock_for_integration(request):
-    """Enable adapter mocking for MCP integration tests."""
-    # Only enable for MCP tests for now
-    # TODO: Enable for internal tests after refactoring them
+    """Enable adapter mocking for internal and MCP integration tests."""
     test_path = str(request.fspath)
-    if '/tests/integration_mcp/' in test_path:
+    if '/tests/internal/' in test_path or '/tests/integration_mcp/' in test_path:
         os.environ["MCP_ADAPTER_MOCK"] = "1"
+        
+        # Force reload of adapters module to pick up the mock setting
+        import mcp_second_brain.adapters
+        import importlib
+        
+        # Clear the adapter cache before reload
+        mcp_second_brain.adapters._ADAPTER_CACHE.clear()
+        
+        importlib.reload(mcp_second_brain.adapters)
+        
         yield
+        
         # Clean up after test
         os.environ.pop("MCP_ADAPTER_MOCK", None)
+        
+        # Clear cache and reload to restore normal adapters
+        mcp_second_brain.adapters._ADAPTER_CACHE.clear()
+        importlib.reload(mcp_second_brain.adapters)
     else:
         yield
 
@@ -161,12 +174,27 @@ def assert_no_secrets_in_logs(caplog, secrets: list[str]):
         assert secret.lower() not in log_text, f"Secret '{secret}' found in logs!"
 
 
-# Note: SDK-level mocking removed in favor of adapter-level mocking
-# All tests now use MCP_ADAPTER_MOCK=1 by default (set in pytest_sessionstart)
-# To disable mocking for specific tests, use:
-#   @pytest.fixture(autouse=True)
-#   def disable_mocks(monkeypatch):
-#       monkeypatch.delenv("MCP_ADAPTER_MOCK", raising=False)
+# Helper fixtures for MockAdapter-based testing
+@pytest.fixture
+def parse_adapter_response():
+    """Parse the JSON string returned by MockAdapter."""
+    def _parse(resp: str) -> dict:
+        import json
+        return json.loads(resp)
+    return _parse
+
+
+@pytest.fixture
+def mock_adapter_error():
+    """Factory for making MockAdapter.generate raise a given exception."""
+    from unittest.mock import patch
+    def _factory(exc: Exception):
+        return patch(
+            "mcp_second_brain.adapters.mock_adapter.MockAdapter.generate",
+            side_effect=exc if isinstance(exc, Exception) else exc()
+        )
+    return _factory
+
 
 # Keep vector store mocking since it's a separate concern
 @pytest.fixture(autouse=True)
