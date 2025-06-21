@@ -55,23 +55,34 @@ jobs:
     - name: Run E2E tests
       env:
         CI_E2E: "1"
+        CI: "1"
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         VERTEX_PROJECT: ${{ secrets.VERTEX_PROJECT }}
         VERTEX_LOCATION: ${{ secrets.VERTEX_LOCATION }}
+        GCLOUD_USER_REFRESH_TOKEN: ${{ secrets.GCLOUD_USER_REFRESH_TOKEN }}
+        GCLOUD_OAUTH_CLIENT_ID: ${{ secrets.GCLOUD_OAUTH_CLIENT_ID }}
+        GCLOUD_OAUTH_CLIENT_SECRET: ${{ secrets.GCLOUD_OAUTH_CLIENT_SECRET }}
       run: |
         # Set up Docker run command
         DOCKER_CMD="docker run --rm"
         DOCKER_CMD="$DOCKER_CMD -e CI_E2E"
+        DOCKER_CMD="$DOCKER_CMD -e CI"
         DOCKER_CMD="$DOCKER_CMD -e OPENAI_API_KEY"
         DOCKER_CMD="$DOCKER_CMD -e ANTHROPIC_API_KEY"
         DOCKER_CMD="$DOCKER_CMD -e VERTEX_PROJECT"
         DOCKER_CMD="$DOCKER_CMD -e VERTEX_LOCATION"
         
-        # Add Google credentials if available
-        if [ -n "$GOOGLE_APPLICATION_CREDENTIALS" ]; then
-          DOCKER_CMD="$DOCKER_CMD -e GOOGLE_APPLICATION_CREDENTIALS"
-          DOCKER_CMD="$DOCKER_CMD -v $GOOGLE_APPLICATION_CREDENTIALS:$GOOGLE_APPLICATION_CREDENTIALS:ro"
+        # Add refresh token auth if available
+        if [ -n "$GCLOUD_USER_REFRESH_TOKEN" ]; then
+          DOCKER_CMD="$DOCKER_CMD -e GCLOUD_USER_REFRESH_TOKEN"
+          DOCKER_CMD="$DOCKER_CMD -e GCLOUD_OAUTH_CLIENT_ID"
+          DOCKER_CMD="$DOCKER_CMD -e GCLOUD_OAUTH_CLIENT_SECRET"
+        fi
+        
+        # Add Google credentials file if available (service account)
+        if [ -n "$GOOGLE_APPLICATION_CREDENTIALS" ] && [ -f "$GOOGLE_APPLICATION_CREDENTIALS" ]; then
+          DOCKER_CMD="$DOCKER_CMD -e GOOGLE_APPLICATION_CREDENTIALS_JSON='$(cat $GOOGLE_APPLICATION_CREDENTIALS)'"
         fi
         
         # Run tests
