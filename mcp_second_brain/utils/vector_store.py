@@ -95,7 +95,7 @@ def create_vector_store(paths: List[str]) -> str:
         for stream in file_streams:
             try:
                 stream.close()
-            except:
+            except Exception:
                 pass
         
         logger.info(f"Batch upload completed in {time.time() - start_time:.2f}s - Status: {file_batch.status}, File counts: {file_batch.file_counts}")
@@ -105,7 +105,7 @@ def create_vector_store(paths: List[str]) -> str:
             logger.warning(f"No files successfully uploaded. Failed: {file_batch.file_counts.failed}, Cancelled: {file_batch.file_counts.cancelled}")
             try:
                 get_client().vector_stores.delete(vs.id)
-            except:
+            except Exception:
                 pass
             return ""
         

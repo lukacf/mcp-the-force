@@ -6,10 +6,10 @@ import json
 import pytest
 import httpx
 import asyncio
-from pathlib import Path
 
 
 @pytest.mark.e2e
+@pytest.mark.xfail(reason="HTTP transport removed, MCP uses stdio protocol - needs redesign for stdio")
 class TestMCPProtocol:
     """Test MCP protocol communication with real server."""
     

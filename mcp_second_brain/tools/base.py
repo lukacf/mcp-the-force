@@ -1,6 +1,5 @@
 """Base class for tool specifications."""
 from typing import Dict, Any, Type, get_type_hints, get_origin, get_args
-import inspect
 from .descriptors import RouteDescriptor
 
 

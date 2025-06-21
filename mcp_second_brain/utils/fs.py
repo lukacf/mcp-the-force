@@ -2,7 +2,7 @@ import mimetypes
 import os
 import fnmatch
 from pathlib import Path
-from typing import List, Set, Optional
+from typing import List, Set
 import logging
 import time
 
@@ -191,15 +191,19 @@ def gather_file_paths(items: List[str]) -> List[str]:
         
         if path.is_file():
             # Single file
-            if _is_text_file(path):
-                path_str = str(path)
-                if path_str not in seen:
-                    seen.add(path_str)
-                    out.append(path_str)
-                    try:
-                        total_size += path.stat().st_size
-                    except OSError:
-                        pass
+            try:
+                if _is_text_file(path):
+                    path_str = str(path)
+                    if path_str not in seen:
+                        seen.add(path_str)
+                        out.append(path_str)
+                        try:
+                            total_size += path.stat().st_size
+                        except OSError:
+                            pass
+            except (OSError, PermissionError) as e:
+                logger.warning(f"Skipping {path} due to permission error: {e}")
+                continue
         
         elif path.is_dir():
             # Directory - find .gitignore files
@@ -237,15 +241,18 @@ def gather_file_paths(items: List[str]) -> List[str]:
                             continue
                         
                         # Check if it's a text file we want
-                        if _is_text_file(file_path):
-                            file_path_str = str(file_path)
-                            if file_path_str not in seen:
-                                seen.add(file_path_str)
-                                out.append(file_path_str)
-                                try:
-                                    total_size += file_path.stat().st_size
-                                except OSError:
-                                    pass
+                        try:
+                            if _is_text_file(file_path):
+                                file_path_str = str(file_path)
+                                if file_path_str not in seen:
+                                    seen.add(file_path_str)
+                                    out.append(file_path_str)
+                                    try:
+                                        total_size += file_path.stat().st_size
+                                    except OSError:
+                                        pass
+                        except (OSError, PermissionError) as e:
+                            logger.warning(f"Skipping {file_path} due to permission error: {e}")
             
             except (OSError, PermissionError):
                 # Skip directories we can't read

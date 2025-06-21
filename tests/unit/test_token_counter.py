@@ -1,7 +1,6 @@
 """
 Unit tests for token counting functionality.
 """
-import pytest
 from unittest.mock import patch, Mock
 from mcp_second_brain.utils.token_counter import count_tokens
 

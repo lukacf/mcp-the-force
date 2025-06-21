@@ -146,7 +146,7 @@ class TestParameterValidator:
             "context": []
         }
         
-        result = validator.validate(tool, tool_metadata, kwargs)
+        validator.validate(tool, tool_metadata, kwargs)
         
         # Temperature should use default value
         assert tool.temperature == 0.7
@@ -161,7 +161,7 @@ class TestParameterValidator:
             "temperature": 0.9
         }
         
-        result = validator.validate(tool, tool_metadata, kwargs)
+        validator.validate(tool, tool_metadata, kwargs)
         
         # Temperature should use provided value
         assert tool.temperature == 0.9
@@ -244,7 +244,7 @@ class TestParameterValidator:
             "session_id": None  # Explicitly None
         }
         
-        result = validator.validate(tool, tool_metadata, kwargs)
+        validator.validate(tool, tool_metadata, kwargs)
         
         # Should accept None for optional param
         assert tool.session_id is None

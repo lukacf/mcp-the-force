@@ -7,7 +7,7 @@ from logging.handlers import QueueHandler, QueueListener
 import queue
 
 # Import all tool definitions to register them
-from .tools import definitions  # This imports and registers all @tool classes
+from .tools import definitions  # This import triggers the @tool decorators
 from .tools.integration import register_all_tools, create_list_models_tool, create_vector_store_tool
 
 # Set up logging
@@ -42,6 +42,25 @@ def main():
     """Main entry point."""
     import asyncio
     import sys
+    
+    # Handle --help and --version
+    if "--help" in sys.argv or "-h" in sys.argv:
+        print("MCP Second-Brain Server")
+        print("\nUsage: mcp-second-brain")
+        print("\nA Model Context Protocol server providing access to multiple AI models")
+        print("with intelligent context management for large codebases.")
+        print("\nOptions:")
+        print("  -h, --help     Show this help message and exit")
+        print("  -V, --version  Show version and exit")
+        sys.exit(0)
+    
+    if "--version" in sys.argv or "-V" in sys.argv:
+        try:
+            from importlib.metadata import version
+            print(version("mcp_second_brain"))
+        except ImportError:
+            print("0.3.2")  # Fallback version
+        sys.exit(0)
     
     if sys.platform == "win32":
         asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())

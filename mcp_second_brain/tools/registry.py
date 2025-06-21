@@ -1,10 +1,8 @@
 """Tool registry and decorator for automatic tool registration."""
 from typing import Type, Dict, Any, Callable, TypeVar, List
 from dataclasses import dataclass, field
-import inspect
 import logging
 from .base import ToolSpec
-from .descriptors import RouteDescriptor
 
 logger = logging.getLogger(__name__)
 

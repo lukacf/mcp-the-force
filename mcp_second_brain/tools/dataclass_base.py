@@ -1,6 +1,6 @@
 """Alternative implementation using actual dataclasses with field metadata."""
 from dataclasses import dataclass, field, fields
-from typing import Dict, Any, Optional, get_type_hints, get_origin, get_args
+from typing import Dict, Any, Optional, get_origin, get_args
 
 
 @dataclass
