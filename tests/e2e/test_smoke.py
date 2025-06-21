@@ -13,9 +13,9 @@ class TestE2ESmoke:
         output = claude_code("Use the second-brain MCP server list_models tool")
         
         # Should mention available models
-        assert "gemini 2.5 pro" in output.lower() or "gemini-2.5-pro" in output.lower()
+        assert "gemini25_pro" in output.lower() or "gemini25_flash" in output.lower()
         assert "o3" in output.lower()
-        assert "gpt" in output.lower()
+        assert "gpt4_1" in output.lower()
     
     def test_simple_query(self, claude_code):
         """Test a simple query with a cheap/fast model."""
