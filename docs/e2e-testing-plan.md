@@ -1,43 +1,116 @@
-# E2E Testing Plan for MCP Second-Brain
+# Testing Plan for MCP Second-Brain
 
 ## Overview
 
-End-to-end tests will use Claude Code (CC) running in a Docker container to test the actual MCP server integration. This tests the real stdio protocol communication between CC and the MCP server.
+Based on investigation and review, we're implementing a three-layer testing strategy:
 
-## Architecture
+1. **Unit Tests** - Fast, isolated component tests (existing)
+2. **Integration Tests** - MCP protocol testing with FastMCP Client (priority)
+3. **E2E Tests** - Full Docker + Claude Code + real models (future)
 
-### 1. Docker Environment Setup
+## 1. Unit Tests (Existing)
 
+- Mock all external dependencies
+- Test individual components in isolation
+- Run on every PR
+- Target: <1 minute
+
+## 2. Integration Tests (Priority)
+
+### Approach
+Use FastMCP's built-in `Client` class for in-memory MCP protocol testing:
+
+```python
+from fastmcp import FastMCP, Client
+
+@pytest.fixture
+def mcp_server():
+    # Import triggers tool registration
+    from mcp_second_brain import server
+    return server.mcp
+
+@pytest.fixture
+async def client(mcp_server):
+    async with Client(mcp_server) as client:
+        yield client
+```
+
+### Mock Adapter
+Create a lightweight mock that echoes metadata for validation:
+
+```python
+class MockAdapter(BaseAdapter):
+    async def generate(self, prompt: str, vector_store_ids=None, **kwargs):
+        return json.dumps({
+            "model": self.model_name,
+            "prompt_preview": prompt[:40],
+            "vector_store_ids": vector_store_ids,
+            "adapter_kwargs": kwargs,
+        }, indent=2)
+```
+
+Activated via environment variable:
+```python
+# In adapters/__init__.py
+if os.getenv("MCP_MOCK", "").lower() in {"1", "true"}:
+    from .mock_adapter import MockAdapter
+    ADAPTER_REGISTRY["openai"] = MockAdapter
+    ADAPTER_REGISTRY["vertex"] = MockAdapter
+```
+
+### Test Structure
+```
+tests/integration_mcp/
+  conftest.py              # Fixtures and mock setup
+  test_tool_sanity.py      # One happy-path test per tool
+  test_scenarios.py        # Cross-tool workflow tests
+```
+
+### Example Tests
+```python
+async def test_list_models(client):
+    result = await client.call_tool("list_models")
+    assert "chat_with_gemini25_pro" in result
+
+async def test_gemini_routing(client):
+    result = await client.call_tool("chat_with_gemini25_flash", {
+        "instructions": "test",
+        "output_format": "json",
+        "context": []
+    })
+    data = json.loads(result)
+    assert data["model"] == "gemini-2.5-flash"
+```
+
+### Benefits
+- No Docker required
+- Tests actual MCP protocol
+- Fast execution (<30s)
+- Catches routing and parameter issues
+- Standard MCP testing approach
+
+## 3. E2E Tests (Future)
+
+### Docker Environment
 ```dockerfile
 # Dockerfile.e2e
 FROM ubuntu:22.04
 
-# Install system dependencies
 RUN apt-get update && apt-get install -y \
     python3 python3-pip curl git \
     && rm -rf /var/lib/apt/lists/*
 
-# Install uv for Python package management
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 ENV PATH="/root/.cargo/bin:${PATH}"
 
-# Install Claude Code
-RUN pip install claude-code
+RUN pip install claude-code pytest pytest-asyncio
 
-# Copy local mcp-second-brain package
-COPY . /mcp-second-brain
-WORKDIR /mcp-second-brain
-
-# Install mcp-second-brain as editable package
+WORKDIR /app
+COPY . /app
 RUN uv pip install -e .
-
-# Setup Claude Code configuration
-RUN mkdir -p ~/.config/claude-code
-COPY tests/e2e/claude-config.json ~/.config/claude-code/config.json
 ```
 
-### 2. Claude Code MCP Configuration
-
+### Claude Code Configuration
 ```json
 // tests/e2e/claude-config.json
 {
@@ -55,147 +128,90 @@ COPY tests/e2e/claude-config.json ~/.config/claude-code/config.json
 }
 ```
 
-### 3. E2E Test Scenarios
+### Test Scenarios (Real Models)
+1. **List Models**: Verify tool discovery works
+2. **Simple Analysis**: "Analyze this Python function"
+3. **Large Context**: Test vector store creation
+4. **Model Comparison**: Compare outputs from different models
+5. **Session Continuity**: Multi-turn conversation
+6. **Error Recovery**: Missing API keys, network issues
 
-1. **List Models Test**: Verify `list_models` tool works
-2. **Simple Query Test**: Use `chat_with_gemini25_flash` for a basic query
-3. **File Context Test**: Use `chat_with_o3` with file context
-4. **Multi-file Test**: Use `chat_with_gpt4_1` with multiple files
-5. **Vector Store Test**: Create a vector store with `create_vector_store_tool`
-6. **Session Test**: Test multi-turn conversation with session_id
-7. **Error Handling Test**: Test with missing API keys
-
-### 4. Test Runner Script
-
+### Test Implementation
 ```python
-# tests/e2e/run_e2e_tests.py
-import subprocess
-import json
-import sys
-import time
+# tests/e2e/conftest.py
+@pytest.fixture
+def cc(tmp_path):
+    """Helper to call claude-code CLI"""
+    config_dir = tmp_path / ".config" / "claude-code"
+    config_dir.mkdir(parents=True)
+    (config_dir / "config.json").write_text(CC_CONFIG)
+    
+    def _run(prompt: str, timeout=180):
+        cmd = f'claude-code -p {shlex.quote(prompt)}'
+        return subprocess.check_output(
+            cmd, shell=True, text=True, timeout=timeout,
+            env={**os.environ, "XDG_CONFIG_HOME": str(tmp_path)}
+        )
+    return _run
 
-def run_test(name, command, expected_output=None, should_fail=False):
-    """Run a single E2E test and check output"""
-    print(f"\n=== Running: {name} ===")
-    result = subprocess.run(
-        command, 
-        shell=True, 
-        capture_output=True, 
-        text=True,
-        timeout=60  # 60 second timeout
-    )
-    
-    if should_fail:
-        if result.returncode == 0:
-            print(f"FAILED: {name} - Expected failure but succeeded")
-            return False
-    else:
-        if result.returncode != 0:
-            print(f"FAILED: {name}")
-            print(f"Error: {result.stderr}")
-            return False
-    
-    if expected_output and expected_output not in result.stdout:
-        print(f"FAILED: {name} - Output validation failed")
-        print(f"Expected: {expected_output}")
-        print(f"Got: {result.stdout[:200]}...")
-        return False
-    
-    print(f"PASSED: {name}")
-    return True
-
-def main():
-    tests = [
-        ("List Models", 
-         'claude-code -p "Use the second-brain MCP server list_models tool to show available models"',
-         "gemini25_pro"),
-         
-        ("Gemini Flash Query", 
-         'claude-code -p "Use chat_with_gemini25_flash to explain Python decorators in exactly 2 sentences"',
-         None),
-         
-        ("File Analysis", 
-         'echo "def hello(): pass" > /tmp/test.py && claude-code -p "Use chat_with_o3 with context [\\"/tmp/test.py\\\"] to analyze this code"',
-         None),
-         
-        ("Vector Store Creation", 
-         'claude-code -p "Use create_vector_store_tool with files [\\"/mcp-second-brain/README.md\\\"]"',
-         "vector_store_id"),
-         
-        ("Missing API Key", 
-         'OPENAI_API_KEY="" claude-code -p "Use chat_with_o3 to say hello"',
-         None,
-         True),  # Should fail
-    ]
-    
-    passed = 0
-    for test in tests:
-        if run_test(*test):
-            passed += 1
-    
-    print(f"\n=== Results: {passed}/{len(tests)} passed ===")
-    return 0 if passed == len(tests) else 1
-
-if __name__ == "__main__":
-    sys.exit(main())
+# tests/e2e/test_real_models.py
+def test_gemini_analysis(cc):
+    out = cc('Use second-brain chat_with_gemini25_flash to explain recursion in 2 sentences')
+    assert "recursion" in out.lower()
+    assert len(out.split('.')) >= 2  # At least 2 sentences
 ```
 
-### 5. GitHub Actions Integration
-
+### CI/CD Strategy
 ```yaml
-# .github/workflows/ci.yml (updated)
-name: CI
-
-on: [push, pull_request]
-
 jobs:
-  unit-tests:
+  unit-and-integration:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-      - name: Install dependencies
-        run: |
-          pip install uv
-          uv pip install -e ".[dev]"
-      - name: Run unit/integration tests
+      - name: Run tests
+        env:
+          MCP_MOCK: "1"
         run: pytest -xvs --ignore=tests/e2e
 
-  e2e-tests:
+  e2e:
     runs-on: ubuntu-latest
-    needs: unit-tests
+    needs: unit-and-integration
+    if: github.event_name == 'schedule' || github.ref == 'refs/heads/main'
     steps:
-      - uses: actions/checkout@v3
-      - name: Build E2E Docker image
-        run: docker build -f Dockerfile.e2e -t mcp-e2e .
       - name: Run E2E tests
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
-          docker run \
-            -e OPENAI_API_KEY \
-            -e ANTHROPIC_API_KEY \
-            mcp-e2e python tests/e2e/run_e2e_tests.py
+          docker build -f Dockerfile.e2e -t mcp-e2e .
+          docker run -e OPENAI_API_KEY mcp-e2e pytest tests/e2e -v
 ```
 
-## Implementation Steps
+## Implementation Order
 
-1. Create `docs/e2e-testing-plan.md` (this file)
-2. Create `Dockerfile.e2e` 
-3. Create `tests/e2e/claude-config.json`
-4. Create `tests/e2e/run_e2e_tests.py`
-5. Update GitHub Actions workflow
-6. Test locally with Docker
-7. Deploy to CI
+### Phase 1 (Now) - Integration Tests
+1. Create `MockAdapter` with env-based activation
+2. Set up integration test structure
+3. Write per-tool sanity tests
+4. Add cross-tool scenario tests
+5. Update CI to run integration tests
 
-## Benefits
+### Phase 2 (Later) - E2E Tests
+1. Create Docker environment
+2. Write real-model test scenarios
+3. Set up nightly CI runs
+4. Monitor costs and adjust
 
-- Tests actual MCP stdio protocol integration
-- Tests real Claude Code interaction
-- Catches issues that mocked tests miss
-- Validates end-user experience
-- Simple and focused test scenarios
+## Key Decisions
+
+1. **Integration before E2E**: Faster to implement, provides immediate value
+2. **FastMCP Client**: Use the standard MCP testing approach
+3. **Mock adapters**: Simple JSON echo for routing validation
+4. **Cost control**: E2E tests only run nightly or on main branch
+5. **Progressive rollout**: Start with integration, add E2E when stable
+
+## Success Criteria
+
+- Integration tests catch MCP protocol issues before merge
+- E2E tests validate real user workflows weekly
+- Total test time stays under 5 minutes for PR checks
+- Mock adapters stay synchronized with real implementations
+- No flaky tests in the integration suite

@@ -89,42 +89,18 @@ jobs:
           pip install uv
           uv pip install -e ".[test]"
       
+      - name: Install pytest-anyio
+        run: pip install pytest-anyio
+      
       - name: Run integration tests
         env:
+          MCP_MOCK: "1"
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'dummy-key-for-mocks' }}
           VERTEX_PROJECT: ${{ secrets.VERTEX_PROJECT || 'dummy-project' }}
           VERTEX_LOCATION: ${{ secrets.VERTEX_LOCATION || 'us-central1' }}
-        run: pytest tests/integration -v
+        run: pytest tests/integration tests/integration_mcp -v -p no:asyncio
         timeout-minutes: 10
 
-  e2e-tests:
-    needs: integration-tests
-    runs-on: ubuntu-latest
-    # Run on main branch, same-repo PRs, or with specific label
-    if: github.ref == 'refs/heads/main' || github.event.pull_request.head.repo.full_name == github.repository || contains(github.event.pull_request.labels.*.name, 'test-e2e')
-    
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      
-      - name: Run E2E tests
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'test-key' }}
-          VERTEX_PROJECT: ${{ secrets.VERTEX_PROJECT || 'test-project' }}
-          VERTEX_LOCATION: ${{ secrets.VERTEX_LOCATION || 'us-central1' }}
-        run: |
-          cd tests/e2e
-          docker-compose up --build --abort-on-container-exit --exit-code-from test-runner
-        timeout-minutes: 15
-      
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: e2e-test-results
-          path: tests/e2e/test_results/
 
   all-tests-passed:
     needs: [lint, unit-tests, integration-tests]

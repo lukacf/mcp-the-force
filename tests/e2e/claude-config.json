@@ -1,0 +1,17 @@
+{
+  "mcp": {
+    "servers": {
+      "second-brain": {
+        "command": "uv",
+        "args": ["run", "--", "mcp-second-brain"],
+        "env": {
+          "OPENAI_API_KEY": "${OPENAI_API_KEY}",
+          "VERTEX_PROJECT": "${VERTEX_PROJECT}",
+          "VERTEX_LOCATION": "${VERTEX_LOCATION}",
+          "MCP_MOCK": "0"
+        },
+        "timeoutMs": 180000
+      }
+    }
+  }
+}
