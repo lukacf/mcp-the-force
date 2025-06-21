@@ -82,11 +82,11 @@ jobs:
         
         # Add Google credentials file if available (service account)
         if [ -n "$GOOGLE_APPLICATION_CREDENTIALS" ] && [ -f "$GOOGLE_APPLICATION_CREDENTIALS" ]; then
-          DOCKER_CMD="$DOCKER_CMD -e GOOGLE_APPLICATION_CREDENTIALS_JSON='$(cat $GOOGLE_APPLICATION_CREDENTIALS)'"
+          DOCKER_CMD="$DOCKER_CMD -e GOOGLE_APPLICATION_CREDENTIALS_JSON"
         fi
         
         # Run tests
-        $DOCKER_CMD mcp-e2e:latest pytest tests/e2e -v --tb=short
+        eval $DOCKER_CMD mcp-e2e:latest pytest tests/e2e -v --tb=short
     
     - name: Upload test results
       if: always()
