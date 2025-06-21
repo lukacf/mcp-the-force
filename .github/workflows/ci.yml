@@ -92,13 +92,15 @@ jobs:
       - name: Install pytest-anyio
         run: pip install pytest-anyio
       
-      - name: Run integration tests
+      - name: Run all integration tests
         env:
-          MCP_MOCK: "1"
+          MCP_ADAPTER_MOCK: "1"  # Use standardized adapter mocking
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'dummy-key-for-mocks' }}
           VERTEX_PROJECT: ${{ secrets.VERTEX_PROJECT || 'dummy-project' }}
           VERTEX_LOCATION: ${{ secrets.VERTEX_LOCATION || 'us-central1' }}
-        run: pytest tests/integration_mcp -v -p no:asyncio
+        run: |
+          # Run both internal and MCP integration tests with same mock setup
+          pytest tests/internal tests/integration_mcp -v -p no:asyncio
         timeout-minutes: 10
 
 

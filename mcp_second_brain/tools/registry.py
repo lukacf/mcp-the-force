@@ -12,6 +12,14 @@ T = TypeVar('T', bound=ToolSpec)
 TOOL_REGISTRY: Dict[str, 'ToolMetadata'] = {}
 
 
+def _ensure_populated() -> None:
+    """Ensure tools are registered by importing definitions if needed."""
+    if TOOL_REGISTRY:  # already loaded
+        return
+    # Importing this module registers every tool class via the @tool decorator
+    from . import definitions  # noqa: F401
+
+
 @dataclass
 class ParameterInfo:
     """Information about a tool parameter."""
@@ -122,11 +130,13 @@ def tool(cls: Type[T] | None = None, *, aliases: List[str] | None = None) -> Typ
 
 def get_tool(tool_id: str) -> ToolMetadata | None:
     """Get tool metadata by ID."""
+    _ensure_populated()
     return TOOL_REGISTRY.get(tool_id)
 
 
 def list_tools() -> Dict[str, ToolMetadata]:
     """Get all registered tools."""
+    _ensure_populated()
     return TOOL_REGISTRY.copy()
 
 

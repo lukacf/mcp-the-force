@@ -15,10 +15,12 @@ ADAPTER_REGISTRY: Dict[str, Type[BaseAdapter]] = {
 }
 
 # Mock adapter injection for testing
-if os.getenv("MCP_MOCK", "").lower() in {"1", "true"}:
+if os.getenv("MCP_ADAPTER_MOCK", "").lower() in {"1", "true", "yes"}:
     from .mock_adapter import MockAdapter
-    ADAPTER_REGISTRY["openai"] = MockAdapter
-    ADAPTER_REGISTRY["vertex"] = MockAdapter
+    # Replace all adapters with mock
+    for name in list(ADAPTER_REGISTRY):
+        ADAPTER_REGISTRY[name] = MockAdapter
+    logger.info("Mock adapter enabled for all models")
 
 # Adapter instance cache
 _ADAPTER_CACHE: Dict[Tuple[str, str], BaseAdapter] = {}
