@@ -34,12 +34,22 @@ jobs:
       env:
         GOOGLE_CREDS_JSON: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}
         GCLOUD_USER_REFRESH_TOKEN: ${{ secrets.GCLOUD_USER_REFRESH_TOKEN }}
+        GCLOUD_OAUTH_CLIENT_ID: ${{ secrets.GCLOUD_OAUTH_CLIENT_ID }}
+        GCLOUD_OAUTH_CLIENT_SECRET: ${{ secrets.GCLOUD_OAUTH_CLIENT_SECRET }}
       run: |
         if [ -n "$GOOGLE_CREDS_JSON" ]; then
+          # Use service account if available
           echo "$GOOGLE_CREDS_JSON" > /tmp/gcloud-key.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcloud-key.json" >> "$GITHUB_ENV"
         elif [ -n "$GCLOUD_USER_REFRESH_TOKEN" ]; then
-          # Skip user credential setup - not safe to commit OAuth credentials
-          echo "Warning: User credential auth not implemented due to security concerns"
+          # Use user credentials via ADC
+          echo "::add-mask::$GCLOUD_USER_REFRESH_TOKEN"
+          echo "::add-mask::$GCLOUD_OAUTH_CLIENT_ID"
+          echo "::add-mask::$GCLOUD_OAUTH_CLIENT_SECRET"
+          
+          # Create ADC file
+          source scripts/create-adc.sh
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$GOOGLE_APPLICATION_CREDENTIALS" >> "$GITHUB_ENV"
         fi
     
     - name: Run E2E tests
@@ -59,9 +69,9 @@ jobs:
         DOCKER_CMD="$DOCKER_CMD -e VERTEX_LOCATION"
         
         # Add Google credentials if available
-        if [ -f /tmp/gcloud-key.json ]; then
-          DOCKER_CMD="$DOCKER_CMD -e GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcloud-key.json"
-          DOCKER_CMD="$DOCKER_CMD -v /tmp/gcloud-key.json:/tmp/gcloud-key.json:ro"
+        if [ -n "$GOOGLE_APPLICATION_CREDENTIALS" ]; then
+          DOCKER_CMD="$DOCKER_CMD -e GOOGLE_APPLICATION_CREDENTIALS"
+          DOCKER_CMD="$DOCKER_CMD -v $GOOGLE_APPLICATION_CREDENTIALS:$GOOGLE_APPLICATION_CREDENTIALS:ro"
         fi
         
         # Run tests
