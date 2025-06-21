@@ -57,9 +57,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install uv
-          # Clear any potential cache issues
-          uv cache clean
-          uv pip install --system -e ".[test]" --reinstall
+          uv pip install --system -e ".[test]"
       
       - name: Run unit tests
         run: pytest tests/unit -v --cov=mcp_second_brain --cov-report=xml --cov-report=term
@@ -90,9 +88,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install uv
-          # Clear any potential cache issues
-          uv cache clean
-          uv pip install --system -e ".[test]" --reinstall
+          uv pip install --system -e ".[test]"
       
       - name: Run CI diagnostics
         run: |
