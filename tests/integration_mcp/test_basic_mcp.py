@@ -3,8 +3,12 @@ import pytest
 from mcp.types import TextContent
 import json
 
-# Use anyio for better async handling
-pytestmark = pytest.mark.anyio
+# Use anyio for better async handling - but only with asyncio backend  
+# This prevents "ModuleNotFoundError: No module named 'trio'" errors
+pytestmark = [
+    pytest.mark.anyio,
+    pytest.mark.parametrize("anyio_backend", ["asyncio"], indirect=True)
+]
 
 
 class TestBasicMCP:
