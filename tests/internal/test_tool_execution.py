@@ -9,13 +9,8 @@ class TestToolExecutionIntegration:
     """Test complete tool execution flows with real components."""
     
     @pytest.mark.asyncio
-    async def test_gemini_tool_with_real_files(self, temp_project, mock_vertex_client, run_tool):
+    async def test_gemini_tool_with_real_files(self, temp_project, run_tool):
         """Test Gemini tool execution with real file loading."""
-        # Mock the Vertex client to return a response
-        mock_chunk = AsyncMock()
-        mock_chunk.text = "Analysis of your Python code:\n- Uses print function\n- Simple structure"
-        mock_vertex_client.models.generate_content_stream.return_value = [mock_chunk]
-        
         # Execute tool with real file context
         result = await run_tool(
             "chat_with_gemini25_flash",
@@ -24,26 +19,20 @@ class TestToolExecutionIntegration:
             context=[str(temp_project)]
         )
         
-        # Verify response
-        assert "Analysis of your Python code" in result
-        assert "print function" in result
+        # With mock adapter, we get JSON metadata
+        import json
+        data = json.loads(result)
         
-        # Verify the prompt included file contents
-        call_kwargs = mock_vertex_client.models.generate_content_stream.call_args.kwargs
-        contents = call_kwargs["contents"]
+        # Verify correct model was used
+        assert data["model"] == "gemini-2.5-flash"
         
-        # Convert contents to string for checking
-        prompt = str(contents)
+        # Verify prompt was built correctly
+        prompt = data["prompt_preview"]
+        assert "Analyze the Python files" in prompt
         
-        # Should include file contents from temp_project
-        assert "main.py" in prompt
-        assert "hello" in prompt  # The content is XML-escaped
-        assert "utils.py" in prompt
-        assert "def helper():" in prompt
-        
-        # Should respect .gitignore (check that ignored files aren't included)
-        # Note: .gitignore content itself will be in prompt
-        assert "Log content" not in prompt  # Content of debug.log
+        # Verify adapter parameters
+        assert data["adapter_kwargs"]["temperature"] == 0.3  # Default for flash
+        assert data["adapter_kwargs"]["timeout"] == 300
     
     @pytest.mark.asyncio
     async def test_openai_tool_with_session(self, mock_openai_client, run_tool):

@@ -2,9 +2,16 @@
 Shared test fixtures and configuration for MCP Second-Brain tests.
 """
 import sys
+import os
 from pathlib import Path
 import pytest
 from unittest.mock import MagicMock, Mock, AsyncMock
+
+
+def pytest_sessionstart():
+    """Set up test environment before session starts."""
+    # Default to mock mode for all tests unless explicitly disabled
+    os.environ.setdefault("MCP_ADAPTER_MOCK", "1")
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -139,36 +146,17 @@ def assert_no_secrets_in_logs(caplog, secrets: list[str]):
         assert secret.lower() not in log_text, f"Secret '{secret}' found in logs!"
 
 
-# Auto-use fixtures to prevent real API calls
+# Note: SDK-level mocking removed in favor of adapter-level mocking
+# All tests now use MCP_ADAPTER_MOCK=1 by default (set in pytest_sessionstart)
+# To disable mocking for specific tests, use:
+#   @pytest.fixture(autouse=True)
+#   def disable_mocks(monkeypatch):
+#       monkeypatch.delenv("MCP_ADAPTER_MOCK", raising=False)
+
+# Keep vector store mocking since it's a separate concern
 @pytest.fixture(autouse=True)
-def mock_external_sdks(monkeypatch, mock_openai_client, mock_vertex_client):
-    """Automatically mock external SDKs to prevent real API calls."""
-    
-    # ----- OpenAI -----
-    # Don't replace the entire module, just patch the classes we use
-    import openai
-    monkeypatch.setattr(openai, "AsyncOpenAI", MagicMock(return_value=mock_openai_client))
-    monkeypatch.setattr(openai, "OpenAI", MagicMock(return_value=mock_openai_client))
-    
-    # The adapter already did `from openai import AsyncOpenAI` at import time,
-    # so we need to patch that symbol too:
-    import mcp_second_brain.adapters.openai_adapter as oa
-    monkeypatch.setattr(oa, "AsyncOpenAI", MagicMock(return_value=mock_openai_client), raising=False)
-    
-    # ----- Google Vertex -----
-    mock_genai_module = Mock()
-    mock_genai_module.Client = Mock(return_value=mock_vertex_client)
-    monkeypatch.setitem(sys.modules, "google.genai", mock_genai_module)
-    
-    # Also mock the aiplatform module if needed
-    mock_aiplatform = Mock()
-    monkeypatch.setitem(sys.modules, "google.cloud.aiplatform", mock_aiplatform)
-    
-    # Patch the vertex adapter's get_client function directly
-    import mcp_second_brain.adapters.vertex_adapter as va
-    monkeypatch.setattr(va, "get_client", Mock(return_value=mock_vertex_client))
-    
-    # Also patch the vector_store's get_client to return our mocked client
+def mock_vector_store_client(monkeypatch, mock_openai_client):
+    """Mock vector store client to prevent real API calls."""
     import mcp_second_brain.utils.vector_store as vs
     monkeypatch.setattr(vs, "get_client", Mock(return_value=mock_openai_client))
 

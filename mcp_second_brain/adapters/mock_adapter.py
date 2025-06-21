@@ -16,8 +16,10 @@ class MockAdapter(BaseAdapter):
     async def generate(self, prompt: str, vector_store_ids=None, **kwargs):
         """Return JSON metadata about the call."""
         return json.dumps({
+            "mock": True,
             "model": self.model_name,
-            "prompt_preview": prompt[:40],
+            "prompt_preview": prompt[:200] + "..." if len(prompt) > 200 else prompt,
+            "prompt_length": len(prompt),
             "vector_store_ids": vector_store_ids,
             "adapter_kwargs": kwargs,
         }, indent=2)
