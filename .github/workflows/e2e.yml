@@ -9,6 +9,7 @@ on:
   push:
     branches:
       - main
+      - feature/comprehensive-testing
     paths:
       - 'mcp_second_brain/**'
       - 'tests/e2e/**'
