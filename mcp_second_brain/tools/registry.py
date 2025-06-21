@@ -1,10 +1,8 @@
 """Tool registry and decorator for automatic tool registration."""
 from typing import Type, Dict, Any, Callable, TypeVar, List
 from dataclasses import dataclass, field
-import inspect
 import logging
 from .base import ToolSpec
-from .descriptors import RouteDescriptor
 
 logger = logging.getLogger(__name__)
 
@@ -12,6 +10,14 @@ T = TypeVar('T', bound=ToolSpec)
 
 # Global registry of all tools
 TOOL_REGISTRY: Dict[str, 'ToolMetadata'] = {}
+
+
+def _ensure_populated() -> None:
+    """Ensure tools are registered by importing definitions if needed."""
+    if TOOL_REGISTRY:  # already loaded
+        return
+    # Importing this module registers every tool class via the @tool decorator
+    from . import definitions  # noqa: F401
 
 
 @dataclass
@@ -124,11 +130,13 @@ def tool(cls: Type[T] | None = None, *, aliases: List[str] | None = None) -> Typ
 
 def get_tool(tool_id: str) -> ToolMetadata | None:
     """Get tool metadata by ID."""
+    _ensure_populated()
     return TOOL_REGISTRY.get(tool_id)
 
 
 def list_tools() -> Dict[str, ToolMetadata]:
     """Get all registered tools."""
+    _ensure_populated()
     return TOOL_REGISTRY.copy()
 
 

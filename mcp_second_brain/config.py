@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     
     class Config:
         env_file = ".env"
+        extra = "ignore"  # Ignore extra fields in .env file
     
     @property
     def vertex_endpoint(self) -> str:
