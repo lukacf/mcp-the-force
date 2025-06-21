@@ -1,6 +1,7 @@
 from typing import Sequence
 try:
-    import tiktoken; _enc = tiktoken.get_encoding("cl100k_base")
+    import tiktoken
+    _enc = tiktoken.get_encoding("cl100k_base")
 except Exception:
     _enc = None
 def count_tokens(texts: Sequence[str]) -> int:

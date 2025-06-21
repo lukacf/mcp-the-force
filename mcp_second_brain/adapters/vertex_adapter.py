@@ -4,20 +4,19 @@ from google.genai import types
 from ..config import get_settings
 from .base import BaseAdapter
 
-_set = get_settings()
-
 # Initialize client once
 _client = None
 
 def get_client():
     global _client
     if _client is None:
-        if not _set.vertex_project or not _set.vertex_location:
+        settings = get_settings()
+        if not settings.vertex_project or not settings.vertex_location:
             raise ValueError("VERTEX_PROJECT and VERTEX_LOCATION must be configured")
         _client = genai.Client(
             vertexai=True,
-            project=_set.vertex_project,
-            location=_set.vertex_location,
+            project=settings.vertex_project,
+            location=settings.vertex_location,
         )
     return _client
 
@@ -41,7 +40,7 @@ class VertexAdapter(BaseAdapter):
         
         # Configure generation
         config_params = {
-            "temperature": temperature or _set.default_temperature,
+            "temperature": temperature or get_settings().default_temperature,
             "top_p": 0.95,
             "max_output_tokens": 65535,
             "safety_settings": [

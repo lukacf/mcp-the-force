@@ -1,25 +1,23 @@
 #!/usr/bin/env python3
 """MCP Second-Brain Server using FastMCP."""
-from mcp.server.fastmcp import FastMCP
-from typing import List, Dict, Any, Optional
-import time
-import logging
 import asyncio
+import logging
+import os
+import queue
+import time
+from logging.handlers import QueueHandler, QueueListener
+from typing import List, Dict, Optional
+
+from mcp.server.fastmcp import FastMCP
+
+from .adapters import OpenAIAdapter, VertexAdapter
+from .utils.prompt_builder import build_prompt
+from .utils.vector_store import create_vector_store, delete_vector_store
 
 # Enable asyncio debug mode
 asyncio.get_event_loop().set_debug(True)
 _logging = logging.getLogger("asyncio")
 _logging.setLevel(logging.INFO)
-
-from .adapters import OpenAIAdapter, VertexAdapter
-from .utils.prompt_builder import build_prompt
-from .utils.vector_store import create_vector_store, delete_vector_store
-from .config import get_settings
-
-# Set up file logging with non-blocking handler
-import os
-from logging.handlers import QueueHandler, QueueListener
-import queue
 
 log_file = os.path.expanduser("~/mcp-second-brain-debug.log")
 
@@ -391,7 +389,7 @@ async def fast_long_context_assistant(
         extra["temperature"] = temperature
     
     gen_start = time.time()
-    logger.info(f"Sending request to OpenAI API...")
+    logger.info("Sending request to OpenAI API...")
     try:
         model = TOOL_TO_MODEL["fast-long-context-assistant"]
         timeout = MODEL_TIMEOUTS.get(model, 300)

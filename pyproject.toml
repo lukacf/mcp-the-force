@@ -20,3 +20,46 @@ dependencies = [
 
 [project.scripts]
 mcp-second-brain = "mcp_second_brain.server:main"
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.4",
+    "pytest-asyncio>=0.21",
+    "anyio>=4.0",
+    "pytest-mock>=3.11",
+    "pytest-timeout>=2.1",
+    "pytest-cov>=4.0",
+    "httpx>=0.25",
+    "coverage[toml]>=7.3",
+]
+
+dev = [
+    "ruff>=0.1",
+    "mypy>=1.7",
+    "pre-commit>=3.5",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+timeout = 10  # 10 seconds default timeout for unit tests
+addopts = "--strict-markers --tb=short"
+markers = [
+    "asyncio: Mark test as requiring asyncio",
+    "anyio: Mark test as requiring anyio",
+    "e2e: End-to-end tests that require Docker",
+    "slow: Tests that take more than 10 seconds",
+]
+# Note: plugins loading moved to conftest.py for better compatibility
+
+[tool.coverage.run]
+source = ["mcp_second_brain"]
+omit = ["*/tests/*", "*/main.py"]
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
+skip_covered = false

@@ -1,11 +1,10 @@
 """Executor for dataclass-based tools."""
 import asyncio
 import logging
-from typing import Dict, Any, Optional
-from ..adapters import get_adapter
-from ..session_cache import session_cache
+from typing import Optional
+from mcp_second_brain import adapters
+from mcp_second_brain import session_cache as session_cache_module
 from .registry import ToolMetadata
-from .base import ToolSpec
 from .vector_store_manager import vector_store_manager
 from .prompt_engine import prompt_engine
 from .parameter_validator import ParameterValidator
@@ -39,6 +38,9 @@ class ToolExecutor:
         Returns:
             Response from the model as a string
         """
+        if metadata is None:
+            raise ValueError("Tool metadata is None - tool not found in registry")
+            
         start_time = asyncio.get_event_loop().time()
         tool_id = metadata.id
         vs_id: Optional[str] = None  # Initialize to avoid UnboundLocalError
@@ -58,11 +60,15 @@ class ToolExecutor:
             vs_id = None
             vector_store_ids = None
             if routed_params["vector_store"]:
-                vs_id = await self.vector_store_manager.create(routed_params["vector_store"])
-                vector_store_ids = [vs_id] if vs_id else None
+                # Gather files from directories
+                from ..utils.fs import gather_file_paths
+                files = gather_file_paths(routed_params["vector_store"])
+                if files:
+                    vs_id = await self.vector_store_manager.create(files)
+                    vector_store_ids = [vs_id] if vs_id else None
             
             # 5. Get adapter
-            adapter, error = get_adapter(
+            adapter, error = adapters.get_adapter(
                 metadata.model_config["adapter_class"],
                 metadata.model_config["model_name"]
             )
@@ -73,7 +79,7 @@ class ToolExecutor:
             previous_response_id = None
             session_id = routed_params["session"].get("session_id")
             if session_id:
-                previous_response_id = session_cache.get_response_id(session_id)
+                previous_response_id = session_cache_module.session_cache.get_response_id(session_id)
                 if previous_response_id:
                     logger.info(f"Continuing session {session_id}")
             
@@ -97,7 +103,7 @@ class ToolExecutor:
                 content = result.get("content", "")
                 # Store response ID for next call if session provided
                 if session_id and "response_id" in result:
-                    session_cache.set_response_id(session_id, result["response_id"])
+                    session_cache_module.session_cache.set_response_id(session_id, result["response_id"])
                 return content
             else:
                 # Vertex adapter returns string directly
@@ -110,6 +116,7 @@ class ToolExecutor:
             
             elapsed = asyncio.get_event_loop().time() - start_time
             logger.info(f"{tool_id} completed in {elapsed:.2f}s")
+    
     
     
 
