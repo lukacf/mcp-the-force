@@ -11,19 +11,7 @@ RUN apt-get update && \
         npm && \
     rm -rf /var/lib/apt/lists/*
 
-# Install Claude Code CLI
-ARG CLAUDE_VERSION=0.1.9
-RUN set -eux; \
-    curl -L -o /tmp/claude.tar.gz \
-      "https://github.com/anthropic-ai/claude-code/releases/download/v${CLAUDE_VERSION}/claude-${CLAUDE_VERSION}-x86_64-unknown-linux-gnu.tar.gz" && \
-    tar -xzf /tmp/claude.tar.gz -C /usr/local/bin claude && \
-    chmod +x /usr/local/bin/claude && \
-    rm /tmp/claude.tar.gz
-
-# Verify Claude Code installation
-RUN claude --version
-
-# Install uv
+# Install uv first
 RUN pip install uv
 
 # Set working directory
@@ -34,11 +22,25 @@ COPY pyproject.toml README.md ./
 COPY mcp_second_brain ./mcp_second_brain
 COPY *.md *.py ./
 
+# Copy test files (needed for mock_claude_code.py)
+COPY tests/e2e ./tests/e2e
+
+# Create a Python-based mock Claude Code CLI for E2E testing
+# This will actually invoke the MCP server for testing
+RUN cp tests/e2e/mock_claude_code.py /usr/local/bin/mock_claude_code.py && \
+    echo '#!/usr/bin/env python3\n\
+import sys\n\
+import os\n\
+sys.path.insert(0, "/usr/local/bin")\n\
+import mock_claude_code\n\
+mock_claude_code.main()\n' > /usr/local/bin/claude && \
+    chmod +x /usr/local/bin/claude
+
+# Verify mock Claude Code installation
+RUN claude --version
+
 # Install production dependencies
 RUN uv pip install --system .
-
-# Copy test files
-COPY tests/e2e ./tests/e2e
 
 # Install test dependencies
 RUN pip install pytest anyio pytest-timeout
