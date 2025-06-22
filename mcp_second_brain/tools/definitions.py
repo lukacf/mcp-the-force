@@ -60,7 +60,7 @@ class ChatWithO3(ToolSpec):
     model_name = "o3"
     adapter_class = "openai"
     context_window = 200_000
-    timeout = 600
+    timeout = 1800
     
     # Custom prompt template for o3 reasoning models
     prompt_template = """## Task Instructions
