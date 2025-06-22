@@ -31,12 +31,17 @@ This file provides guidance to you when working with code in this repository.
 
 5. **Parallel Consultation Pattern**:
 
-   Use parallel tasks when appropriate using the Task tool. 
+   Use parallel tasks when appropriate using the Task tool. Make sure the task tool returns the session id when available so that multi turn conversations are possible.
+   
    ```
    Task 1: o3 (session: "feature-x") - "Best approach for X?"
    Task 2: gemini25_pro - "What are the risks with X?"
    Task 3: gpt4_1 - "Current best practices for X?"
    ```
+   Parallel, not sequential!
+   
+   When using a Task to asking gpt4_1, instruct the task not to use the web search tool (gpt4_1 will handle it itself.)
+
 
 6. **Quality Control Before Changes**:
    - Get implementation reviewed: "What's genuinely problematic here?"
@@ -88,7 +93,7 @@ MCP Second-Brain Server - A Model Context Protocol (MCP) server that provides ac
 
 ### Smart Context Management
 
-- **Files under `MAX_INLINE_TOKENS` (12000)**: Inlined directly into prompt
+- **Files within context percentage**: Inlined directly into prompt (default 85% of model's context window minus safety margin)
 - **Larger contexts**: Automatic vector store creation for RAG
 - **File filtering**: Respects .gitignore, skips binaries, size limits (500KB/file, 50MB total)
 - **Extension support**: 60+ text file types, OpenAI vector store compatible formats
@@ -124,7 +129,7 @@ Environment variables (via `.env` file):
 - `OPENAI_API_KEY`: Required for OpenAI models (o3, o3-pro, gpt-4.1)
 - `VERTEX_PROJECT`, `VERTEX_LOCATION`: Required for Google Vertex AI models
 - `HOST`, `PORT`: Server configuration
-- `MAX_INLINE_TOKENS`: Context inlining threshold (default: 12000)
+- `CONTEXT_PERCENTAGE`: Percentage of model context to use (default: 0.85 = 85%)
 - `DEFAULT_TEMPERATURE`: AI model temperature setting
 - `LOG_LEVEL`: Logging verbosity
 
@@ -153,7 +158,7 @@ Immediately engage Second Brain when encountering these triggers:
 
 ### Your Second Brain Workflow
 
-**ALWAYS use parallel execution:**
+**Use parallel execution (Task tool) when appropriate:**
 ```
 1. Initial analysis with me (Claude)
 2. SIMULTANEOUSLY: Second Brain deep dive
@@ -161,9 +166,9 @@ Immediately engage Second Brain when encountering these triggers:
 ```
 
 **Default Model Selection:**
-- First pass: `chat_with_gemini25_flash` (2-3 seconds)
-- Need depth: `chat_with_o3` (30-60 seconds)
-- Critical issues: `chat_with_o3_pro` (10-30 minutes)
+- Finding simple information (stuff context with as much as you can): `chat_with_gemini25_flash` (2-3 seconds)
+- Need depth: `chat_with_o3` (10-30 seconds)
+- Critical issues: `chat_with_o3_pro` (5-10 minutes)
 
 ### Why This Makes You More Effective
 
