@@ -403,6 +403,57 @@ class ChatWithMyModel(ToolSpec):
 
 See `OpenAIAdapter` and `VertexAdapter` for reference implementations.
 
+## 🛠️ Development
+
+### Setting Up Pre-commit Hooks
+
+We use pre-commit hooks to ensure code quality before commits reach CI:
+
+```bash
+# Install development dependencies
+uv pip install -e ".[dev]"
+
+# Install pre-commit hooks
+make install-hooks
+# or manually: pre-commit install && pre-commit install --hook-type pre-push
+```
+
+**What runs automatically:**
+- **On every commit** (fast, <15 seconds):
+  - Ruff linting and formatting
+  - MyPy type checking
+  - Fast unit tests (excluding slow/integration tests)
+- **On push** (optional, can skip with `--no-verify`):
+  - Full unit test suite
+
+### Development Commands
+
+```bash
+make help              # Show all available commands
+make lint              # Run ruff and mypy
+make test              # Run fast unit tests only
+make test-all          # Run all tests (unit + integration + e2e)
+make test-unit         # Run all unit tests with coverage
+make test-integration  # Run integration tests
+make ci                # Run full CI suite locally
+make clean             # Clean up generated files
+```
+
+### Running Tests
+
+```bash
+# Fast feedback loop (what pre-commit runs)
+make test
+
+# Full test suite
+make test-all
+
+# Specific test types
+pytest tests/unit -v                    # All unit tests
+pytest tests/unit -m "not slow"         # Fast unit tests only
+pytest tests/integration_mcp -v         # MCP integration tests
+```
+
 ## 📚 Documentation
 
 - [Authentication Guide](docs/authentication-guide.md) - Detailed Google Cloud authentication setup

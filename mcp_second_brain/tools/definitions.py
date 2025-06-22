@@ -112,8 +112,8 @@ class ChatWithO3Pro(ToolSpec):
 
 @tool
 class ChatWithGPT4_1(ToolSpec):
-    """Fast long-context processing (GPT-4.1, ~1M context).
-    Excels at: large-scale refactoring, codebase navigation, RAG workflows."""
+    """Fast long-context processing with web search (GPT-4.1, ~1M context).
+    Excels at: large-scale refactoring, codebase navigation, RAG workflows, current information retrieval."""
     
     model_name = "gpt-4.1"
     adapter_class = "openai"
