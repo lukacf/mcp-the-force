@@ -64,3 +64,15 @@ omit = ["*/tests/*", "*/main.py"]
 precision = 2
 show_missing = true
 skip_covered = false
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+ignore_missing_imports = true
+
+# Ignore descriptor-related type errors in definitions.py
+[[tool.mypy.overrides]]
+module = "mcp_second_brain.tools.definitions"
+disable_error_code = ["assignment"]
