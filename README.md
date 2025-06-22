@@ -403,6 +403,14 @@ class ChatWithMyModel(ToolSpec):
 
 See `OpenAIAdapter` and `VertexAdapter` for reference implementations.
 
+## 📚 Documentation
+
+- [Authentication Guide](docs/authentication-guide.md) - Detailed Google Cloud authentication setup
+- [Claude Integration Guide](docs/claude-integration-guide.md) - Best practices for Claude to use Second Brain MCP effectively
+- [E2E Test Setup](docs/e2e-test-setup.md) - End-to-end testing configuration
+- [GitHub Secrets Setup](docs/github-secrets-setup.md) - CI/CD configuration
+- [Workload Identity Setup](docs/workload-identity-setup.md) - Secure authentication for GitHub Actions
+
 ## 📄 License
 
 Private repository - see license terms.
