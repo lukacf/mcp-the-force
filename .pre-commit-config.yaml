@@ -1,0 +1,33 @@
+# Run fast checks on every commit (should complete in <15 seconds)
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.4.8
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+      - id: ruff-format
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.10.0
+    hooks:
+      - id: mypy
+        args: [--install-types, --non-interactive, --follow-imports=silent]
+        files: ^mcp_second_brain/
+
+  - repo: local
+    hooks:
+      - id: pytest-fast
+        name: pytest (fast unit tests only)
+        entry: pytest tests/unit -q -m "not slow and not e2e and not integration" --tb=short
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      # Optional: Run full unit tests before push (can skip with --no-verify)
+      - id: pytest-unit-full
+        name: pytest (all unit tests)
+        entry: pytest tests/unit -v
+        language: system
+        stages: [pre-push]
+        pass_filenames: false
+        always_run: true
