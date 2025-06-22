@@ -6,7 +6,11 @@ import asyncio
 import httpx
 
 # Model capabilities
-SUPPORTS_STREAM: Set[str] = {"o3", "gpt-4.1"}  # Models that support streaming
+SUPPORTS_STREAM: Set[str] = {
+    "o3",
+    "gpt-4.1",
+    "o4-mini",
+}  # Models that support streaming
 NO_STREAM: Set[str] = {"o3-pro"}  # Models that require background mode
 
 # Initialize client lazily to avoid errors on startup
@@ -101,26 +105,38 @@ class OpenAIAdapter(BaseAdapter):
                 response = await client.responses.create(**params)
 
                 # Poll for completion
-                poll_interval = 5  # seconds
+                poll_interval = 3  # seconds (reduced from 5 for better responsiveness)
                 elapsed = 0
 
                 while elapsed < timeout:
-                    status_response = await client.responses.retrieve(response.id)
+                    job = await client.responses.retrieve(response.id)
 
-                    if status_response.status == "completed":
+                    if job.status == "completed":
                         return {
-                            "content": status_response.output_text,  # type: ignore[attr-defined]
-                            "response_id": status_response.id,  # type: ignore[attr-defined]
+                            "content": job.output_text,  # type: ignore[attr-defined]
+                            "response_id": job.id,  # type: ignore[attr-defined]
                         }
-                    elif status_response.status in ["failed", "cancelled"]:
-                        raise ValueError(
-                            f"Response {status_response.status}: {getattr(status_response, 'error', 'Unknown error')}"
+                    elif job.status not in ["queued", "in_progress"]:
+                        # Handle failed, cancelled, or unknown status
+                        error_msg = getattr(job, "error", {})
+                        if isinstance(error_msg, dict):
+                            error_detail = error_msg.get("message", "Unknown error")
+                        else:
+                            error_detail = (
+                                str(error_msg) if error_msg else "Unknown error"
+                            )
+                        raise RuntimeError(
+                            f"Job failed with status={job.status}: {error_detail}"
                         )
 
                     await asyncio.sleep(poll_interval)
                     elapsed += poll_interval
 
-                raise ValueError(f"Response not completed within {timeout}s timeout")
+                # Timeout reached
+                raise ValueError(
+                    f"Job {response.id} still not finished after {timeout}s "
+                    f"(status: {job.status})"
+                )
             else:
                 # Streaming response (for models that support it)
                 stream = await asyncio.wait_for(
@@ -148,11 +164,13 @@ class OpenAIAdapter(BaseAdapter):
             raise ValueError(f"Request timed out after {timeout}s")
         except Exception as e:
             # Check for gateway timeout
-            if hasattr(e, "status_code") and e.status_code == 504:
+            if hasattr(e, "status_code") and e.status_code in [504, 524]:
                 raise ValueError(
-                    "OpenAI gateway timed out. This typically happens with long-running "
-                    "requests that don't use streaming. Consider using a model that "
-                    "supports streaming or reducing the complexity of the request."
+                    f"Gateway timeout ({e.status_code}) after ~100-180s of idle time. "
+                    f"Model: {self.model_name}. This happens when non-streaming requests "
+                    f"take too long to produce output. The request may still be processing "
+                    f"server-side. For {self.model_name}, background mode should have been "
+                    f"used automatically - this error suggests a configuration issue."
                 )
             # Let OpenAI SDK handle retries for transient errors
             raise
