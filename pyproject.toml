@@ -52,6 +52,7 @@ markers = [
     "anyio: Mark test as requiring anyio",
     "e2e: End-to-end tests that require Docker",
     "slow: Tests that take more than 10 seconds",
+    "integration: Integration tests that may require external services",
 ]
 # Note: plugins loading moved to conftest.py for better compatibility
 
