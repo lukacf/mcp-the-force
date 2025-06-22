@@ -1,9 +1,13 @@
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Set
 from openai import AsyncOpenAI
 from ..config import get_settings
 from .base import BaseAdapter
 import asyncio
 import httpx
+
+# Model capabilities
+SUPPORTS_STREAM: Set[str] = {"o3", "gpt-4.1"}  # Models that support streaming
+NO_STREAM: Set[str] = {"o3-pro"}  # Models that require background mode
 
 # Initialize client lazily to avoid errors on startup
 _client = None
@@ -75,13 +79,50 @@ class OpenAIAdapter(BaseAdapter):
         # Use singleton client for connection pooling
         client = get_client()
 
-        # Use streaming for o-series models to avoid gateway timeout
-        if self.model_name.startswith("o"):
+        # Choose the safest strategy based on model capabilities and timeout
+        use_background = False
+
+        if self.model_name in NO_STREAM:
+            # Models like o3-pro must use background mode
+            params["background"] = True
+            use_background = True
+        elif timeout > 180 or self.model_name not in SUPPORTS_STREAM:
+            # Use background for long timeouts or unknown streaming support
+            params["background"] = True
+            use_background = True
+        else:
+            # Model supports streaming and timeout is within gateway limit
             params["stream"] = True
+            use_background = False
 
         try:
-            if params.get("stream"):
-                # Handle streaming response
+            if use_background:
+                # Handle background mode (for o3-pro)
+                response = await client.responses.create(**params)
+
+                # Poll for completion
+                poll_interval = 5  # seconds
+                elapsed = 0
+
+                while elapsed < timeout:
+                    status_response = await client.responses.retrieve(response.id)
+
+                    if status_response.status == "completed":
+                        return {
+                            "content": status_response.output_text,  # type: ignore[attr-defined]
+                            "response_id": status_response.id,  # type: ignore[attr-defined]
+                        }
+                    elif status_response.status in ["failed", "cancelled"]:
+                        raise ValueError(
+                            f"Response {status_response.status}: {getattr(status_response, 'error', 'Unknown error')}"
+                        )
+
+                    await asyncio.sleep(poll_interval)
+                    elapsed += poll_interval
+
+                raise ValueError(f"Response not completed within {timeout}s timeout")
+            else:
+                # Streaming response (for models that support it)
                 stream = await asyncio.wait_for(
                     client.responses.create(**params), timeout=timeout
                 )
@@ -103,15 +144,6 @@ class OpenAIAdapter(BaseAdapter):
                         response_id = stream.response_id
 
                 return {"content": "".join(content_parts), "response_id": response_id}
-            else:
-                # Non-streaming response (for non-o-series models)
-                response = await asyncio.wait_for(
-                    client.responses.create(**params), timeout=timeout
-                )
-                return {
-                    "content": response.output_text,  # type: ignore[attr-defined]
-                    "response_id": response.id,  # type: ignore[attr-defined]
-                }
         except asyncio.TimeoutError:
             raise ValueError(f"Request timed out after {timeout}s")
         except Exception as e:
