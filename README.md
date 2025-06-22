@@ -31,7 +31,7 @@ VERTEX_PROJECT=your_gcp_project_id
 VERTEX_LOCATION=your_gcp_location
 HOST=127.0.0.1
 PORT=8000
-MAX_INLINE_TOKENS=12000
+CONTEXT_PERCENTAGE=0.85
 DEFAULT_TEMPERATURE=0.2
 ```
 
@@ -96,7 +96,7 @@ All tools follow the pattern `chat_with_{model_name}` for clarity and consistenc
 The server intelligently handles large codebases through a two-tier approach:
 
 ### 🔄 **Inline Context** (Fast Access)
-- Files under 12,000 tokens (configurable) are embedded directly in the prompt
+- Files within context percentage (default 85% of model limit minus safety margin) are embedded directly in the prompt
 - Provides immediate access for small to medium projects
 - Optimized for quick analysis and focused tasks
 
