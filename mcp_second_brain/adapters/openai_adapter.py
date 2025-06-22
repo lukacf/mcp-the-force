@@ -16,7 +16,7 @@ def get_client():
         _client = AsyncOpenAI(
             api_key=api_key,
             timeout=30.0,
-            max_retries=0
+            max_retries=3  # Enable retries for resilience
         )
     return _client
 
@@ -33,7 +33,15 @@ class OpenAIAdapter(BaseAdapter):
         self._ensure(prompt)
         
         msgs = [{"role": "user", "content": prompt}]
-        tools = [{"type": "file_search", "vector_store_ids": vector_store_ids}] if vector_store_ids else []
+        tools = []
+        
+        # Add file search if vector stores provided
+        if vector_store_ids:
+            tools.append({"type": "file_search", "vector_store_ids": vector_store_ids})
+        
+        # Add web search for GPT-4.1
+        if self.model_name == "gpt-4.1":
+            tools.append({"type": "web_search"})
         
         params: Dict[str, Any] = {
             "model": self.model_name,
@@ -50,16 +58,8 @@ class OpenAIAdapter(BaseAdapter):
         if previous_response_id:
             params["previous_response_id"] = previous_response_id
         
-        # Create a fresh client for each request to avoid state corruption
-        api_key = get_settings().openai_api_key
-        if not api_key:
-            raise ValueError("OPENAI_API_KEY not configured")
-            
-        client = AsyncOpenAI(
-            api_key=api_key,
-            timeout=timeout + 60,  # Client timeout should be longer than request timeout
-            max_retries=0
-        )
+        # Use singleton client for connection pooling
+        client = get_client()
         
         try:
             response = await asyncio.wait_for(
@@ -70,6 +70,8 @@ class OpenAIAdapter(BaseAdapter):
                 "content": response.output_text,  # type: ignore[attr-defined]
                 "response_id": response.id  # type: ignore[attr-defined]
             }
-        finally:
-            # Ensure proper cleanup
-            await asyncio.wait_for(client.close(), timeout=5)
+        except asyncio.TimeoutError:
+            raise ValueError(f"Request timed out after {timeout}s")
+        except Exception as e:
+            # Let OpenAI SDK handle retries for transient errors
+            raise
