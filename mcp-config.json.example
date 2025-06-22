@@ -10,7 +10,7 @@
         "VERTEX_ACCOUNT": "your-email@your-domain.com",
         "HOST": "127.0.0.1",
         "PORT": "8000",
-        "MAX_INLINE_TOKENS": "12000",
+        "CONTEXT_PERCENTAGE": "0.9",
         "DEFAULT_TEMPERATURE": "0.2",
         "LOG_LEVEL": "INFO"
       },
