@@ -25,7 +25,7 @@ This file provides guidance to you when working with code in this repository.
    - **o3/o3_pro**: Analytical reasoning, multi-turn conversations (use session_id)
    - **gemini25_pro**: Massive context windows (~1M tokens), smart, single-shot only
    - **gemini25_flash**: Massive context windows (~1M tokens), fast, single-shot only
-   - **gpt4_1**: Massive context windows (~1M tokens),Web search for current info (use_session_id)
+   - **gpt4_1**: Massive context windows (~1M tokens), Web search for current info (use session_id)
    - All have knowledge cutoffs - o3 doesn't even know what MCP is
    - Prompting and context is important. At the start of a session, give context of the situation. Do not ask the assistants to adopt personas, be up front that you are an AI and be clear about your expectations. 
 
