@@ -72,6 +72,6 @@ class OpenAIAdapter(BaseAdapter):
             }
         except asyncio.TimeoutError:
             raise ValueError(f"Request timed out after {timeout}s")
-        except Exception as e:
+        except Exception:
             # Let OpenAI SDK handle retries for transient errors
             raise
