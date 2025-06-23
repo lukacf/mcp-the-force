@@ -54,6 +54,130 @@ tools=[{
 }]
 ```
 
+## Key Innovations
+
+### 1. Automatic Session Correlation
+
+Instead of manual Session-ID in commit messages, we use a two-phase placeholder system:
+
+**Phase 1: During chat_with_xyz() call**
+```python
+# Create placeholder with metadata
+placeholder_key = f"latest_{branch}_{int(time.time())}_{random.randint(1000,9999)}"
+placeholder_doc = {
+    "content": "[Placeholder - awaiting commit]",
+    "metadata": {
+        "placeholder": True,
+        "prev_commit_sha": current_git_head(),
+        "branch": current_branch(),
+        "chat_start": datetime.utcnow().isoformat(),
+        "session_id": session_id
+    }
+}
+# Store placeholder in vector store
+```
+
+**Phase 2: Post-commit hook**
+```python
+# Find matching placeholder
+prev_sha = get_previous_commit_sha()
+placeholders = search_vector_store(
+    filters={
+        "and": [
+            {"key": "placeholder", "value": True},
+            {"key": "prev_commit_sha", "value": prev_sha}
+        ]
+    }
+)
+# Update placeholder with real content and commit SHA
+```
+
+### 2. Vector Store Chaining (20k limit solution)
+
+Maintain multiple vector stores with automatic rollover:
+
+**Configuration: `.secondbrain/stores.json`**
+```json
+{
+    "stores": [
+        {"id": "vs_project_001", "count": 19743, "created": "2024-01-01"},
+        {"id": "vs_project_002", "count": 3421, "created": "2024-06-01"}
+    ],
+    "active_index": 1
+}
+```
+
+**Auto-rollover logic:**
+```python
+def get_active_store():
+    config = load_stores_config()
+    active = config["stores"][config["active_index"]]
+    
+    if active["count"] > 18000:  # Leave buffer before 20k
+        # Create new store
+        new_store = create_vector_store(f"project-memory-{len(config['stores'])+1}")
+        config["stores"].append({
+            "id": new_store.id,
+            "count": 0,
+            "created": datetime.utcnow().isoformat()
+        })
+        config["active_index"] = len(config["stores"]) - 1
+        save_stores_config(config)
+        return new_store.id
+    
+    return active["id"]
+
+# When querying, provide ALL stores
+vector_store_ids = [store["id"] for store in config["stores"]]
+```
+
+### 3. Gemini Support via Custom Tool
+
+Create a file_search tool for Gemini that queries OpenAI vector stores:
+
+```python
+@tool
+class GeminiFileSearch(ToolSpec):
+    query: str = Route.prompt(pos=0)
+    branch_filter: Optional[str] = Route.prompt()
+    
+    async def execute(self):
+        # Use OpenAI client to search vector stores
+        client = get_openai_client()
+        stores = get_all_project_stores()
+        
+        results = await client.vector_stores.search(
+            vector_store_ids=stores,
+            query=self.query,
+            filters={"key": "branch", "value": self.branch_filter} if branch_filter else None
+        )
+        
+        # Return formatted results to Gemini
+        return format_search_results(results)
+```
+
+### 4. Enhanced Metadata with Chronology
+
+```python
+metadata = {
+    # Identity
+    "commit_sha": "abc123",
+    "parent_sha": "def456", 
+    "branch": "feature-auth",
+    "session_id": "session-xyz",
+    
+    # Chronology (sortable integers)
+    "git_time": 1737654321,      # Commit timestamp (epoch)
+    "session_time": 1737654000,   # Chat end timestamp (epoch)
+    "message_index": 0,           # Order within session
+    
+    # Search optimization
+    "files_changed": ["auth.py", "login.js"],
+    "doc_hash": "sha256_abc",     # Deduplication
+    "placeholder": False          # Correlation state
+}
+```
+
 ## Implementation Details
 
 ### 1. Configuration Storage
@@ -121,45 +245,45 @@ def get_recent_sessions():
         )
         return cur.fetchall()
 
-def create_memory_document(session_id, commit_info):
-    """Create a memory document with metadata"""
-    # In real implementation, would extract conversation from session cache
-    # and summarize with Gemini Flash
+def find_and_update_placeholders(prev_sha, commit_info):
+    """Find placeholders matching previous SHA and update them"""
+    client = get_client()
+    store_id = get_active_store()
     
-    content = f"""
-## Session: {session_id}
-
-### Context
-[Conversation summary would go here]
-
-### Code Changes
-Commit: {commit_info['sha']}
-Branch: {commit_info['branch']}
-Parent: {commit_info['parent']}
-
-[Git diff summary would go here]
-
-### Key Decisions
-[Extracted reasoning and decisions]
-"""
-    
-    # Redact sensitive info
-    content = redact_sensitive(content)
-    
-    # Create document with metadata
-    doc_hash = hashlib.sha256(content.encode()).hexdigest()
-    
-    return {
-        "content": content,
-        "metadata": {
-            "branch": commit_info['branch'],
-            "commit_sha": commit_info['sha'],
-            "parent_sha": commit_info['parent'],
-            "session_id": session_id,
-            "timestamp": datetime.datetime.utcnow().isoformat(),
-            "doc_hash": doc_hash
+    # Search for matching placeholders
+    results = client.vector_stores.files.search(
+        vector_store_id=store_id,
+        query="placeholder",
+        filters={
+            "and": [
+                {"type": "eq", "key": "placeholder", "value": True},
+                {"type": "eq", "key": "prev_commit_sha", "value": prev_sha}
+            ]
         }
-    }
+    )
+    
+    for result in results:
+        # Get session from metadata
+        session_id = result.metadata.get("session_id")
+        if not session_id:
+            continue
+            
+        # Create full memory document
+        content = create_memory_content(session_id, commit_info)
+        
+        # Update the placeholder file
+        client.vector_stores.files.update(
+            vector_store_id=store_id,
+            file_id=result.id,
+            content=content,
+            metadata={
+                **result.metadata,
+                "placeholder": False,
+                "commit_sha": commit_info['sha'],
+                "git_time": int(os.popen(f"git show -s --format=%ct {commit_info['sha']}").read().strip()),
+                "files_changed": get_changed_files(commit_info['sha'])
+            }
+        )
 
 def check_duplicate(store_id, doc_hash):
     """Check if document already exists"""
@@ -350,11 +474,11 @@ def test_branch_isolation():
 
 ## Limitations and Future Work
 
-### Current Limitations
-1. Only works with OpenAI models (Gemini can't use vector stores)
-2. 20k file limit per store (years of commits for most projects)
-3. Requires manual session correlation (via commit message)
-4. No versioning of memory documents
+### Current Limitations (Addressed)
+1. ~~Only works with OpenAI models~~ → Gemini support via custom file_search tool
+2. ~~20k file limit per store~~ → Vector store chaining (file_search accepts arrays)
+3. ~~Requires manual session correlation~~ → Automatic correlation via placeholder system
+4. ~~No chronological ordering~~ → git_time and session_time metadata fields
 
 ### Future Enhancements
 1. Local vector store mirror for Gemini support
@@ -363,8 +487,60 @@ def test_branch_isolation():
 4. Memory document versioning and updates
 5. Cross-project memory federation
 
+### 5. Placeholder Creation During Chat
+
+Add to `mcp_second_brain/tools/executor.py` after each tool execution:
+
+```python
+async def create_placeholder_memory(session_id: str, tool_name: str, result: str):
+    """Create placeholder memory entry after successful tool execution"""
+    if tool_name not in ["chat_with_o3", "chat_with_gemini25_pro", "chat_with_gpt4_1"]:
+        return
+        
+    # Get current git state
+    branch = os.popen("git branch --show-current").read().strip()
+    prev_sha = os.popen("git rev-parse HEAD").read().strip()
+    
+    # Create placeholder
+    placeholder_key = f"latest_{branch}_{int(time.time())}_{random.randint(1000,9999)}"
+    
+    placeholder_doc = {
+        "content": f"[Placeholder - Session {session_id}]\nTool: {tool_name}\nAwaiting commit...",
+        "metadata": {
+            "placeholder": True,
+            "prev_commit_sha": prev_sha,
+            "branch": branch,
+            "session_id": session_id,
+            "chat_start": datetime.utcnow().isoformat(),
+            "tool_name": tool_name
+        }
+    }
+    
+    # Upload to active store
+    store_id = get_active_store()
+    await upload_memory_doc(store_id, placeholder_key, placeholder_doc)
+```
+
+## Critical Context: Claude as User
+
+This system is designed with a critical understanding:
+- **Claude (via Claude Code)** is the user creating these memories through MCP tool calls
+- **The assistant LLMs (o3, Gemini, GPT-4.1)** are the consumers via RAG
+- **Human developers** never directly interact with this system
+
+This means:
+1. **Summaries over transcripts** - Raw conversations waste tokens and reduce retrieval quality
+2. **Automatic operation** - No manual steps, everything happens via tool execution and git hooks
+3. **LLM-optimized format** - Structured metadata for precise filtering, not human readability
+4. **Cross-model memory** - Gemini can learn from o3's insights via the custom file_search tool
+
 ## Conclusion
 
-This project memory system provides a simple, powerful way to capture institutional knowledge with minimal infrastructure changes. By leveraging OpenAI's vector stores as the sole storage system and using git hooks for automatic capture, we create a self-maintaining knowledge base that grows with the project and improves AI assistance over time.
+This project memory system elegantly solves the institutional knowledge problem with minimal complexity:
 
-The key insight is that we're not building a complex knowledge management system - we're simply capturing what already exists (conversations and code changes) and making it searchable by future AI interactions. The ~80 lines of implementation code deliver outsized value by turning ephemeral knowledge into persistent, searchable memory.
+1. **Automatic correlation** - Placeholder system links conversations to commits without manual intervention
+2. **Unlimited scale** - Vector store chaining handles the 20k file limit transparently
+3. **Universal access** - All models (including Gemini) can search the knowledge base
+4. **Zero friction** - Works automatically in the background during normal Claude Code usage
+
+The key insight is that we're creating an "AI-to-AI" memory layer where Claude's conversations with assistant models are automatically captured, correlated with code changes, and made searchable for future interactions. This turns every consultation into lasting institutional knowledge without disrupting the development workflow.
