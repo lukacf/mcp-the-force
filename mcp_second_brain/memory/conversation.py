@@ -57,7 +57,7 @@ async def store_conversation_memory(
                 "datetime": datetime.utcnow().isoformat(),
             },
         }
-        
+
         # Redact secrets before storage
         doc = redact_dict(doc)
 
