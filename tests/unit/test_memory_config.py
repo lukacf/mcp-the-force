@@ -1,282 +1,278 @@
-"""Unit tests for memory configuration management."""
+"""Unit tests for memory configuration using SQLite."""
 
-import json
 import tempfile
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, patch
+import sqlite3
+
 import pytest
 
-from mcp_second_brain.memory.config import MemoryConfig
+from mcp_second_brain.memory.config import MemoryConfig, get_memory_config
+
+
+@pytest.fixture
+def temp_db():
+    """Create a temporary database file."""
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+        db_path = Path(f.name)
+    yield db_path
+    db_path.unlink(missing_ok=True)
+
+
+@pytest.fixture
+def mock_client():
+    """Mock OpenAI client."""
+    client = MagicMock()
+    # Mock vector store creation
+    store = MagicMock()
+    store.id = "vs_test_store_id"
+    client.vector_stores.create.return_value = store
+    return client
 
 
 class TestMemoryConfig:
-    """Test memory configuration management."""
+    """Test memory configuration with SQLite."""
 
-    @pytest.fixture
-    def temp_config_dir(self):
-        """Create temporary directory for config files."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            yield Path(tmpdir)
-
-    @pytest.fixture
-    def mock_client(self):
-        """Mock OpenAI client."""
-        client = Mock()
-        # Mock vector store creation
-        store = Mock()
-        store.id = "test-store-id"
-        client.vector_stores.create.return_value = store
-        return client
-
-    @pytest.fixture
-    def mock_settings(self):
-        """Mock settings with memory configuration."""
-        settings = Mock()
-        settings.memory_rollover_limit = 100  # Low limit for testing
-        settings.memory_config_path = "test/stores.json"
-        return settings
-
-    def test_init_creates_config_directory(self, temp_config_dir, mock_client):
-        """Test that initialization creates config directory."""
-        config_path = temp_config_dir / "memory" / "stores.json"
-
+    def test_init_creates_database(self, temp_db, mock_client):
+        """Test that initialization creates database tables."""
         with patch(
             "mcp_second_brain.memory.config.get_client", return_value=mock_client
         ):
-            config = MemoryConfig(config_path)
+            MemoryConfig(db_path=temp_db)
 
-        assert config_path.parent.exists()
-        assert config._config is not None
+        # Check tables were created
+        conn = sqlite3.connect(temp_db)
+        cursor = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+        )
+        tables = [row[0] for row in cursor.fetchall()]
+        conn.close()
 
-    def test_load_default_config(self, temp_config_dir, mock_client):
-        """Test loading default configuration."""
-        config_path = temp_config_dir / "stores.json"
+        assert "stores" in tables
+        assert "memory_meta" in tables
 
-        with patch(
-            "mcp_second_brain.memory.config.get_client", return_value=mock_client
-        ):
-            config = MemoryConfig(config_path)
-
-        assert config._config["conversation_stores"] == []
-        assert config._config["commit_stores"] == []
-        assert config._config["active_conv_index"] == -1
-        assert config._config["active_commit_index"] == -1
-        assert "created_at" in config._config
-        assert "last_gc" in config._config
-
-    def test_load_existing_config(self, temp_config_dir, mock_client):
-        """Test loading existing configuration."""
-        config_path = temp_config_dir / "stores.json"
-
-        # Create existing config
-        existing_config = {
-            "conversation_stores": [
-                {"id": "conv-1", "count": 50, "created": "2024-01-01"}
-            ],
-            "commit_stores": [{"id": "commit-1", "count": 30, "created": "2024-01-01"}],
-            "active_conv_index": 0,
-            "active_commit_index": 0,
-            "created_at": "2024-01-01",
-            "last_gc": "2024-01-01",
-        }
-
-        with open(config_path, "w") as f:
-            json.dump(existing_config, f)
-
-        with patch(
-            "mcp_second_brain.memory.config.get_client", return_value=mock_client
-        ):
-            config = MemoryConfig(config_path)
-
-        assert len(config._config["conversation_stores"]) == 1
-        assert config._config["conversation_stores"][0]["id"] == "conv-1"
-        assert config._config["active_conv_index"] == 0
-
-    def test_save_config_atomic(self, temp_config_dir, mock_client):
-        """Test atomic config saving."""
-        config_path = temp_config_dir / "stores.json"
-
-        with patch(
-            "mcp_second_brain.memory.config.get_client", return_value=mock_client
-        ):
-            config = MemoryConfig(config_path)
-
-            # Modify config
-            config._config["test_field"] = "test_value"
-            config._save_config()
-
-        # Verify saved config
-        with open(config_path) as f:
-            saved = json.load(f)
-
-        assert saved["test_field"] == "test_value"
-        # Verify temp file doesn't exist
-        assert not config_path.with_suffix(".tmp").exists()
-
-    def test_get_active_conversation_store_creates_first(
-        self, temp_config_dir, mock_client, mock_settings
-    ):
+    def test_get_active_conversation_store_creates_first(self, temp_db, mock_client):
         """Test creating first conversation store."""
-        config_path = temp_config_dir / "stores.json"
-
         with patch(
             "mcp_second_brain.memory.config.get_client", return_value=mock_client
         ):
-            with patch(
-                "mcp_second_brain.memory.config.get_settings",
-                return_value=mock_settings,
-            ):
-                config = MemoryConfig(config_path)
-                store_id = config.get_active_conversation_store()
+            config = MemoryConfig(db_path=temp_db)
+            store_id = config.get_active_conversation_store()
 
-        assert store_id == "test-store-id"
-        assert len(config._config["conversation_stores"]) == 1
-        assert config._config["active_conv_index"] == 0
+        assert store_id == "vs_test_store_id"
         mock_client.vector_stores.create.assert_called_once_with(
             name="project-conversations-001"
         )
 
-    def test_get_active_conversation_store_rollover(
-        self, temp_config_dir, mock_client, mock_settings
-    ):
-        """Test store rollover when limit reached."""
-        config_path = temp_config_dir / "stores.json"
+        # Check database state
+        conn = sqlite3.connect(temp_db)
+        cursor = conn.execute("SELECT store_id, store_type, is_active FROM stores")
+        row = cursor.fetchone()
+        conn.close()
 
-        # Create config with store at limit
-        existing_config = {
-            "conversation_stores": [
-                {"id": "conv-1", "count": 100, "created": "2024-01-01"}
-            ],
-            "commit_stores": [],
-            "active_conv_index": 0,
-            "active_commit_index": -1,
-            "created_at": "2024-01-01",
-            "last_gc": "2024-01-01",
-        }
+        assert row[0] == "vs_test_store_id"
+        assert row[1] == "conversation"
+        assert row[2] == 1
 
-        with open(config_path, "w") as f:
-            json.dump(existing_config, f)
-
+    def test_get_active_commit_store_creates_first(self, temp_db, mock_client):
+        """Test creating first commit store."""
         with patch(
             "mcp_second_brain.memory.config.get_client", return_value=mock_client
         ):
-            with patch(
-                "mcp_second_brain.memory.config.get_settings",
-                return_value=mock_settings,
-            ):
-                config = MemoryConfig(config_path)
-                store_id = config.get_active_conversation_store()
+            config = MemoryConfig(db_path=temp_db)
+            store_id = config.get_active_commit_store()
 
-        assert store_id == "test-store-id"
-        assert len(config._config["conversation_stores"]) == 2
-        assert config._config["active_conv_index"] == 1
+        assert store_id == "vs_test_store_id"
         mock_client.vector_stores.create.assert_called_once_with(
-            name="project-conversations-002"
+            name="project-commits-001"
         )
 
-    def test_increment_counts(self, temp_config_dir, mock_client):
+    def test_increment_counts(self, temp_db, mock_client):
         """Test incrementing document counts."""
-        config_path = temp_config_dir / "stores.json"
-
-        # Create config with existing stores
-        existing_config = {
-            "conversation_stores": [
-                {"id": "conv-1", "count": 10, "created": "2024-01-01"}
-            ],
-            "commit_stores": [{"id": "commit-1", "count": 5, "created": "2024-01-01"}],
-            "active_conv_index": 0,
-            "active_commit_index": 0,
-            "created_at": "2024-01-01",
-            "last_gc": "2024-01-01",
-        }
-
-        with open(config_path, "w") as f:
-            json.dump(existing_config, f)
+        # Mock different store IDs for conversation and commit
+        conv_store = MagicMock()
+        conv_store.id = "vs_conversation_store"
+        commit_store = MagicMock()
+        commit_store.id = "vs_commit_store"
+        mock_client.vector_stores.create.side_effect = [conv_store, commit_store]
 
         with patch(
             "mcp_second_brain.memory.config.get_client", return_value=mock_client
         ):
-            config = MemoryConfig(config_path)
+            config = MemoryConfig(db_path=temp_db)
+
+            # Create stores first
+            config.get_active_conversation_store()
+            config.get_active_commit_store()
 
             # Increment counts
             config.increment_conversation_count()
+            config.increment_conversation_count()
             config.increment_commit_count()
 
-        assert config._config["conversation_stores"][0]["count"] == 11
-        assert config._config["commit_stores"][0]["count"] == 6
+        # Check counts in database
+        conn = sqlite3.connect(temp_db)
+        cursor = conn.execute(
+            "SELECT store_type, doc_count FROM stores WHERE is_active = 1 ORDER BY store_type"
+        )
+        rows = cursor.fetchall()
+        conn.close()
 
-    def test_get_all_store_ids(self, temp_config_dir, mock_client):
-        """Test getting all store IDs."""
-        config_path = temp_config_dir / "stores.json"
+        assert rows[0][0] == "commit"
+        assert rows[0][1] == 1
+        assert rows[1][0] == "conversation"
+        assert rows[1][1] == 2
 
-        # Create config with multiple stores
-        existing_config = {
-            "conversation_stores": [
-                {"id": "conv-1", "count": 10, "created": "2024-01-01"},
-                {"id": "conv-2", "count": 20, "created": "2024-01-02"},
-            ],
-            "commit_stores": [{"id": "commit-1", "count": 5, "created": "2024-01-01"}],
-            "active_conv_index": 1,
-            "active_commit_index": 0,
-            "created_at": "2024-01-01",
-            "last_gc": "2024-01-01",
-        }
+    def test_rollover_at_limit(self, temp_db, mock_client):
+        """Test store rollover when limit is reached."""
+        # Create stores with different IDs
+        store1 = MagicMock()
+        store1.id = "vs_store_001"
+        store2 = MagicMock()
+        store2.id = "vs_store_002"
+        mock_client.vector_stores.create.side_effect = [store1, store2]
 
-        with open(config_path, "w") as f:
-            json.dump(existing_config, f)
+        with patch(
+            "mcp_second_brain.memory.config.get_client", return_value=mock_client
+        ), patch("mcp_second_brain.memory.config.get_settings") as mock_settings:
+            # Set low rollover limit for testing
+            settings = MagicMock()
+            settings.memory_rollover_limit = 2
+            settings.session_db_path = str(temp_db)
+            mock_settings.return_value = settings
+
+            config = MemoryConfig(db_path=temp_db)
+
+            # Get first store
+            store_id1 = config.get_active_conversation_store()
+            assert store_id1 == "vs_store_001"
+
+            # Increment to limit
+            config.increment_conversation_count()
+            config.increment_conversation_count()
+
+            # Next get should trigger rollover
+            store_id2 = config.get_active_conversation_store()
+            assert store_id2 == "vs_store_002"
+
+            # Check both stores exist in database
+            conn = sqlite3.connect(temp_db)
+            cursor = conn.execute(
+                "SELECT store_id, is_active FROM stores WHERE store_type = 'conversation' ORDER BY store_id"
+            )
+            rows = cursor.fetchall()
+            conn.close()
+
+            assert len(rows) == 2
+            assert rows[0][0] == "vs_store_001"
+            assert rows[0][1] == 0  # Not active
+            assert rows[1][0] == "vs_store_002"
+            assert rows[1][1] == 1  # Active
+
+    def test_get_all_store_ids(self, temp_db, mock_client):
+        """Test retrieving all store IDs."""
+        # Create multiple stores
+        stores = []
+        for i in range(4):
+            store = MagicMock()
+            store.id = f"vs_store_{i:03d}"
+            stores.append(store)
+        mock_client.vector_stores.create.side_effect = stores
 
         with patch(
             "mcp_second_brain.memory.config.get_client", return_value=mock_client
         ):
-            config = MemoryConfig(config_path)
-            store_ids = config.get_all_store_ids()
+            config = MemoryConfig(db_path=temp_db)
 
-        assert len(store_ids) == 3
-        assert "conv-1" in store_ids
-        assert "conv-2" in store_ids
-        assert "commit-1" in store_ids
+            # Create some stores
+            config.get_active_conversation_store()
+            config.get_active_commit_store()
 
-    def test_thread_safety(self, temp_config_dir, mock_client):
-        """Test thread-safe operations."""
-        import threading
+            # Get all IDs
+            all_ids = config.get_all_store_ids()
 
-        config_path = temp_config_dir / "stores.json"
+        assert len(all_ids) == 2
+        assert "vs_store_000" in all_ids
+        assert "vs_store_001" in all_ids
 
-        with patch(
-            "mcp_second_brain.memory.config.get_client", return_value=mock_client
-        ):
-            config = MemoryConfig(config_path)
-
-            # Simulate concurrent access
-            results = []
-
-            def get_store():
-                store_id = config.get_active_conversation_store()
-                results.append(store_id)
-
-            threads = [threading.Thread(target=get_store) for _ in range(5)]
-            for t in threads:
-                t.start()
-            for t in threads:
-                t.join()
-
-        # All threads should get the same store ID
-        assert len(set(results)) == 1
-        assert results[0] == "test-store-id"
-
-    def test_get_memory_config_singleton(self, mock_client):
+    def test_singleton_instance(self, temp_db, mock_client):
         """Test that get_memory_config returns singleton."""
-        from mcp_second_brain.memory.config import get_memory_config
-
-        # Clear any existing instance
-        import mcp_second_brain.memory.config
-
-        mcp_second_brain.memory.config._memory_config = None
-
         with patch(
             "mcp_second_brain.memory.config.get_client", return_value=mock_client
-        ):
+        ), patch("mcp_second_brain.memory.config.get_settings") as mock_settings:
+            settings = MagicMock()
+            settings.session_db_path = str(temp_db)
+            settings.memory_rollover_limit = 9500
+            mock_settings.return_value = settings
+
             config1 = get_memory_config()
             config2 = get_memory_config()
 
         assert config1 is config2
+
+    def test_concurrent_access(self, temp_db):
+        """Test concurrent access to the database."""
+        import threading
+        import uuid
+
+        results = []
+
+        # Create a mock client that generates unique IDs
+        def create_mock_client():
+            client = MagicMock()
+
+            def create_store(name):
+                store = MagicMock()
+                store.id = f"vs_{uuid.uuid4().hex[:8]}"
+                return store
+
+            client.vector_stores.create.side_effect = create_store
+            return client
+
+        def create_stores(config, store_type):
+            """Create stores in a thread."""
+            try:
+                if store_type == "conversation":
+                    store_id = config.get_active_conversation_store()
+                    config.increment_conversation_count()
+                else:
+                    store_id = config.get_active_commit_store()
+                    config.increment_commit_count()
+                results.append((store_type, store_id))
+            except Exception as e:
+                results.append((store_type, f"ERROR: {e}"))
+
+        with patch(
+            "mcp_second_brain.memory.config.get_client",
+            return_value=create_mock_client(),
+        ):
+            config = MemoryConfig(db_path=temp_db)
+
+            # Create threads
+            threads = []
+            for i in range(5):
+                t1 = threading.Thread(
+                    target=create_stores, args=(config, "conversation")
+                )
+                t2 = threading.Thread(target=create_stores, args=(config, "commit"))
+                threads.extend([t1, t2])
+
+            # Start all threads
+            for t in threads:
+                t.start()
+
+            # Wait for completion
+            for t in threads:
+                t.join()
+
+        # Check results - should have no errors
+        errors = [r for r in results if "ERROR" in str(r[1])]
+        assert len(errors) == 0, f"Concurrent access errors: {errors}"
+
+        # Check database state
+        conn = sqlite3.connect(temp_db)
+        cursor = conn.execute("SELECT COUNT(*) FROM stores")
+        count = cursor.fetchone()[0]
+        conn.close()
+
+        assert count == 2  # One active store per type

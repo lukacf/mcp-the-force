@@ -1,11 +1,11 @@
 """Configuration management for project memory system."""
 
-import json
 import logging
+import sqlite3
 import threading
 from pathlib import Path
-from typing import Dict, List, Optional, Any
-from datetime import datetime
+from typing import List, Optional, Tuple
+from datetime import datetime, timezone
 
 from ..utils.vector_store import get_client
 from ..config import get_settings
@@ -14,171 +14,200 @@ logger = logging.getLogger(__name__)
 
 
 class MemoryConfig:
-    """Manages memory store configuration and rollover."""
+    """Manages memory store configuration and rollover using SQLite."""
 
-    def __init__(self, config_path: Optional[Path] = None):
+    def __init__(self, db_path: Optional[Path] = None):
         settings = get_settings()
-        self.config_path = config_path or Path(settings.memory_config_path)
-        self.config_path.parent.mkdir(parents=True, exist_ok=True)
-        self._config = self._load_config()
+
+        # SQLite database path (defaults to session cache DB)
+        self.db_path = db_path or Path(settings.session_db_path)
+
         self._client = get_client()
         self._lock = threading.RLock()
         self._rollover_limit = settings.memory_rollover_limit
 
-    def _load_config(self) -> Dict[str, Any]:
-        """Load configuration from file or create default."""
-        if self.config_path.exists():
-            with open(self.config_path, "r") as f:
-                data = json.load(f)
-                assert isinstance(data, dict)
-                return data
+        # Initialize database connection
+        self._db = sqlite3.connect(
+            self.db_path, detect_types=sqlite3.PARSE_DECLTYPES, check_same_thread=False
+        )
+        self._db.row_factory = sqlite3.Row
 
-        # Default configuration
-        return {
-            "conversation_stores": [],
-            "commit_stores": [],
-            "active_conv_index": -1,
-            "active_commit_index": -1,
-            "created_at": datetime.utcnow().isoformat(),
-            "last_gc": datetime.utcnow().isoformat(),
-        }
+        # Initialize schema
+        self._init_db()
 
-    def _save_config(self):
-        """Save configuration to file atomically."""
-        with self._lock:
-            # Write to temp file first
-            temp_path = self.config_path.with_suffix(".tmp")
-            with open(temp_path, "w") as f:
-                json.dump(self._config, f, indent=2)
-            # Atomic rename
-            temp_path.replace(self.config_path)
+    def _init_db(self):
+        """Initialize database schema."""
+        with self._db:
+            self._db.executescript("""
+                -- Same pragmas as session cache
+                PRAGMA journal_mode=WAL;
+                PRAGMA synchronous=NORMAL;
+                PRAGMA busy_timeout=5000;
+                
+                -- Main stores table
+                CREATE TABLE IF NOT EXISTS stores (
+                    store_id      TEXT PRIMARY KEY,
+                    store_type    TEXT NOT NULL CHECK(store_type IN ('conversation','commit')),
+                    doc_count     INTEGER NOT NULL DEFAULT 0,
+                    created_at    TEXT NOT NULL,
+                    is_active     INTEGER NOT NULL CHECK(is_active IN (0,1))
+                );
+                
+                -- Ensure exactly one active store per type
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_active_store
+                  ON stores (store_type) WHERE is_active = 1;
+                
+                -- Metadata table
+                CREATE TABLE IF NOT EXISTS memory_meta(
+                    key         TEXT PRIMARY KEY,
+                    value       TEXT NOT NULL
+                );
+                
+                -- Convenient view for active stores
+                CREATE VIEW IF NOT EXISTS active_stores AS
+                  SELECT store_type, store_id, doc_count
+                    FROM stores WHERE is_active = 1;
+            """)
+
+            # Initialize metadata if not exists
+            row = self._db.execute("SELECT COUNT(*) FROM memory_meta").fetchone()
+            if row[0] == 0:
+                now = datetime.now(timezone.utc).isoformat()
+                self._db.executemany(
+                    "INSERT INTO memory_meta(key, value) VALUES(?, ?)",
+                    [("created_at", now), ("last_gc", now)],
+                )
+
+    def _get_active_store(self, store_type: str) -> Tuple[str, int]:
+        """Get active store ID and count for given type."""
+        row = self._db.execute(
+            """
+            SELECT store_id, doc_count FROM stores
+            WHERE store_type = ? AND is_active = 1
+        """,
+            (store_type,),
+        ).fetchone()
+
+        if row:
+            return row["store_id"], row["doc_count"]
+        return "", 0
+
+    def _create_store(self, store_type: str, store_num: int) -> str:
+        """Create a new vector store."""
+        name = f"project-{store_type}s-{store_num:03d}"
+        store = self._client.vector_stores.create(name=name)
+        store_id: str = store.id
+        return store_id
+
+    def _rollover_store(self, store_type: str) -> str:
+        """Create new store and mark it as active."""
+        # Count existing stores of this type
+        count = self._db.execute(
+            "SELECT COUNT(*) FROM stores WHERE store_type = ?", (store_type,)
+        ).fetchone()[0]
+
+        # Create new store
+        store_id = self._create_store(store_type, count + 1)
+
+        # Update database in a transaction
+        with self._db:
+            # Deactivate current active store
+            self._db.execute(
+                "UPDATE stores SET is_active = 0 WHERE store_type = ? AND is_active = 1",
+                (store_type,),
+            )
+
+            # Insert new active store
+            self._db.execute(
+                """
+                INSERT INTO stores(store_id, store_type, doc_count, created_at, is_active)
+                VALUES(?, ?, 0, ?, 1)
+            """,
+                (store_id, store_type, datetime.now(timezone.utc).isoformat()),
+            )
+
+        return store_id
 
     def get_active_conversation_store(self) -> str:
         """Get active conversation store ID, creating if needed."""
         with self._lock:
-            stores = self._config["conversation_stores"]
-            active_index = self._config["active_conv_index"]
+            store_id, count = self._get_active_store("conversation")
 
             # Create first store if none exist
-            if not stores:
-                store = self._client.vector_stores.create(
-                    name="project-conversations-001"
-                )
-                stores.append(
-                    {
-                        "id": store.id,
-                        "count": 0,
-                        "created": datetime.utcnow().isoformat(),
-                    }
-                )
-                self._config["active_conv_index"] = 0
-                self._save_config()
-                store_id = store.id
-                assert isinstance(store_id, str)
+            if not store_id:
+                store_id = self._create_store("conversation", 1)
+                with self._db:
+                    self._db.execute(
+                        """
+                        INSERT INTO stores(store_id, store_type, doc_count, created_at, is_active)
+                        VALUES(?, 'conversation', 0, ?, 1)
+                    """,
+                        (store_id, datetime.now(timezone.utc).isoformat()),
+                    )
                 return store_id
 
-            # Check if active store needs rollover
-            active_store = stores[active_index]
-            if active_store["count"] >= self._rollover_limit:
-                # Create new store
-                store_num = len(stores) + 1
-                store = self._client.vector_stores.create(
-                    name=f"project-conversations-{store_num:03d}"
-                )
-                stores.append(
-                    {
-                        "id": store.id,
-                        "count": 0,
-                        "created": datetime.utcnow().isoformat(),
-                    }
-                )
-                self._config["active_conv_index"] = len(stores) - 1
-                self._save_config()
-                store_id = store.id
-                assert isinstance(store_id, str)
-                return store_id
+            # Check if rollover needed
+            if count >= self._rollover_limit:
+                return self._rollover_store("conversation")
 
-            store_id = active_store["id"]
-            assert isinstance(store_id, str)
             return store_id
 
     def get_active_commit_store(self) -> str:
         """Get active commit store ID, creating if needed."""
         with self._lock:
-            stores = self._config["commit_stores"]
-            active_index = self._config["active_commit_index"]
+            store_id, count = self._get_active_store("commit")
 
             # Create first store if none exist
-            if not stores:
-                store = self._client.vector_stores.create(name="project-commits-001")
-                stores.append(
-                    {
-                        "id": store.id,
-                        "count": 0,
-                        "created": datetime.utcnow().isoformat(),
-                    }
-                )
-                self._config["active_commit_index"] = 0
-                self._save_config()
-                store_id = store.id
-                assert isinstance(store_id, str)
+            if not store_id:
+                store_id = self._create_store("commit", 1)
+                with self._db:
+                    self._db.execute(
+                        """
+                        INSERT INTO stores(store_id, store_type, doc_count, created_at, is_active)
+                        VALUES(?, 'commit', 0, ?, 1)
+                    """,
+                        (store_id, datetime.now(timezone.utc).isoformat()),
+                    )
                 return store_id
 
-            # Check if active store needs rollover
-            active_store = stores[active_index]
-            if active_store["count"] >= self._rollover_limit:
-                # Create new store
-                store_num = len(stores) + 1
-                store = self._client.vector_stores.create(
-                    name=f"project-commits-{store_num:03d}"
-                )
-                stores.append(
-                    {
-                        "id": store.id,
-                        "count": 0,
-                        "created": datetime.utcnow().isoformat(),
-                    }
-                )
-                self._config["active_commit_index"] = len(stores) - 1
-                self._save_config()
-                store_id = store.id
-                assert isinstance(store_id, str)
-                return store_id
+            # Check if rollover needed
+            if count >= self._rollover_limit:
+                return self._rollover_store("commit")
 
-            store_id = active_store["id"]
-            assert isinstance(store_id, str)
             return store_id
 
     def increment_conversation_count(self):
         """Increment document count for active conversation store."""
         with self._lock:
-            if self._config["conversation_stores"]:
-                active_index = self._config["active_conv_index"]
-                self._config["conversation_stores"][active_index]["count"] += 1
-                self._save_config()
+            with self._db:
+                self._db.execute("""
+                    UPDATE stores SET doc_count = doc_count + 1
+                    WHERE store_type = 'conversation' AND is_active = 1
+                """)
 
     def increment_commit_count(self):
         """Increment document count for active commit store."""
         with self._lock:
-            if self._config["commit_stores"]:
-                active_index = self._config["active_commit_index"]
-                self._config["commit_stores"][active_index]["count"] += 1
-                self._save_config()
+            with self._db:
+                self._db.execute("""
+                    UPDATE stores SET doc_count = doc_count + 1
+                    WHERE store_type = 'commit' AND is_active = 1
+                """)
 
     def get_all_store_ids(self) -> List[str]:
         """Get all store IDs for querying."""
         with self._lock:
-            store_ids = []
+            rows = self._db.execute("SELECT store_id FROM stores").fetchall()
+            return [row["store_id"] for row in rows]
 
-            # Add all conversation stores
-            for store in self._config.get("conversation_stores", []):
-                store_ids.append(store["id"])
+    def close(self):
+        """Close database connection."""
+        if hasattr(self, "_db"):
+            self._db.close()
 
-            # Add all commit stores
-            for store in self._config.get("commit_stores", []):
-                store_ids.append(store["id"])
-
-            return store_ids
+    def __del__(self):
+        """Ensure database connection is closed."""
+        self.close()
 
 
 # Global instance and lock
