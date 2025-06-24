@@ -9,6 +9,7 @@ import logging
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from ..utils.vector_store import get_client as get_openai_client
+from ..utils.redaction import redact_secrets
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +81,7 @@ class GeminiFileSearch:
         # Process results and handle exceptions
         for result in search_results:
             if isinstance(result, BaseException):
-                logger.debug(f"Search error: {result}")
+                logger.warning(f"Search error during msearch: {result}")
                 continue
             if result and isinstance(result, list):
                 all_results.extend(result)
@@ -148,7 +149,7 @@ class GeminiFileSearch:
 
                     results.append(
                         {
-                            "content": content.strip(),
+                            "content": redact_secrets(content.strip()),
                             "score": getattr(item, "score", 0),
                             "file_name": getattr(item, "file_name", "unknown"),
                             "file_id": getattr(item, "file_id", None),
@@ -159,7 +160,7 @@ class GeminiFileSearch:
                 return results
 
             except Exception as e:
-                logger.debug(f"Error searching store {store_id}: {e}")
+                logger.warning(f"Error searching store {store_id}: {e}")
                 return []
 
 
