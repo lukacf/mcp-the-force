@@ -1,4 +1,5 @@
 """Executor for dataclass-based tools."""
+
 import asyncio
 import logging
 from typing import Optional
@@ -10,15 +11,19 @@ from .prompt_engine import prompt_engine
 from .parameter_validator import ParameterValidator
 from .parameter_router import ParameterRouter
 
+# Project memory imports
+from ..config import get_settings
+from ..memory import get_memory_config, store_conversation_memory
+
 logger = logging.getLogger(__name__)
 
 
 class ToolExecutor:
     """Orchestrates tool execution using specialized components."""
-    
+
     def __init__(self, strict_mode: bool = False):
         """Initialize executor with component instances.
-        
+
         Args:
             strict_mode: If True, raise errors for unknown parameters.
                         If False (default), log warnings only.
@@ -27,98 +32,155 @@ class ToolExecutor:
         self.router = ParameterRouter()
         self.prompt_engine = prompt_engine
         self.vector_store_manager = vector_store_manager
-    
+
     async def execute(self, metadata: ToolMetadata, **kwargs) -> str:
         """Execute a tool with the given arguments.
-        
+
         Args:
             metadata: Tool metadata containing routing information
             **kwargs: User-provided arguments
-            
+
         Returns:
             Response from the model as a string
         """
         if metadata is None:
             raise ValueError("Tool metadata is None - tool not found in registry")
-            
+
         start_time = asyncio.get_event_loop().time()
         tool_id = metadata.id
         vs_id: Optional[str] = None  # Initialize to avoid UnboundLocalError
-        
+
         try:
             # 1. Create tool instance and validate inputs
             tool_instance = metadata.spec_class()
             validated_params = self.validator.validate(tool_instance, metadata, kwargs)
-            
+
             # 2. Route parameters
             routed_params = self.router.route(metadata, validated_params)
-            
+
             # 3. Build prompt
-            prompt = await self.prompt_engine.build(metadata.spec_class, routed_params["prompt"])
-            
+            prompt_params = routed_params["prompt"]
+            assert isinstance(prompt_params, dict)  # Type hint for mypy
+            prompt = await self.prompt_engine.build(metadata.spec_class, prompt_params)
+
             # 4. Handle vector store if needed
             vs_id = None
             vector_store_ids = None
-            if routed_params["vector_store"]:
+            vector_store_param = routed_params["vector_store"]
+            assert isinstance(vector_store_param, list)  # Type hint for mypy
+            if vector_store_param:
                 # Gather files from directories
                 from ..utils.fs import gather_file_paths
-                files = gather_file_paths(routed_params["vector_store"])
+
+                files = gather_file_paths(vector_store_param)
                 if files:
                     vs_id = await self.vector_store_manager.create(files)
                     vector_store_ids = [vs_id] if vs_id else None
-            
+
+            # 4a. Auto-attach memory stores for OpenAI models
+            settings = get_settings()
+            model_name = metadata.model_config.get("model_name", "")
+            if settings.memory_enabled and model_name in ["o3", "o3-pro", "gpt-4.1"]:
+                try:
+                    memory_config = get_memory_config()
+                    memory_store_ids = memory_config.get_all_store_ids()
+                    if memory_store_ids:
+                        vector_store_ids = vector_store_ids or []
+                        vector_store_ids.extend(memory_store_ids)
+                        logger.info(
+                            f"Attached {len(memory_store_ids)} memory stores to {model_name}"
+                        )
+                except Exception as e:
+                    logger.warning(f"Failed to attach memory stores: {e}")
+
             # 5. Get adapter
             adapter, error = adapters.get_adapter(
                 metadata.model_config["adapter_class"],
-                metadata.model_config["model_name"]
+                metadata.model_config["model_name"],
             )
             if not adapter:
                 return f"Error: Failed to initialize adapter: {error}"
-            
+
             # 6. Handle session
             previous_response_id = None
-            session_id = routed_params["session"].get("session_id")
+            session_params = routed_params["session"]
+            assert isinstance(session_params, dict)  # Type hint for mypy
+            session_id = session_params.get("session_id")
             if session_id:
-                previous_response_id = session_cache_module.session_cache.get_response_id(session_id)
+                previous_response_id = (
+                    session_cache_module.session_cache.get_response_id(session_id)
+                )
                 if previous_response_id:
                     logger.info(f"Continuing session {session_id}")
-            
+
             # 7. Execute model call
             adapter_params = routed_params["adapter"]
+            assert isinstance(adapter_params, dict)  # Type hint for mypy
             if previous_response_id:
                 adapter_params["previous_response_id"] = previous_response_id
-            
+
             result = await asyncio.wait_for(
                 adapter.generate(
                     prompt=prompt,
                     vector_store_ids=vector_store_ids,
                     timeout=metadata.model_config["timeout"],
-                    **adapter_params
+                    **adapter_params,
                 ),
-                timeout=metadata.model_config["timeout"]
+                timeout=metadata.model_config["timeout"],
             )
-            
+
             # 8. Handle response
             if isinstance(result, dict):
                 content = result.get("content", "")
                 # Store response ID for next call if session provided
                 if session_id and "response_id" in result:
-                    session_cache_module.session_cache.set_response_id(session_id, result["response_id"])
-                return content
+                    session_cache_module.session_cache.set_response_id(
+                        session_id, result["response_id"]
+                    )
+
+                # 8a. Store conversation in memory
+                if settings.memory_enabled and session_id:
+                    try:
+                        # Extract messages from prompt
+                        messages = prompt_params.get("messages", [])
+                        asyncio.create_task(
+                            store_conversation_memory(
+                                session_id=session_id,
+                                tool_name=tool_id,
+                                messages=messages,
+                                response=content,
+                            )
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to store conversation memory: {e}")
+
+                return str(content)
             else:
                 # Vertex adapter returns string directly
-                return result
-                
+                # Store conversation for Vertex models too
+                if settings.memory_enabled and session_id:
+                    try:
+                        messages = prompt_params.get("messages", [])
+                        asyncio.create_task(
+                            store_conversation_memory(
+                                session_id=session_id,
+                                tool_name=tool_id,
+                                messages=messages,
+                                response=result,
+                            )
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to store conversation memory: {e}")
+
+                return str(result)
+
         finally:
             # Cleanup
             if vs_id:
                 await vector_store_manager.delete(vs_id)
-            
+
             elapsed = asyncio.get_event_loop().time() - start_time
             logger.info(f"{tool_id} completed in {elapsed:.2f}s")
-    
-    
-    
 
 
 # Global executor instance
