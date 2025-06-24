@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from typing import Optional
+from typing import Optional, List
 from mcp_second_brain import adapters
 from mcp_second_brain import session_cache as session_cache_module
 from .registry import ToolMetadata
@@ -49,6 +49,7 @@ class ToolExecutor:
         start_time = asyncio.get_event_loop().time()
         tool_id = metadata.id
         vs_id: Optional[str] = None  # Initialize to avoid UnboundLocalError
+        memory_tasks: List[asyncio.Task] = []  # Track memory storage tasks
 
         try:
             # 1. Create tool instance and validate inputs
@@ -143,7 +144,7 @@ class ToolExecutor:
                     try:
                         # Extract messages from prompt
                         messages = prompt_params.get("messages", [])
-                        asyncio.create_task(
+                        task = asyncio.create_task(
                             store_conversation_memory(
                                 session_id=session_id,
                                 tool_name=tool_id,
@@ -151,6 +152,7 @@ class ToolExecutor:
                                 response=content,
                             )
                         )
+                        memory_tasks.append(task)
                     except Exception as e:
                         logger.warning(f"Failed to store conversation memory: {e}")
 
@@ -161,7 +163,7 @@ class ToolExecutor:
                 if settings.memory_enabled and session_id:
                     try:
                         messages = prompt_params.get("messages", [])
-                        asyncio.create_task(
+                        task = asyncio.create_task(
                             store_conversation_memory(
                                 session_id=session_id,
                                 tool_name=tool_id,
@@ -169,6 +171,7 @@ class ToolExecutor:
                                 response=result,
                             )
                         )
+                        memory_tasks.append(task)
                     except Exception as e:
                         logger.warning(f"Failed to store conversation memory: {e}")
 
@@ -178,6 +181,16 @@ class ToolExecutor:
             # Cleanup
             if vs_id:
                 await vector_store_manager.delete(vs_id)
+
+            # Wait for memory tasks to complete
+            if memory_tasks:
+                try:
+                    await asyncio.wait_for(
+                        asyncio.gather(*memory_tasks, return_exceptions=True),
+                        timeout=5.0,  # 5 second timeout for memory storage
+                    )
+                except asyncio.TimeoutError:
+                    logger.warning("Memory storage tasks timed out")
 
             elapsed = asyncio.get_event_loop().time() - start_time
             logger.info(f"{tool_id} completed in {elapsed:.2f}s")

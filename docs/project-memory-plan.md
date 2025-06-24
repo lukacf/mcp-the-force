@@ -356,7 +356,7 @@ async def store_commit_memory(commit_sha):
 
 # Git hook script
 #!/bin/bash
-python -m mcp_second_brain.memory.capture_commit
+python -m mcp_second_brain.memory.commit
 ```
 
 ### 3. Auto-attach for ALL Models
