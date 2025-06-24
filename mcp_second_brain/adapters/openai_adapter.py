@@ -57,7 +57,7 @@ class OpenAIAdapter(BaseAdapter):
         msgs = [{"role": "user", "content": prompt}]
         tools = []
 
-        # Add file search if vector stores provided
+        # Add file search if vector stores provided (limited to 2 stores)
         if vector_store_ids:
             tools.append({"type": "file_search", "vector_store_ids": vector_store_ids})
 
@@ -105,7 +105,7 @@ class OpenAIAdapter(BaseAdapter):
                 response = await client.responses.create(**params)
 
                 # Poll for completion
-                poll_interval = 3  # seconds (reduced from 5 for better responsiveness)
+                poll_interval = 3  # seconds
                 elapsed = 0
 
                 while elapsed < timeout:
