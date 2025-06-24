@@ -4,10 +4,11 @@ import json
 import logging
 import subprocess
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 import tempfile
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, TypedDict
+from xml.etree import ElementTree as ET
 
 from ..utils.vector_store import get_client
 from ..utils.redaction import redact_dict
@@ -39,8 +40,8 @@ async def store_conversation_memory(
         branch = _git_command(["branch", "--show-current"]) or "main"
         prev_commit_sha = _git_command(["rev-parse", "HEAD"]) or "initial"
 
-        # Create summary (in production, would use Gemini Flash)
-        summary = create_conversation_summary(messages, response, tool_name)
+        # Create summary using Gemini Flash (or fallback)
+        summary = await create_conversation_summary(messages, response, tool_name)
 
         # Create document with metadata - only store summary, not raw messages
         doc = {
@@ -52,7 +53,7 @@ async def store_conversation_memory(
                 "branch": branch,
                 "prev_commit_sha": prev_commit_sha,
                 "timestamp": int(time.time()),
-                "datetime": datetime.utcnow().isoformat(),
+                "datetime": datetime.now(timezone.utc).isoformat(),
                 "message_count": len(messages),
                 "response_length": len(response),
             },
@@ -92,44 +93,172 @@ async def store_conversation_memory(
         logger.exception("Failed to store conversation memory")
 
 
-def create_conversation_summary(
+class MessageComponents(TypedDict):
+    """Type definition for extracted message components."""
+
+    instructions: str
+    output_format: str
+    context_files: List[str]
+    has_attachments: bool
+
+
+def _extract_message_components(raw_msg: str) -> MessageComponents:
+    """Extract components from a Task prompt.
+
+    Returns dict with:
+    - instructions: The user's actual instructions
+    - output_format: The requested output format
+    - context_files: List of file paths (not content)
+    - has_attachments: Bool indicating if vector store attachments exist
+    """
+    result: MessageComponents = {
+        "instructions": "",
+        "output_format": "",
+        "context_files": [],
+        "has_attachments": False,
+    }
+
+    try:
+        # Try to parse as XML
+        root = ET.fromstring(raw_msg)
+
+        # Extract instructions
+        instructions = root.findtext(".//Instructions")
+        if instructions:
+            result["instructions"] = instructions.strip()
+
+        # Extract output format
+        output_format = root.findtext(".//OutputFormat")
+        if output_format:
+            result["output_format"] = output_format.strip()
+
+        # Extract file paths (not content)
+        context = root.find(".//CONTEXT")
+        if context is not None:
+            for file_elem in context.findall(".//file"):
+                path = file_elem.get("path")
+                if path:
+                    result["context_files"].append(path)
+
+    except ET.ParseError:
+        # Not valid XML, fall back to simple extraction
+        # Try to at least get the instructions
+        context_idx = raw_msg.find("<CONTEXT>")
+        if context_idx != -1:
+            result["instructions"] = raw_msg[:context_idx].strip()
+        else:
+            result["instructions"] = raw_msg.strip()
+
+    # Check for vector store attachments
+    if "additional information accessible through the file search tool" in raw_msg:
+        result["has_attachments"] = True
+
+    return result
+
+
+async def create_conversation_summary(
     messages: List[Dict[str, Any]], response: str, tool_name: str
 ) -> str:
-    """Create a summary of the conversation.
+    """Create a summary of the conversation using Gemini Flash.
 
-    In production, this would use Gemini Flash for summarization.
-    For now, we create a structured summary.
+    Falls back to structured summary if Gemini is unavailable.
     """
-    # Extract key information
-    user_query = ""
+    # Extract components from user message
+    user_components = None
     if messages:
-        # Find the main user query (usually the instructions)
         for msg in messages:
             if isinstance(msg, dict) and msg.get("role") == "user":
-                from ..config import get_settings
-
-                settings = get_settings()
-                user_query = msg.get("content", "")[
-                    : settings.memory_summary_char_limit
-                ]
+                raw_content = msg.get("content", "")
+                user_components = _extract_message_components(raw_content)
                 break
 
-    # Create structured summary
+    if not user_components:
+        user_components = {
+            "instructions": "No query captured",
+            "output_format": "",
+            "context_files": [],
+            "has_attachments": False,
+        }
+
+    # Try to use Gemini Flash for summarization
+    try:
+        from ..adapters.vertex_adapter import VertexAdapter
+        from ..config import get_settings
+
+        settings = get_settings()
+
+        # Build a clean representation of the conversation
+        conversation_text = f"""
+## User Request
+Instructions: {user_components['instructions']}
+Output Format: {user_components['output_format']}
+Context Files: {len(user_components['context_files'])} files provided
+Vector Store Attachments: {'Yes' if user_components['has_attachments'] else 'No'}
+
+## Assistant Response ({tool_name})
+{response[:settings.memory_summary_char_limit]}
+"""
+
+        # Use Gemini Flash to create summary
+        summarization_prompt = f"""Summarize this AI consultation for future reference. Focus on:
+1. What the user asked for
+2. What the AI assistant ({tool_name}) provided/discovered/analyzed
+3. Any specific data, decisions, or recommendations made
+4. Important details that should be searchable later
+
+Keep the summary concise but include all key information, especially any specific values, names, or identifiers mentioned.
+
+Conversation to summarize:
+{conversation_text}
+"""
+
+        adapter = VertexAdapter(model="gemini-2.5-flash")
+        summary = await adapter.generate(
+            prompt=summarization_prompt, vector_store_ids=None, temperature=0.3
+        )
+
+        # Add metadata header
+        return f"""## AI Consultation Session
+**Tool**: {tool_name}
+**Date**: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}
+
+{summary}
+"""
+
+    except Exception as e:
+        logger.warning(f"Failed to use Gemini Flash for summarization: {e}")
+        # Fall back to structured summary
+        return _create_fallback_summary(user_components, response, tool_name)
+
+
+def _create_fallback_summary(
+    user_components: MessageComponents, response: str, tool_name: str
+) -> str:
+    """Create a structured summary when Gemini Flash is unavailable."""
+    from ..config import get_settings
+
+    settings = get_settings()
+
+    # Include actual response content in fallback
+    response_preview = response[: settings.memory_summary_char_limit]
+
     summary = f"""## AI Consultation Session
 
 **Tool**: {tool_name}
-**Date**: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}
+**Date**: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}
 
 ### User Query
-{user_query or "No query captured"}
+{user_components['instructions']}
 
-### Assistant Response Summary
-The assistant provided analysis and recommendations regarding the query.
+### Output Format
+{user_components['output_format'] or 'Not specified'}
 
-### Key Points
-- Consultation completed successfully
-- Response provided by {tool_name}
-- Full context available in session
+### Context
+- Files provided: {len(user_components['context_files'])}
+- Vector store attachments: {'Yes' if user_components['has_attachments'] else 'No'}
+
+### Assistant Response
+{response_preview}
 
 ### Technical Context
 This consultation may have influenced subsequent code changes.

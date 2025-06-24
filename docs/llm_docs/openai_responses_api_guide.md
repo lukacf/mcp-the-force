@@ -2036,3 +2036,87 @@ Remember to:
 - Structure prompts for caching by placing reusable content at the beginning
 
 With these tools and knowledge, you're ready to build the next generation of AI-powered applications using the OpenAI Responses API.
+
+
+Below is a concise “cheat sheet” that pulls together what is publicly documented (or demo-verified by developers) about the eight OpenAI models you listed.  I split the information into three compact matrices so you can scan what matters most ― **modalities, supported endpoints, and advanced features**.
+
+---
+
+### 1 · Modalities (I = input, O = output)
+
+| Model                 | Text (I/O) | Image I | Image O                                                          | Audio I | Audio O |
+| --------------------- | ---------- | ------- | ---------------------------------------------------------------- | ------- | ------- |
+| **o3**                | ✓          | ✓       | ✓ (via built-in image-generation tool)                           | —       | —       |
+| **o3-pro**            | ✓          | ✓       | ✓                                                                | —       | —       |
+| **gpt-4.1**           | ✓          | ✓       | — (text-only output)                                             | —       | —       |
+| **gpt-4.1-mini**      | ✓          | ✓       | —                                                                | —       | —       |
+| **gpt-4.1-nano**      | ✓          | ✓       | —                                                                | —       | —       |
+| **codex-mini-latest** | ✓          | —       | —                                                                | —       | —       |
+| **gpt-4o**            | ✓          | ✓       | ✓                                                                | ✓       | ✓       |
+| **gpt-4o mini**       | ✓          | ✓       | ✓ (text + vision; audio in a separate *audio-preview* sub-model) | —\*     | —\*     |
+
+\* A preview variant (`gpt-4o-mini-audio-preview`) adds low-latency speech-in/speech-out, but the default **gpt-4o mini** model shipping today is text-&-vision only. ([axios.com][1], [reuters.com][2], [en.wikipedia.org][3], [platform.openai.com][4])
+
+---
+
+### 2 · Core API Endpoints
+
+| Model                 | Chat Completions<br>`v1/chat/completions` | **Responses**<br>`v1/responses` | **Realtime**<br>`v1/realtime`    | Assistants (`v1/assistants`) |
+| --------------------- | ----------------------------------------- | ------------------------------- | -------------------------------- | ---------------------------- |
+| o3                    | — (use Responses)                         | ✓                               | —                                | —                            |
+| o3-pro                | —                                         | ✓ *only*                        | —                                | —                            |
+| gpt-4.1 / mini / nano | ✓                                         | ✓                               | —                                | ✓                            |
+| codex-mini-latest     | —                                         | ✓                               | —                                | —                            |
+| gpt-4o                | ✓                                         | ✓                               | ✓ (WebSocket / WebRTC)           | ✓                            |
+| gpt-4o mini           | ✓                                         | ✓                               | — (audio-preview sub-model only) | ✓                            |
+
+Key sources: o3/o4 models and Responses API notes ([github.com][5], [youtrack.jetbrains.com][6]); GPT-4.1 endpoint list ([learn.microsoft.com][7], [learn.microsoft.com][8]); GPT-4o realtime docs ([learn.microsoft.com][9]).
+
+---
+
+### 3 · Advanced Features
+
+| Model             | Streaming | Function Calling            | Structured Outputs | **Fine-tuning**  | Distillation / Pred. Outputs | Snap-shots\* |
+| ----------------- | --------- | --------------------------- | ------------------ | ---------------- | ---------------------------- | ------------ |
+| o3                | ✓         | ✓ (tool calls in Responses) | ✓                  | —                | —                            | ✓            |
+| o3-pro            | ✓         | ✓                           | ✓                  | —                | —                            | ✓            |
+| gpt-4.1           | ✓         | ✓                           | ✓                  | —                | —                            | ✓            |
+| gpt-4.1-mini      | ✓         | ✓                           | ✓                  | —                | —                            | ✓            |
+| gpt-4.1-nano      | ✓         | ✓                           | ✓                  | —                | —                            | ✓            |
+| codex-mini-latest | ✓         | (limited)                   | JSON only          | —                | —                            | rolling      |
+| gpt-4o            | ✓         | ✓                           | ✓                  | — (planned)      | —                            | ✓            |
+| gpt-4o mini       | ✓         | ✓                           | ✓                  | ✓ (text-to-text) | —                            | ✓            |
+
+\*All models are version-snapshotted; you can pin a call to, e.g., `gpt-4.1-2025-04-14`.
+
+Fine-tuning confirmation for **gpt-4o mini**: ([openai.com][10]); o3-pro “Fine-tuning = Not supported” line in docs snippet ([platform.openai.com][11]).
+
+---
+
+## How to read this
+
+* **✓** = officially supported and documented (or live in the API today).
+* **—** = not supported as of 24 Jun 2025.
+* Items marked “only” mean the model is *restricted* to that endpoint.
+
+### Quick takeaways
+
+* **o-series** (o3 / o3-pro) trade endpoint flexibility for deeper reasoning depth; today you must adopt the new **Responses** API.
+* **GPT-4.1 family** brings the huge 1 M-token context window but is text-and-vision only; no image generation or audio yet.
+* **GPT-4o** remains the only fully multimodal flagship (text + vision + audio) and is the *only* model exposed through the low-latency **Realtime** socket endpoint.
+* **GPT-4o mini** is the sweet-spot for cost and can be fine-tuned; audio is still in preview and shipped as a separate model ID.
+* **codex-mini-latest** is a niche coding-assistant model exposed solely via **Responses** (plus the `local_shell` tool). If you need general chat or multimodal work, use GPT-4.1 or GPT-4o instead.
+
+Hope this gives you a clear, at-a-glance map of what each model can (and can’t) do today. If you need deeper details on any single row—pricing, context window, regional availability—just let me know and I’ll dig in.
+
+[1]: https://www.axios.com/2025/04/16/openai-o3-o4-mini-advanced-ai-tools?utm_source=chatgpt.com "New OpenAI models \"think\" with images"
+[2]: https://www.reuters.com/technology/artificial-intelligence/openai-unveils-cheaper-small-ai-model-gpt-4o-mini-2024-07-18/?utm_source=chatgpt.com "OpenAI unveils cheaper small AI model GPT-4o mini"
+[3]: https://en.wikipedia.org/wiki/GPT-4o?utm_source=chatgpt.com "GPT-4o"
+[4]: https://platform.openai.com/docs/models/gpt-4o-mini-audio-preview?utm_source=chatgpt.com "GPT-4o mini Audio - OpenAI Platform"
+[5]: https://github.com/zed-industries/zed/discussions/32550?utm_source=chatgpt.com "Use OpenAI responses API instead of /v1/chat/completions #32550"
+[6]: https://youtrack.jetbrains.com/issue/PY-82037/API-endpoint-error-when-using-o3-pro-in-AI-Playground?utm_source=chatgpt.com "API endpoint error when using o3-pro in AI Playground : PY-82037"
+[7]: https://learn.microsoft.com/en-us/answers/questions/2279852/azure-openai-error-500-on-responses-api-on-gpt-4-1?utm_source=chatgpt.com "Azure OpenAI - Error 500 on responses API on GPT 4.1"
+[8]: https://learn.microsoft.com/en-us/azure/ai-services/openai/concepts/models?utm_source=chatgpt.com "Azure OpenAI in Azure AI Foundry Models - Learn Microsoft"
+[9]: https://learn.microsoft.com/en-us/azure/ai-services/openai/how-to/realtime-audio-websockets?utm_source=chatgpt.com "How to use the GPT-4o Realtime API via WebSockets (Preview)"
+[10]: https://openai.com/index/gpt-4o-fine-tuning/?utm_source=chatgpt.com "Fine-tuning now available for GPT-4o - OpenAI"
+[11]: https://platform.openai.com/docs/models/o3-pro?utm_source=chatgpt.com "Model - OpenAI API"

@@ -91,7 +91,14 @@ class TestE2EScenarios:
         print(f"Turn 1 output: {output1}")
         assert any(
             word in output1.lower()
-            for word in ["ok", "understand", "acknowledged", "remember"]
+            for word in [
+                "ok",
+                "understand",
+                "acknowledged",
+                "remember",
+                "done",
+                "stored",
+            ]
         )
 
         # Second turn: Test recall

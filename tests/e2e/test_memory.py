@@ -30,13 +30,14 @@ class TestE2EMemory:
         # Just verify we got a response - the important test is whether memory works
         assert output1.strip()
 
-        # Wait a moment for async storage and vector store indexing
-        time.sleep(5)
+        # Wait for async storage, summarization, and vector store indexing
+        # This includes: async summarization with Gemini Flash, file upload, and indexing
+        time.sleep(15)  # Increased to ensure everything completes
 
         # Second: In a NEW session, search for the unique fact using memory
         # The model should be able to find it in the conversation history
         args2 = {
-            "instructions": f"Use file_search to search your memory for the exact string: {unique_fact}. This should search through all stored conversations.",
+            "instructions": f"Use the search_project_memory function to search for the exact string: {unique_fact}. This should search through all stored conversations. Report the results in the specified JSON format.",
             "output_format": f'JSON object: {{"found": true/false, "fact": "{unique_fact}" if found or null, "num_results": number}}',
             "context": [],  # No context - relying on memory
             "session_id": f"different-session-{uuid.uuid4().hex[:8]}",  # Different session
@@ -74,12 +75,12 @@ class TestE2EMemory:
 
         print(f"O3 storage output: {output1}")
 
-        # Wait for storage
-        time.sleep(2)
+        # Wait for storage and vector store indexing
+        time.sleep(8)  # Give more time for async storage and indexing
 
-        # Retrieve with Gemini
+        # Retrieve with Gemini - be explicit about using memory search
         args2 = {
-            "instructions": f"Search for information about {unique_info}. Report what you find.",
+            "instructions": f"Use the search_project_memory function to search for '{unique_info}'. Report what you find in the search results.",
             "output_format": "found information only",
             "context": [],
         }
@@ -116,7 +117,7 @@ class TestE2EMemory:
 
         # Search for the fact in a new session
         search_args = {
-            "instructions": f"Use file_search to find any facts containing '{test_id}'. Report what you find.",
+            "instructions": f"Use the search_project_memory function to find any facts containing '{test_id}'. Report what you find.",
             "output_format": f"If you find '{test_id}_FACT', output exactly 'FOUND'. If not found, output 'NOT_FOUND'.",
             "context": [],
             "session_id": f"search-{uuid.uuid4().hex[:8]}",
@@ -164,7 +165,7 @@ def {unique_func}():
 
         # Later, ask about the function without providing context
         args2 = {
-            "instructions": f"What do you know about the function {unique_func}? Search your memory.",
+            "instructions": f"Use the search_project_memory function to search for information about the function {unique_func}. Report what you find.",
             "output_format": "what you remember about this function",
             "context": [],  # No context!
             "session_id": f"memory-recall-{uuid.uuid4().hex[:8]}",
