@@ -31,19 +31,8 @@ This file provides guidance to you when working with code in this repository.
    - gpt4_1 doesn't know either but can search the web to find information if needed
    - Prompting and context is important. At the start of a session, give context of the situation. Do not ask the assistants to adopt personas, be up front that you are an AI and be clear about your expectations. 
 
-5. **Parallel Consultation Pattern**:
-
-   Use parallel tasks when appropriate using the Task tool. Make sure the task tool returns the session id when available so that multi turn conversations are possible.
-   
-   ```
-   Task 1: o3 (session: "feature-x") - "Best approach for X?"
-   Task 2: gemini25_pro - "What are the risks with X?"
-   Task 3: gpt4_1 - "Current best practices for X?"
-   ```
-   Parallel, not sequential!
-   
-   When using a Task to asking gpt4_1, instruct the task not to use the web search tool (gpt4_1 will handle it itself.)
-
+5. **Tasks**
+   -Avoid using tasks for calling the assistants. 
 
 6. **Quality Control Before Changes**:
    - Get implementation reviewed: "What's genuinely problematic here?"

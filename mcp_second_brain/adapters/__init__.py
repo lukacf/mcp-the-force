@@ -40,6 +40,20 @@ def get_adapter(
     Returns:
         Tuple of (adapter instance, error message)
     """
+    # Lazy load SearchMemoryAdapter to break circular import
+    if adapter_key == "SearchMemoryAdapter" and adapter_key not in ADAPTER_REGISTRY:
+        try:
+            from ..tools.search_memory import SearchMemoryAdapter
+
+            register_adapter("SearchMemoryAdapter", SearchMemoryAdapter)
+            logger.info("Lazily registered SearchMemoryAdapter")
+        except ImportError as e:
+            logger.error(f"Failed to lazy-load SearchMemoryAdapter: {e}")
+            return (
+                None,
+                f"Adapter {adapter_key} could not be loaded due to an import error.",
+            )
+
     cache_key = (adapter_key, model_name)
 
     # Check cache first
@@ -53,11 +67,7 @@ def get_adapter(
 
     try:
         # Create adapter instance
-        # SearchMemoryAdapter has a different signature
-        if adapter_key == "SearchMemoryAdapter":
-            adapter = adapter_class()
-        else:
-            adapter = adapter_class(model_name)  # type: ignore[call-arg]
+        adapter = adapter_class(model_name)  # type: ignore[call-arg]
         _ADAPTER_CACHE[cache_key] = adapter
         logger.info(f"Created {adapter_key} adapter for {model_name}")
         return adapter, None
@@ -84,12 +94,3 @@ __all__ = [
     "get_adapter",
     "register_adapter",
 ]
-
-# Register SearchMemoryAdapter after all imports are complete
-# This avoids circular import issues
-try:
-    from ..tools.search_memory import SearchMemoryAdapter
-
-    ADAPTER_REGISTRY["SearchMemoryAdapter"] = SearchMemoryAdapter
-except ImportError:
-    logger.warning("Failed to import SearchMemoryAdapter")
