@@ -5,6 +5,7 @@ from google.genai import types
 from ..config import get_settings
 from .base import BaseAdapter
 from .vertex_file_search import GeminiFileSearch, create_file_search_declaration
+from .memory_search_declaration import create_search_memory_declaration_gemini
 
 logger = logging.getLogger(__name__)
 
@@ -76,8 +77,14 @@ class VertexAdapter(BaseAdapter):
                 thinking_budget=max_reasoning_tokens if max_reasoning_tokens > 0 else -1
             )
 
-        # Setup file_search function if vector stores provided
-        tools = None
+        # Setup tools - always include search_project_memory
+        function_declarations = []
+
+        # Always add search_project_memory for accessing memory
+        memory_search_decl = create_search_memory_declaration_gemini()
+        function_declarations.append(memory_search_decl)
+
+        # Setup file_search function if vector stores provided (for user attachments)
         file_search = None
         if vector_store_ids:
             logger.info(
@@ -87,7 +94,11 @@ class VertexAdapter(BaseAdapter):
 
             # Create function declaration for Gemini
             file_search_decl = create_file_search_declaration()
-            tools = [types.Tool(function_declarations=[file_search_decl])]
+            function_declarations.append(file_search_decl)
+
+        # Add tools to config if we have any functions
+        if function_declarations:
+            tools = [types.Tool(function_declarations=function_declarations)]
             config_params["tools"] = tools
 
         generate_content_config = types.GenerateContentConfig(**config_params)
@@ -163,6 +174,35 @@ class VertexAdapter(BaseAdapter):
                     function_responses.append(
                         types.Part.from_function_response(
                             name=fc.function_call.name, response=search_results
+                        )
+                    )
+
+                elif fc.function_call.name == "search_project_memory":
+                    # Extract parameters
+                    query = fc.function_call.args.get("query", "")
+                    max_results = fc.function_call.args.get("max_results", 40)
+                    store_types = fc.function_call.args.get(
+                        "store_types", ["conversation", "commit"]
+                    )
+
+                    logger.info(f"Executing search_project_memory: '{query}'")
+
+                    # Import and execute the search
+                    from ..tools.search_memory import SearchMemoryAdapter
+
+                    memory_search = SearchMemoryAdapter()
+                    search_result_text = await memory_search.generate(
+                        prompt=query,
+                        query=query,
+                        max_results=max_results,
+                        store_types=store_types,
+                    )
+
+                    # Create function response
+                    function_responses.append(
+                        types.Part.from_function_response(
+                            name=fc.function_call.name,
+                            response={"result": search_result_text},
                         )
                     )
 

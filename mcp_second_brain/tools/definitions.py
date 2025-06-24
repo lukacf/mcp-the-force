@@ -5,7 +5,7 @@ from .base import ToolSpec
 from .descriptors import Route
 from .registry import tool
 
-# Import Gemini search tools to ensure registration
+# Import tools to ensure registration
 
 
 @tool

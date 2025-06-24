@@ -12,8 +12,8 @@ from .parameter_validator import ParameterValidator
 from .parameter_router import ParameterRouter
 
 # Project memory imports
+from ..memory import store_conversation_memory
 from ..config import get_settings
-from ..memory import get_memory_config, store_conversation_memory
 
 logger = logging.getLogger(__name__)
 
@@ -78,23 +78,11 @@ class ToolExecutor:
                     vs_id = await self.vector_store_manager.create(files)
                     vector_store_ids = [vs_id] if vs_id else None
 
-            # 4a. Auto-attach memory stores for ALL models
-            settings = get_settings()
-            if settings.memory_enabled:
-                try:
-                    memory_config = get_memory_config()
-                    memory_store_ids = memory_config.get_all_store_ids()
-                    if memory_store_ids:
-                        vector_store_ids = vector_store_ids or []
-                        vector_store_ids.extend(memory_store_ids)
-                        model_name = metadata.model_config.get("model_name", "")
-                        logger.info(
-                            f"Attached {len(memory_store_ids)} memory stores to {model_name}"
-                        )
-                except Exception as e:
-                    logger.warning(f"Failed to attach memory stores: {e}")
+            # Memory stores are no longer auto-attached
+            # Models should use search_project_memory function to access memory
 
             # 5. Get adapter
+            settings = get_settings()
             adapter, error = adapters.get_adapter(
                 metadata.model_config["adapter_class"],
                 metadata.model_config["model_name"],

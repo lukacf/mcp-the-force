@@ -2,8 +2,12 @@ from typing import Any, Dict, List, Set
 from openai import AsyncOpenAI
 from ..config import get_settings
 from .base import BaseAdapter
+from .memory_search_declaration import create_search_memory_declaration_openai
 import asyncio
 import httpx
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Model capabilities
 SUPPORTS_STREAM: Set[str] = {
@@ -57,7 +61,10 @@ class OpenAIAdapter(BaseAdapter):
         msgs = [{"role": "user", "content": prompt}]
         tools = []
 
-        # Add file search if vector stores provided
+        # Always add search_project_memory tool for accessing memory
+        tools.append(create_search_memory_declaration_openai())
+
+        # Add file search if vector stores provided (for user attachments)
         if vector_store_ids:
             tools.append({"type": "file_search", "vector_store_ids": vector_store_ids})
 
