@@ -77,16 +77,16 @@ class ToolExecutor:
                     vs_id = await self.vector_store_manager.create(files)
                     vector_store_ids = [vs_id] if vs_id else None
 
-            # 4a. Auto-attach memory stores for OpenAI models
+            # 4a. Auto-attach memory stores for ALL models
             settings = get_settings()
-            model_name = metadata.model_config.get("model_name", "")
-            if settings.memory_enabled and model_name in ["o3", "o3-pro", "gpt-4.1"]:
+            if settings.memory_enabled:
                 try:
                     memory_config = get_memory_config()
                     memory_store_ids = memory_config.get_all_store_ids()
                     if memory_store_ids:
                         vector_store_ids = vector_store_ids or []
                         vector_store_ids.extend(memory_store_ids)
+                        model_name = metadata.model_config.get("model_name", "")
                         logger.info(
                             f"Attached {len(memory_store_ids)} memory stores to {model_name}"
                         )

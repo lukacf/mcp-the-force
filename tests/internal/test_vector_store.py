@@ -85,7 +85,8 @@ class TestVectorStoreIntegration:
         mock_openai_client.vector_stores.create.assert_called()
         
         # MockAdapter should have received vector_store_ids
-        assert data["vector_store_ids"] == ["vs_attach"]
+        # Note: May include auto-attached memory stores
+        assert "vs_attach" in data["vector_store_ids"]
     
     @pytest.mark.asyncio
     async def test_vector_store_file_filtering(self, tmp_path, mock_env, mock_openai_client):
@@ -182,8 +183,9 @@ class TestVectorStoreIntegration:
         # Verify vector store creation was attempted
         mock_openai_client.vector_stores.create.assert_called()
         
-        # Vector store IDs should be None due to failure
-        assert data["vector_store_ids"] is None
+        # Vector store IDs should not contain the failed store
+        # But may still have auto-attached memory stores
+        assert "vs_error" not in (data["vector_store_ids"] or [])
     
     @pytest.mark.asyncio
     @pytest.mark.timeout(30)
@@ -217,4 +219,5 @@ class TestVectorStoreIntegration:
         import json
         data = json.loads(result)
         assert data["mock"] is True
-        assert data["vector_store_ids"] == ["vs_large"]
+        # Note: May include auto-attached memory stores
+        assert "vs_large" in data["vector_store_ids"]

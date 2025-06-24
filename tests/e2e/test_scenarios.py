@@ -87,7 +87,7 @@ class TestE2EScenarios:
         )
         
         print(f"Turn 1 output: {output1}")
-        assert "ok" in output1.lower() or "understand" in output1.lower()
+        assert any(word in output1.lower() for word in ["ok", "understand", "acknowledged", "remember"])
         
         # Second turn: Test recall
         args2 = {

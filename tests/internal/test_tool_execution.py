@@ -143,7 +143,8 @@ class TestToolExecutionIntegration:
         assert data["model"] == "gpt-4.1"
         assert data["adapter_kwargs"]["temperature"] == 0.8
         # Vector store should be created for attachments
-        assert data["vector_store_ids"] == ["vs_params"]
+        # Note: May include auto-attached memory stores
+        assert "vs_params" in data["vector_store_ids"]
     
     @pytest.mark.asyncio
     async def test_error_propagation(self, run_tool):
