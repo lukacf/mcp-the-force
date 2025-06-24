@@ -40,8 +40,7 @@ claude mcp add-json second-brain "$(cat <<EOF
     "VERTEX_LOCATION": "${VERTEX_LOCATION}",
     "GOOGLE_APPLICATION_CREDENTIALS": "${GOOGLE_APPLICATION_CREDENTIALS}",
     "MCP_ADAPTER_MOCK": "0",
-    "MEMORY_ENABLED": "true",
-    "MEMORY_CONFIG_PATH": ".secondbrain/stores.json"
+    "MEMORY_ENABLED": "true"
   },
   "timeoutMs": 180000
 }
