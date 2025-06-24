@@ -21,10 +21,8 @@ SECRET_PATTERNS = [
         r"\1=REDACTED",
     ),
     # GitHub tokens
-    (r"(ghp_[a-zA-Z0-9]{8,})", "GITHUB_TOKEN_REDACTED"),
-    (r"(gho_[a-zA-Z0-9]{8,})", "GITHUB_OAUTH_REDACTED"),
-    # OpenAI keys
-    (r"(sk-[a-zA-Z0-9]{16,})", "[REDACTED_OPENAI_KEY]"),
+    (r"(ghp_[a-zA-Z0-9]{36})", "GITHUB_TOKEN_REDACTED"),
+    (r"(gho_[a-zA-Z0-9]{36})", "GITHUB_OAUTH_REDACTED"),
     # Generic tokens
     (r'(token|bearer)[\s:=]+[\'""]?([a-zA-Z0-9_\-\.]{20,})[\'""]?', r"\1=REDACTED"),
     # Database URLs

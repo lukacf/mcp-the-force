@@ -78,41 +78,19 @@ class ToolExecutor:
                     vs_id = await self.vector_store_manager.create(files)
                     vector_store_ids = [vs_id] if vs_id else None
 
-            # Handle memory stores with model-specific logic
+            # 4a. Auto-attach memory stores for ALL models
             settings = get_settings()
-            if (
-                settings.memory_enabled
-                and "openai" in metadata.model_config.get("adapter_class", "").lower()
-            ):
-                # For OpenAI models, intelligently select up to 2 memory stores
+            if settings.memory_enabled:
                 try:
                     memory_config = get_memory_config()
-                    all_store_ids = memory_config.get_all_store_ids()
-
-                    if all_store_ids:
-                        # Select the 2 most recent stores (1 conversation, 1 commit if available)
-                        conversation_stores = [
-                            s for s in all_store_ids if "conversation" in s
-                        ]
-                        commit_stores = [s for s in all_store_ids if "commit" in s]
-
-                        selected_stores = []
-                        if conversation_stores:
-                            selected_stores.append(
-                                conversation_stores[-1]
-                            )  # Most recent
-                        if commit_stores and len(selected_stores) < 2:
-                            selected_stores.append(commit_stores[-1])  # Most recent
-
-                        # Only take up to 2 stores total
-                        selected_stores = selected_stores[:2]
-
-                        if selected_stores:
-                            vector_store_ids = vector_store_ids or []
-                            vector_store_ids.extend(selected_stores)
-                            logger.info(
-                                f"Attached {len(selected_stores)} memory stores to {metadata.model_config.get('model_name', '')}: {selected_stores}"
-                            )
+                    memory_store_ids = memory_config.get_all_store_ids()
+                    if memory_store_ids:
+                        vector_store_ids = vector_store_ids or []
+                        vector_store_ids.extend(memory_store_ids)
+                        model_name = metadata.model_config.get("model_name", "")
+                        logger.info(
+                            f"Attached {len(memory_store_ids)} memory stores to {model_name}"
+                        )
                 except Exception as e:
                     logger.warning(f"Failed to attach memory stores: {e}")
 
