@@ -2,15 +2,15 @@
   "conversation_stores": [
     {
       "id": "vs_685a4f48e1308191b54a4643cbd52209",
-      "count": 35,
+      "count": 28,
       "created": "2025-06-24T07:10:00.961665"
     }
   ],
   "commit_stores": [
     {
-      "id": "vs_685a791bfccc8191b82933db1b4335b7",
+      "id": "vs_685a79e391e881918579dc745f9a5fc2",
       "count": 1,
-      "created": "2025-06-24T10:08:28.030623"
+      "created": "2025-06-24T10:11:47.600707"
     }
   ],
   "active_conv_index": 0,
