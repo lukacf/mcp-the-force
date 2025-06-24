@@ -99,30 +99,126 @@ vector_store_ids = [CONVERSATION_STORE_ID, COMMIT_STORE_ID]
 - Monitor join success rate to tune k value
 - Archive old stores after branch deletion
 
-### 4. Gemini Support via Custom Tool
+### 4. Unified File Search Infrastructure
 
-Create a file_search tool for Gemini that queries OpenAI vector stores:
+**Key Architecture Decision**: Both OpenAI and Gemini models expose the exact same `file_search` function interface, matching OpenAI's `file_search.msearch` specification.
+
+#### OpenAI's file_search.msearch Interface
+
+```typescript
+// From o3's description:
+namespace file_search {
+  // Issues multiple queries to a search over the file(s) uploaded by the user
+  type msearch = (_: {
+    queries?: string[],  // Max 5 queries
+  }) => any;
+}
+```
+
+#### How It Works
+
+1. **Same Interface**: Both model families use the `attachments` parameter
+2. **OpenAI Models**: Attachments → vector_store_ids → native file_search.msearch
+3. **Gemini Models**: Attachments → vector_store_ids → file_search_msearch function (via Gemini function calling)
+
+#### Implementation for Gemini
 
 ```python
-@tool
-class GeminiFileSearch(ToolSpec):
-    query: str = Route.prompt(pos=0)
-    branch_filter: Optional[str] = Route.prompt()
+# In vertex_file_search.py - matching OpenAI's interface
+class GeminiFileSearch:
+    def __init__(self, vector_store_ids: List[str]):
+        self.vector_store_ids = vector_store_ids
     
-    async def execute(self):
-        # Use OpenAI client to search vector stores
-        client = get_openai_client()
-        stores = get_all_project_stores()
+    async def msearch(self, queries: Optional[List[str]] = None) -> Dict[str, Any]:
+        """Issues multiple queries to search over files.
         
-        results = await client.vector_stores.search(
-            vector_store_ids=stores,
-            query=self.query,
-            filters={"key": "branch", "value": self.branch_filter} if branch_filter else None
-        )
+        This matches OpenAI's file_search.msearch signature exactly:
+        - Takes optional queries array (max 5)
+        - Returns search results with citation markers
+        """
+        if not queries or not self.vector_store_ids:
+            return {"results": []}
         
-        # Return formatted results to Gemini
-        return format_search_results(results)
+        # Limit to 5 queries max (same as OpenAI)
+        queries = queries[:5]
+        
+        # Search all stores with all queries in parallel
+        all_results = await self._parallel_search(queries)
+        
+        # Format results to match OpenAI's structure
+        formatted_results = []
+        for i, result in enumerate(all_results[:20]):
+            formatted_results.append({
+                "text": result['content'],
+                "metadata": {
+                    "file_name": result['file_name'],
+                    "score": result['score'],
+                    **result['metadata']
+                },
+                "citation": f"<source>{i}</source>"  # Citation marker
+            })
+        
+        return {"results": formatted_results}
+
+# Function declaration for Gemini
+FILE_SEARCH_DECLARATION = {
+    "name": "file_search_msearch",  # Flattened namespace
+    "description": (
+        "Issues multiple queries to search over files and vector stores. "
+        "Use this to find information in uploaded documents or project memory."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "queries": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": (
+                    "Array of search queries (max 5). Include the user's "
+                    "original question plus focused queries for key terms."
+                ),
+                "maxItems": 5
+            }
+        },
+        "required": []  # queries is optional, matching OpenAI
+    }
+}
 ```
+
+#### What Happens at Runtime
+
+1. **User Query**: "What authentication changes were made?"
+2. **Executor**: Passes prompt + vector_store_ids to adapter
+3. **OpenAI Path**: 
+   - Sends vector_store_ids with request
+   - OpenAI calls file_search.msearch({queries: ["authentication changes", ...]})
+   - Native implementation searches and returns results with citations
+4. **Gemini Path**:
+   - Registers file_search_msearch function with Gemini
+   - Gemini analyzes prompt and calls file_search_msearch({queries: ["What authentication changes were made?", "authentication changes", "auth modifications"]})
+   - Our function queries same OpenAI vector stores
+   - Returns results in identical format with citation markers
+   - Gemini incorporates results and citations in response
+
+#### Key Implementation Details
+
+1. **Multiple Queries**: Following OpenAI's pattern, models typically send:
+   - The user's original question (for context)
+   - 2-4 focused queries for specific terms
+   - Max 5 queries total
+
+2. **Citation Format**: Results include `<source>N</source>` markers that models weave into responses
+
+3. **Parallel Search**: All queries × all stores searched concurrently with timeout
+
+4. **Deduplication**: Identical results across queries are merged
+
+#### Key Benefits
+
+1. **Exact Interface Match**: Same function signature as OpenAI's file_search.msearch
+2. **Model Autonomy**: Models decide when/what to search
+3. **Unified Backend**: Same vector stores, same search API
+4. **Clean Architecture**: Pure function calling, no prompt manipulation
 
 ### 5. Metadata-Aware Retrieval (o3's recommendation)
 
@@ -263,7 +359,7 @@ async def store_commit_memory(commit_sha):
 python -m mcp_second_brain.memory.capture_commit
 ```
 
-### 3. Auto-attach Both Stores
+### 3. Auto-attach for ALL Models
 
 ```python
 # In mcp_second_brain/tools/executor.py
@@ -282,15 +378,52 @@ def get_memory_stores():
     
     return stores
 
-# In execute() method:
-if self.model_name in ["o3", "o3-pro", "gpt-4.1"]:
+# In execute() method - for ALL models:
+if settings.memory_enabled:
     memory_stores = get_memory_stores()
     if memory_stores:
         vector_store_ids = vector_store_ids or []
         vector_store_ids.extend(memory_stores)
+        
+        # OpenAI: passes to native file_search
+        # Gemini: VertexMemoryAdapter handles search and injection
 ```
 
-## Production Considerations (from o3)
+## Architectural Improvements (from Reviews)
+
+### From Gemini 2.5 Pro Review
+
+1. **Centralize Auto-Attachment**: Move all auto-attachment logic to ToolExecutor
+2. **Extract Search Service**: Create VectorSearchService for code reuse
+3. **Parallel Search**: Use asyncio.gather() for concurrent store searches
+4. **Better Error Handling**: Don't silently swallow search failures
+
+### From o3-pro Deep Analysis
+
+1. **Performance Optimizations**:
+   - Parallelize vector store searches with timeout limits
+   - Implement LRU cache for store metadata
+   - Deduplicate search results to reduce context
+   - Add token counting guards for Gemini prompts
+
+2. **Security Hardening**:
+   - Redaction filter for sensitive content in search results
+   - Path traversal protection in file gathering
+   - Proper error propagation for auth failures
+
+3. **Architectural Patterns**:
+   - Extract VectorSearchService with pluggable backends
+   - Replace string templates with structured prompt slots
+   - Add preprocessing layer for auto-attachment
+   - Implement store selection strategies (recency, relevance)
+
+4. **Scalability Considerations**:
+   - Don't attach ALL stores - use "active + N recent"
+   - Implement per-branch or per-project rollover limits
+   - Add metrics for join success rate and query latency
+   - Consider eventual consistency for git hook writes
+
+## Production Considerations
 
 ### 1. Monitor Key Metrics
 - **Join success rate** - What % of queries return paired conv+commit?
@@ -371,8 +504,9 @@ We tested the two-store approach with synthetic data:
 ### Phase 2: Production Readiness (1-2 days)
 1. Add store rollover at 18k documents
 2. Implement monitoring and metrics
-3. Add Gemini file_search tool
+3. Implement unified file_search for Gemini
 4. Create garbage collection script
+5. Add security filters (redaction, path traversal)
 
 ### Phase 3: Optimization (ongoing)
 1. Tune k values based on metrics
@@ -391,7 +525,39 @@ This means:
 1. **Summaries over transcripts** - Raw conversations waste tokens and reduce retrieval quality
 2. **Automatic operation** - No manual steps, everything happens via tool execution and git hooks
 3. **LLM-optimized format** - Structured metadata for precise filtering, not human readability
-4. **Cross-model memory** - Gemini can learn from o3's insights via the custom file_search tool
+4. **Unified cross-model memory** - All models access the same memory through the same infrastructure
+
+## Key Implementation Insight: Unified File Search
+
+The breakthrough realization is that we implement the SAME `file_search` function for all models:
+
+1. **One Function Name**: All models expose a function called `file_search`
+2. **One Vector Store Backend**: All searches go through OpenAI's vector store API
+3. **Model-Specific Implementation**:
+   - OpenAI: Built-in file_search that queries their vector stores
+   - Gemini: We provide a file_search function that queries the same stores
+4. **Transparent Memory Access**: Auto-attachment works identically for all models
+
+### Critical Understanding: Function Calling, Not Prompt Injection
+
+For Gemini:
+- We register a `file_search_msearch` function matching OpenAI's spec
+- Gemini decides when to call it and what queries to send
+- Gemini typically sends multiple queries (like o3 does):
+  - User's original question
+  - Focused keyword searches
+  - Alternative phrasings
+- The SDK handles the function call/response cycle automatically
+- Results include citation markers that Gemini weaves into responses
+
+### Implementation Principles
+
+1. **Exact Function Match**: Our file_search_msearch has the same signature as OpenAI's file_search.msearch
+2. **Behavioral Parity**: Multi-query search, citation markers, parallel execution
+3. **No Custom Logic**: Models decide everything - when to search, what to search for
+4. **Unified Storage**: All models search the same OpenAI vector stores
+
+This ensures true parity: a user switching between o3 and Gemini gets identical search capabilities with the same project memory access.
 
 ## Conclusion
 
