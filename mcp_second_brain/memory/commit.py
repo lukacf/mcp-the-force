@@ -76,7 +76,7 @@ def store_commit_memory(commit_sha: Optional[str] = None) -> None:
                 "session_id": session_id,  # May be None
             },
         }
-        
+
         # Redact any secrets from the document
         doc = redact_dict(doc)
 

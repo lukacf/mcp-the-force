@@ -6,9 +6,15 @@
       "created": "2025-06-24T07:10:00.961665"
     }
   ],
-  "commit_stores": [],
+  "commit_stores": [
+    {
+      "id": "vs_685a791bfccc8191b82933db1b4335b7",
+      "count": 1,
+      "created": "2025-06-24T10:08:28.030623"
+    }
+  ],
   "active_conv_index": 0,
-  "active_commit_index": -1,
+  "active_commit_index": 0,
   "created_at": "2025-06-24T07:08:44.580572",
   "last_gc": "2025-06-24T07:08:44.580578"
 }
