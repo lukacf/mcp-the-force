@@ -64,9 +64,10 @@ class OpenAIAdapter(BaseAdapter):
         # Always add search_project_memory tool for accessing memory
         tools.append(create_search_memory_declaration_openai())
 
-        # Add file search if vector stores provided (for user attachments)
-        if vector_store_ids:
-            tools.append({"type": "file_search", "vector_store_ids": vector_store_ids})
+        # Note: file_search is intentionally NOT added. All vector store searches
+        # must go through our search_project_memory function for consistency.
+        # The vector_store_ids parameter is kept for interface compatibility but
+        # is not used directly by this adapter.
 
         # Add web search for GPT-4.1
         if self.model_name == "gpt-4.1":
