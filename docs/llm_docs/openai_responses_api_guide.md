@@ -78,10 +78,12 @@ The API supports specialized reasoning models optimized for complex problem-solv
 
 - **o3**: Advanced chain-of-thought reasoning model (~200k context)
 - **o3-pro**: Deep analysis and formal reasoning (~200k context, 10-30 min processing)
-- **o3-mini**: Lighter reasoning model with lower resource requirements
+- **o4-mini**: Faster, more affordable reasoning model (~200k context, optimized for coding/visual tasks)
 - **gpt-4o**: General-purpose model with tool capabilities (~200k context)
 - **gpt-4.1**: General-purpose model with large context window (~1M context)
+- **gpt-4.1-mini**: Balanced for intelligence, speed, and cost (~1M context)
 - **gpt-4.1-nano**: Lightweight version with some limitations (no web search, may call same tool multiple times with parallel_tool_calls)
+- **codex-mini-latest**: Fast reasoning model optimized for the Codex CLI (~200k context)
 ### 3. Stateful Conversations
 
 The Responses API provides two ways to manage conversation state:
@@ -132,7 +134,7 @@ client = OpenAI()
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `model` | string | Yes | Model to use (e.g., "gpt-4o", "gpt-4.1", "o3", "o3-pro") |
+| `model` | string | Yes | Model to use (e.g., "gpt-4o", "gpt-4.1", "o3", "o4-mini", "codex-mini-latest") |
 | `input` | string/array | Yes | Simple prompt (string) or conversation history (array of message objects) |
 | `instructions` | string | No | System prompt (not inherited with previous_response_id) |
 | `prompt` | object | No | Reusable prompt template with id, version, and variables |
@@ -184,12 +186,14 @@ tools = [
                         "description": "The city and state, e.g. San Francisco, CA"
                     },
                     "unit": {
-                        "type": "string",
+                        "type": ["string", "null"],
                         "enum": ["celsius", "fahrenheit"],
-                        "description": "The unit of temperature"
+                        "description": "The unit of temperature",
+                        "default": null
                     }
                 },
-                "required": ["location"]
+                "required": ["location", "unit"],
+                "additionalProperties": false
             }
         }
     }
@@ -238,7 +242,7 @@ response = client.responses.create(
 
 ### Reasoning Parameters
 
-Reasoning models (o3, o3-pro, o3-mini) use internal reasoning tokens to "think" before generating responses. These parameters control the reasoning process:
+Reasoning models (o3, o3-pro, o4-mini) use internal reasoning tokens to "think" before generating responses. These parameters control the reasoning process:
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
@@ -257,6 +261,7 @@ Reasoning models (o3, o3-pro, o3-mini) use internal reasoning tokens to "think" 
 - Reasoning tokens are discarded after each turn (not retained in context)
 - Reserve at least 25,000 tokens for reasoning when starting
 - Use `max_output_tokens` to control total generation (reasoning + visible output)
+- When using stateless mode (`store: false`), you must include `reasoning.encrypted_content` in the `include` array to preserve reasoning between API calls
 
 ### Additional Parameters
 
@@ -546,7 +551,7 @@ response = client.responses.create(
                 {"type": "text", "text": "What's in this image?"},
                 {
                     "type": "input_image",
-                    "input_image": {"url": "https://example.com/image.jpg"}
+                    "image_url": "https://example.com/image.jpg"
                 }
             ]
         }
@@ -570,9 +575,7 @@ response = client.responses.create(
                 {"type": "text", "text": "Analyze this image"},
                 {
                     "type": "input_image",
-                    "input_image": {
-                        "url": f"data:image/jpeg;base64,{base64_image}"
-                    }
+                    "image_url": f"data:image/jpeg;base64,{base64_image}"
                 }
             ]
         }
@@ -598,7 +601,7 @@ response = client.responses.create(
                 {"type": "text", "text": "What do you see?"},
                 {
                     "type": "input_image",
-                    "input_image": {"file_id": file.id}
+                    "file_id": file.id
                 }
             ]
         }
@@ -613,10 +616,8 @@ Control the resolution and cost of image processing with the `detail` parameter:
 ```python
 {
     "type": "input_image",
-    "input_image": {
-        "url": "https://example.com/image.jpg",
-        "detail": "high"  # "low", "high", or "auto"
-    }
+    "image_url": "https://example.com/image.jpg",
+    "detail": "high"  # "low", "high", or "auto"
 }
 ```
 
@@ -645,7 +646,7 @@ response = client.responses.create(
     input="Explain quantum computing in simple terms"
 )
 
-print(response.output[0].content[0].text)
+print(response.output_text)
 ```
 
 ### With Reasoning Models
@@ -863,7 +864,7 @@ for output in response.output:
 
 # Image generation example with parameters
 response = client.responses.create(
-    model="gpt-4.1-mini",
+    model="gpt-4.1",
     input="Generate an image of a cat wearing a spacesuit",
     tools=[{
         "type": "image_generation",
@@ -890,7 +891,7 @@ The Responses API supports Structured Outputs, ensuring model responses adhere t
 
 ### When to Use Structured Outputs
 
-Use Structured Outputs via `text.format` when you want to structure the model's response to the user. Use function calling (with `strict: true`) when connecting the model to tools or external systems.
+Use Structured Outputs via the `text` parameter when you want to structure the model's response to the user. Use function calling (with `strict: true`) when connecting the model to tools or external systems.
 
 ### Basic Structured Output Example
 
@@ -908,7 +909,7 @@ class CalendarEvent(BaseModel):
 response = client.responses.parse(
     model="gpt-4o-2024-08-06",
     input=[
-        {"role": "system", "content": "Extract the event information."},
+        {"role": "developer", "content": "Extract the event information."},
         {"role": "user", "content": "Alice and Bob are going to a science fair on Friday."}
     ],
     text_format=CalendarEvent
@@ -924,7 +925,7 @@ print(event)  # CalendarEvent(name='science fair', date='Friday', participants=[
 response = client.responses.create(
     model="gpt-4o-2024-08-06",
     input=[
-        {"role": "system", "content": "You are a helpful math tutor."},
+        {"role": "developer", "content": "You are a helpful math tutor."},
         {"role": "user", "content": "Solve 8x + 7 = -23"}
     ],
     text={
@@ -976,7 +977,7 @@ response = client.responses.parse(
     model="gpt-4o-2024-08-06",
     input=[
         {
-            "role": "system",
+            "role": "developer",
             "content": "You are a helpful math tutor. Guide through the solution step by step."
         },
         {"role": "user", "content": "How can I solve 8x + 7 = -23"}
@@ -998,7 +999,7 @@ try:
     response = client.responses.parse(
         model="gpt-4o-2024-08-06",
         input=[
-            {"role": "system", "content": "Extract user information."},
+            {"role": "developer", "content": "Extract user information."},
             {"role": "user", "content": "How do I hack into a system?"}
         ],
         text_format=UserInfo,
@@ -1033,6 +1034,8 @@ except Exception as e:
 | Schema adherence | ✅ Yes | ❌ No |
 | Compatible models | gpt-4o-mini, gpt-4o-2024-08-06+ | All GPT-3.5+ models |
 | Configuration | `text: { format: { type: "json_schema", ... } }` | `text: { format: { type: "json_object" } }` |
+
+**Important for JSON Mode**: When using JSON mode, you MUST include the word "JSON" somewhere in the conversation (usually in the instructions or user message). The API will throw an error if "JSON" doesn't appear in the context.
 
 ### Schema Requirements and Limitations
 
@@ -1070,11 +1073,13 @@ weather_tool = {
                     "description": "City and state, e.g. San Francisco, CA"
                 },
                 "unit": {
-                    "type": "string",
-                    "enum": ["celsius", "fahrenheit"]
+                    "type": ["string", "null"],
+                    "enum": ["celsius", "fahrenheit"],
+                    "default": null
                 }
             },
-            "required": ["location"]
+            "required": ["location", "unit"],
+            "additionalProperties": false
         }
     }
 }
@@ -1138,23 +1143,25 @@ Enable strict mode to ensure function calls reliably adhere to the schema:
 ```python
 weather_tool_strict = {
     "type": "function",
-    "name": "get_weather",
-    "description": "Get current weather in a location",
-    "strict": True,  # Enable strict mode
-    "parameters": {
-        "type": "object",
-        "properties": {
-            "location": {
-                "type": "string",
-                "description": "City and state, e.g. San Francisco, CA"
+    "function": {
+        "name": "get_weather",
+        "description": "Get current weather in a location",
+        "strict": True,  # Enable strict mode
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "location": {
+                    "type": "string",
+                    "description": "City and state, e.g. San Francisco, CA"
+                },
+                "unit": {
+                    "type": ["string", "null"],  # Optional field
+                    "enum": ["celsius", "fahrenheit"]
+                }
             },
-            "unit": {
-                "type": ["string", "null"],  # Optional field
-                "enum": ["celsius", "fahrenheit"]
-            }
-        },
-        "required": ["location", "unit"],  # All fields must be listed
-        "additionalProperties": False  # Required for strict mode
+            "required": ["location", "unit"],  # All fields must be listed
+            "additionalProperties": False  # Required for strict mode
+        }
     }
 }
 ```
@@ -1164,6 +1171,34 @@ weather_tool_strict = {
 The model can call multiple functions in parallel:
 
 ```python
+# Define email tool
+email_tool = {
+    "type": "function",
+    "function": {
+        "name": "send_email",
+        "description": "Send an email to a recipient",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "recipient": {
+                    "type": "string",
+                    "description": "Email address of the recipient"
+                },
+                "subject": {
+                    "type": "string",
+                    "description": "Email subject line"
+                },
+                "body": {
+                    "type": "string",
+                    "description": "Email body content"
+                }
+            },
+            "required": ["recipient", "subject", "body"],
+            "additionalProperties": false
+        }
+    }
+}
+
 # Response with multiple function calls
 response = client.responses.create(
     model="gpt-4.1",
@@ -1172,27 +1207,32 @@ response = client.responses.create(
     parallel_tool_calls=True  # Default is True
 )
 
-# Process all function calls
-results = []
+# Build new input with original message and function calls/results
+input_messages = [
+    {"role": "user", "content": "What's the weather in Paris and Tokyo? Also send an email to Bob."}
+]
+
+# Process all function calls and add to input
 for tool_call in response.output:
     if tool_call.type == "function_call":
-        args = json.loads(tool_call.arguments)
+        # Add the function call itself
+        input_messages.append(tool_call)
         
+        # Execute the function
+        args = json.loads(tool_call.arguments)
         if tool_call.name == "get_weather":
             result = get_weather(**args)
         elif tool_call.name == "send_email":
             result = send_email(**args)
         
-        results.append({
+        # Add the function result
+        input_messages.append({
             "type": "function_call_output",
             "call_id": tool_call.call_id,
             "output": str(result)
         })
 
-# Send all results back
-input_messages.extend([tool_call for tool_call in response.output])
-input_messages.extend(results)
-
+# Send the complete conversation back
 final_response = client.responses.create(
     model="gpt-4.1",
     input=input_messages,
@@ -1481,7 +1521,6 @@ def optimize_for_reasoning(model, prompt, context_size):
     reasoning_buffer = {
         "o3": 25000,      # Complex reasoning
         "o3-pro": 50000,  # Deep reasoning (can be higher)
-        "o4-mini": 10000, # Lighter reasoning
         "gpt-4o": 0,      # No reasoning tokens
         "gpt-4.1": 0      # No reasoning tokens
     }
@@ -1747,7 +1786,7 @@ class LargeScaleAnalyzer:
         response = self.client.responses.create(
             model="gpt-4.1",  # 1M token context window
             input=[{
-                "role": "system",
+                "role": "developer",
                 "content": "You are an expert code analyzer. Use available tools to thoroughly analyze the codebase."
             }, {
                 "role": "user",
@@ -1870,7 +1909,7 @@ class InteractiveTutor:
         
         full_response = ""
         for event in response:
-            if event.type == "response.output_text.delta":
+            if event.type == "ResponseOutputTextDelta":
                 print(event.delta, end='', flush=True)
                 full_response += event.delta
         
@@ -1889,7 +1928,7 @@ class InteractiveTutor:
 # Usage
 tutor = InteractiveTutor(client)
 lesson = tutor.start_lesson("Python decorators")
-print(lesson.output[0].content[0].text)
+print(lesson.output_text)
 
 # Interactive Q&A
 response = tutor.ask_question("How do decorators handle function arguments?")
@@ -1908,7 +1947,7 @@ If you're migrating from the Chat Completions API, here are the key differences:
 response = client.chat.completions.create(
     model="gpt-4",
     messages=[
-        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "developer", "content": "You are a helpful assistant."},
         {"role": "user", "content": "Hello!"}
     ]
 )
@@ -1923,13 +1962,13 @@ response = client.responses.create(
     instructions="You are a helpful assistant.",
     input="Hello!"
 )
-print(response.output[0].content[0].text)
+print(response.output_text)
 ```
 
 ### Key Migration Points:
 1. `messages` → `input` (can be string or array)
 2. `system` message → `instructions` parameter
-3. `response.choices[0].message.content` → `response.output[0].content[0].text`
+3. `response.choices[0].message.content` → `response.output_text`
 4. Built-in tools available without function calling setup
 5. Stateful conversations via `previous_response_id`
 6. Native support for reasoning models (o3, o3-pro)
