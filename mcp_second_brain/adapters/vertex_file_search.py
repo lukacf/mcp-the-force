@@ -99,7 +99,7 @@ class GeminiFileSearch:
 
         # Format results to match OpenAI's response structure
         formatted_results = []
-        for i, unique_result in enumerate(unique_results[:20]):  # Limit total results
+        for i, unique_result in enumerate(unique_results[:40]):  # Match OpenAI's limit
             formatted_results.append(
                 {
                     "text": unique_result.get("content", ""),
@@ -127,7 +127,7 @@ class GeminiFileSearch:
                     lambda: self.client.beta.vector_stores.search(
                         vector_store_id=store_id,
                         query=query,
-                        max_num_results=5,  # Limit per store to avoid explosion
+                        max_num_results=40,  # Match OpenAI's default
                     ),
                 )
 

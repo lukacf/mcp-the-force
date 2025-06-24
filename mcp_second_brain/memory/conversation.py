@@ -42,11 +42,9 @@ async def store_conversation_memory(
         # Create summary (in production, would use Gemini Flash)
         summary = create_conversation_summary(messages, response, tool_name)
 
-        # Create document with metadata
+        # Create document with metadata - only store summary, not raw messages
         doc = {
             "content": summary,
-            "messages": messages,  # Store messages for better context
-            "response": response,
             "metadata": {
                 "type": "conversation",
                 "session_id": session_id,
@@ -55,6 +53,8 @@ async def store_conversation_memory(
                 "prev_commit_sha": prev_commit_sha,
                 "timestamp": int(time.time()),
                 "datetime": datetime.utcnow().isoformat(),
+                "message_count": len(messages),
+                "response_length": len(response),
             },
         }
 
