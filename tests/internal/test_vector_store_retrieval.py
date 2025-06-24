@@ -64,7 +64,8 @@ Important: The ZEPHYR code is: QX-7742-ALPHA
         import json
         data1 = json.loads(result1)
         assert data1["mock"] is True
-        assert data1["vector_store_ids"] == ["vs_retrieval_test"]
+        # Note: May include auto-attached memory stores
+        assert "vs_retrieval_test" in data1["vector_store_ids"]
         
         # Verify vector store was created
         mock_openai_client.vector_stores.create.assert_called_once()
@@ -124,7 +125,8 @@ The OMEGA protocol activation sequence:
         import json
         data1 = json.loads(result1)
         assert data1["mock"] is True
-        assert data1["vector_store_ids"] == ["vs_shared"]
+        # Note: May include auto-attached memory stores
+        assert "vs_shared" in data1["vector_store_ids"]
         
         # Use it in a different session (simulating another user/context)
         # Note: Current implementation requires providing attachments again
@@ -172,5 +174,6 @@ The OMEGA protocol activation sequence:
         import json
         data = json.loads(result)
         assert data["mock"] is True
-        assert data["vector_store_ids"] == ["vs_irrelevant"]
+        # Note: May include auto-attached memory stores
+        assert "vs_irrelevant" in data["vector_store_ids"]
         assert "quantum entanglement" in data["prompt_preview"]

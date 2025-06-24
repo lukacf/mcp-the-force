@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Optional, List
 
 from ..utils.vector_store import get_client
+from ..utils.redaction import redact_dict, redact_secrets
 from .config import get_memory_config
 
 logger = logging.getLogger(__name__)
@@ -63,6 +64,7 @@ def store_commit_memory(commit_sha: Optional[str] = None) -> None:
         # Create document with metadata
         doc = {
             "content": summary,
+            "commit_message": redact_secrets(commit_message),  # Redact message
             "metadata": {
                 "type": "commit",
                 "commit_sha": commit_sha,
@@ -74,6 +76,9 @@ def store_commit_memory(commit_sha: Optional[str] = None) -> None:
                 "session_id": session_id,  # May be None
             },
         }
+        
+        # Redact any secrets from the document
+        doc = redact_dict(doc)
 
         # Get active store and upload
         config = get_memory_config()

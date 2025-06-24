@@ -10,6 +10,7 @@ import tempfile
 from typing import List, Dict, Any, Optional
 
 from ..utils.vector_store import get_client
+from ..utils.redaction import redact_dict
 from .config import get_memory_config
 
 logger = logging.getLogger(__name__)
@@ -44,6 +45,8 @@ async def store_conversation_memory(
         # Create document with metadata
         doc = {
             "content": summary,
+            "messages": messages,  # Store messages for better context
+            "response": response,
             "metadata": {
                 "type": "conversation",
                 "session_id": session_id,
@@ -54,6 +57,9 @@ async def store_conversation_memory(
                 "datetime": datetime.utcnow().isoformat(),
             },
         }
+        
+        # Redact secrets before storage
+        doc = redact_dict(doc)
 
         # Get active store and upload
         config = get_memory_config()

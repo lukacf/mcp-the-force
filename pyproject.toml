@@ -77,7 +77,3 @@ ignore_missing_imports = true
 module = "mcp_second_brain.tools.definitions"
 disable_error_code = ["assignment"]
 
-# Ignore descriptor-related type errors in gemini_search.py
-[[tool.mypy.overrides]]
-module = "mcp_second_brain.tools.gemini_search"
-disable_error_code = ["assignment"]

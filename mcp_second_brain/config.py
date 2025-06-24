@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     memory_config_path: str = Field(
         ".secondbrain/stores.json", env="MEMORY_CONFIG_PATH"
     )
-    memory_rollover_limit: PositiveInt = Field(18000, env="MEMORY_ROLLOVER_LIMIT")
+    memory_rollover_limit: PositiveInt = Field(9500, env="MEMORY_ROLLOVER_LIMIT")
     memory_session_cutoff_hours: PositiveInt = Field(
         2, env="MEMORY_SESSION_CUTOFF_HOURS"
     )
