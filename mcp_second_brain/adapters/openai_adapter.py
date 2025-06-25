@@ -7,15 +7,17 @@ from .attachment_search_declaration import create_attachment_search_declaration_
 import asyncio
 import httpx
 import logging
+import json
 
 logger = logging.getLogger(__name__)
 
 # Model capabilities
 SUPPORTS_STREAM: Set[str] = {
+    "o3",
     "gpt-4.1",
     "o4-mini",
 }  # Models that support streaming
-NO_STREAM: Set[str] = {"o3", "o3-pro"}  # Models that require background mode
+NO_STREAM: Set[str] = {"o3-pro"}  # Models that require background mode
 
 # Initialize client lazily to avoid errors on startup
 _client = None
@@ -45,6 +47,73 @@ class OpenAIAdapter(BaseAdapter):
             if model == "gpt-4.1"
             else "Chain-of-thought helper"
         )
+
+    async def _execute_function_calls(
+        self, function_calls: List[Any], vector_store_ids: List[str] | None = None
+    ) -> List[Dict[str, Any]]:
+        """Execute function calls and return results."""
+        results = []
+
+        for fc in function_calls:
+            # Extract function details
+            name = fc.get("name") if isinstance(fc, dict) else getattr(fc, "name", None)
+            call_id = (
+                fc.get("call_id")
+                if isinstance(fc, dict)
+                else getattr(fc, "call_id", None)
+            )
+            arguments = (
+                fc.get("arguments")
+                if isinstance(fc, dict)
+                else getattr(fc, "arguments", "{}")
+            )
+
+            try:
+                args = (
+                    json.loads(arguments) if isinstance(arguments, str) else arguments
+                )
+            except json.JSONDecodeError:
+                args = {}
+
+            # Execute the function based on its name
+            output = None
+            if name == "search_project_memory":
+                # Import and execute search
+                from ..tools.search_memory import SearchMemoryAdapter
+
+                adapter = SearchMemoryAdapter()
+                output = await adapter.generate(
+                    prompt=args.get("query", ""),
+                    query=args.get("query", ""),
+                    max_results=args.get("max_results", 40),
+                    store_types=args.get("store_types", ["conversation", "commit"]),
+                )
+            elif name == "search_session_attachments":
+                # Import and execute attachment search
+                from ..tools.search_attachments import SearchAttachmentAdapter
+
+                attachment_adapter = SearchAttachmentAdapter()
+                output = await attachment_adapter.generate(
+                    prompt=args.get("query", ""),
+                    query=args.get("query", ""),
+                    max_results=args.get("max_results", 20),
+                    vector_store_ids=vector_store_ids,
+                )
+            else:
+                output = f"Unknown function: {name}"
+
+            # Format the result
+            results.append(
+                {
+                    "type": "function_call_output",
+                    "call_id": call_id,
+                    "output": json.dumps(output)
+                    if not isinstance(output, str)
+                    else output,
+                }
+            )
+
+        return results
 
     async def generate(
         self,
@@ -119,34 +188,79 @@ class OpenAIAdapter(BaseAdapter):
                     job = await client.responses.retrieve(response.id)
 
                     if job.status == "completed":
-                        # Extract content from the response
-                        # First try the convenience property
+                        # Check if response contains function calls
                         content = getattr(job, "output_text", "")
 
-                        # If output_text is empty (can happen with function calls),
-                        # extract from output array
-                        if not content and hasattr(job, "output") and job.output:
-                            text_contents = []
-                            for item in job.output:
-                                # Handle both dict and object representations
-                                if hasattr(item, "type") and hasattr(item, "text"):
-                                    if item.type == "output_text":
-                                        text_contents.append(item.text)
-                                elif isinstance(item, dict):
-                                    if (
-                                        item.get("type") == "output_text"
-                                        and "text" in item
-                                    ):
-                                        text_contents.append(item["text"])
-
-                            content = " ".join(text_contents)
-
-                            if not content:
-                                # Log what we found for debugging
-                                logger.warning(
-                                    f"No text content found in {self.model_name} response. "
-                                    f"Output items: {[getattr(item, 'type', None) or item.get('type') if isinstance(item, dict) else type(item) for item in job.output[:5]]}"
+                        if hasattr(job, "output") and job.output and not content:
+                            function_calls = [
+                                item
+                                for item in job.output
+                                if (
+                                    hasattr(item, "type")
+                                    and item.type == "function_call"
                                 )
+                                or (
+                                    isinstance(item, dict)
+                                    and item.get("type") == "function_call"
+                                )
+                            ]
+
+                            if function_calls:
+                                logger.info(
+                                    f"{self.model_name} returned {len(function_calls)} function calls, executing them"
+                                )
+
+                                # Execute the function calls
+                                results = await self._execute_function_calls(
+                                    function_calls, vector_store_ids
+                                )
+
+                                # Send results back to the model
+                                follow_up_params = {
+                                    "model": self.model_name,
+                                    "previous_response_id": job.id,
+                                    "input": function_calls
+                                    + results,  # Include both calls and results
+                                }
+
+                                # Add reasoning parameters if present
+                                if reasoning_effort:
+                                    follow_up_params["reasoning"] = {
+                                        "effort": reasoning_effort
+                                    }
+
+                                # Get the final response
+                                follow_up = await client.responses.create(
+                                    **follow_up_params
+                                )
+
+                                # Wait for follow-up completion
+                                elapsed_follow_up = 0
+                                while elapsed_follow_up < timeout - elapsed:
+                                    follow_up_job = await client.responses.retrieve(
+                                        follow_up.id
+                                    )
+
+                                    if follow_up_job.status == "completed":
+                                        content = getattr(
+                                            follow_up_job, "output_text", ""
+                                        )
+                                        return {
+                                            "content": content,
+                                            "response_id": follow_up_job.id,
+                                        }
+                                    elif follow_up_job.status not in [
+                                        "queued",
+                                        "in_progress",
+                                    ]:
+                                        raise RuntimeError(
+                                            f"Follow-up job failed: {follow_up_job.status}"
+                                        )
+
+                                    await asyncio.sleep(poll_interval)
+                                    elapsed_follow_up += poll_interval
+
+                                raise ValueError("Follow-up job timed out")
 
                         return {
                             "content": content,
