@@ -3,6 +3,7 @@ from openai import AsyncOpenAI
 from ..config import get_settings
 from .base import BaseAdapter
 from .memory_search_declaration import create_search_memory_declaration_openai
+from .attachment_search_declaration import create_attachment_search_declaration_openai
 import asyncio
 import httpx
 import logging
@@ -64,10 +65,9 @@ class OpenAIAdapter(BaseAdapter):
         # Always add search_project_memory tool for accessing memory
         tools.append(create_search_memory_declaration_openai())
 
-        # Note: file_search is intentionally NOT added. All vector store searches
-        # must go through our search_project_memory function for consistency.
-        # The vector_store_ids parameter is kept for interface compatibility but
-        # is not used directly by this adapter.
+        # Add attachment search tool when vector stores are provided
+        if vector_store_ids:
+            tools.append(create_attachment_search_declaration_openai())
 
         # Add web search for GPT-4.1
         if self.model_name == "gpt-4.1":

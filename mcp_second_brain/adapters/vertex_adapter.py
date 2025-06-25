@@ -4,8 +4,8 @@ from google import genai
 from google.genai import types
 from ..config import get_settings
 from .base import BaseAdapter
-from .vertex_file_search import GeminiFileSearch, create_file_search_declaration
 from .memory_search_declaration import create_search_memory_declaration_gemini
+from .attachment_search_declaration import create_attachment_search_declaration_gemini
 
 logger = logging.getLogger(__name__)
 
@@ -84,17 +84,13 @@ class VertexAdapter(BaseAdapter):
         memory_search_decl = create_search_memory_declaration_gemini()
         function_declarations.append(memory_search_decl)
 
-        # Setup file_search function if vector stores provided (for user attachments)
-        file_search = None
+        # Add attachment search tool when vector stores are provided
         if vector_store_ids:
             logger.info(
-                f"Registering file_search for {len(vector_store_ids)} vector stores"
+                f"Registering search_session_attachments for {len(vector_store_ids)} vector stores"
             )
-            file_search = GeminiFileSearch(vector_store_ids)
-
-            # Create function declaration for Gemini
-            file_search_decl = create_file_search_declaration()
-            function_declarations.append(file_search_decl)
+            attachment_search_decl = create_attachment_search_declaration_gemini()
+            function_declarations.append(attachment_search_decl)
 
         # Add tools to config if we have any functions
         if function_declarations:
@@ -112,9 +108,9 @@ class VertexAdapter(BaseAdapter):
         )
 
         # Handle function calls if any
-        if file_search and response.candidates:
+        if response.candidates and function_declarations:
             return await self._handle_function_calls(
-                response, contents, generate_content_config, file_search
+                response, contents, generate_content_config
             )
 
         # Extract text from response
@@ -133,7 +129,6 @@ class VertexAdapter(BaseAdapter):
         response: Any,
         contents: List[types.Content],
         config: types.GenerateContentConfig,
-        file_search: GeminiFileSearch,
     ) -> str:
         """Handle function calls in the response."""
         client = get_client()
@@ -162,22 +157,7 @@ class VertexAdapter(BaseAdapter):
             # Execute function calls
             function_responses = []
             for fc in function_calls:
-                if fc.function_call.name == "file_search_msearch":
-                    # Extract queries parameter
-                    queries = fc.function_call.args.get("queries", [])
-                    logger.info(f"Executing file_search with {len(queries)} queries")
-
-                    # Execute search
-                    search_results = await file_search.msearch(queries)
-
-                    # Create function response
-                    function_responses.append(
-                        types.Part.from_function_response(
-                            name=fc.function_call.name, response=search_results
-                        )
-                    )
-
-                elif fc.function_call.name == "search_project_memory":
+                if fc.function_call.name == "search_project_memory":
                     # Extract parameters
                     query = fc.function_call.args.get("query", "")
                     max_results = fc.function_call.args.get("max_results", 40)
@@ -196,6 +176,31 @@ class VertexAdapter(BaseAdapter):
                         query=query,
                         max_results=max_results,
                         store_types=store_types,
+                    )
+
+                    # Create function response
+                    function_responses.append(
+                        types.Part.from_function_response(
+                            name=fc.function_call.name,
+                            response={"result": search_result_text},
+                        )
+                    )
+
+                elif fc.function_call.name == "search_session_attachments":
+                    # Extract parameters
+                    query = fc.function_call.args.get("query", "")
+                    max_results = fc.function_call.args.get("max_results", 20)
+
+                    logger.info(f"Executing search_session_attachments: '{query}'")
+
+                    # Import and execute the search
+                    from ..tools.search_attachments import SearchAttachmentAdapter
+
+                    attachment_search = SearchAttachmentAdapter()
+                    search_result_text = await attachment_search.generate(
+                        prompt=query,
+                        query=query,
+                        max_results=max_results,
                     )
 
                     # Create function response

@@ -1,21 +1,17 @@
-"""Search project memory tool implementation.
+"""Search session attachments tool implementation.
 
-This provides a unified way for all models (OpenAI and Gemini) to search
-across project memory stores without the 2-store limitation.
+This provides a way for models to search ephemeral vector stores created
+from attachments during the current execution.
 """
 
-from typing import List, Dict, Any, TYPE_CHECKING
+from typing import List, Dict, Any
 import logging
 import asyncio
+from contextvars import ContextVar
 from concurrent.futures import ThreadPoolExecutor
 
 from openai import OpenAI
 
-if TYPE_CHECKING:
-    pass
-
-from ..memory.config import get_memory_config
-from ..utils.redaction import redact_secrets
 from ..config import get_settings
 from ..adapters.base import BaseAdapter
 from .base import ToolSpec
@@ -24,44 +20,45 @@ from .registry import tool
 
 logger = logging.getLogger(__name__)
 
+# Context variable to track current execution's ephemeral vector stores
+current_attachment_stores: ContextVar[List[str]] = ContextVar(
+    "current_attachment_stores", default=[]
+)
+
 # Thread pool for synchronous OpenAI operations
-executor = ThreadPoolExecutor(max_workers=5)
+executor = ThreadPoolExecutor(max_workers=3)
 
 # Semaphore to limit concurrent searches
-search_semaphore = asyncio.Semaphore(5)
+search_semaphore = asyncio.Semaphore(3)
 
 
 @tool
-class SearchProjectMemory(ToolSpec):
-    """Search across all project memory stores."""
+class SearchSessionAttachments(ToolSpec):
+    """Search ephemeral attachment vector stores for current session."""
 
-    model_name = "memory_search"
-    adapter_class = "SearchMemoryAdapter"
+    model_name = "attachment_search"
+    adapter_class = "SearchAttachmentAdapter"
     context_window = 0  # Not applicable for search
-    timeout = 30  # 30 second timeout for searches
+    timeout = 20  # 20 second timeout for searches
 
     # Parameters
     query: str = Route.prompt(description="Search query or semicolon-separated queries")  # type: ignore
     max_results: int = Route.prompt(
-        description="Maximum results to return (default: 40)"
+        description="Maximum results to return (default: 20)"
     )  # type: ignore
-    store_types: List[str] = Route.prompt(  # type: ignore
-        description="Types of stores to search (default: ['conversation', 'commit'])"
-    )
 
 
-class SearchMemoryAdapter(BaseAdapter):
-    """Adapter for searching project memory stores."""
+class SearchAttachmentAdapter(BaseAdapter):
+    """Adapter for searching ephemeral attachment stores."""
 
-    model_name = "memory_search"
+    model_name = "attachment_search"
     context_window = 0  # Not applicable
-    description_snippet = "Search project memory stores"
+    description_snippet = "Search current session attachments"
 
-    def __init__(self, model_name: str = "memory_search"):
+    def __init__(self, model_name: str = "attachment_search"):
         self.model_name = model_name
         settings = get_settings()
         self.client = OpenAI(api_key=settings.openai_api_key)
-        self.memory_config = get_memory_config()
 
     async def generate(
         self,
@@ -69,34 +66,24 @@ class SearchMemoryAdapter(BaseAdapter):
         vector_store_ids: List[str] | None = None,
         **kwargs: Any,
     ) -> str:
-        """Search memory stores and return formatted results.
+        """Search attachment stores and return formatted results.
 
-        This method is called by the ToolExecutor when any model
-        (OpenAI or Gemini) invokes the search_project_memory function.
+        This searches only the ephemeral stores created for the current
+        execution's attachments.
         """
         # Extract search parameters
         query = kwargs.get("query", prompt)
-        max_results = kwargs.get("max_results", 40)
-        store_types = kwargs.get("store_types", ["conversation", "commit"])
+        max_results = kwargs.get("max_results", 20)
 
         if not query:
             return "Error: Search query is required"
 
+        # Get current execution's attachment stores
+        attachment_stores = current_attachment_stores.get()
+        if not attachment_stores:
+            return "No attachments available to search in this session"
+
         try:
-            # Get all memory store IDs
-            all_store_ids = self.memory_config.get_all_store_ids()
-            if not all_store_ids:
-                return "No memory stores available to search"
-
-            # Filter stores by type
-            stores_to_search = []
-            for store_id in all_store_ids:
-                if any(store_type in store_id for store_type in store_types):
-                    stores_to_search.append(store_id)
-
-            if not stores_to_search:
-                return f"No {', '.join(store_types)} stores found"
-
             # Support multiple queries (semicolon-separated)
             queries = (
                 [q.strip() for q in query.split(";") if q.strip()]
@@ -104,9 +91,9 @@ class SearchMemoryAdapter(BaseAdapter):
                 else [query]
             )
 
-            # Search all stores in parallel
+            # Search all attachment stores in parallel
             search_tasks = []
-            for store_id in stores_to_search:
+            for store_id in attachment_stores:
                 for q in queries:
                     task = self._search_single_store(
                         q, store_id, max_results // max(len(queries), 1)
@@ -120,8 +107,8 @@ class SearchMemoryAdapter(BaseAdapter):
                     timeout=10.0,  # 10 second timeout for all searches
                 )
             except asyncio.TimeoutError:
-                logger.warning("Memory search timed out")
-                return "Memory search timed out after 10 seconds"
+                logger.warning("Attachment search timed out")
+                return "Attachment search timed out after 10 seconds"
 
             # Aggregate and sort results
             all_results = []
@@ -142,34 +129,27 @@ class SearchMemoryAdapter(BaseAdapter):
 
             # Format response
             if not all_results:
-                return f"No results found for query: '{query}'"
+                return f"No results found in attachments for query: '{query}'"
 
-            # Build formatted response with metadata
+            # Build formatted response
             response_parts = [
-                f"Found {len(all_results)} results across {len(stores_to_search)} memory stores:"
+                f"Found {len(all_results)} results in session attachments:"
             ]
 
             for i, search_result in enumerate(all_results, 1):
                 response_parts.append(f"\n--- Result {i} ---")
-
-                # Add metadata
-                metadata = search_result.get("metadata", {})
-                if metadata.get("type"):
-                    response_parts.append(f"Type: {metadata['type']}")
-                if metadata.get("datetime"):
-                    response_parts.append(f"Date: {metadata['datetime']}")
-                if metadata.get("session_id"):
-                    response_parts.append(f"Session: {metadata['session_id']}")
-                if metadata.get("branch"):
-                    response_parts.append(f"Branch: {metadata['branch']}")
-
                 response_parts.append(f"Score: {search_result.get('score', 'N/A')}")
 
-                # Add content (redacted)
-                content = redact_secrets(search_result.get("content", ""))
+                # Add file name if available in metadata
+                metadata = search_result.get("metadata", {})
+                if metadata.get("filename"):
+                    response_parts.append(f"File: {metadata['filename']}")
+
+                # Add content
+                content = search_result.get("content", "")
                 # Truncate very long content
-                if len(content) > 500:
-                    content = content[:500] + "..."
+                if len(content) > 1000:
+                    content = content[:1000] + "..."
                 response_parts.append(f"Content: {content}")
 
             if errors > 0:
@@ -178,8 +158,8 @@ class SearchMemoryAdapter(BaseAdapter):
             return "\n".join(response_parts)
 
         except Exception as e:
-            logger.error(f"Memory search failed: {e}")
-            return f"Error searching memory: {str(e)}"
+            logger.error(f"Attachment search failed: {e}")
+            return f"Error searching attachments: {str(e)}"
 
     async def _search_single_store(
         self, query: str, store_id: str, max_results: int
@@ -230,5 +210,5 @@ class SearchMemoryAdapter(BaseAdapter):
                 return results
 
             except Exception as e:
-                logger.error(f"Failed to search store {store_id}: {e}")
+                logger.error(f"Failed to search attachment store {store_id}: {e}")
                 raise
