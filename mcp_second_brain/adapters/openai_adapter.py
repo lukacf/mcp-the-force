@@ -380,9 +380,10 @@ class OpenAIAdapter(BaseAdapter):
 
                     # Handle streaming events based on event type
                     if hasattr(event, "type"):
-                        if event.type == "ResponseOutputTextDelta" and hasattr(
-                            event, "delta"
-                        ):
+                        if event.type in (
+                            "response.delta",
+                            "ResponseOutputTextDelta",
+                        ) and hasattr(event, "delta"):
                             content_parts.append(event.delta)
                         elif event.type == "response.output_text" and hasattr(
                             event, "text"
@@ -453,14 +454,16 @@ class OpenAIAdapter(BaseAdapter):
 
                         # Collect text content
                         if hasattr(event, "type"):
-                            if event.type == "ResponseOutputTextDelta" and hasattr(
-                                event, "delta"
-                            ):
+                            if event.type in (
+                                "response.delta",
+                                "ResponseOutputTextDelta",
+                            ) and hasattr(event, "delta"):
                                 follow_up_content.append(event.delta)
                         elif hasattr(event, "text") and event.text:
                             follow_up_content.append(event.text)
 
-                    content = "".join(follow_up_content)
+                    # Concatenate original content with follow-up content
+                    content = content + "".join(follow_up_content)
                     # Update response_id to the follow-up if we got one
                     if follow_up_response_id:
                         response_id = follow_up_response_id
