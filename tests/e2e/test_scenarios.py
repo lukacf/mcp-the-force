@@ -53,19 +53,33 @@ class TestE2EScenarios:
         assert "ANSWER: 4" in output
 
     @pytest.mark.timeout(600)  # 10 minutes for o3
-    def test_o3_session(self, claude_code):
+    def test_o3_session(self, claude_code, claude_config_path):
         """Test o3 with session continuity."""
+        import time
+        import subprocess
+        import os
+
         # First query
-        claude_code(
+        output1 = claude_code(
             'Use second-brain chat_with_o3 with instructions "Remember the number 42", '
             'output_format "text", context [], and session_id "test-session-1"'
         )
+        print(f"First turn output: {output1}")
 
-        # Follow-up query
-        output2 = claude_code(
-            'Use second-brain chat_with_o3 with instructions "What number did I ask you to remember?", '
-            'output_format "text", context [], and session_id "test-session-1"'
+        # Give time for session to be stored
+        time.sleep(2)
+
+        # Follow-up query - use --continue to maintain Claude Code context
+        cmd = 'claude -p --dangerously-skip-permissions --continue "Use second-brain chat_with_o3 with instructions=\\"What number did I ask you to remember?\\", output_format=\\"text\\", context=[], and session_id=\\"test-session-1\\""'
+
+        env = os.environ.copy()
+        env["XDG_CONFIG_HOME"] = str(claude_config_path)
+
+        result = subprocess.run(
+            cmd, shell=True, capture_output=True, text=True, env=env
         )
+        output2 = result.stdout
+        print(f"Second turn output: {output2}")
 
         # Should remember
         assert "42" in output2
