@@ -5,6 +5,30 @@ import time
 import uuid
 
 
+def wait_for_memory_indexed(claude_code, fact, timeout=60):
+    """Poll until a fact appears in memory search results."""
+    start_time = time.time()
+    last_output = None
+
+    while time.time() - start_time < timeout:
+        output = claude_code(
+            f'Use second-brain search_project_memory with query "{fact}" and max_results 10'
+        )
+        last_output = output
+
+        if fact in output and "No results found" not in output:
+            return True
+
+        time.sleep(2)  # Poll every 2 seconds
+
+    # Timeout reached
+    import pytest
+
+    pytest.fail(
+        f"Fact '{fact}' not found in memory after {timeout}s. Last output: {last_output}"
+    )
+
+
 class TestE2EMemory:
     """Test the project memory system end-to-end."""
 
@@ -30,9 +54,8 @@ class TestE2EMemory:
         # Just verify we got a response - the important test is whether memory works
         assert output1.strip()
 
-        # Wait for async storage, summarization, and vector store indexing
-        # This includes: async summarization with Gemini Flash, file upload, and indexing
-        time.sleep(15)  # Increased to ensure everything completes
+        # Wait for async storage, summarization, and vector store indexing using polling
+        wait_for_memory_indexed(claude_code, unique_fact)
 
         # Second: In a NEW session, search for the unique fact using memory
         # The model should be able to find it in the conversation history
@@ -75,8 +98,8 @@ class TestE2EMemory:
 
         print(f"O3 storage output: {output1}")
 
-        # Wait for storage and vector store indexing
-        time.sleep(8)  # Give more time for async storage and indexing
+        # Wait for storage and vector store indexing using polling
+        wait_for_memory_indexed(claude_code, unique_info)
 
         # Retrieve with Gemini - be explicit about using memory search
         args2 = {
@@ -112,8 +135,8 @@ class TestE2EMemory:
         print(f"Store output: {store_output}")
         assert store_output.strip()  # Just verify we got a response
 
-        # Wait for async storage and indexing
-        time.sleep(8)  # Give more time for indexing
+        # Wait for async storage and indexing using polling
+        wait_for_memory_indexed(claude_code, f"{test_id}_FACT")
 
         # Search for the fact in a new session
         search_args = {
@@ -160,8 +183,8 @@ def {unique_func}():
         print(f"Code analysis output: {output1}")
         assert "memory" in output1.lower()
 
-        # Wait for storage
-        time.sleep(2)
+        # Wait for storage using polling
+        wait_for_memory_indexed(claude_code, "calculate_compound_interest")
 
         # Later, ask about the function without providing context
         args2 = {
