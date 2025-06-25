@@ -11,13 +11,20 @@ import json
 
 logger = logging.getLogger(__name__)
 
+# Constants
+POLL_INTERVAL = 3  # seconds
+STREAM_TIMEOUT_THRESHOLD = (
+    180  # seconds - models with longer timeouts use background mode
+)
+DEFAULT_TIMEOUT = 300  # seconds
+
 # Model capabilities
 SUPPORTS_STREAM: Set[str] = {
     "o3",
     "gpt-4.1",
     "o4-mini",
 }  # Models that support streaming
-NO_STREAM: Set[str] = {"o3-pro"}  # Models that require background mode
+REQUIRES_BACKGROUND: Set[str] = {"o3-pro"}  # Models that require background mode
 
 # Initialize client lazily to avoid errors on startup
 _client = None
@@ -52,9 +59,8 @@ class OpenAIAdapter(BaseAdapter):
         self, function_calls: List[Any], vector_store_ids: List[str] | None = None
     ) -> List[Dict[str, Any]]:
         """Execute function calls and return results."""
-        results = []
 
-        for fc in function_calls:
+        async def _execute_single_call(fc):
             # Extract function details
             name = fc.get("name") if isinstance(fc, dict) else getattr(fc, "name", None)
             call_id = (
@@ -103,16 +109,16 @@ class OpenAIAdapter(BaseAdapter):
                 output = f"Unknown function: {name}"
 
             # Format the result
-            results.append(
-                {
-                    "type": "function_call_output",
-                    "call_id": call_id,
-                    "output": json.dumps(output)
-                    if not isinstance(output, str)
-                    else output,
-                }
-            )
+            return {
+                "type": "function_call_output",
+                "call_id": call_id,
+                "output": json.dumps(output) if not isinstance(output, str) else output,
+            }
 
+        # Execute all function calls in parallel
+        results: List[Dict[str, Any]] = await asyncio.gather(
+            *[_execute_single_call(fc) for fc in function_calls]
+        )
         return results
 
     async def generate(
@@ -147,6 +153,10 @@ class OpenAIAdapter(BaseAdapter):
             **({"tools": tools} if tools else {}),
         }
 
+        # Be explicit about parallel tool calls when tools are present
+        if tools:
+            params["parallel_tool_calls"] = True
+
         if temperature is not None:
             params["temperature"] = temperature
 
@@ -162,11 +172,13 @@ class OpenAIAdapter(BaseAdapter):
         # Choose the safest strategy based on model capabilities and timeout
         use_background = False
 
-        if self.model_name in NO_STREAM:
+        if self.model_name in REQUIRES_BACKGROUND:
             # Models like o3-pro must use background mode
             params["background"] = True
             use_background = True
-        elif timeout > 180 or self.model_name not in SUPPORTS_STREAM:
+        elif (
+            timeout > STREAM_TIMEOUT_THRESHOLD or self.model_name not in SUPPORTS_STREAM
+        ):
             # Use background for long timeouts or unknown streaming support
             params["background"] = True
             use_background = True
@@ -181,17 +193,50 @@ class OpenAIAdapter(BaseAdapter):
                 response = await client.responses.create(**params)
 
                 # Poll for completion
-                poll_interval = 3  # seconds (reduced from 5 for better responsiveness)
                 elapsed = 0
 
                 while elapsed < timeout:
                     job = await client.responses.retrieve(response.id)
 
                     if job.status == "completed":
-                        # Check if response contains function calls
+                        # First try the convenience property
                         content = getattr(job, "output_text", "")
 
-                        if hasattr(job, "output") and job.output and not content:
+                        # If empty, extract text from output array (mixed content case)
+                        if not content and hasattr(job, "output") and job.output:
+                            text_parts = []
+                            for item in job.output:
+                                if (
+                                    isinstance(item, dict)
+                                    and item.get("type") == "message"
+                                ):
+                                    # Extract text from message content
+                                    if "content" in item:
+                                        for content_item in item["content"]:
+                                            if (
+                                                isinstance(content_item, dict)
+                                                and content_item.get("type")
+                                                == "output_text"
+                                            ):
+                                                text_parts.append(
+                                                    content_item.get("text", "")
+                                                )
+                                elif hasattr(item, "type") and item.type == "message":
+                                    # Handle object representation
+                                    if hasattr(item, "content"):
+                                        for content_item in item.content:
+                                            if (
+                                                hasattr(content_item, "type")
+                                                and content_item.type == "output_text"
+                                            ):
+                                                text_parts.append(
+                                                    getattr(content_item, "text", "")
+                                                )
+                            if text_parts:
+                                content = " ".join(text_parts)
+
+                        # Check for function calls that need execution
+                        if hasattr(job, "output") and job.output:
                             function_calls = [
                                 item
                                 for item in job.output
@@ -221,6 +266,8 @@ class OpenAIAdapter(BaseAdapter):
                                     "previous_response_id": job.id,
                                     "input": function_calls
                                     + results,  # Include both calls and results
+                                    "tools": tools,  # Re-attach tool schemas
+                                    "parallel_tool_calls": True,  # Be explicit
                                 }
 
                                 # Add reasoning parameters if present
@@ -257,8 +304,8 @@ class OpenAIAdapter(BaseAdapter):
                                             f"Follow-up job failed: {follow_up_job.status}"
                                         )
 
-                                    await asyncio.sleep(poll_interval)
-                                    elapsed_follow_up += poll_interval
+                                    await asyncio.sleep(POLL_INTERVAL)
+                                    elapsed_follow_up += POLL_INTERVAL
 
                                 raise ValueError("Follow-up job timed out")
 
@@ -279,8 +326,8 @@ class OpenAIAdapter(BaseAdapter):
                             f"Job failed with status={job.status}: {error_detail}"
                         )
 
-                    await asyncio.sleep(poll_interval)
-                    elapsed += poll_interval
+                    await asyncio.sleep(POLL_INTERVAL)
+                    elapsed += POLL_INTERVAL
 
                 # Timeout reached
                 raise ValueError(
@@ -295,6 +342,7 @@ class OpenAIAdapter(BaseAdapter):
 
                 response_id = None
                 content_parts = []
+                function_calls = []
                 event_count = 0
 
                 async for event in stream:
@@ -330,6 +378,19 @@ class OpenAIAdapter(BaseAdapter):
                             event, "text"
                         ):
                             content_parts.append(event.text)
+                        elif (
+                            event.type == "response.tool_call"
+                            or event.type == "tool_call"
+                        ):
+                            # Collect function calls
+                            function_calls.append(
+                                {
+                                    "type": "function_call",
+                                    "name": getattr(event, "name", None),
+                                    "call_id": getattr(event, "call_id", None),
+                                    "arguments": getattr(event, "arguments", "{}"),
+                                }
+                            )
                     # Fallback for other event structures
                     elif hasattr(event, "output_text") and event.output_text:
                         content_parts.append(event.output_text)
@@ -338,23 +399,55 @@ class OpenAIAdapter(BaseAdapter):
 
                 content = "".join(content_parts)
 
+                # If we got function calls but no text, execute them
+                if function_calls and not content:
+                    logger.info(
+                        f"{self.model_name} streaming returned {len(function_calls)} function calls, executing them"
+                    )
+
+                    # Execute the function calls
+                    results = await self._execute_function_calls(
+                        function_calls, vector_store_ids
+                    )
+
+                    # Create follow-up with same tools
+                    follow_up_params = {
+                        "model": self.model_name,
+                        "previous_response_id": response_id,
+                        "input": function_calls + results,
+                        "tools": tools,
+                        "parallel_tool_calls": True,
+                        "stream": True,  # Continue streaming
+                    }
+
+                    if temperature is not None:
+                        follow_up_params["temperature"] = temperature
+
+                    # Get follow-up response
+                    follow_up_stream = await client.responses.create(**follow_up_params)
+
+                    # Process follow-up stream
+                    follow_up_content = []
+                    async for event in follow_up_stream:
+                        if hasattr(event, "type"):
+                            if event.type == "ResponseOutputTextDelta" and hasattr(
+                                event, "delta"
+                            ):
+                                follow_up_content.append(event.delta)
+                        elif hasattr(event, "text") and event.text:
+                            follow_up_content.append(event.text)
+
+                    content = "".join(follow_up_content)
+                    # Update response_id to the follow-up
+                    if hasattr(follow_up_stream, "id"):
+                        response_id = follow_up_stream.id
+
                 # Log streaming summary for debugging
                 logger.info(
                     f"Streaming complete for {self.model_name}: "
                     f"events={event_count}, content_length={len(content)}, "
                     f"response_id={response_id}"
                 )
-
-                # O3 models may take time to start streaming content
-                # If we got a response_id but no content, it likely means the model
-                # is still processing. This shouldn't happen with proper streaming.
-                if not content and response_id:
-                    logger.warning(
-                        f"Received response_id {response_id} but no content for {self.model_name}. "
-                        f"Events received: {event_count}. The model may still be processing."
-                    )
-                    # Return a more informative message rather than empty content
-                    content = f"Model {self.model_name} acknowledged request (response_id: {response_id}) but did not produce output within the streaming window."
 
                 return {"content": content, "response_id": response_id}
         except asyncio.TimeoutError:
