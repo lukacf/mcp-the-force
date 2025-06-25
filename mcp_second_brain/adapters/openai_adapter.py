@@ -151,21 +151,18 @@ class OpenAIAdapter(BaseAdapter):
                     client.responses.create(**params), timeout=timeout
                 )
 
+                # Capture response ID from the stream object itself (not from events)
+                # This is critical for conversation continuity
+                response_id = getattr(stream, "response_id", None)
+
                 # Collect all text from stream events
                 content_parts = []
-                response_id = None
 
                 async for event in stream:
                     if hasattr(event, "output_text") and event.output_text:
                         content_parts.append(event.output_text)
                     elif hasattr(event, "text") and event.text:
                         content_parts.append(event.text)
-
-                    # Capture response ID from the stream
-                    if hasattr(event, "response_id"):
-                        response_id = event.response_id
-                    elif hasattr(stream, "response_id"):
-                        response_id = stream.response_id
 
                 return {"content": "".join(content_parts), "response_id": response_id}
         except asyncio.TimeoutError:
