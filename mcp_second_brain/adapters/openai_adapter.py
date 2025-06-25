@@ -213,10 +213,11 @@ class OpenAIAdapter(BaseAdapter):
                                     # Extract text from message content
                                     if "content" in item:
                                         for content_item in item["content"]:
-                                            if (
-                                                isinstance(content_item, dict)
-                                                and content_item.get("type")
-                                                == "output_text"
+                                            if isinstance(
+                                                content_item, dict
+                                            ) and content_item.get("type") in (
+                                                "text",
+                                                "output_text",
                                             ):
                                                 text_parts.append(
                                                     content_item.get("text", "")
@@ -225,9 +226,11 @@ class OpenAIAdapter(BaseAdapter):
                                     # Handle object representation
                                     if hasattr(item, "content"):
                                         for content_item in item.content:
-                                            if (
-                                                hasattr(content_item, "type")
-                                                and content_item.type == "output_text"
+                                            if hasattr(
+                                                content_item, "type"
+                                            ) and content_item.type in (
+                                                "text",
+                                                "output_text",
                                             ):
                                                 text_parts.append(
                                                     getattr(content_item, "text", "")
@@ -283,7 +286,8 @@ class OpenAIAdapter(BaseAdapter):
 
                                 # Wait for follow-up completion
                                 elapsed_follow_up = 0
-                                while elapsed_follow_up < timeout - elapsed:
+                                remaining = timeout - elapsed
+                                while elapsed_follow_up < remaining:
                                     follow_up_job = await client.responses.retrieve(
                                         follow_up.id
                                     )
@@ -307,7 +311,13 @@ class OpenAIAdapter(BaseAdapter):
                                     await asyncio.sleep(POLL_INTERVAL)
                                     elapsed_follow_up += POLL_INTERVAL
 
-                                raise ValueError("Follow-up job timed out")
+                                    # Recalculate remaining time to prevent overrun
+                                    if elapsed + elapsed_follow_up >= timeout:
+                                        break
+
+                                raise ValueError(
+                                    f"Follow-up job timed out after {elapsed_follow_up}s (total: {elapsed + elapsed_follow_up}s)"
+                                )
 
                         return {
                             "content": content,
@@ -399,8 +409,8 @@ class OpenAIAdapter(BaseAdapter):
 
                 content = "".join(content_parts)
 
-                # If we got function calls but no text, execute them
-                if function_calls and not content:
+                # If we got function calls, execute them (even if text exists)
+                if function_calls:
                     logger.info(
                         f"{self.model_name} streaming returned {len(function_calls)} function calls, executing them"
                     )
@@ -428,7 +438,20 @@ class OpenAIAdapter(BaseAdapter):
 
                     # Process follow-up stream
                     follow_up_content = []
+                    follow_up_response_id = None
                     async for event in follow_up_stream:
+                        # Capture follow-up response ID
+                        if follow_up_response_id is None:
+                            if (
+                                hasattr(event, "id")
+                                and isinstance(event.id, str)
+                                and event.id.startswith("resp_")
+                            ):
+                                follow_up_response_id = event.id
+                            elif hasattr(event, "response_id"):
+                                follow_up_response_id = event.response_id
+
+                        # Collect text content
                         if hasattr(event, "type"):
                             if event.type == "ResponseOutputTextDelta" and hasattr(
                                 event, "delta"
@@ -438,9 +461,9 @@ class OpenAIAdapter(BaseAdapter):
                             follow_up_content.append(event.text)
 
                     content = "".join(follow_up_content)
-                    # Update response_id to the follow-up
-                    if hasattr(follow_up_stream, "id"):
-                        response_id = follow_up_stream.id
+                    # Update response_id to the follow-up if we got one
+                    if follow_up_response_id:
+                        response_id = follow_up_response_id
 
                 # Log streaming summary for debugging
                 logger.info(
