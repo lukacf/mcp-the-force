@@ -41,8 +41,9 @@ class VertexAdapter(BaseAdapter):
         vector_store_ids: List[str] | None = None,
         max_reasoning_tokens: int | None = None,
         temperature: float | None = None,
+        return_debug: bool = False,
         **kwargs: Any,
-    ) -> str:
+    ) -> Any:
         self._ensure(prompt)
 
         # Build initial content
@@ -109,9 +110,12 @@ class VertexAdapter(BaseAdapter):
 
         # Handle function calls if any
         if response.candidates and function_declarations:
-            return await self._handle_function_calls(
+            result = await self._handle_function_calls(
                 response, contents, generate_content_config
             )
+            if return_debug:
+                return {"content": result, "_debug_tools": function_declarations}
+            return result
 
         # Extract text from response
         response_text = ""
@@ -122,6 +126,8 @@ class VertexAdapter(BaseAdapter):
                         if part.text:
                             response_text += part.text
 
+        if return_debug:
+            return {"content": response_text, "_debug_tools": function_declarations}
         return response_text
 
     async def _handle_function_calls(
