@@ -151,39 +151,30 @@ class OpenAIAdapter(BaseAdapter):
                     client.responses.create(**params), timeout=timeout
                 )
 
-                # Capture response ID from the stream object itself (not from events)
-                # This is critical for conversation continuity
                 response_id = None
-
-                # Try multiple ways to get the response_id
-                if hasattr(stream, "response_id"):
-                    response_id = stream.response_id
-                elif hasattr(stream, "id"):
-                    response_id = stream.id
-                elif hasattr(stream, "_response") and hasattr(stream._response, "id"):
-                    response_id = stream._response.id
-
-                logger.info(
-                    f"Stream object type: {type(stream)}, captured response_id: {response_id}"
-                )
-
-                # Collect all text from stream events
                 content_parts = []
-                event_count = 0
 
                 async for event in stream:
-                    event_count += 1
-
-                    # Try to capture response_id from first event if not already found
-                    if not response_id and event_count == 1:
-                        if hasattr(event, "response_id"):
+                    # Capture the response ID as soon as it's available in an event.
+                    # It should be the same across all events for a given response.
+                    if response_id is None:
+                        # The main response object has an 'id' field starting with 'resp_'.
+                        # This is the most reliable attribute based on OpenAI's API structure.
+                        if (
+                            hasattr(event, "id")
+                            and isinstance(event.id, str)
+                            and event.id.startswith("resp_")
+                        ):
+                            response_id = event.id
+                            logger.info(
+                                f"Captured response ID from event 'id' attribute: {response_id}"
+                            )
+                        # Fallback for other possible attribute names like 'response_id'
+                        elif hasattr(event, "response_id"):
                             response_id = event.response_id
                             logger.info(
-                                f"Got response_id from first event: {response_id}"
+                                f"Captured response ID from event 'response_id' attribute: {response_id}"
                             )
-                        elif hasattr(event, "id"):
-                            response_id = event.id
-                            logger.info(f"Got id from first event: {response_id}")
 
                     if hasattr(event, "output_text") and event.output_text:
                         content_parts.append(event.output_text)
