@@ -12,11 +12,10 @@ logger = logging.getLogger(__name__)
 
 # Model capabilities
 SUPPORTS_STREAM: Set[str] = {
-    "o3",
     "gpt-4.1",
     "o4-mini",
 }  # Models that support streaming
-NO_STREAM: Set[str] = {"o3-pro"}  # Models that require background mode
+NO_STREAM: Set[str] = {"o3", "o3-pro"}  # Models that require background mode
 
 # Initialize client lazily to avoid errors on startup
 _client = None
