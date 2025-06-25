@@ -154,6 +154,7 @@ class OpenAIAdapter(BaseAdapter):
                 # Capture response ID from the stream object itself (not from events)
                 # This is critical for conversation continuity
                 response_id = getattr(stream, "response_id", None)
+                logger.info(f"Captured response_id from stream: {response_id}")
 
                 # Collect all text from stream events
                 content_parts = []

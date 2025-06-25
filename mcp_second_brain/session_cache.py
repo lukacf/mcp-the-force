@@ -67,6 +67,7 @@ class _SQLiteSessionCache:
             row = cur.fetchone()
 
             if not row:
+                logger.info(f"No previous response found for session {session_id}")
                 return None
 
             response_id, updated_at = str(row[0]), row[1]
@@ -78,6 +79,7 @@ class _SQLiteSessionCache:
                 )
                 return None
 
+            logger.info(f"Retrieved response_id {response_id} for session {session_id}")
             return response_id
 
     def set_response_id(self, session_id: str, response_id: str):
@@ -92,6 +94,7 @@ class _SQLiteSessionCache:
                 "REPLACE INTO sessions(session_id, response_id, updated_at) VALUES(?, ?, ?)",
                 (session_id, response_id, now),
             )
+            logger.info(f"Stored response_id {response_id} for session {session_id}")
             logger.debug(f"Stored response_id for session {session_id}")
 
             # Probabilistic cleanup
