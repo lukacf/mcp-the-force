@@ -61,29 +61,22 @@ class OpenAIAdapter(BaseAdapter):
         msgs = [{"role": "user", "content": prompt}]
         tools = []
 
-        # O-series models cannot yet handle function-call follow-ups,
-        # so only expose tools to models that we can service
-        if self.model_name not in {"o3", "o3-pro"}:
-            # Always add search_project_memory tool for accessing memory
-            tools.append(create_search_memory_declaration_openai())
+        # Always add search_project_memory tool for accessing memory
+        tools.append(create_search_memory_declaration_openai())
 
-            # Add attachment search tool when vector stores are provided
-            if vector_store_ids:
-                tools.append(create_attachment_search_declaration_openai())
+        # Add attachment search tool when vector stores are provided
+        if vector_store_ids:
+            tools.append(create_attachment_search_declaration_openai())
 
-            # Add web search for GPT-4.1
-            if self.model_name == "gpt-4.1":
-                tools.append({"type": "web_search"})
+        # Add web search for GPT-4.1
+        if self.model_name == "gpt-4.1":
+            tools.append({"type": "web_search"})
 
         params: Dict[str, Any] = {
             "model": self.model_name,
             "input": msgs,
             **({"tools": tools} if tools else {}),
         }
-
-        # Explicitly disable tool calling for O3/O3-pro
-        if self.model_name in {"o3", "o3-pro"}:
-            params["tool_choice"] = "none"
 
         if temperature is not None:
             params["temperature"] = temperature
