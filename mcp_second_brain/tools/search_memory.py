@@ -108,9 +108,9 @@ class SearchMemoryAdapter(BaseAdapter):
             search_tasks = []
             for store_id in stores_to_search:
                 for q in queries:
-                    task = self._search_single_store(
-                        q, store_id, max_results // max(len(queries), 1)
-                    )
+                    # Ensure each query gets at least 1 result slot
+                    per_query_limit = max(1, max_results // max(len(queries), 1))
+                    task = self._search_single_store(q, store_id, per_query_limit)
                     search_tasks.append(task)
 
             # Wait for all searches with timeout
