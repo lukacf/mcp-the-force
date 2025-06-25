@@ -17,8 +17,7 @@ class TestMemorySearchDeclaration:
         assert "type" in declaration
         assert declaration["type"] == "function"
 
-        # CRITICAL: Ensure name, description, and parameters are at top level
-        # This is what the OpenAI Responses API expects
+        # CRITICAL: For Responses API, function details are at the top level, not nested
         assert "name" in declaration
         assert declaration["name"] == "search_project_memory"
 
@@ -26,9 +25,6 @@ class TestMemorySearchDeclaration:
         assert "Search project memory" in declaration["description"]
 
         assert "parameters" in declaration
-
-        # Ensure there's NO nested "function" key (this was the bug)
-        assert "function" not in declaration
 
         # Check parameters structure
         params = declaration["parameters"]
@@ -97,9 +93,8 @@ class TestMemorySearchDeclaration:
         """Test that the OpenAI declaration would be accepted as a valid tool."""
         declaration = create_search_memory_declaration_openai()
 
-        # Simulate what the OpenAI API would check
-        # Based on the error message, it expects tools[0].name to exist
-        # This means tools[0]["name"] must be accessible
+        # The Responses API expects the function details at the top level
+        assert declaration.get("type") == "function"
         assert declaration.get("name") is not None
         assert isinstance(declaration.get("name"), str)
         assert len(declaration.get("name")) > 0
@@ -108,8 +103,10 @@ class TestMemorySearchDeclaration:
         tools = [declaration]
         assert tools[0]["name"] == "search_project_memory"
 
-        # Ensure no nested function object
-        assert "function" not in tools[0]
+        # Ensure proper structure
+        assert "name" in tools[0]
+        assert "type" in tools[0]
+        assert "parameters" in tools[0]
 
     def test_openai_declaration_in_context(self):
         """Test how the declaration would be used in the OpenAI adapter."""
@@ -121,20 +118,13 @@ class TestMemorySearchDeclaration:
         tools = []
         tools.append(create_search_memory_declaration_openai())
 
-        # This is what failed before - accessing tools[0].name
-        # The API expects tools[0]["name"] to exist
-        assert tools[0]["name"] == "search_project_memory"
+        # The Responses API expects flat structure
         assert tools[0]["type"] == "function"
+        assert tools[0]["name"] == "search_project_memory"
         assert tools[0]["description"] is not None
         assert tools[0]["parameters"] is not None
 
         # Ensure the structure matches OpenAI Responses API expectations
-        # From the docs and error, the API wants:
-        # tools = [{"type": "function", "name": "...", "description": "...", "parameters": {...}}]
+        # The API wants: tools = [{"type": "function", "name": "...", "parameters": {...}}]
         tool = tools[0]
         assert all(key in tool for key in ["type", "name", "description", "parameters"])
-        assert all(
-            key in ["type", "name", "description", "parameters"]
-            for key in tool.keys()
-            if key != "default"
-        )

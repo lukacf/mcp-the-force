@@ -6,6 +6,8 @@ from .descriptors import Route
 from .registry import tool
 
 # Import tools to ensure registration
+from . import search_memory  # noqa: F401
+from . import search_attachments  # noqa: F401
 
 
 @tool

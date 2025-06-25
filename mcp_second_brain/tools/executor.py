@@ -14,6 +14,7 @@ from .parameter_router import ParameterRouter
 # Project memory imports
 from ..memory import store_conversation_memory
 from ..config import get_settings
+from .search_attachments import current_attachment_stores
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +78,10 @@ class ToolExecutor:
                 if files:
                     vs_id = await self.vector_store_manager.create(files)
                     vector_store_ids = [vs_id] if vs_id else None
+
+                    # Set context variable for attachment search
+                    if vector_store_ids:
+                        current_attachment_stores.set(vector_store_ids)
 
             # Memory stores are no longer auto-attached
             # Models should use search_project_memory function to access memory
@@ -169,6 +174,9 @@ class ToolExecutor:
             # Cleanup
             if vs_id:
                 await vector_store_manager.delete(vs_id)
+
+            # Clear attachment context
+            current_attachment_stores.set([])
 
             # Wait for memory tasks to complete
             if memory_tasks:
