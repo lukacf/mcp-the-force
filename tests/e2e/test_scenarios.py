@@ -66,7 +66,11 @@ class TestE2EScenarios:
             f'output_format "text", context [], and session_id "{session_id}"'
         )
         print(f"First turn output: {output1}")
-        assert output1.strip()  # Ensure we got a response
+
+        # Ensure we got a real response, not just an error message
+        assert output1.strip()
+        assert "no response was returned" not in output1.lower()
+        assert "42" in output1 or "remember" in output1.lower()
 
         # Follow-up query with same session ID
         output2 = claude_code(

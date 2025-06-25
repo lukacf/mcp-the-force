@@ -153,8 +153,10 @@ class OpenAIAdapter(BaseAdapter):
 
                 response_id = None
                 content_parts = []
+                event_count = 0
 
                 async for event in stream:
+                    event_count += 1
                     # Capture the response ID as soon as it's available in an event.
                     # It should be the same across all events for a given response.
                     if response_id is None:
@@ -176,12 +178,43 @@ class OpenAIAdapter(BaseAdapter):
                                 f"Captured response ID from event 'response_id' attribute: {response_id}"
                             )
 
-                    if hasattr(event, "output_text") and event.output_text:
+                    # Handle streaming events based on event type
+                    if hasattr(event, "type"):
+                        if event.type == "ResponseOutputTextDelta" and hasattr(
+                            event, "delta"
+                        ):
+                            content_parts.append(event.delta)
+                        elif event.type == "response.output_text" and hasattr(
+                            event, "text"
+                        ):
+                            content_parts.append(event.text)
+                    # Fallback for other event structures
+                    elif hasattr(event, "output_text") and event.output_text:
                         content_parts.append(event.output_text)
                     elif hasattr(event, "text") and event.text:
                         content_parts.append(event.text)
 
-                return {"content": "".join(content_parts), "response_id": response_id}
+                content = "".join(content_parts)
+
+                # Log streaming summary for debugging
+                logger.info(
+                    f"Streaming complete for {self.model_name}: "
+                    f"events={event_count}, content_length={len(content)}, "
+                    f"response_id={response_id}"
+                )
+
+                # O3 models may take time to start streaming content
+                # If we got a response_id but no content, it likely means the model
+                # is still processing. This shouldn't happen with proper streaming.
+                if not content and response_id:
+                    logger.warning(
+                        f"Received response_id {response_id} but no content for {self.model_name}. "
+                        f"Events received: {event_count}. The model may still be processing."
+                    )
+                    # Return a more informative message rather than empty content
+                    content = f"Model {self.model_name} acknowledged request (response_id: {response_id}) but did not produce output within the streaming window."
+
+                return {"content": content, "response_id": response_id}
         except asyncio.TimeoutError:
             raise ValueError(f"Request timed out after {timeout}s")
         except Exception as e:
