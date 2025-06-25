@@ -152,10 +152,27 @@ class TestAttachmentSearchReal:
         # For OpenAI models
         from mcp_second_brain.adapters.openai_adapter import OpenAIAdapter
 
-        OpenAIAdapter("gpt-4.1")
+        adapter = OpenAIAdapter("gpt-4.1")
 
-        # Generate a call with attachments - should include search tool
-        # This test will fail until we implement the conditional registration
+        # Test 1: Without attachments - should NOT have search_session_attachments
+        result = await adapter.generate(prompt="test", return_debug=True)
+
+        tool_names = [
+            t.get("function", {}).get("name") for t in result.get("_debug_tools", [])
+        ]
+        assert "search_project_memory" in tool_names
+        assert "search_session_attachments" not in tool_names
+
+        # Test 2: With attachments - should have search_session_attachments
+        result2 = await adapter.generate(
+            prompt="test", vector_store_ids=["vs_dummy"], return_debug=True
+        )
+
+        tool_names2 = [
+            t.get("function", {}).get("name") for t in result2.get("_debug_tools", [])
+        ]
+        assert "search_project_memory" in tool_names2
+        assert "search_session_attachments" in tool_names2
 
     @pytest.mark.skipif(
         not os.getenv("OPENAI_API_KEY"),
@@ -313,19 +330,49 @@ class TestAttachmentSearchIntegration:
         """Test that OpenAI models get search_session_attachments when attachments exist."""
         from mcp_second_brain.adapters.openai_adapter import OpenAIAdapter
 
-        # This test will fail until we implement conditional tool registration
-        OpenAIAdapter("gpt-4.1")
+        adapter = OpenAIAdapter("gpt-4.1")
 
-        # When called with vector_store_ids, should include attachment search
-        # Need to implement this behavior
+        # Test without attachments
+        result = await adapter.generate(prompt="test query", return_debug=True)
+        tool_names = [
+            t.get("function", {}).get("name") for t in result.get("_debug_tools", [])
+        ]
+        assert "search_session_attachments" not in tool_names
+
+        # Test with attachments
+        result2 = await adapter.generate(
+            prompt="test query", vector_store_ids=["vs_123"], return_debug=True
+        )
+        tool_names2 = [
+            t.get("function", {}).get("name") for t in result2.get("_debug_tools", [])
+        ]
+        assert "search_session_attachments" in tool_names2
 
     @pytest.mark.asyncio
     async def test_gemini_tool_registration_with_attachments(self):
         """Test that Gemini models get search_session_attachments when attachments exist."""
+        import os
+        import pytest
+
+        if not os.getenv("VERTEX_PROJECT"):
+            pytest.skip("Requires VERTEX_PROJECT configuration")
+
         from mcp_second_brain.adapters.vertex_adapter import VertexAdapter
 
-        # This test will fail until we implement conditional tool registration
-        VertexAdapter("gemini-2.5-pro")
+        adapter = VertexAdapter("gemini-2.5-flash")  # Use flash for faster tests
 
-        # When called with vector_store_ids, should include attachment search
-        # Need to implement this behavior
+        # Test without attachments
+        result = await adapter.generate(prompt="test query", return_debug=True)
+
+        # For Gemini, tools are FunctionDeclaration objects
+        tool_names = [fd.name for fd in result.get("_debug_tools", [])]
+        assert "search_project_memory" in tool_names
+        assert "search_session_attachments" not in tool_names
+
+        # Test with attachments
+        result2 = await adapter.generate(
+            prompt="test query", vector_store_ids=["vs_123"], return_debug=True
+        )
+        tool_names2 = [fd.name for fd in result2.get("_debug_tools", [])]
+        assert "search_project_memory" in tool_names2
+        assert "search_session_attachments" in tool_names2

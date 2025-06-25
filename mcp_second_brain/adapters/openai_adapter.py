@@ -129,6 +129,7 @@ class OpenAIAdapter(BaseAdapter):
         reasoning_effort: str | None = None,
         timeout: float = 300,
         previous_response_id: str | None = None,
+        return_debug: bool = False,
         **kwargs: Any,
     ) -> Dict[str, Any]:
         self._ensure(prompt)
@@ -296,10 +297,13 @@ class OpenAIAdapter(BaseAdapter):
                                         content = getattr(
                                             follow_up_job, "output_text", ""
                                         )
-                                        return {
+                                        result = {
                                             "content": content,
                                             "response_id": follow_up_job.id,
                                         }
+                                        if return_debug:
+                                            result["_debug_tools"] = tools
+                                        return result
                                     elif follow_up_job.status not in [
                                         "queued",
                                         "in_progress",
@@ -319,10 +323,13 @@ class OpenAIAdapter(BaseAdapter):
                                     f"Follow-up job timed out after {elapsed_follow_up}s (total: {elapsed + elapsed_follow_up}s)"
                                 )
 
-                        return {
+                        result = {
                             "content": content,
                             "response_id": job.id,  # type: ignore[attr-defined]
                         }
+                        if return_debug:
+                            result["_debug_tools"] = tools
+                        return result
                     elif job.status not in ["queued", "in_progress"]:
                         # Handle failed, cancelled, or unknown status
                         error_msg = getattr(job, "error", {})
@@ -475,7 +482,10 @@ class OpenAIAdapter(BaseAdapter):
                     f"response_id={response_id}"
                 )
 
-                return {"content": content, "response_id": response_id}
+                result = {"content": content, "response_id": response_id}
+                if return_debug:
+                    result["_debug_tools"] = tools
+                return result
         except asyncio.TimeoutError:
             raise ValueError(f"Request timed out after {timeout}s")
         except Exception as e:
