@@ -53,32 +53,26 @@ class TestE2EScenarios:
         assert "ANSWER: 4" in output
 
     @pytest.mark.timeout(600)  # 10 minutes for o3
-    def test_o3_session(self, claude_code, claude_config_path):
+    def test_o3_session(self, claude_code):
         """Test o3 with session continuity."""
-        import time
-        import subprocess
-        import os
+        import uuid
+
+        # Use a unique session ID to avoid conflicts
+        session_id = f"test-o3-{uuid.uuid4()}"
 
         # First query
         output1 = claude_code(
-            'Use second-brain chat_with_o3 with instructions "Remember the number 42", '
-            'output_format "text", context [], and session_id "test-session-1"'
+            f'Use second-brain chat_with_o3 with instructions "Remember the number 42. Acknowledge you will remember it.", '
+            f'output_format "text", context [], and session_id "{session_id}"'
         )
         print(f"First turn output: {output1}")
+        assert output1.strip()  # Ensure we got a response
 
-        # Give time for session to be stored
-        time.sleep(2)
-
-        # Follow-up query - use --continue to maintain Claude Code context
-        cmd = 'claude -p --dangerously-skip-permissions --continue "Use second-brain chat_with_o3 with instructions=\\"What number did I ask you to remember?\\", output_format=\\"text\\", context=[], and session_id=\\"test-session-1\\""'
-
-        env = os.environ.copy()
-        env["XDG_CONFIG_HOME"] = str(claude_config_path)
-
-        result = subprocess.run(
-            cmd, shell=True, capture_output=True, text=True, env=env
+        # Follow-up query with same session ID
+        output2 = claude_code(
+            f'Use second-brain chat_with_o3 with instructions "What number did I ask you to remember? Just tell me the number.", '
+            f'output_format "text", context [], and session_id "{session_id}"'
         )
-        output2 = result.stdout
         print(f"Second turn output: {output2}")
 
         # Should remember
