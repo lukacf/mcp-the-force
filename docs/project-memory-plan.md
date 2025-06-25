@@ -1,4 +1,20 @@
-# Project Memory System - Implementation Plan
+# Project Memory System - Current State & Plan
+
+*Last Updated: 2025-06-24*
+
+## Current Implementation Status
+
+The project memory system is **partially implemented** with significant architectural improvements over the original plan:
+
+### What's Working Now
+1. **Conversation Memory Storage** - AI consultations are automatically summarized and stored in vector stores
+2. **Session Persistence** - Multi-turn conversations maintain state via SQLite-backed session cache
+3. **Memory Search** - `search_project_memory` function allows searching across all memory stores
+4. **Attachment Isolation** - Temporary files are kept in ephemeral vector stores, deleted after each call
+5. **No Pollution** - Project memory remains clean; temporary attachments never contaminate it
+
+### Key Architectural Insight (from O3 analysis)
+**Attachments are already isolated!** The system creates temporary vector stores for attachments that are deleted immediately after use. There's no risk of pollution, and no need for a separate `search_session_attachments` function.
 
 ## Core Idea
 
@@ -99,128 +115,88 @@ vector_store_ids = [CONVERSATION_STORE_ID, COMMIT_STORE_ID]
 - Monitor join success rate to tune k value
 - Archive old stores after branch deletion
 
-### 4. Unified File Search Infrastructure
+### 4. Search Architecture - Intentional Separation
 
-**Key Architecture Decision**: Both OpenAI and Gemini models expose the exact same `file_search` function interface, matching OpenAI's `file_search.msearch` specification.
+**Key Architecture Decision**: Based on extensive analysis with O3 and Gemini, we maintain **intentional separation** between permanent project memory and ephemeral attachments:
 
-#### OpenAI's file_search.msearch Interface
+1. **`search_project_memory`** - Searches only permanent knowledge (conversations, commits)
+2. **Native attachment search** - Models can search their current attachments via built-in mechanisms
+3. **No cross-contamination** - Ephemeral attachments are deleted after each call
 
-```typescript
-// From o3's description:
-namespace file_search {
-  // Issues multiple queries to a search over the file(s) uploaded by the user
-  type msearch = (_: {
-    queries?: string[],  // Max 5 queries
-  }) => any;
-}
-```
+**Why This Works**:
+- **Prevents laziness** - LLMs must be intentional about what they're searching
+- **Maintains quality** - Project memory stays high-signal, no pollution from temporary files
+- **Already implemented** - The executor already creates/deletes ephemeral stores correctly
 
-#### How It Works
+### Current Implementation Details
 
-1. **Same Interface**: Both model families use the `attachments` parameter
-2. **OpenAI Models**: Attachments → vector_store_ids → native file_search.msearch
-3. **Gemini Models**: Attachments → vector_store_ids → file_search_msearch function (via Gemini function calling)
+#### How Attachments Work (Already Implemented)
 
-#### Implementation for Gemini
+1. **User provides attachments** → Files that are too large for context
+2. **Executor creates ephemeral vector store** → Temporary store for this call only
+3. **Model searches via native mechanisms** → Each model has its own way
+4. **Executor deletes vector store** → Cleanup happens automatically after call
 
 ```python
-# In vertex_file_search.py - matching OpenAI's interface
-class GeminiFileSearch:
-    def __init__(self, vector_store_ids: List[str]):
-        self.vector_store_ids = vector_store_ids
-    
-    async def msearch(self, queries: Optional[List[str]] = None) -> Dict[str, Any]:
-        """Issues multiple queries to search over files.
-        
-        This matches OpenAI's file_search.msearch signature exactly:
-        - Takes optional queries array (max 5)
-        - Returns search results with citation markers
-        """
-        if not queries or not self.vector_store_ids:
-            return {"results": []}
-        
-        # Limit to 5 queries max (same as OpenAI)
-        queries = queries[:5]
-        
-        # Search all stores with all queries in parallel
-        all_results = await self._parallel_search(queries)
-        
-        # Format results to match OpenAI's structure
-        formatted_results = []
-        for i, result in enumerate(all_results[:20]):
-            formatted_results.append({
-                "text": result['content'],
-                "metadata": {
-                    "file_name": result['file_name'],
-                    "score": result['score'],
-                    **result['metadata']
-                },
-                "citation": f"<source>{i}</source>"  # Citation marker
-            })
-        
-        return {"results": formatted_results}
-
-# Function declaration for Gemini
-FILE_SEARCH_DECLARATION = {
-    "name": "file_search_msearch",  # Flattened namespace
-    "description": (
-        "Issues multiple queries to search over files and vector stores. "
-        "Use this to find information in uploaded documents or project memory."
-    ),
-    "parameters": {
-        "type": "object",
-        "properties": {
-            "queries": {
-                "type": "array",
-                "items": {"type": "string"},
-                "description": (
-                    "Array of search queries (max 5). Include the user's "
-                    "original question plus focused queries for key terms."
-                ),
-                "maxItems": 5
-            }
-        },
-        "required": []  # queries is optional, matching OpenAI
-    }
-}
+# In tools/executor.py - this already works!
+if attachments:
+    vector_store_ids = [vector_store_manager.create(attachment_files)]
+    try:
+        result = await adapter.generate(prompt, vector_store_ids)
+    finally:
+        vector_store_manager.delete(vector_store_ids[0])
 ```
 
-#### What Happens at Runtime
+#### Memory Search Implementation
 
-1. **User Query**: "What authentication changes were made?"
-2. **Executor**: Passes prompt + vector_store_ids to adapter
-3. **OpenAI Path**: 
-   - Sends vector_store_ids with request
-   - OpenAI calls file_search.msearch({queries: ["authentication changes", ...]})
-   - Native implementation searches and returns results with citations
-4. **Gemini Path**:
-   - Registers file_search_msearch function with Gemini
-   - Gemini analyzes prompt and calls file_search_msearch({queries: ["What authentication changes were made?", "authentication changes", "auth modifications"]})
-   - Our function queries same OpenAI vector stores
-   - Returns results in identical format with citation markers
-   - Gemini incorporates results and citations in response
+```python
+# tools/search_memory.py - SearchMemoryAdapter
+class SearchMemoryAdapter(BaseAdapter):
+    async def generate(self, prompt, **kwargs):
+        query = kwargs.get("query")
+        store_types = kwargs.get("store_types", ["conversation", "commit"])
+        
+        # Get all permanent memory stores
+        all_store_ids = self.memory_config.get_all_store_ids()
+        
+        # Filter by type and search
+        results = await self._search_stores(query, store_ids)
+        return formatted_results
+```
 
-#### Key Implementation Details
+**Key Points**:
+- Only searches permanent stores (project-conversations-XXX, project-commits-XXX)
+- Never sees ephemeral attachment stores
+- Available to all models via `search_project_memory` tool
 
-1. **Multiple Queries**: Following OpenAI's pattern, models typically send:
-   - The user's original question (for context)
-   - 2-4 focused queries for specific terms
-   - Max 5 queries total
+### 5. Conversation Summarization (Implemented with Gemini Flash)
 
-2. **Citation Format**: Results include `<source>N</source>` markers that models weave into responses
+Conversations are automatically summarized after each tool call:
 
-3. **Parallel Search**: All queries × all stores searched concurrently with timeout
+```python
+# memory/conversation.py
+async def create_conversation_summary(messages, response, tool_name):
+    # Extract just instructions (not inlined context)
+    user_components = _extract_message_components(raw_content)
+    
+    # Use Gemini Flash for intelligent summarization
+    adapter = VertexAdapter(model="gemini-2.5-flash")
+    summary = await adapter.generate(
+        prompt=summarization_prompt,
+        temperature=0.3
+    )
+    
+    # Store with metadata
+    return formatted_summary_with_metadata
+```
 
-4. **Deduplication**: Identical results across queries are merged
+**Smart Design Choices**:
+1. **XML parsing** to extract instructions without context files
+2. **Gemini Flash** for fast, intelligent summarization
+3. **Fallback** to structured summary if Gemini unavailable
+4. **Actual response content** included in summary (not just template)
 
-#### Key Benefits
-
-1. **Exact Interface Match**: Same function signature as OpenAI's file_search.msearch
-2. **Model Autonomy**: Models decide when/what to search
-3. **Unified Backend**: Same vector stores, same search API
-4. **Clean Architecture**: Pure function calling, no prompt manipulation
-
-### 5. Metadata-Aware Retrieval (o3's recommendation)
+### 6. Metadata-Aware Retrieval (o3's recommendation)
 
 ```python
 def retrieve_context(query, k_conv=40, k_commit=40):
@@ -247,32 +223,13 @@ def retrieve_context(query, k_conv=40, k_commit=40):
     return truncate_to_token_budget(context)
 ```
 
-## Minimal Implementation
+## What Still Needs Implementation
 
-### 1. After Each Tool Call
+### 1. Git Commit Memory Storage
 
-```python
-# In mcp_second_brain/tools/executor.py
-async def store_conversation_memory(session_id, tool_name, messages, response):
-    # Summarize with Gemini Flash
-    summary = await summarize_conversation(messages, response)
-    
-    doc = {
-        "content": summary,
-        "metadata": {
-            "type": "conversation",
-            "tool": tool_name,
-            "session_id": session_id,
-            "branch": get_current_branch(),
-            "prev_commit_sha": get_current_sha(),
-            "timestamp": int(time.time())
-        }
-    }
-    
-    upload_to_store(CONVERSATION_STORE_ID, doc)
-```
+Currently, only conversation memory is stored. Git commits need to be added:
 
-### 2. Git Post-Commit Hook
+### Git Post-Commit Hook (To Be Implemented)
 ```python
 import os, sqlite3, json, datetime, hashlib, re
 from pathlib import Path
@@ -359,35 +316,31 @@ async def store_commit_memory(commit_sha):
 python -m mcp_second_brain.memory.commit
 ```
 
-### 3. Auto-attach for ALL Models
+### 2. Store Rollover Management
+
+Need to implement the 18k document rollover:
 
 ```python
-# In mcp_second_brain/tools/executor.py
-def get_memory_stores():
-    """Get all memory store IDs"""
-    config = load_stores_config()
-    stores = []
-    
-    # Add all conversation stores
-    for store in config.get("conversation_stores", []):
-        stores.append(store["id"])
-    
-    # Add all commit stores
-    for store in config.get("commit_stores", []):
-        stores.append(store["id"])
-    
-    return stores
-
-# In execute() method - for ALL models:
-if settings.memory_enabled:
-    memory_stores = get_memory_stores()
-    if memory_stores:
-        vector_store_ids = vector_store_ids or []
-        vector_store_ids.extend(memory_stores)
-        
-        # OpenAI: passes to native file_search
-        # Gemini: VertexMemoryAdapter handles search and injection
+# memory/config.py - MemoryConfig class
+def get_active_conversation_store(self):
+    store_id, count = self._get_active_store("conversation")
+    if count >= self._rollover_limit:  # 18k
+        return self._rollover_store("conversation")
+    return store_id
 ```
+
+### 3. Important: No Auto-Attachment Planned
+
+**Design Decision**: Models must explicitly call `search_project_memory` when they need historical context. This prevents:
+- Unnecessary searches on every call
+- Token waste from irrelevant results  
+- Lazy "search everything" behavior
+
+**Rationale** (from O3/Gemini discussion):
+- Intentionality in tool use improves result quality
+- Prevents cognitive laziness of always searching
+- Reduces latency and token usage
+- System prompts can guide when to search
 
 ## Architectural Improvements (from Reviews)
 
@@ -527,47 +480,87 @@ This means:
 3. **LLM-optimized format** - Structured metadata for precise filtering, not human readability
 4. **Unified cross-model memory** - All models access the same memory through the same infrastructure
 
-## Key Implementation Insight: Unified File Search
+## Key Architectural Decisions
 
-The breakthrough realization is that we implement the SAME `file_search` function for all models:
+### 1. Custom Search Tools Only
 
-1. **One Function Name**: All models expose a function called `file_search`
-2. **One Vector Store Backend**: All searches go through OpenAI's vector store API
-3. **Model-Specific Implementation**:
-   - OpenAI: Built-in file_search that queries their vector stores
-   - Gemini: We provide a file_search function that queries the same stores
-4. **Transparent Memory Access**: Auto-attachment works identically for all models
+We **removed** the native file_search tool from OpenAI models and replaced it with two custom tools:
+- `search_project_memory` - For searching permanent memory (conversations, commits)
+- `search_session_attachments` - For searching ephemeral attachment stores
 
-### Critical Understanding: Function Calling, Not Prompt Injection
+This ensures:
+- Consistent behavior across all models (OpenAI and Gemini)
+- Clear separation between permanent and ephemeral data
+- Intentional tool selection by models
 
-For Gemini:
-- We register a `file_search_msearch` function matching OpenAI's spec
-- Gemini decides when to call it and what queries to send
-- Gemini typically sends multiple queries (like o3 does):
-  - User's original question
-  - Focused keyword searches
-  - Alternative phrasings
-- The SDK handles the function call/response cycle automatically
-- Results include citation markers that Gemini weaves into responses
+### 2. Ephemeral vs Permanent Separation
 
-### Implementation Principles
+Based on O3's analysis, the system already maintains perfect separation:
+- **Permanent**: Managed by MemoryConfig, prefixed with "project-"
+- **Ephemeral**: Created per-call by executor, deleted immediately
+- **No mixing**: search_project_memory only sees permanent stores
 
-1. **Exact Function Match**: Our file_search_msearch has the same signature as OpenAI's file_search.msearch
-2. **Behavioral Parity**: Multi-query search, citation markers, parallel execution
-3. **No Custom Logic**: Models decide everything - when to search, what to search for
-4. **Unified Storage**: All models search the same OpenAI vector stores
+### 3. Intentional Search Strategy
 
-This ensures true parity: a user switching between o3 and Gemini gets identical search capabilities with the same project memory access.
+Models must explicitly choose to search memory. This is by design:
+- Prevents lazy "always search" behavior
+- Reduces unnecessary API calls and tokens
+- Encourages thoughtful tool use
+- System prompts guide when searching is valuable
+
+### 4. Attachment Search Implementation
+
+The `search_session_attachments` tool is conditionally registered:
+- **Context Variable**: Uses Python's contextvars to track current execution's vector stores
+- **Tool Registration**: Only added to model's tools when vector_store_ids are provided
+- **Execution Flow**:
+  1. Executor creates ephemeral vector store from attachments
+  2. Sets context variable with vector store IDs
+  3. Models receive search_session_attachments tool in their function list
+  4. Models can search attachments during execution
+  5. Executor cleans up vector store and clears context after execution
+
+### 5. Multi-Turn Considerations
+
+From O3's analysis, if we need attachment reuse across turns:
+- Implement in executor with session-based caching
+- NOT through a new public API
+- Use TTL-based cleanup
+- Monitor for store explosion
+
+## Implementation Gaps & Next Steps
+
+### Completed ✓
+1. Conversation memory storage with Gemini Flash summarization
+2. Session persistence for multi-turn conversations
+3. Memory search via search_project_memory
+4. Proper attachment isolation (ephemeral stores)
+5. XML parsing to exclude context from summaries
+6. Attachment search via search_session_attachments tool
+7. Conditional tool registration (attachment search only when vector stores exist)
+
+### To Do
+1. **Git commit memory storage** - Post-commit hook implementation
+2. **Store rollover** - Handle 18k document limit
+3. **Cleanup/GC** - Remove old ephemeral stores if any escape
+4. **Monitoring** - Track search latency, join rates, token usage
+5. **System prompts** - Guide models on when to use search_project_memory
+
+### Won't Do (By Design)
+1. **Auto-attachment of memory** - Models must explicitly search
+2. **Cross-session attachment persistence** - Keep it simple, delete after use
+3. **Unified search across permanent and ephemeral** - Intentional separation promotes better tool use
 
 ## Conclusion
 
-This project memory system elegantly solves the institutional knowledge problem with radical simplicity:
+The project memory system has evolved from the original plan based on implementation experience and expert analysis:
 
-1. **No complex correlation** - Just good metadata and smart models
-2. **Empirically validated** - Tested and proven to work
-3. **Minimal implementation** - ~200 lines of code total
-4. **Zero friction** - Works automatically in the background
+1. **Functional attachment system** - Implemented search_session_attachments to make attachments actually searchable
+2. **More intentional** - Two distinct search tools prevent lazy "search everything" behavior  
+3. **Cleaner separation** - No risk of pollution between permanent/ephemeral stores
+4. **Consistent across models** - Both OpenAI and Gemini use the same search interface
+5. **Empirically validated** - Core concepts proven to work with real tests
 
-The key insight from our testing: **We don't need to be prescriptive**. Models are intelligent enough to connect conversations to commits using metadata breadcrumbs. The simpler two-store approach outperforms complex correlation systems by trusting in model capabilities.
+The key insight remains: **Trust model intelligence**. With good metadata and clear interfaces, models successfully use the appropriate search tool for their needs.
 
-As o3 concluded: "The empirical test confirms the two-store pattern works; placeholders can be dropped."
+**Latest Update (2025-06-24)**: After discovering that attachments were non-functional (models couldn't search uploaded files), we implemented the `search_session_attachments` tool. This restored the intended functionality where models can search both permanent project memory and temporary attachments, with intentional separation between the two.

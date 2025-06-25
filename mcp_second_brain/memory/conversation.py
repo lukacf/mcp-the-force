@@ -182,7 +182,7 @@ async def create_conversation_summary(
 
     # Try to use Gemini Flash for summarization
     try:
-        from ..adapters.vertex_adapter import VertexAdapter
+        from ..adapters import get_adapter
         from ..config import get_settings
 
         settings = get_settings()
@@ -212,7 +212,13 @@ Conversation to summarize:
 {conversation_text}
 """
 
-        adapter = VertexAdapter(model="gemini-2.5-flash")
+        # Use the central adapter factory instead of direct instantiation
+        adapter, error = get_adapter("vertex", "gemini-2.5-flash")
+        if not adapter:
+            logger.warning(f"Failed to get Vertex adapter for summarization: {error}")
+            # Fall back to structured summary
+            return _create_fallback_summary(user_components, response, tool_name)
+
         summary = await adapter.generate(
             prompt=summarization_prompt, vector_store_ids=None, temperature=0.3
         )
