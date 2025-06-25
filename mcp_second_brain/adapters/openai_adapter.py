@@ -119,8 +119,37 @@ class OpenAIAdapter(BaseAdapter):
                     job = await client.responses.retrieve(response.id)
 
                     if job.status == "completed":
+                        # Extract content from the response
+                        # First try the convenience property
+                        content = getattr(job, "output_text", "")
+
+                        # If output_text is empty (can happen with function calls),
+                        # extract from output array
+                        if not content and hasattr(job, "output") and job.output:
+                            text_contents = []
+                            for item in job.output:
+                                # Handle both dict and object representations
+                                if hasattr(item, "type") and hasattr(item, "text"):
+                                    if item.type == "output_text":
+                                        text_contents.append(item.text)
+                                elif isinstance(item, dict):
+                                    if (
+                                        item.get("type") == "output_text"
+                                        and "text" in item
+                                    ):
+                                        text_contents.append(item["text"])
+
+                            content = " ".join(text_contents)
+
+                            if not content:
+                                # Log what we found for debugging
+                                logger.warning(
+                                    f"No text content found in {self.model_name} response. "
+                                    f"Output items: {[getattr(item, 'type', None) or item.get('type') if isinstance(item, dict) else type(item) for item in job.output[:5]]}"
+                                )
+
                         return {
-                            "content": job.output_text,  # type: ignore[attr-defined]
+                            "content": content,
                             "response_id": job.id,  # type: ignore[attr-defined]
                         }
                     elif job.status not in ["queued", "in_progress"]:
