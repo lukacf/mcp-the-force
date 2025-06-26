@@ -241,18 +241,25 @@ class OpenAIAdapter(BaseAdapter):
 
                         # Check for function calls that need execution
                         if hasattr(job, "output") and job.output:
-                            function_calls = [
-                                item
-                                for item in job.output
+                            # Deduplicate function calls by call_id
+                            seen_call_ids = set()
+                            function_calls = []
+                            for item in job.output:
                                 if (
                                     hasattr(item, "type")
                                     and item.type == "function_call"
-                                )
-                                or (
+                                ) or (
                                     isinstance(item, dict)
                                     and item.get("type") == "function_call"
-                                )
-                            ]
+                                ):
+                                    call_id = (
+                                        getattr(item, "call_id", None)
+                                        if hasattr(item, "call_id")
+                                        else item.get("call_id")
+                                    )
+                                    if call_id and call_id not in seen_call_ids:
+                                        seen_call_ids.add(call_id)
+                                        function_calls.append(item)
 
                             if function_calls:
                                 logger.info(
@@ -264,12 +271,28 @@ class OpenAIAdapter(BaseAdapter):
                                     function_calls, vector_store_ids
                                 )
 
+                                # Debug logging
+                                logger.info(
+                                    f"Function calls: {len(function_calls)} items"
+                                )
+                                logger.info(f"Results: {len(results)} items")
+                                for i, fc in enumerate(function_calls):
+                                    fc_id = (
+                                        fc.get("call_id")
+                                        if isinstance(fc, dict)
+                                        else getattr(fc, "call_id", None)
+                                    )
+                                    logger.info(f"Function call {i}: call_id={fc_id}")
+                                for i, res in enumerate(results):
+                                    logger.info(
+                                        f"Result {i}: call_id={res.get('call_id')}"
+                                    )
+
                                 # Send results back to the model
                                 follow_up_params = {
                                     "model": self.model_name,
                                     "previous_response_id": job.id,
-                                    "input": function_calls
-                                    + results,  # Include both calls and results
+                                    "input": results,  # Only include results, not the original calls
                                     "tools": tools,  # Re-attach tool schemas
                                     "parallel_tool_calls": True,  # Be explicit
                                 }
@@ -360,6 +383,7 @@ class OpenAIAdapter(BaseAdapter):
                 response_id = None
                 content_parts = []
                 function_calls = []
+                function_call_ids = set()  # Track seen call IDs to avoid duplicates
                 event_count = 0
 
                 async for event in stream:
@@ -400,15 +424,18 @@ class OpenAIAdapter(BaseAdapter):
                             event.type == "response.tool_call"
                             or event.type == "tool_call"
                         ):
-                            # Collect function calls
-                            function_calls.append(
-                                {
-                                    "type": "function_call",
-                                    "name": getattr(event, "name", None),
-                                    "call_id": getattr(event, "call_id", None),
-                                    "arguments": getattr(event, "arguments", "{}"),
-                                }
-                            )
+                            # Collect function calls, avoiding duplicates
+                            call_id = getattr(event, "call_id", None)
+                            if call_id and call_id not in function_call_ids:
+                                function_call_ids.add(call_id)
+                                function_calls.append(
+                                    {
+                                        "type": "function_call",
+                                        "name": getattr(event, "name", None),
+                                        "call_id": call_id,
+                                        "arguments": getattr(event, "arguments", "{}"),
+                                    }
+                                )
                     # Fallback for other event structures
                     elif hasattr(event, "output_text") and event.output_text:
                         content_parts.append(event.output_text)
@@ -428,11 +455,21 @@ class OpenAIAdapter(BaseAdapter):
                         function_calls, vector_store_ids
                     )
 
+                    # Debug logging
+                    logger.info(
+                        f"Streaming function calls: {len(function_calls)} items"
+                    )
+                    logger.info(f"Results: {len(results)} items")
+                    for i, fc in enumerate(function_calls):
+                        logger.info(f"Function call {i}: call_id={fc.get('call_id')}")
+                    for i, res in enumerate(results):
+                        logger.info(f"Result {i}: call_id={res.get('call_id')}")
+
                     # Create follow-up with same tools
                     follow_up_params = {
                         "model": self.model_name,
                         "previous_response_id": response_id,
-                        "input": function_calls + results,
+                        "input": results,  # Only include results, not the original calls
                         "tools": tools,
                         "parallel_tool_calls": True,
                         "stream": True,  # Continue streaming
