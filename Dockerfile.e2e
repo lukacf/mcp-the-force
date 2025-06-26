@@ -32,11 +32,13 @@ RUN uv pip install --system .
 COPY tests/e2e ./tests/e2e
 
 # Install test dependencies
-RUN pip install pytest anyio pytest-timeout
+RUN pip install pytest pytest-asyncio anyio pytest-timeout
 
-# Create non-root user
+# Create non-root user and ensure proper permissions
 RUN useradd -m -u 1000 tester && \
-    chown -R tester:tester /app
+    chown -R tester:tester /app && \
+    chmod -R 755 /app && \
+    mkdir -p /tmp && chmod 1777 /tmp
 
 # Switch to non-root user
 USER tester
