@@ -289,10 +289,13 @@ class OpenAIAdapter(BaseAdapter):
                                     )
 
                                 # Send results back to the model
+                                # Only send results when using previous_response_id
+                                follow_up_input = results
+
                                 follow_up_params = {
                                     "model": self.model_name,
                                     "previous_response_id": job.id,
-                                    "input": results,  # Only include results, not the original calls
+                                    "input": follow_up_input,  # Only results needed with previous_response_id
                                     "tools": tools,  # Re-attach tool schemas
                                     "parallel_tool_calls": True,  # Be explicit
                                 }
@@ -466,10 +469,13 @@ class OpenAIAdapter(BaseAdapter):
                         logger.info(f"Result {i}: call_id={res.get('call_id')}")
 
                     # Create follow-up with same tools
+                    # Only send results when using previous_response_id
+                    follow_up_input = results
+
                     follow_up_params = {
                         "model": self.model_name,
                         "previous_response_id": response_id,
-                        "input": results,  # Only include results, not the original calls
+                        "input": follow_up_input,  # Only results needed with previous_response_id
                         "tools": tools,
                         "parallel_tool_calls": True,
                         "stream": True,  # Continue streaming
