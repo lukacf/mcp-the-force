@@ -83,16 +83,8 @@ class SearchMemoryAdapter(BaseAdapter):
             return "Error: Search query is required"
 
         try:
-            # Get all memory store IDs
-            all_store_ids = self.memory_config.get_all_store_ids()
-            if not all_store_ids:
-                return "No memory stores available to search"
-
-            # Filter stores by type
-            stores_to_search = []
-            for store_id in all_store_ids:
-                if any(store_type in store_id for store_type in store_types):
-                    stores_to_search.append(store_id)
+            # Get memory store IDs filtered by type
+            stores_to_search = self.memory_config.get_store_ids_by_type(store_types)
 
             if not stores_to_search:
                 return f"No {', '.join(store_types)} stores found"

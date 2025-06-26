@@ -206,7 +206,7 @@ Vector Store Attachments: {'Yes' if user_components['has_attachments'] else 'No'
 3. Any specific data, decisions, or recommendations made
 4. Important details that should be searchable later
 
-Keep the summary concise but include all key information, especially any specific values, names, or identifiers mentioned.
+IMPORTANT: Keep the summary under 1000 words while ensuring ALL unique identifiers, specific values, names, and technical details are preserved for searchability.
 
 Conversation to summarize:
 {conversation_text}

@@ -200,6 +200,16 @@ class MemoryConfig:
             rows = self._db.execute("SELECT store_id FROM stores").fetchall()
             return [row["store_id"] for row in rows]
 
+    def get_store_ids_by_type(self, store_types: List[str]) -> List[str]:
+        """Get store IDs filtered by type."""
+        with self._lock:
+            if not store_types:
+                return []
+            placeholders = ",".join("?" for _ in store_types)
+            query = f"SELECT store_id FROM stores WHERE store_type IN ({placeholders})"
+            rows = self._db.execute(query, store_types).fetchall()
+            return [row["store_id"] for row in rows]
+
     def close(self):
         """Close database connection."""
         if hasattr(self, "_db"):

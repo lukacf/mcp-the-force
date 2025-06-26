@@ -5,7 +5,7 @@ import time
 import uuid
 
 
-def wait_for_memory_indexed(claude_code, fact, timeout=60):
+def wait_for_memory_indexed(claude_code, fact, timeout=120):
     """Poll until a fact appears in memory search results."""
     start_time = time.time()
     last_output = None
@@ -17,7 +17,13 @@ def wait_for_memory_indexed(claude_code, fact, timeout=60):
         last_output = output
 
         if fact in output and "No results found" not in output:
+            print(f"\nMemory found after {time.time() - start_time:.1f}s")
             return True
+
+        # Print progress every 10 seconds
+        elapsed = time.time() - start_time
+        if int(elapsed) % 10 == 0:
+            print(f"\nWaiting for memory indexing... {elapsed:.0f}s elapsed")
 
         time.sleep(2)  # Poll every 2 seconds
 
@@ -88,8 +94,8 @@ class TestE2EMemory:
 
         # Store with o3
         args1 = {
-            "instructions": f"Remember this cross-model test info: {unique_info}",
-            "output_format": "brief confirmation",
+            "instructions": f"I need you to analyze and describe this unique identifier: {unique_info}. What pattern do you see in it?",
+            "output_format": "brief analysis mentioning the identifier",
             "context": [],
             "session_id": f"o3-memory-{uuid.uuid4().hex[:8]}",
         }

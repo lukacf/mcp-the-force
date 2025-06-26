@@ -20,7 +20,9 @@ class Settings(BaseSettings):
     memory_session_cutoff_hours: PositiveInt = Field(
         2, env="MEMORY_SESSION_CUTOFF_HOURS"
     )
-    memory_summary_char_limit: PositiveInt = Field(500, env="MEMORY_SUMMARY_CHAR_LIMIT")
+    memory_summary_char_limit: PositiveInt = Field(
+        200000, env="MEMORY_SUMMARY_CHAR_LIMIT"
+    )  # ~50k tokens
     memory_max_files_per_commit: PositiveInt = Field(
         50, env="MEMORY_MAX_FILES_PER_COMMIT"
     )

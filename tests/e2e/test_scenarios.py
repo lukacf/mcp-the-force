@@ -10,7 +10,7 @@ class TestE2EScenarios:
     """More complex scenarios testing tool interactions."""
 
     @pytest.mark.timeout(300)  # 5 minutes
-    def test_vector_store_workflow(self, claude_code):
+    def test_vector_store_workflow(self, claude_code, created_vector_stores):
         """Test creating and using a vector store."""
         # Use specific Python files from the project
         files = [
@@ -29,7 +29,16 @@ class TestE2EScenarios:
 
         # Check for structured response
         assert "SUCCESS:" in output or "FAILED:" in output
-        if "FAILED:" in output:
+        if "SUCCESS:" in output:
+            # Extract the vector store ID and track it
+            try:
+                # Parse "SUCCESS: vs_xxxxx"
+                vs_id = output.split("SUCCESS:")[1].strip().split()[0]
+                if vs_id.startswith("vs_"):
+                    created_vector_stores.append(vs_id)
+            except Exception:
+                pass  # If parsing fails, we can't track it
+        elif "FAILED:" in output:
             # If it failed, make sure it's for a valid reason
             assert "no_supported_files" in output.lower() or "error" in output.lower()
 
