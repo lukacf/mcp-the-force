@@ -104,11 +104,11 @@ class SearchAttachmentAdapter(BaseAdapter):
             try:
                 results = await asyncio.wait_for(
                     asyncio.gather(*search_tasks, return_exceptions=True),
-                    timeout=10.0,  # 10 second timeout for all searches
+                    timeout=30.0,  # 30 second timeout for all searches
                 )
             except asyncio.TimeoutError:
                 logger.warning("Attachment search timed out")
-                return "Attachment search timed out after 10 seconds"
+                return "Attachment search timed out after 30 seconds"
 
             # Aggregate and sort results
             all_results = []
