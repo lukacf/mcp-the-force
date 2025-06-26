@@ -256,6 +256,8 @@ class BackgroundFlowStrategy(BaseFlowStrategy):
 
         if self.context.request.reasoning_effort:
             api_params["reasoning"] = {"effort": self.context.request.reasoning_effort}
+            # Remove the flat reasoning_effort parameter that was included by to_api_format()
+            api_params.pop("reasoning_effort", None)
 
         # Create initial response
         initial_response = await self.context.client.responses.create(**api_params)
@@ -371,6 +373,8 @@ class StreamingFlowStrategy(BaseFlowStrategy):
 
         if self.context.request.reasoning_effort:
             api_params["reasoning"] = {"effort": self.context.request.reasoning_effort}
+            # Remove the flat reasoning_effort parameter that was included by to_api_format()
+            api_params.pop("reasoning_effort", None)
 
         # Create streaming response
         stream = await asyncio.wait_for(
