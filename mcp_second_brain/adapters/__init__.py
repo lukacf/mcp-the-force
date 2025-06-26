@@ -3,7 +3,7 @@
 import os
 from typing import Dict, Tuple, Type, Optional
 from .base import BaseAdapter
-from .openai_adapter import OpenAIAdapter
+from .openai import OpenAIAdapter
 from .vertex_adapter import VertexAdapter
 import logging
 
