@@ -158,7 +158,8 @@ class TestAttachmentSearchReal:
         result = await adapter.generate(prompt="test", return_debug=True)
 
         tool_names = [
-            t.get("function", {}).get("name") for t in result.get("_debug_tools", [])
+            t.get("name") if t.get("type") == "function" else t.get("type")
+            for t in result.get("_debug_tools", [])
         ]
         assert "search_project_memory" in tool_names
         assert "search_session_attachments" not in tool_names
@@ -169,7 +170,8 @@ class TestAttachmentSearchReal:
         )
 
         tool_names2 = [
-            t.get("function", {}).get("name") for t in result2.get("_debug_tools", [])
+            t.get("name") if t.get("type") == "function" else t.get("type")
+            for t in result2.get("_debug_tools", [])
         ]
         assert "search_project_memory" in tool_names2
         assert "search_session_attachments" in tool_names2
@@ -180,7 +182,7 @@ class TestAttachmentSearchReal:
     )
     @pytest.mark.asyncio
     async def test_search_finds_specific_content(
-        self, real_vector_store_client, test_documents
+        self, real_vector_store_client, test_documents, created_vector_stores
     ):
         """Test that search actually finds specific content in attachments."""
         from mcp_second_brain.tools.search_attachments import (
@@ -195,6 +197,7 @@ class TestAttachmentSearchReal:
 
         # Create vector store with test documents
         vs_id = await manager.create([str(doc) for doc in test_documents])
+        created_vector_stores.append(vs_id)  # Track for cleanup
 
         try:
             # Set the context variable
@@ -247,7 +250,9 @@ class TestAttachmentSearchReal:
         reason="Requires OPENAI_API_KEY for real vector store operations",
     )
     @pytest.mark.asyncio
-    async def test_multiple_queries(self, real_vector_store_client, test_documents):
+    async def test_multiple_queries(
+        self, real_vector_store_client, test_documents, created_vector_stores
+    ):
         """Test searching with multiple semicolon-separated queries."""
         from mcp_second_brain.tools.search_attachments import (
             SearchAttachmentAdapter,
@@ -257,6 +262,7 @@ class TestAttachmentSearchReal:
 
         manager = VectorStoreManager()
         vs_id = await manager.create([str(doc) for doc in test_documents])
+        created_vector_stores.append(vs_id)  # Track for cleanup
 
         try:
             current_attachment_stores.set([vs_id])
@@ -280,7 +286,9 @@ class TestAttachmentSearchReal:
         reason="Requires OPENAI_API_KEY for real vector store operations",
     )
     @pytest.mark.asyncio
-    async def test_context_isolation(self, real_vector_store_client, test_documents):
+    async def test_context_isolation(
+        self, real_vector_store_client, test_documents, created_vector_stores
+    ):
         """Test that attachment contexts don't leak between executions."""
         from mcp_second_brain.tools.search_attachments import current_attachment_stores
         from mcp_second_brain.tools.vector_store_manager import VectorStoreManager
@@ -293,6 +301,7 @@ class TestAttachmentSearchReal:
 
         vs_id1 = await manager.create([str(doc) for doc in docs1])
         vs_id2 = await manager.create([str(doc) for doc in docs2])
+        created_vector_stores.extend([vs_id1, vs_id2])  # Track both for cleanup
 
         try:
             # Simulate two concurrent executions
@@ -335,7 +344,8 @@ class TestAttachmentSearchIntegration:
         # Test without attachments
         result = await adapter.generate(prompt="test query", return_debug=True)
         tool_names = [
-            t.get("function", {}).get("name") for t in result.get("_debug_tools", [])
+            t.get("name") if t.get("type") == "function" else t.get("type")
+            for t in result.get("_debug_tools", [])
         ]
         assert "search_session_attachments" not in tool_names
 
@@ -344,7 +354,8 @@ class TestAttachmentSearchIntegration:
             prompt="test query", vector_store_ids=["vs_123"], return_debug=True
         )
         tool_names2 = [
-            t.get("function", {}).get("name") for t in result2.get("_debug_tools", [])
+            t.get("name") if t.get("type") == "function" else t.get("type")
+            for t in result2.get("_debug_tools", [])
         ]
         assert "search_session_attachments" in tool_names2
 
@@ -364,8 +375,8 @@ class TestAttachmentSearchIntegration:
         # Test without attachments
         result = await adapter.generate(prompt="test query", return_debug=True)
 
-        # For Gemini, tools are FunctionDeclaration objects
-        tool_names = [fd.name for fd in result.get("_debug_tools", [])]
+        # For Gemini, tools are dicts with 'name' key
+        tool_names = [fd.get("name") for fd in result.get("_debug_tools", [])]
         assert "search_project_memory" in tool_names
         assert "search_session_attachments" not in tool_names
 
@@ -373,6 +384,6 @@ class TestAttachmentSearchIntegration:
         result2 = await adapter.generate(
             prompt="test query", vector_store_ids=["vs_123"], return_debug=True
         )
-        tool_names2 = [fd.name for fd in result2.get("_debug_tools", [])]
+        tool_names2 = [fd.get("name") for fd in result2.get("_debug_tools", [])]
         assert "search_project_memory" in tool_names2
         assert "search_session_attachments" in tool_names2

@@ -183,7 +183,7 @@ class ToolExecutor:
                 try:
                     await asyncio.wait_for(
                         asyncio.gather(*memory_tasks, return_exceptions=True),
-                        timeout=5.0,  # 5 second timeout for memory storage
+                        timeout=120.0,  # 120 second timeout for memory storage (vector indexing can take 10-30s)
                     )
                 except asyncio.TimeoutError:
                     logger.warning("Memory storage tasks timed out")
