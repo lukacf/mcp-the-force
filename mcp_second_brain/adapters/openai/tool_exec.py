@@ -22,7 +22,7 @@ class ToolExecutor:
         """
         self._dispatch = tool_dispatcher
 
-    async def run_all(self, tool_calls: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    async def run_all(self, tool_calls: List[Any]) -> List[Dict[str, Any]]:
         """Executes all tool calls with controlled parallelism.
 
         Args:
@@ -63,32 +63,30 @@ class ToolExecutor:
         return [r for r in results if r is not None]
 
     async def _execute_one_with_limit(
-        self, call: Dict[str, Any], results: List[Optional[Dict[str, Any]]], index: int
+        self, call: Any, results: List[Optional[Dict[str, Any]]], index: int
     ):
         """Execute a single tool call with semaphore limiting."""
         async with GLOBAL_TOOL_LIMITER:
             await self._execute_one(call, results, index)
 
     async def _execute_one(
-        self, call: Dict[str, Any], results: List[Optional[Dict[str, Any]]], index: int
+        self, call: Any, results: List[Optional[Dict[str, Any]]], index: int
     ):
         """Executes a single tool and places the result in the shared list.
 
         This method captures errors but does not raise them, allowing other
         tools to complete. Errors are returned as part of the result.
         """
-        # Extract call details
-        call_id = call.get("call_id")
-        name = call.get("name")
-        arguments = call.get("arguments", "{}")
-
-        # Handle both dict and object-like tool calls
-        if hasattr(call, "call_id"):
-            call_id = call.call_id
-        if hasattr(call, "name"):
-            name = call.name
-        if hasattr(call, "arguments"):
-            arguments = call.arguments
+        # Extract call details - handle both dict and object representations
+        if isinstance(call, dict):
+            call_id = call.get("call_id")
+            name = call.get("name")
+            arguments = call.get("arguments", "{}")
+        else:
+            # Handle object-like tool calls (e.g., ResponseFunctionToolCall)
+            call_id = getattr(call, "call_id", None)
+            name = getattr(call, "name", None)
+            arguments = getattr(call, "arguments", "{}")
 
         logger.info(f"Executing tool '{name}' (call_id: {call_id})")
 
