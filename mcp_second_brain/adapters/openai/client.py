@@ -67,7 +67,6 @@ class OpenAIClientFactory:
             client_kwargs: Dict[str, Any] = {
                 "http_client": http_client,
                 "max_retries": 3,  # SDK-level retries
-                "use_responses_api": True,  # Always use Responses API
             }
 
             if api_key:
