@@ -14,6 +14,20 @@ class Settings(BaseSettings):
     )  # Use 10-95% of model context
     default_temperature: float = Field(0.2, env="DEFAULT_TEMPERATURE")
 
+    # Memory configuration
+    memory_enabled: bool = Field(True, env="MEMORY_ENABLED")
+    memory_rollover_limit: PositiveInt = Field(9500, env="MEMORY_ROLLOVER_LIMIT")
+    memory_session_cutoff_hours: PositiveInt = Field(
+        2, env="MEMORY_SESSION_CUTOFF_HOURS"
+    )
+    memory_summary_char_limit: PositiveInt = Field(
+        200000, env="MEMORY_SUMMARY_CHAR_LIMIT"
+    )  # ~50k tokens
+    memory_max_files_per_commit: PositiveInt = Field(
+        50, env="MEMORY_MAX_FILES_PER_COMMIT"
+    )
+    session_db_path: str = Field(".mcp_sessions.sqlite3", env="SESSION_DB_PATH")
+
     class Config:
         env_file = ".env"
         extra = "ignore"  # Ignore extra fields in .env file

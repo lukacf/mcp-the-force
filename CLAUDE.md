@@ -26,22 +26,13 @@ This file provides guidance to you when working with code in this repository.
    - **gemini25_pro**: Massive context windows (~1M tokens), smart, single-shot only
    - **gemini25_flash**: Massive context windows (~1M tokens), fast, single-shot only
    - **gpt4_1**: Massive context windows (~1M tokens), Web search for current info (use session_id)
-   - All have knowledge cutoffs - o3 doesn't even know what MCP is
+   - **IMPORTANT**: None of these assistants are aware of MCP (Model Context Protocol) or the Responses API
+   - o3/o3_pro/gemini models have no knowledge of these APIs at all
+   - gpt4_1 doesn't know either but can search the web to find information if needed
    - Prompting and context is important. At the start of a session, give context of the situation. Do not ask the assistants to adopt personas, be up front that you are an AI and be clear about your expectations. 
 
-5. **Parallel Consultation Pattern**:
-
-   Use parallel tasks when appropriate using the Task tool. Make sure the task tool returns the session id when available so that multi turn conversations are possible.
-   
-   ```
-   Task 1: o3 (session: "feature-x") - "Best approach for X?"
-   Task 2: gemini25_pro - "What are the risks with X?"
-   Task 3: gpt4_1 - "Current best practices for X?"
-   ```
-   Parallel, not sequential!
-   
-   When using a Task to asking gpt4_1, instruct the task not to use the web search tool (gpt4_1 will handle it itself.)
-
+5. **Tasks**
+   -Avoid using tasks for calling the assistants. 
 
 6. **Quality Control Before Changes**:
    - Get implementation reviewed: "What's genuinely problematic here?"
