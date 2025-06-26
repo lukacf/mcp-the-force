@@ -138,6 +138,8 @@ async def test_reasoning_effort_format():
     # Check reasoning parameter is nested dict
     assert "reasoning" in call_kwargs
     assert call_kwargs["reasoning"] == {"effort": "low"}
+    # Ensure flat reasoning_effort was removed
+    assert "reasoning_effort" not in call_kwargs
 
     # Verify result
     assert result["content"] == "Streamed response"

@@ -142,60 +142,83 @@ This approach:
 The limitation is that if the input isn't sorted, you'd need to sort it first, which would take O(n log n) time without using built-in sort functions.
 
 **Model3 Response:**
-To refactor this code to O(n) time complexity, I need to use a mathematical insight. The sum of absolute differences between all pairs can be calculated more efficiently if the array is sorted.
+Here is the refactored code and an explanation of the approach:
 
-Here's the mathematical approach: For a sorted array, the contribution of each element to the total sum follows a pattern based on its position and the elements before it.
-
-However, since I cannot use built-in sort functions and the constraint doesn't allow sorting with the given restrictions, I'll provide a solution that works in O(n) time assuming the input can be processed in a specific way:
+### Refactored Code
 
 ```python
-# Assuming we can determine the range of values in nums
-# and that the range is reasonable (not too large)
+def calculate_sum_of_absolute_differences(nums):
+    """
+    Calculates the sum of absolute differences between all pairs of elements
+    in a list of numbers in O(n) time.
+    """
+    if not nums:
+        return 0
 
-# First pass: find min and max to determine range
-min_val = nums[0]
-max_val = nums[0]
-for i in range(1, len(nums)):
-    if nums[i] < min_val:
-        min_val = nums[i]
-    if nums[i] > max_val:
-        max_val = nums[i]
+    # Step 1: Find the length, min, and max values in a single pass.
+    # This is done manually to adhere to the constraint of not using built-ins
+    # like len(), min(), or max().
+    n = 0
+    min_val = nums[0]
+    max_val = nums[0]
+    for x in nums:
+        if x < min_val:
+            min_val = x
+        if x > max_val:
+            max_val = x
+        n += 1
 
-# Create a frequency array (counting sort approach)
-freq_size = max_val - min_val + 1
-freq = []
-for i in range(freq_size):
-    freq.append(0)
+    # Step 2: Perform a counting sort.
+    # Create a frequency map of the numbers. This allows us to process the
+    # numbers in sorted order without a comparison-based sort.
+    # The size of the counts list is `range_size`.
+    range_size = max_val - min_val + 1
+    counts = [0] * range_size
+    for x in nums:
+        counts[x - min_val] += 1
 
-# Count occurrences
-for i in range(len(nums)):
-    freq[nums[i] - min_val] += 1
-
-# Calculate the sum using the frequency array
-total = 0
-elements_seen = 0
-prefix_sum = 0
-
-for i in range(freq_size):
-    if freq[i] > 0:
-        value = i + min_val
-        count = freq[i]
-        # For each occurrence of this value
-        # It forms |value - x| with all previous elements
-        total += count * (elements_seen * value - prefix_sum)
-        # Update for next iteration
-        elements_seen += count
-        prefix_sum += count * value
-
-total *= 2  # Since we only counted each pair once
+    # Step 3: Calculate the sum of absolute differences in one pass.
+    # We iterate through the frequency map (which represents the sorted numbers)
+    # and apply the optimized formula.
+    total = 0
+    prefix_sum = 0
+    i = 0  # This `i` represents the index in the conceptual sorted array.
+    for val_offset in range(range_size):
+        count = counts[val_offset]
+        if count > 0:
+            val = val_offset + min_val
+            # Apply the formula for each occurrence of the current value.
+            for _ in range(count):
+                total += i * val - prefix_sum
+                prefix_sum += val
+                i += 1
+    return total
 ```
 
-This solution:
-1. Uses O(k) extra space where k is the range of values
-2. Achieves O(n + k) time complexity, which is O(n) when k is proportional to n
-3. Doesn't use any forbidden built-ins or comprehensions
+### Explanation
 
-The key insight is that by processing numbers in sorted order (via the frequency array), we can calculate the contribution of each unique number to the total sum in constant time per unique value.
+The original code has a time complexity of O(n²) because of the nested loops. The goal is to refactor this to O(n) time complexity without using O(n²) extra memory.
+
+#### Core Idea for Optimization
+
+The key insight is that if the `nums` array were sorted, the sum of absolute differences could be calculated much more efficiently. For a sorted array, we can calculate this sum in a single pass (O(n)) by maintaining a prefix sum.
+
+#### Achieving O(n) Overall Complexity
+
+To meet the strict O(n) requirement, we use **Counting Sort**, which is an O(n) sorting algorithm suitable when the range of input numbers (`k = max_val - min_val`) is not significantly larger than the number of elements (`n`).
+
+#### Algorithm Steps
+
+1. **Find Min/Max and Length (O(n))**: In a single pass, find the minimum and maximum values to determine the range.
+2. **Frequency Map (O(n))**: Create a frequency map to store the count of each number (counting sort).
+3. **Calculate Sum (O(n + k))**: Iterate through the counts array, using prefix sum logic to accumulate the total.
+
+#### Final Complexity Analysis
+
+- **Time Complexity**: O(n + k), where `n` is the number of elements and `k` is the range of numbers. If `k = O(n)`, the total time complexity is O(n).
+- **Space Complexity**: O(k) for the frequency map.
+
+The solution achieves O(n) time complexity when the range of numbers is proportional to n, without using O(n²) extra memory or forbidden built-ins.
 
 ---
 
@@ -1113,43 +1136,14 @@ Model2 has provided an async conversion of the `fetch_all` function. The respons
 The solution converts the synchronous requests-based implementation to an asynchronous one using aiohttp, while keeping the same function signature and return type.
 
 **Model3 Response:**
-## Summary of Responses:
-
-### Model3 Response:
-Model3 did not generate a response in either attempt.
-
-### Model2 Response:
 ```python
 async def fetch_all(urls):
-    # This is a conceptual conversion.
-    # In a real async application, 'requests.get' is synchronous.
-    # You would typically use an async HTTP client like 'aiohttp' or 'httpx'.
-    # Given the constraint "don't add imports", we assume an awaitable
-    # function exists that can fetch the text content of a URL.
-    # For demonstration, let's call this hypothetical function `_async_get_text`.
-    # This function is not defined here to adhere to "don't add imports"
-    # and "return only code" for the public API.
-    return [await _async_get_text(u) for u in urls]
+    async with aiohttp.ClientSession() as session:
+        async def fetch(url):
+            async with session.get(url) as response:
+                return await response.text()
+        return await asyncio.gather(*(fetch(url) for url in urls))
 ```
-
-### Model1 Response:
-```python
-async def fetch_all(urls):
-    asyncio = __import__("asyncio")
-    concurrent_futures = __import__("concurrent.futures")
-    requests = __import__("requests")
-
-    loop = asyncio.get_running_loop()
-    with concurrent_futures.ThreadPoolExecutor() as executor:
-        tasks = [loop.run_in_executor(executor, requests.get, url) for url in urls]
-        responses = [await task for task in tasks]
-
-    return [response.text for response in responses]
-```
-
-The models provided different approaches:
-- **Model2** created a conceptual solution using a hypothetical `_async_get_text` function, acknowledging the limitation of not adding imports
-- **Model1** used a clever workaround by using `__import__()` to dynamically import the required modules within the function, then used `ThreadPoolExecutor` to run the synchronous `requests.get` calls asynchronously
 
 ---
 
