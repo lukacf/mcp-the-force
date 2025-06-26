@@ -1,4 +1,4 @@
-"""Test that OpenAI adapter always uses Responses API."""
+"""Test that OpenAI adapter uses Responses API through correct method calls."""
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -6,8 +6,8 @@ from mcp_second_brain.adapters.openai.client import OpenAIClientFactory
 
 
 @pytest.mark.asyncio
-async def test_client_uses_responses_api():
-    """Verify that OpenAI client is created with use_responses_api=True."""
+async def test_client_initialization():
+    """Verify that OpenAI client is created properly."""
     # Clear any existing instances
     await OpenAIClientFactory.close_all()
 
@@ -19,13 +19,14 @@ async def test_client_uses_responses_api():
         # Get client instance
         await OpenAIClientFactory.get_instance(api_key="test-key")
 
-        # Verify AsyncOpenAI was called with use_responses_api=True
+        # Verify AsyncOpenAI was called with correct parameters
         mock_openai.assert_called_once()
         call_kwargs = mock_openai.call_args[1]
 
-        assert "use_responses_api" in call_kwargs
-        assert call_kwargs["use_responses_api"] is True
         assert call_kwargs["api_key"] == "test-key"
+        assert "http_client" in call_kwargs
+        assert "max_retries" in call_kwargs
+        assert call_kwargs["max_retries"] == 3
 
         # Cleanup
         await OpenAIClientFactory.close_all()
