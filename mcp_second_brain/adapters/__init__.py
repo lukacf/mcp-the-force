@@ -1,11 +1,12 @@
 """Adapter module for AI model integrations."""
 
-import os
 from typing import Dict, Tuple, Type, Optional
 from .base import BaseAdapter
 from .openai import OpenAIAdapter
 from .vertex import VertexAdapter
 import logging
+
+from mcp_second_brain.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +17,8 @@ ADAPTER_REGISTRY: Dict[str, Type[BaseAdapter]] = {
 }
 
 # Mock adapter injection for testing
-if os.getenv("MCP_ADAPTER_MOCK", "").lower() in {"1", "true", "yes"}:
+_settings = get_settings()
+if _settings.adapter_mock:
     from .mock_adapter import MockAdapter
 
     # Replace all adapters with mock
