@@ -98,6 +98,11 @@ memory:
 providers:
   openai:
     api_key: sk-proj-...  # Your OpenAI API key
+  vertex:
+    # For CI/CD environments (e.g., GitHub Actions, Docker):
+    oauth_client_id: ""     # Required for refresh token auth
+    oauth_client_secret: "" # Required for refresh token auth  
+    user_refresh_token: ""  # Your Google Cloud refresh token
   anthropic:
     api_key: claude-...   # Your Anthropic API key
 ```
@@ -149,6 +154,7 @@ Common environment variables:
 | Server | `HOST`, `PORT` |
 | Logging | `LOG_LEVEL` |
 | Vertex AI | `VERTEX_PROJECT`, `VERTEX_LOCATION` |
+| Vertex OAuth (CI/CD) | `GCLOUD_OAUTH_CLIENT_ID`, `GCLOUD_OAUTH_CLIENT_SECRET`, `GCLOUD_USER_REFRESH_TOKEN` |
 
 ### Migration from Legacy .env
 

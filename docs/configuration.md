@@ -53,6 +53,11 @@ Edit `secrets.yaml`:
 providers:
   openai:
     api_key: sk-proj-...
+  vertex:
+    # For CI/CD environments that can't use gcloud auth:
+    oauth_client_id: "your-oauth-client-id"
+    oauth_client_secret: "your-oauth-client-secret"
+    user_refresh_token: "your-refresh-token"
   anthropic:
     api_key: claude-...
 ```
@@ -172,6 +177,10 @@ providers:
     enabled: true
     project: my-project
     location: us-central1
+    # OAuth config for CI/CD (usually in secrets.yaml):
+    oauth_client_id: ""     # For refresh token auth
+    oauth_client_secret: "" # For refresh token auth
+    user_refresh_token: ""  # For refresh token auth
   
   anthropic:
     enabled: false
@@ -212,6 +221,9 @@ All configuration values can be overridden using environment variables:
 | `providers.openai.api_key` | `OPENAI_API_KEY` |
 | `providers.vertex.project` | `VERTEX_PROJECT` |
 | `providers.vertex.location` | `VERTEX_LOCATION` |
+| `providers.vertex.oauth_client_id` | `GCLOUD_OAUTH_CLIENT_ID` |
+| `providers.vertex.oauth_client_secret` | `GCLOUD_OAUTH_CLIENT_SECRET` |
+| `providers.vertex.user_refresh_token` | `GCLOUD_USER_REFRESH_TOKEN` |
 | `providers.anthropic.api_key` | `ANTHROPIC_API_KEY` |
 | `session.ttl_seconds` | `SESSION_TTL_SECONDS` |
 | `session.db_path` | `SESSION_DB_PATH` |
