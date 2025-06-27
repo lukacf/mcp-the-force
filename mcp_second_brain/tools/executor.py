@@ -5,6 +5,7 @@ import logging
 from typing import Optional, List
 from mcp_second_brain import adapters
 from mcp_second_brain import session_cache as session_cache_module
+from mcp_second_brain import gemini_session_cache as gemini_session_cache_module
 from .registry import ToolMetadata
 from .vector_store_manager import vector_store_manager
 from .prompt_engine import prompt_engine
@@ -92,21 +93,34 @@ class ToolExecutor:
 
             # 6. Handle session
             previous_response_id = None
+            gemini_messages = None
             session_params = routed_params["session"]
             assert isinstance(session_params, dict)  # Type hint for mypy
             session_id = session_params.get("session_id")
             if session_id:
-                previous_response_id = (
-                    session_cache_module.session_cache.get_response_id(session_id)
-                )
-                if previous_response_id:
-                    logger.info(f"Continuing session {session_id}")
+                if metadata.model_config["adapter_class"] == "openai":
+                    previous_response_id = (
+                        session_cache_module.session_cache.get_response_id(session_id)
+                    )
+                    if previous_response_id:
+                        logger.info(f"Continuing session {session_id}")
+                elif metadata.model_config["adapter_class"] == "vertex":
+                    gemini_messages = (
+                        gemini_session_cache_module.gemini_session_cache.get_messages(
+                            session_id
+                        )
+                    )
 
             # 7. Execute model call
             adapter_params = routed_params["adapter"]
             assert isinstance(adapter_params, dict)  # Type hint for mypy
             if previous_response_id:
                 adapter_params["previous_response_id"] = previous_response_id
+
+            if gemini_messages is not None:
+                adapter_params["messages"] = gemini_messages + [
+                    {"role": "user", "content": prompt}
+                ]
 
             result = await asyncio.wait_for(
                 adapter.generate(
@@ -121,11 +135,21 @@ class ToolExecutor:
             # 8. Handle response
             if isinstance(result, dict):
                 content = result.get("content", "")
-                # Store response ID for next call if session provided
-                if session_id and "response_id" in result:
+                if (
+                    session_id
+                    and metadata.model_config["adapter_class"] == "openai"
+                    and "response_id" in result
+                ):
                     session_cache_module.session_cache.set_response_id(
                         session_id, result["response_id"]
                     )
+                if session_id and metadata.model_config["adapter_class"] == "vertex":
+                    try:
+                        gemini_session_cache_module.gemini_session_cache.append_exchange(
+                            session_id, prompt, content
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to update Gemini session: {e}")
 
                 # 8a. Store conversation in memory
                 if settings.memory_enabled and session_id:
@@ -163,13 +187,20 @@ class ToolExecutor:
                     except Exception as e:
                         logger.warning(f"Failed to store conversation memory: {e}")
 
+                if session_id and metadata.model_config["adapter_class"] == "vertex":
+                    try:
+                        gemini_session_cache_module.gemini_session_cache.append_exchange(
+                            session_id, prompt, str(result)
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to update Gemini session: {e}")
+
                 return str(result)
 
         finally:
             # Cleanup
             if vs_id:
                 await vector_store_manager.delete(vs_id)
-
 
             # Wait for memory tasks to complete
             if memory_tasks:
