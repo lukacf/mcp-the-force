@@ -258,8 +258,8 @@ async def test_flow_web_search_tool_attachment():
 
     models_to_test = [
         ("gpt-4.1", True),  # Should have web search
-        ("o3", False),  # Should not have web search
-        ("o3-pro", False),  # Should not have web search
+        ("o3", True),  # Now has web search!
+        ("o3-pro", True),  # Now has web search!
     ]
 
     for model, should_have_web_search in models_to_test:

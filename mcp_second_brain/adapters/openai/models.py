@@ -1,6 +1,6 @@
 """Pydantic models for OpenAI adapter configuration and validation."""
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 from typing import Dict, List, Any, Optional
 
 
@@ -10,16 +10,33 @@ class ModelCapability(BaseModel):
     supports_streaming: bool
     force_background: bool
     supports_web_search: bool = False
+    web_search_tool: str = "web_search"  # Tool name for web search
+    supports_custom_tools: bool = True  # Whether model supports custom tools
     supports_reasoning: bool = False
+    supports_reasoning_effort: bool = (
+        False  # Whether model supports reasoning_effort parameter
+    )
     supports_parallel_tool_calls: bool = True
     context_window: int = 200000
     default_temperature: Optional[float] = None
+    default_reasoning_effort: Optional[str] = (
+        None  # Default reasoning effort for models that support it
+    )
 
     @field_validator("context_window")
     def validate_context_window(cls, v: int) -> int:
         if v <= 0:
             raise ValueError("context_window must be positive")
         return v
+
+    @model_validator(mode="after")
+    def validate_reasoning_temperature_exclusion(self) -> "ModelCapability":
+        """Ensure models with reasoning support don't have temperature and vice versa."""
+        if self.supports_reasoning and self.default_temperature is not None:
+            raise ValueError(
+                "Models with reasoning support should not have a default_temperature"
+            )
+        return self
 
 
 # Model capabilities are now defined directly in code using Pydantic models.
@@ -28,17 +45,21 @@ model_capabilities: Dict[str, ModelCapability] = {
     "o3": ModelCapability(
         supports_streaming=True,
         force_background=False,
-        supports_web_search=False,
+        supports_web_search=True,  # Now supports web search!
         context_window=200000,
         supports_reasoning=True,
+        supports_reasoning_effort=True,  # Regular o3 supports reasoning_effort
+        default_reasoning_effort="medium",
         supports_parallel_tool_calls=True,
     ),
     "o3-pro": ModelCapability(
         supports_streaming=False,
         force_background=True,
-        supports_web_search=False,
+        supports_web_search=True,  # Now supports web search!
         context_window=200000,
         supports_reasoning=True,
+        supports_reasoning_effort=True,  # Regular o3-pro supports reasoning_effort
+        default_reasoning_effort="high",
         supports_parallel_tool_calls=True,
     ),
     "gpt-4.1": ModelCapability(
@@ -55,6 +76,31 @@ model_capabilities: Dict[str, ModelCapability] = {
         supports_web_search=False,
         context_window=200000,
         supports_reasoning=False,
+        supports_parallel_tool_calls=True,
+    ),
+    # New deep research models
+    "o3-deep-research": ModelCapability(
+        supports_streaming=False,
+        force_background=True,
+        supports_web_search=True,
+        web_search_tool="web_search_preview",  # Deep research uses preview
+        supports_custom_tools=False,  # Deep research models don't support custom tools
+        context_window=200000,
+        supports_reasoning=True,
+        supports_reasoning_effort=False,  # Deep research models don't support reasoning_effort
+        default_reasoning_effort="high",  # Will be ignored, but kept for consistency
+        supports_parallel_tool_calls=True,
+    ),
+    "o4-mini-deep-research": ModelCapability(
+        supports_streaming=False,  # Deep research models don't support streaming
+        force_background=True,  # Deep research models must use background mode
+        supports_web_search=True,
+        web_search_tool="web_search_preview",  # Deep research uses preview
+        supports_custom_tools=False,  # Deep research models don't support custom tools
+        context_window=200000,
+        supports_reasoning=True,
+        supports_reasoning_effort=False,  # Deep research models don't support reasoning_effort
+        default_reasoning_effort="medium",  # Will be ignored, but kept for consistency
         supports_parallel_tool_calls=True,
     ),
 }
@@ -128,8 +174,15 @@ class OpenAIRequest(BaseModel):
         capability = model_capabilities.get(self.model)
         if capability:
             # Remove reasoning if not supported
-            if not capability.supports_reasoning:
+            if (
+                not capability.supports_reasoning
+                or not capability.supports_reasoning_effort
+            ):
                 data.pop("reasoning_effort", None)
+
+            # Remove temperature if model supports reasoning (reasoning models don't support temperature)
+            if capability.supports_reasoning:
+                data.pop("temperature", None)
 
             # Remove parallel_tool_calls if not supported
             if not capability.supports_parallel_tool_calls:

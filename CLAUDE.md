@@ -96,11 +96,15 @@ Tools are defined using a descriptor-based system with parameter routing:
 Primary tools:
 - `chat_with_gemini25_pro`: Deep analysis (Gemini 2.5 Pro, ~1M tokens)
 - `chat_with_gemini25_flash`: Fast summarization (Gemini 2.5 Flash, ~1M tokens)
-- `chat_with_o3`: Chain-of-thought reasoning (OpenAI o3, ~200k tokens) - supports session_id
-- `chat_with_o3_pro`: Formal proofs (OpenAI o3-pro, ~200k tokens) - supports session_id
-- `chat_with_gpt4_1`: Large-scale analysis (GPT-4.1, ~1M tokens) - supports session_id
+- `chat_with_o3`: Chain-of-thought reasoning (OpenAI o3, ~200k tokens) - supports session_id, **now with web search!**
+- `chat_with_o3_pro`: Formal proofs (OpenAI o3-pro, ~200k tokens) - supports session_id, **now with web search!**
+- `chat_with_gpt4_1`: Large-scale analysis (GPT-4.1, ~1M tokens) - supports session_id, web search enabled
+- `research_with_o3_deep_research`: Ultra-deep research (OpenAI o3-deep-research, ~200k tokens) - supports session_id, autonomous web search, 10-60 min response time
+- `research_with_o4_mini_deep_research`: Fast research (OpenAI o4-mini-deep-research, ~200k tokens) - supports session_id, autonomous web search, 2-10 min response time
 
-All tools follow the naming pattern `chat_with_{model_name}` for clarity and consistency.
+Tools follow the naming patterns:
+- `chat_with_{model_name}` for conversational AI assistance
+- `research_with_{model_name}` for autonomous research tools
 
 Utility tools:
 - `create_vector_store_tool`: Create vector stores for RAG workflows
@@ -108,11 +112,12 @@ Utility tools:
 
 ### Conversation Support
 
-OpenAI tools (o3, o3-pro, gpt-4.1) support optional multi-turn conversations:
+OpenAI tools (o3, o3-pro, gpt-4.1, research models) support optional multi-turn conversations:
 - Pass `session_id` parameter to maintain conversation continuity
 - Server maintains ephemeral cache (1 hour TTL) of OpenAI response IDs
 - No conversation history stored - OpenAI maintains full context
 - Gemini models remain single-shot (no session support)
+- Research models (o3-deep-research, o4-mini-deep-research) also support sessions
 
 ### Configuration
 
@@ -213,6 +218,11 @@ Is it urgent and needs < 5 second response?
 Do you need to search/navigate a large codebase?
   → chat_with_gpt4_1 (best with attachments)
 
+Do you need current information or web research?
+  → chat_with_o3 / chat_with_o3_pro (now with web search!)
+  → research_with_o3_deep_research (for comprehensive research, 10-60 min)
+  → research_with_o4_mini_deep_research (for quick research, 2-10 min)
+
 Is it a bug you can't immediately solve?
   → chat_with_o3 (then o3_pro if needed)
 
@@ -224,6 +234,9 @@ Is it algorithmic or needs step-by-step reasoning?
 
 Is it critical and worth waiting 10-30 minutes?
   → chat_with_o3_pro
+
+Need ultra-deep research with web search?
+  → research_with_o3_deep_research (most thorough, 10-60 min)
 ```
 
 ### The Mindset Shift
@@ -254,11 +267,16 @@ This parallel approach typically provides better answers in LESS time than seque
 
 ### Important: Timeout Configuration
 
-For o3-pro models (chat_with_o3_pro), set timeout to 3600000ms (1 hour) in your MCP config:
+For deep reasoning models, set appropriate timeouts in your MCP config:
+- `chat_with_o3_pro`: Set timeout to 3600000ms (1 hour) - can take 10-30 minutes
+- `research_with_o3_deep_research`: Set timeout to 3600000ms (1 hour) - can take 10-60 minutes
+- `research_with_o4_mini_deep_research`: Set timeout to 900000ms (15 min) - can take 2-10 minutes
+
 ```json
 "timeout": 3600000
 ```
-These models can take 10-30 minutes to generate responses due to their deep reasoning capabilities.
+
+These models perform extensive reasoning and web research, requiring longer processing times.
 
 ## Development Notes
 
