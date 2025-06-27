@@ -275,6 +275,10 @@ HOST=legacy-host
 PORT=7777
 OPENAI_API_KEY=legacy-key
 VERTEX_PROJECT=legacy-project
+VERTEX_LOCATION=us-west1
+GCLOUD_OAUTH_CLIENT_ID=legacy-client-id
+GCLOUD_OAUTH_CLIENT_SECRET=legacy-client-secret
+GCLOUD_USER_REFRESH_TOKEN=legacy-refresh-token
 LOG_LEVEL=WARNING
 MEMORY_ENABLED=false
 """)
@@ -310,6 +314,9 @@ MEMORY_ENABLED=false
         with open(tmp_path / "secrets.yaml") as f:
             secrets = yaml.safe_load(f)
             assert secrets["providers"]["openai"]["api_key"] == "legacy-key"
+            assert secrets["providers"]["vertex"]["oauth_client_id"] == "legacy-client-id"
+            assert secrets["providers"]["vertex"]["oauth_client_secret"] == "legacy-client-secret"
+            assert secrets["providers"]["vertex"]["user_refresh_token"] == "legacy-refresh-token"
 
     def test_import_legacy_no_files(self, tmp_path, monkeypatch):
         """Test import-legacy with no legacy files."""

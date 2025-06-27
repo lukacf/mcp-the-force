@@ -69,7 +69,10 @@ providers:
   openai:
     api_key: "" # sk-proj-...
   vertex:
-    # GCP auth is typically handled via gcloud or service account
+    # For CI/CD environments that can't use gcloud auth:
+    oauth_client_id: "" # Only needed for refresh token auth
+    oauth_client_secret: "" # Only needed for refresh token auth
+    user_refresh_token: "" # Only needed for refresh token auth
   anthropic:
     api_key: "" # claude-...
 """
@@ -86,10 +89,16 @@ ENV_ALIASES: Dict[str, str] = {
     "providers.openai.api_key": "OPENAI_API_KEY",
     "providers.vertex.project": "VERTEX_PROJECT",
     "providers.vertex.location": "VERTEX_LOCATION",
+    "providers.vertex.oauth_client_id": "GCLOUD_OAUTH_CLIENT_ID",
+    "providers.vertex.oauth_client_secret": "GCLOUD_OAUTH_CLIENT_SECRET",
+    "providers.vertex.user_refresh_token": "GCLOUD_USER_REFRESH_TOKEN",
     "providers.anthropic.api_key": "ANTHROPIC_API_KEY",
     "openai.api_key": "OPENAI_API_KEY",
     "vertex.project": "VERTEX_PROJECT",
     "vertex.location": "VERTEX_LOCATION",
+    "vertex.oauth_client_id": "GCLOUD_OAUTH_CLIENT_ID",
+    "vertex.oauth_client_secret": "GCLOUD_OAUTH_CLIENT_SECRET",
+    "vertex.user_refresh_token": "GCLOUD_USER_REFRESH_TOKEN",
     "anthropic.api_key": "ANTHROPIC_API_KEY",
 }
 
@@ -420,6 +429,12 @@ def import_legacy(
                 config_data["providers"]["vertex"]["project"] = value
             elif key == "VERTEX_LOCATION":
                 config_data["providers"]["vertex"]["location"] = value
+            elif key == "GCLOUD_OAUTH_CLIENT_ID":
+                secrets_data["providers"]["vertex"]["oauth_client_id"] = value
+            elif key == "GCLOUD_OAUTH_CLIENT_SECRET":
+                secrets_data["providers"]["vertex"]["oauth_client_secret"] = value
+            elif key == "GCLOUD_USER_REFRESH_TOKEN":
+                secrets_data["providers"]["vertex"]["user_refresh_token"] = value
             elif key == "ANTHROPIC_API_KEY":
                 secrets_data["providers"]["anthropic"]["api_key"] = value
             elif key.startswith("SESSION_"):

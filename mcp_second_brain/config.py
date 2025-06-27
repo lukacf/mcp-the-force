@@ -37,6 +37,10 @@ class ProviderConfig(BaseModel):
     api_key: Optional[str] = None
     project: Optional[str] = None
     location: Optional[str] = None
+    # OAuth configuration for Vertex AI (CI/CD environments)
+    oauth_client_id: Optional[str] = None
+    oauth_client_secret: Optional[str] = None
+    user_refresh_token: Optional[str] = None
 
 
 class MCPConfig(BaseModel):
@@ -150,6 +154,9 @@ class Settings(BaseSettings):
                     "OPENAI_API_KEY",
                     "VERTEX_PROJECT",
                     "VERTEX_LOCATION",
+                    "GCLOUD_OAUTH_CLIENT_ID",
+                    "GCLOUD_OAUTH_CLIENT_SECRET",
+                    "GCLOUD_USER_REFRESH_TOKEN",
                     "ANTHROPIC_API_KEY",
                     "HOST",
                     "PORT",
@@ -254,6 +261,9 @@ class Settings(BaseSettings):
             "OPENAI_API_KEY": ("openai", "api_key"),
             "VERTEX_PROJECT": ("vertex", "project"),
             "VERTEX_LOCATION": ("vertex", "location"),
+            "GCLOUD_OAUTH_CLIENT_ID": ("vertex", "oauth_client_id"),
+            "GCLOUD_OAUTH_CLIENT_SECRET": ("vertex", "oauth_client_secret"),
+            "GCLOUD_USER_REFRESH_TOKEN": ("vertex", "user_refresh_token"),
             "ANTHROPIC_API_KEY": ("anthropic", "api_key"),
             # MCP settings
             "HOST": ("mcp", "host"),
@@ -307,6 +317,9 @@ class Settings(BaseSettings):
             "OPENAI_API_KEY": ("openai", "api_key"),
             "VERTEX_PROJECT": ("vertex", "project"),
             "VERTEX_LOCATION": ("vertex", "location"),
+            "GCLOUD_OAUTH_CLIENT_ID": ("vertex", "oauth_client_id"),
+            "GCLOUD_OAUTH_CLIENT_SECRET": ("vertex", "oauth_client_secret"),
+            "GCLOUD_USER_REFRESH_TOKEN": ("vertex", "user_refresh_token"),
             "ANTHROPIC_API_KEY": ("anthropic", "api_key"),
             # MCP settings
             "HOST": ("mcp", "host"),
@@ -450,6 +463,9 @@ class Settings(BaseSettings):
             "OPENAI_API_KEY": self.openai.api_key or "",
             "VERTEX_PROJECT": self.vertex.project or "",
             "VERTEX_LOCATION": self.vertex.location or "",
+            "GCLOUD_OAUTH_CLIENT_ID": self.vertex.oauth_client_id or "",
+            "GCLOUD_OAUTH_CLIENT_SECRET": self.vertex.oauth_client_secret or "",
+            "GCLOUD_USER_REFRESH_TOKEN": self.vertex.user_refresh_token or "",
             "ANTHROPIC_API_KEY": self.anthropic.api_key or "",
             # Session
             "SESSION_TTL_SECONDS": str(self.session.ttl_seconds),
