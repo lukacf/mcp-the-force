@@ -81,17 +81,19 @@ class TestFileDetection:
 class TestGatherFiles:
     """Test the main gather_file_paths function."""
     
-    def test_gather_single_file(self, tmp_path):
+    def test_gather_single_file(self, tmp_path, monkeypatch):
         """Test gathering a single file."""
+        monkeypatch.chdir(tmp_path)
         test_file = tmp_path / "test.py"
         test_file.write_text("print('hello')")
-        
+
         files = gather_file_paths([str(test_file)])
         assert len(files) == 1
         assert str(test_file) in files
     
-    def test_gather_directory(self, tmp_path):
+    def test_gather_directory(self, tmp_path, monkeypatch):
         """Test gathering files from a directory."""
+        monkeypatch.chdir(tmp_path)
         # Create some files
         (tmp_path / "main.py").write_text("# main")
         (tmp_path / "utils.py").write_text("# utils")
@@ -109,8 +111,9 @@ class TestGatherFiles:
         assert str(tmp_path / "data.json") in files
         assert str(tmp_path / "image.jpg") not in files
     
-    def test_gather_with_gitignore(self, tmp_path):
+    def test_gather_with_gitignore(self, tmp_path, monkeypatch):
         """Test that .gitignore is respected."""
+        monkeypatch.chdir(tmp_path)
         # Create .gitignore
         (tmp_path / ".gitignore").write_text("*.log\n__pycache__/\nbuild/")
         
@@ -128,8 +131,9 @@ class TestGatherFiles:
         assert str(tmp_path / ".gitignore") in files
         assert str(tmp_path / "debug.log") not in files
     
-    def test_skip_common_directories(self, tmp_path):
+    def test_skip_common_directories(self, tmp_path, monkeypatch):
         """Test that common directories are skipped."""
+        monkeypatch.chdir(tmp_path)
         # Create node_modules
         node_modules = tmp_path / "node_modules"
         node_modules.mkdir()
@@ -147,8 +151,9 @@ class TestGatherFiles:
         assert len(files) == 1
         assert str(tmp_path / "app.js") in files
     
-    def test_total_size_limit(self, tmp_path):
+    def test_total_size_limit(self, tmp_path, monkeypatch):
         """Test that total size limit is enforced."""
+        monkeypatch.chdir(tmp_path)
         # Create many large files
         for i in range(200):
             f = tmp_path / f"file{i}.txt"
@@ -164,15 +169,17 @@ class TestGatherFiles:
         # Allow exceeding by one file (300KB) since check happens before adding
         assert total_size <= fs.MAX_TOTAL_SIZE + 300_000
     
-    def test_nonexistent_path(self, tmp_path):
+    def test_nonexistent_path(self, tmp_path, monkeypatch):
         """Test handling of non-existent paths."""
+        monkeypatch.chdir(tmp_path)
         files = gather_file_paths([str(tmp_path / "nonexistent")])
         assert files == []
     
-    def test_permission_error_handling(self, tmp_path):
+    def test_permission_error_handling(self, tmp_path, monkeypatch):
         """Test handling of permission errors."""
         if os.name == 'nt':  # Skip on Windows
             pytest.skip("Permission test not reliable on Windows")
+        monkeypatch.chdir(tmp_path)
         
         # Create a directory with no read permission
         secret_dir = tmp_path / "secret"
@@ -186,8 +193,9 @@ class TestGatherFiles:
         # Restore permissions for cleanup
         secret_dir.chmod(0o755)
     
-    def test_sorted_output(self, tmp_path):
+    def test_sorted_output(self, tmp_path, monkeypatch):
         """Test that output is sorted."""
+        monkeypatch.chdir(tmp_path)
         # Create files in non-alphabetical order
         (tmp_path / "z.txt").write_text("z")
         (tmp_path / "a.txt").write_text("a")
@@ -198,8 +206,9 @@ class TestGatherFiles:
         # Should be sorted
         assert files == sorted(files)
     
-    def test_deduplication(self, tmp_path):
+    def test_deduplication(self, tmp_path, monkeypatch):
         """Test that duplicate paths are handled."""
+        monkeypatch.chdir(tmp_path)
         test_file = tmp_path / "test.py"
         test_file.write_text("test")
         
@@ -211,20 +220,26 @@ class TestGatherFiles:
 
 
 class TestPathTraversal:
-    """Test for path traversal vulnerabilities - currently NOT protected."""
-    
-    @pytest.mark.xfail(reason="Path traversal protection not yet implemented")
-    def test_path_traversal_blocked(self, tmp_path):
-        """Test that path traversal attempts should be blocked (not yet implemented)."""
-        # This test documents the security gap
-        # Currently, gather_file_paths does NOT prevent path traversal
-        
-        # Create a file outside the project
+    """Tests for path traversal protection."""
+
+    def test_path_traversal_blocked(self, tmp_path, monkeypatch):
+        """Paths escaping the project root should be rejected."""
+        monkeypatch.chdir(tmp_path)
+
         outside = tmp_path.parent / "outside.txt"
         outside.write_text("secret")
-        
-        # These SHOULD be blocked but currently aren't
+
         files = gather_file_paths([str(tmp_path / ".." / "outside.txt")])
-        
-        # This assertion will fail because protection isn't implemented
-        assert len(files) == 0, "Path traversal should be blocked"
+
+        assert files == []
+
+    def test_safe_path_allowed(self, tmp_path, monkeypatch):
+        """Paths inside the project root should be processed."""
+        monkeypatch.chdir(tmp_path)
+
+        inside = tmp_path / "inside.txt"
+        inside.write_text("ok")
+
+        files = gather_file_paths([str(inside)])
+
+        assert [str(inside)] == files

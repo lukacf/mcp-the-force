@@ -100,6 +100,17 @@ def _is_ignored(file_path: Path, gitignore_patterns: List[str], root_path: Path)
     
     return False
 
+
+def _is_safe_path(base: Path, target: Path) -> bool:
+    """Return True if target is within base directory after resolving."""
+    try:
+        base_resolved = base.resolve()
+        target_resolved = target.resolve()
+    except Exception:
+        return False
+
+    return base_resolved == target_resolved or base_resolved in target_resolved.parents
+
 def _should_skip_dir(dir_path: Path) -> bool:
     """Check if directory should be skipped."""
     return dir_path.name in SKIP_DIRS or dir_path.name.startswith('.')
@@ -170,11 +181,12 @@ def gather_file_paths(items: List[str]) -> List[str]:
     
     start_time = time.time()
     logger.info(f"gather_file_paths called with {len(items)} items: {items}")
-    
+
+    project_root = Path.cwd()
     seen: Set[str] = set()
     out: List[str] = []
     total_size = 0
-    
+
     for item in items:
         if total_size >= MAX_TOTAL_SIZE:
             break
@@ -185,7 +197,12 @@ def gather_file_paths(items: List[str]) -> List[str]:
             # Continue processing but user should be aware
             pass
             
-        path = Path(item).expanduser().resolve()
+        raw_path = Path(item).expanduser()
+        if not _is_safe_path(project_root, raw_path):
+            logger.warning(f"Skipping unsafe path outside project root: {raw_path}")
+            continue
+
+        path = raw_path.resolve()
         if not path.exists():
             continue
         
