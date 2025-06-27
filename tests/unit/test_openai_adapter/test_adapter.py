@@ -168,13 +168,13 @@ async def test_adapter_o3_reasoning():
 
             assert result["content"] == "Based on the calculation, the answer is 42."
 
-            # Verify reasoning was preserved in follow-up
+            # Verify follow-up only sends function results
             follow_up_call = mock_client.responses.create.call_args_list[1]
             follow_up_input = follow_up_call.kwargs["input"]
 
-            # Should have user message + reasoning + function call + result
-            assert len(follow_up_input) == 4
-            assert any(item.get("type") == "reasoning" for item in follow_up_input)
+            # When using previous_response_id, only send function results
+            assert len(follow_up_input) == 1
+            assert follow_up_input[0]["type"] == "function_call_output"
 
 
 @pytest.mark.unit

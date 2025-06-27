@@ -79,23 +79,13 @@ async def test_flow_preserves_reasoning_items_with_function_calls():
 
             await orchestrator.run(request_data)
 
-            # CRITICAL VERIFICATION: Follow-up must include BOTH reasoning and function results
+            # CRITICAL VERIFICATION: Follow-up only sends function results with previous_response_id
             follow_up_call = mock_client.responses.create.call_args_list[1]
             follow_up_input = follow_up_call.kwargs["input"]
 
-            # Should contain: original message + reasoning + function call + function result
-            assert len(follow_up_input) == 4
-            assert follow_up_input[0] == {
-                "role": "user",
-                "content": "Analyze and use tools",
-            }
-            assert follow_up_input[1]["type"] == "reasoning"  # Reasoning item preserved
-            assert (
-                follow_up_input[2]["type"] == "function_call"
-            )  # Function call preserved
-            assert (
-                follow_up_input[3]["type"] == "function_call_output"
-            )  # Function result
+            # When using previous_response_id, only send function results
+            assert len(follow_up_input) == 1
+            assert follow_up_input[0]["type"] == "function_call_output"
 
 
 @pytest.mark.unit
