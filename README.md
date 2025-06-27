@@ -5,35 +5,193 @@ An intelligent Model Context Protocol (MCP) server that orchestrates multiple AI
 ## 🚀 Quick Start
 
 ```bash
-# Install dependencies
+# 1. Install dependencies
 uv pip install -e .
 
-# Set up Google Cloud authentication (for Gemini models)
+# 2. Initialize configuration (creates config.yaml and secrets.yaml)
+mcp-config init
+
+# 3. Add your API keys to secrets.yaml
+# Edit secrets.yaml and add your OpenAI/Anthropic API keys
+
+# 4. Set up Google Cloud authentication (for Gemini models)
 # See docs/authentication-guide.md for all authentication options
 gcloud auth application-default login
 
-# Configure environment variables
-cp .env.example .env
-# Edit .env with your API keys
+# 5. Validate your configuration
+mcp-config validate
 
-# Run the server
+# 6. Run the server
 uv run -- mcp-second-brain
 ```
 
 ## 🔧 Configuration
 
-### Environment Variables
-Create a `.env` file with your API credentials:
+MCP Second-Brain uses a unified YAML-based configuration system with environment variable overlay support, providing flexibility for different deployment scenarios.
 
-```env
-OPENAI_API_KEY=your_openai_api_key_here
-VERTEX_PROJECT=your_gcp_project_id
-VERTEX_LOCATION=your_gcp_location
-HOST=127.0.0.1
-PORT=8000
-CONTEXT_PERCENTAGE=0.85
-DEFAULT_TEMPERATURE=0.2
+### How Configuration Works
+
+The system loads configuration from multiple sources with clear precedence (highest to lowest):
+
+1. **Environment Variables** - Override any setting for CI/CD and production
+2. **YAML Files** - Primary configuration method (`config.yaml` + `secrets.yaml`)
+3. **Legacy .env** - Backward compatibility for existing setups
+4. **Defaults** - Sensible defaults built into the application
+
+This design allows you to:
+- ✅ Commit non-sensitive config to version control
+- ✅ Keep secrets separate and secure
+- ✅ Override any setting via environment variables
+- ✅ Migrate smoothly from legacy .env files
+
+### Quick Configuration Setup
+
+```bash
+# 1. Initialize configuration files
+mcp-config init
+
+# This creates:
+# - config.yaml: Non-sensitive configuration (can be committed)
+# - secrets.yaml: API keys and sensitive data (gitignored with mode 600)
+
+# 2. Edit the files with your settings
+# config.yaml for general settings, secrets.yaml for API keys
+
+# 3. Validate your configuration
+mcp-config validate
+
+# 4. View your resolved configuration
+mcp-config show
 ```
+
+### Configuration Files
+
+**config.yaml** - General settings (safe to commit):
+```yaml
+mcp:
+  host: 127.0.0.1
+  port: 8000
+  context_percentage: 0.85  # Use 85% of model's context window
+  default_temperature: 0.2
+
+providers:
+  openai:
+    enabled: true
+  vertex:
+    enabled: true
+    project: your-gcp-project
+    location: us-central1
+
+logging:
+  level: INFO
+
+session:
+  ttl_seconds: 3600  # 1 hour session timeout
+  
+memory:
+  enabled: true
+  rollover_limit: 9500  # Items before new vector store
+```
+
+**secrets.yaml** - Sensitive data (never commit):
+```yaml
+providers:
+  openai:
+    api_key: sk-proj-...  # Your OpenAI API key
+  vertex:
+    # For CI/CD environments (e.g., GitHub Actions, Docker):
+    oauth_client_id: ""     # Required for refresh token auth
+    oauth_client_secret: "" # Required for refresh token auth  
+    user_refresh_token: ""  # Your Google Cloud refresh token
+  anthropic:
+    api_key: claude-...   # Your Anthropic API key
+```
+
+### Configuration Management CLI
+
+The `mcp-config` tool provides comprehensive configuration management:
+
+```bash
+# Initialize new configuration
+mcp-config init [--force]
+
+# Validate configuration
+mcp-config validate
+
+# View configuration (with masked secrets)
+mcp-config show                    # All config as YAML
+mcp-config show mcp.port          # Specific value
+mcp-config show --format json     # As JSON
+mcp-config show --format env      # As environment variables
+
+# Export configuration
+mcp-config export-env             # Generate .env file
+mcp-config export-client          # Generate mcp-config.json for Claude
+
+# Import from legacy files
+mcp-config import-legacy          # Migrate from .env
+```
+
+### Environment Variable Override
+
+Any configuration value can be overridden via environment variables:
+
+```bash
+# Direct mappings (legacy support)
+export OPENAI_API_KEY=sk-proj-...
+export PORT=9000
+export LOG_LEVEL=DEBUG
+
+# Nested configuration (with __ delimiter)
+export MCP__HOST=0.0.0.0
+export PROVIDERS__OPENAI__API_KEY=sk-proj-...
+```
+
+Common environment variables:
+| Setting | Environment Variable |
+|---------|---------------------|
+| API Keys | `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` |
+| Server | `HOST`, `PORT` |
+| Logging | `LOG_LEVEL` |
+| Vertex AI | `VERTEX_PROJECT`, `VERTEX_LOCATION` |
+| Vertex OAuth (CI/CD) | `GCLOUD_OAUTH_CLIENT_ID`, `GCLOUD_OAUTH_CLIENT_SECRET`, `GCLOUD_USER_REFRESH_TOKEN` |
+
+### Migration from Legacy .env
+
+If upgrading from an older version:
+
+```bash
+# Option 1: Automatic migration
+mcp-config import-legacy
+
+# Option 2: Continue using .env (lower precedence)
+# Your .env will still work but YAML takes precedence
+cp .env.example .env
+
+# Option 3: Manual migration
+# 1. Copy non-sensitive values to config.yaml
+# 2. Copy secrets to secrets.yaml
+# 3. Run: mcp-config validate
+```
+
+### Best Practices
+
+1. **Security**:
+   - Keep `secrets.yaml` in `.gitignore` (done automatically)
+   - Use environment variables for production secrets
+   - File permissions are set to 600 (owner-only) for secrets.yaml
+
+2. **Development**:
+   - Use YAML files for local development
+   - Override specific settings with environment variables as needed
+   - Run `mcp-config validate` after changes
+
+3. **Production**:
+   - Use environment variables for all secrets
+   - Generate .env with `mcp-config export-env` for Docker
+   - Use `mcp-config export-client` for MCP client configuration
+
+See [docs/configuration.md](docs/configuration.md) for the complete configuration reference including all available settings, Docker integration, and troubleshooting.
 
 ### Google Cloud Authentication
 
@@ -286,7 +444,17 @@ Relative paths will be resolved relative to the MCP server's working directory, 
 
 ## 🔌 MCP Integration
 
-Add to your MCP client configuration:
+### Generate MCP Client Configuration
+
+```bash
+# Generate mcp-config.json for Claude Code or other MCP clients
+mcp-config export-client
+
+# Or specify a custom output path
+mcp-config export-client --output /path/to/mcp-config.json
+```
+
+This generates a properly formatted `mcp-config.json` with all your configured settings:
 
 ```json
 {
@@ -305,7 +473,7 @@ Add to your MCP client configuration:
 }
 ```
 
-**Important**: Set `timeout` to 3600000 (1 hour) for o3-pro models which can take 10-30 minutes to respond.
+**Important**: The timeout is automatically set to 3600000 (1 hour) to accommodate o3-pro models which can take 10-30 minutes to respond.
 
 ## 🏗️ Architecture
 
@@ -337,6 +505,54 @@ class ChatWithO3(ToolSpec):
 - **Adapters**: Model-specific integrations (OpenAI, Vertex AI)
 - **Vector Store Manager**: Handles RAG lifecycle for large contexts
 - **Session Manager**: Maintains conversation continuity for supported models
+- **Configuration System**: Unified YAML-based configuration with environment overlay
+
+### Configuration System Architecture
+
+The configuration system is built on pydantic-settings v2 with custom source handling:
+
+#### Configuration Sources and Precedence
+
+```python
+# Configuration is loaded and merged in this order:
+1. Default values (in pydantic models)
+2. .env file (if exists)
+3. YAML files (config.yaml + secrets.yaml)
+4. Environment variables (highest precedence)
+```
+
+#### Key Components
+
+1. **Settings Class** (`config.py`):
+   - Pydantic v2 BaseSettings with nested configuration models
+   - Custom `settings_customise_sources` for YAML support
+   - Deep merge functionality for configuration layering
+   - Backward compatibility properties for legacy code
+
+2. **Configuration Models**:
+   ```python
+   Settings
+   ├── MCPConfig (host, port, context_percentage, temperature)
+   ├── LoggingConfig (level)
+   ├── ProviderConfig (api_key, project, location, enabled)
+   │   ├── openai
+   │   ├── vertex
+   │   └── anthropic
+   ├── SessionConfig (ttl, db_path, cleanup_probability)
+   └── MemoryConfig (enabled, limits, thresholds)
+   ```
+
+3. **CLI Tool** (`cli/config_cli.py`):
+   - Built with Typer for modern CLI experience
+   - Commands: init, validate, show, export-env, export-client, import-legacy
+   - Automatic secret masking in output
+   - Environment variable resolution with proper precedence
+
+4. **Configuration Loading**:
+   - `CombinedConfigSource`: Custom pydantic source that merges all config
+   - Legacy environment variable mapping (e.g., `OPENAI_API_KEY` → `providers.openai.api_key`)
+   - Nested environment variables with `__` delimiter support
+   - YAML transformation for provider structure compatibility
 
 ### File Processing Pipeline
 1. **Path Resolution**: Convert relative to absolute paths
