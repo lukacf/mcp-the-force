@@ -186,6 +186,25 @@ PORT=3000
             assert settings.memory_summary_char_limit == 200000
             assert settings.memory_max_files_per_commit == 50
 
+    def test_vertex_oauth_configuration(self):
+        """Test Vertex AI OAuth configuration for CI/CD environments."""
+        with patch.dict(os.environ, {
+            "GCLOUD_OAUTH_CLIENT_ID": "test-client-id",
+            "GCLOUD_OAUTH_CLIENT_SECRET": "test-client-secret",
+            "GCLOUD_USER_REFRESH_TOKEN": "test-refresh-token"
+        }, clear=True):
+            get_settings.cache_clear()
+            settings = Settings()
+            assert settings.vertex.oauth_client_id == "test-client-id"
+            assert settings.vertex.oauth_client_secret == "test-client-secret"
+            assert settings.vertex.user_refresh_token == "test-refresh-token"
+            
+            # Also verify they're exported correctly
+            env_vars = settings.export_env()
+            assert env_vars["GCLOUD_OAUTH_CLIENT_ID"] == "test-client-id"
+            assert env_vars["GCLOUD_OAUTH_CLIENT_SECRET"] == "test-client-secret"
+            assert env_vars["GCLOUD_USER_REFRESH_TOKEN"] == "test-refresh-token"
+
 
 class TestYAMLConfiguration:
     """Test YAML-based configuration loading."""
