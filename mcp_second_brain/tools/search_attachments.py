@@ -7,7 +7,6 @@ from attachments during the current execution.
 from typing import List, Dict, Any
 import logging
 import asyncio
-from contextvars import ContextVar
 from concurrent.futures import ThreadPoolExecutor
 
 from openai import OpenAI
@@ -20,10 +19,6 @@ from .registry import tool
 
 logger = logging.getLogger(__name__)
 
-# Context variable to track current execution's ephemeral vector stores
-current_attachment_stores: ContextVar[List[str]] = ContextVar(
-    "current_attachment_stores", default=[]
-)
 
 # Thread pool for synchronous OpenAI operations
 executor = ThreadPoolExecutor(max_workers=3)
@@ -68,8 +63,7 @@ class SearchAttachmentAdapter(BaseAdapter):
     ) -> str:
         """Search attachment stores and return formatted results.
 
-        This searches only the ephemeral stores created for the current
-        execution's attachments.
+        This searches only the vector stores provided via ``vector_store_ids``.
         """
         # Extract search parameters
         query = kwargs.get("query", prompt)
@@ -78,8 +72,8 @@ class SearchAttachmentAdapter(BaseAdapter):
         if not query:
             return "Error: Search query is required"
 
-        # Get current execution's attachment stores
-        attachment_stores = current_attachment_stores.get()
+        # Use provided vector store IDs
+        attachment_stores = vector_store_ids or []
         if not attachment_stores:
             return "No attachments available to search in this session"
 
