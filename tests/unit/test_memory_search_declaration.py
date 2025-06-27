@@ -110,10 +110,6 @@ class TestMemorySearchDeclaration:
 
     def test_openai_declaration_in_context(self):
         """Test how the declaration would be used in the OpenAI adapter."""
-        from mcp_second_brain.adapters.openai_adapter import (
-            create_search_memory_declaration_openai,
-        )
-
         # Simulate how it's used in the adapter
         tools = []
         tools.append(create_search_memory_declaration_openai())

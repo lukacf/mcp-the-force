@@ -61,7 +61,7 @@ MCP Second-Brain Server - A Model Context Protocol (MCP) server that provides ac
 
 1. **Adapters** (`mcp_second_brain/adapters/`)
    - `base.py`: Abstract `BaseAdapter` defining the interface
-   - `openai_adapter.py`: OpenAI models integration (o3, o3-pro, gpt-4.1) via Responses API
+   - `openai/`: OpenAI models integration (o3, o3-pro, gpt-4.1) via Responses API
    - `vertex_adapter.py`: Google Vertex AI integration (Gemini 2.5 pro/flash) via google-genai SDK
 
 2. **Tool System** (`mcp_second_brain/tools/`)
