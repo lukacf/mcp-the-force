@@ -35,13 +35,13 @@ async def test_tool_executor_handles_partial_failures():
 
     # Check success result
     success_result = results[0]
-    assert success_result["tool_call_id"] == "call_1"
+    assert success_result["call_id"] == "call_1"
     assert success_result["type"] == "function_call_output"
     assert '"status": "ok"' in success_result["output"]
 
     # Check error result
     error_result = results[1]
-    assert error_result["tool_call_id"] == "call_2"
+    assert error_result["call_id"] == "call_2"
     assert error_result["type"] == "function_call_output"
     assert "failed: This tool failed" in error_result["output"]
 
@@ -70,9 +70,9 @@ async def test_tool_executor_preserves_order():
     results = await executor.run_all(tool_calls)
 
     # Results should be in input order, not execution order
-    assert results[0]["tool_call_id"] == "1"
-    assert results[1]["tool_call_id"] == "2"
-    assert results[2]["tool_call_id"] == "3"
+    assert results[0]["call_id"] == "1"
+    assert results[1]["call_id"] == "2"
+    assert results[2]["call_id"] == "3"
 
     # But execution can be in any order due to concurrency
     assert set(call_order) == {"slow", "fast", "medium"}
@@ -191,7 +191,7 @@ async def test_tool_executor_handles_object_like_calls():
     results = await executor.run_all([mock_call])
 
     assert received_name == "object_tool"
-    assert results[0]["tool_call_id"] == "obj_call_1"
+    assert results[0]["call_id"] == "obj_call_1"
 
 
 @pytest.mark.unit

@@ -72,4 +72,4 @@ gcp-service-account-key.json
 .mcp_sessions.sqlite3
 *.sqlite3
 *.sqlite3-wal
-*.sqlite3-shm
+*.sqlite3-shmmcp-config.json

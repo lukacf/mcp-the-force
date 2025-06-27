@@ -142,7 +142,6 @@ async def test_flow_handles_function_calls_with_follow_up():
         assert follow_up_call.kwargs["input"] == [
             {
                 "type": "function_call_output",
-                "tool_call_id": "call_123",
                 "call_id": "call_123",
                 "output": '{"temperature": "72F", "condition": "sunny"}',
             }

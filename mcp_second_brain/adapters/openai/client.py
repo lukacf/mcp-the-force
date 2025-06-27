@@ -69,6 +69,7 @@ class OpenAIClientFactory:
             client_kwargs: Dict[str, Any] = {
                 "http_client": http_client,
                 "max_retries": 3,  # SDK-level retries
+                "timeout": 3600.0,  # 1 hour timeout for deep research models
             }
 
             if api_key:
