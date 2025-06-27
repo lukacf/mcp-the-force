@@ -11,7 +11,7 @@ from mcp_second_brain.cli.config_cli import app
 from mcp_second_brain.config import get_settings
 
 
-runner = CliRunner(mix_stderr=False)
+runner = CliRunner()
 
 
 class TestConfigCLI:
@@ -119,7 +119,7 @@ logging:
             result = runner.invoke(app, ["validate"])
 
         assert result.exit_code == 1
-        assert "[ERROR] Configuration validation failed" in result.stderr
+        assert "[ERROR] Configuration validation failed" in result.output
 
     def test_validate_command_missing_api_keys(self, tmp_path, monkeypatch):
         """Test validate command warns about missing API keys."""
@@ -251,7 +251,7 @@ logging:
             # Show non-existent key
             result = runner.invoke(app, ["show", "invalid.key"])
             assert result.exit_code == 1
-            assert "[ERROR] Key 'invalid.key' not found" in result.stderr
+            assert "[ERROR] Key 'invalid.key' not found" in result.output
 
             # Different formats
             result = runner.invoke(app, ["show", "--format", "json"])
@@ -332,7 +332,7 @@ MEMORY_ENABLED=false
 
         result = runner.invoke(app, ["import-legacy"])
         assert result.exit_code == 1
-        assert "[ERROR] No legacy configuration files found" in result.stderr
+        assert "[ERROR] No legacy configuration files found" in result.output
 
     def test_cli_error_handling(self, tmp_path, monkeypatch):
         """Test CLI error handling."""
@@ -344,7 +344,7 @@ MEMORY_ENABLED=false
         ):
             result = runner.invoke(app, ["init"])
             assert result.exit_code == 1
-            assert "[ERROR] Permission denied" in result.stderr
+            assert "[ERROR] Permission denied" in result.output
 
         # Test export-env with write error
         (tmp_path / "config.yaml").write_text("mcp:\n  port: 8000")
@@ -358,7 +358,7 @@ MEMORY_ENABLED=false
             with patch("pathlib.Path.write_text", side_effect=OSError("Write failed")):
                 result = runner.invoke(app, ["export-env"])
                 assert result.exit_code == 1
-                assert "Failed to write" in result.stderr
+                assert "Failed to write" in result.output
 
 
 class TestCLIHelpers:
