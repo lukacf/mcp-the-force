@@ -116,26 +116,44 @@ For GitHub Actions, use Workload Identity Federation to avoid storing credential
 - Complex initial setup
 - Requires Google Cloud project ownership
 
-### Method 4: User Credentials with OAuth (Not Recommended)
+### Method 4: OAuth Refresh Tokens (For CI/CD Only)
 
-This method requires OAuth client credentials and a refresh token.
+This method is specifically for CI/CD environments (GitHub Actions, Docker) where:
+- You cannot use interactive `gcloud auth` 
+- You cannot create service accounts with required permissions
+- You need to run E2E tests with real Vertex AI APIs
 
-**Why Not Recommended:**
-- Requires managing OAuth client credentials
-- Refresh tokens are user-specific
-- Complex setup for end users
-- Security risks if tokens are mishandled
+**When to Use:**
+- GitHub Actions workflows
+- Docker containers in CI/CD
+- Automated testing environments
+- When service account creation is not possible
 
-If you must use this method:
+**Setup:**
 
-1. Create OAuth credentials in Google Cloud Console
+1. Use existing OAuth credentials (or obtain from gcloud CLI)
 2. Obtain a refresh token via OAuth flow
-3. Set environment variables:
+3. Configure in `secrets.yaml`:
+   ```yaml
+   providers:
+     vertex:
+       oauth_client_id: "your-client-id"
+       oauth_client_secret: "your-client-secret"
+       user_refresh_token: "your-refresh-token"
+   ```
+   
+   Or via environment variables:
    ```bash
    export GCLOUD_OAUTH_CLIENT_ID="your-client-id"
    export GCLOUD_OAUTH_CLIENT_SECRET="your-client-secret"
    export GCLOUD_USER_REFRESH_TOKEN="your-refresh-token"
    ```
+
+**Security Notes:**
+- Store these credentials as encrypted secrets in your CI/CD platform
+- Never commit these values to version control
+- Refresh tokens are user-specific and long-lived
+- Consider token rotation policies
 
 ## Environment Variables
 
