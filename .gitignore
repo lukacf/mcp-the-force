@@ -72,4 +72,8 @@ gcp-service-account-key.json
 .mcp_sessions.sqlite3
 *.sqlite3
 *.sqlite3-wal
-*.sqlite3-shmmcp-config.json
+*.sqlite3-shm
+
+# Configuration files
+config.yaml
+secrets.yaml
