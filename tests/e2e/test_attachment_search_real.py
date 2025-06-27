@@ -185,10 +185,7 @@ class TestAttachmentSearchReal:
         self, real_vector_store_client, test_documents, created_vector_stores
     ):
         """Test that search actually finds specific content in attachments."""
-        from mcp_second_brain.tools.search_attachments import (
-            SearchAttachmentAdapter,
-            current_attachment_stores,
-        )
+        from mcp_second_brain.tools.search_attachments import SearchAttachmentAdapter
 
         # Manually create a vector store for testing
         from mcp_second_brain.tools.vector_store_manager import VectorStoreManager
@@ -200,13 +197,12 @@ class TestAttachmentSearchReal:
         created_vector_stores.append(vs_id)  # Track for cleanup
 
         try:
-            # Set the context variable
-            current_attachment_stores.set([vs_id])
-
-            # Create adapter and search
             adapter = SearchAttachmentAdapter()
             result = await adapter.generate(
-                prompt="", query="ZEPHYR-AUTH-KEY-2024", max_results=5
+                prompt="",
+                query="ZEPHYR-AUTH-KEY-2024",
+                max_results=5,
+                vector_store_ids=[vs_id],
             )
 
             # Verify the secret key was found
@@ -215,7 +211,10 @@ class TestAttachmentSearchReal:
 
             # Search for meeting notes content
             result2 = await adapter.generate(
-                prompt="", query="microservices architecture", max_results=5
+                prompt="",
+                query="microservices architecture",
+                max_results=5,
+                vector_store_ids=[vs_id],
             )
 
             assert "microservices" in result2.lower()
@@ -223,7 +222,6 @@ class TestAttachmentSearchReal:
         finally:
             # Cleanup
             await manager.delete(vs_id)
-            current_attachment_stores.set([])
 
     @pytest.mark.skipif(
         not os.getenv("OPENAI_API_KEY"),
@@ -232,16 +230,15 @@ class TestAttachmentSearchReal:
     @pytest.mark.asyncio
     async def test_search_without_attachments(self, real_vector_store_client):
         """Test search behavior when no attachments exist."""
-        from mcp_second_brain.tools.search_attachments import (
-            SearchAttachmentAdapter,
-            current_attachment_stores,
-        )
-
-        # Ensure no attachments in context
-        current_attachment_stores.set([])
+        from mcp_second_brain.tools.search_attachments import SearchAttachmentAdapter
 
         adapter = SearchAttachmentAdapter()
-        result = await adapter.generate(prompt="", query="anything", max_results=10)
+        result = await adapter.generate(
+            prompt="",
+            query="anything",
+            max_results=10,
+            vector_store_ids=[],
+        )
 
         assert "No attachments available" in result
 
@@ -254,10 +251,7 @@ class TestAttachmentSearchReal:
         self, real_vector_store_client, test_documents, created_vector_stores
     ):
         """Test searching with multiple semicolon-separated queries."""
-        from mcp_second_brain.tools.search_attachments import (
-            SearchAttachmentAdapter,
-            current_attachment_stores,
-        )
+        from mcp_second_brain.tools.search_attachments import SearchAttachmentAdapter
         from mcp_second_brain.tools.vector_store_manager import VectorStoreManager
 
         manager = VectorStoreManager()
@@ -265,11 +259,12 @@ class TestAttachmentSearchReal:
         created_vector_stores.append(vs_id)  # Track for cleanup
 
         try:
-            current_attachment_stores.set([vs_id])
-
             adapter = SearchAttachmentAdapter()
             result = await adapter.generate(
-                prompt="", query="JWT tokens;PostgreSQL;Kubernetes", max_results=10
+                prompt="",
+                query="JWT tokens;PostgreSQL;Kubernetes",
+                max_results=10,
+                vector_store_ids=[vs_id],
             )
 
             # Should find results for multiple queries
@@ -279,7 +274,6 @@ class TestAttachmentSearchReal:
 
         finally:
             await manager.delete(vs_id)
-            current_attachment_stores.set([])
 
     @pytest.mark.skipif(
         not os.getenv("OPENAI_API_KEY"),
@@ -290,7 +284,7 @@ class TestAttachmentSearchReal:
         self, real_vector_store_client, test_documents, created_vector_stores
     ):
         """Test that attachment contexts don't leak between executions."""
-        from mcp_second_brain.tools.search_attachments import current_attachment_stores
+        from mcp_second_brain.tools.search_attachments import SearchAttachmentAdapter
         from mcp_second_brain.tools.vector_store_manager import VectorStoreManager
 
         manager = VectorStoreManager()
@@ -306,22 +300,24 @@ class TestAttachmentSearchReal:
         try:
             # Simulate two concurrent executions
             async def execution1():
-                current_attachment_stores.set([vs_id1])
-                # Should only see technical spec content
-                stores = current_attachment_stores.get()
-                assert stores == [vs_id1]
-                await asyncio.sleep(0.1)  # Simulate work
-                # Verify context unchanged
-                assert current_attachment_stores.get() == [vs_id1]
+                adapter = SearchAttachmentAdapter()
+                result = await adapter.generate(
+                    prompt="",
+                    query="tech",
+                    max_results=1,
+                    vector_store_ids=[vs_id1],
+                )
+                assert f"{vs_id1}" in result
 
             async def execution2():
-                current_attachment_stores.set([vs_id2])
-                # Should only see meeting notes
-                stores = current_attachment_stores.get()
-                assert stores == [vs_id2]
-                await asyncio.sleep(0.1)  # Simulate work
-                # Verify context unchanged
-                assert current_attachment_stores.get() == [vs_id2]
+                adapter = SearchAttachmentAdapter()
+                result = await adapter.generate(
+                    prompt="",
+                    query="meet",
+                    max_results=1,
+                    vector_store_ids=[vs_id2],
+                )
+                assert f"{vs_id2}" in result
 
             # Run concurrently
             await asyncio.gather(execution1(), execution2())
