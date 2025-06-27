@@ -35,6 +35,11 @@ CONTEXT_PERCENTAGE=0.85
 DEFAULT_TEMPERATURE=0.2
 ```
 
+### Logging and Secret Redaction
+The server installs a `SecretRedactionFilter` that automatically replaces any
+`sk-` style keys and values of environment variables ending with `_KEY` or
+`_SECRET` with `[REDACTED]` before they are written to the log files.
+
 ### Google Cloud Authentication
 
 The server requires Google Cloud authentication for Gemini models. See [docs/authentication-guide.md](docs/authentication-guide.md) for detailed setup instructions.
@@ -464,4 +469,4 @@ pytest tests/integration_mcp -v         # MCP integration tests
 
 ## 📄 License
 
-Private repository - see license terms.
+Private repository - see license terms

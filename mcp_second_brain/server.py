@@ -6,6 +6,7 @@ import logging
 import os
 from logging.handlers import QueueHandler, QueueListener
 import queue
+from .utils.log_filter import SecretRedactionFilter
 
 # Import all tool definitions to register them
 from .tools import definitions  # noqa: F401 # This import triggers the @tool decorators
@@ -32,6 +33,8 @@ queue_listener = QueueListener(log_queue, file_handler, console_handler)
 queue_listener.start()
 
 logging.basicConfig(level=logging.INFO, handlers=[queue_handler])
+root_logger = logging.getLogger()
+root_logger.addFilter(SecretRedactionFilter())
 logger = logging.getLogger(__name__)
 
 # Initialize FastMCP server

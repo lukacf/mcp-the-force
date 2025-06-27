@@ -22,6 +22,7 @@ Tests for these features are marked with `@pytest.mark.xfail` to document the ga
 - Detects patterns like `sk-[alphanumeric]` (OpenAI keys)
 - Redacts environment variable values ending in `_KEY` or `_SECRET`
 - Replaces with `[REDACTED]` or similar
+**Status**: Implemented as `SecretRedactionFilter` in `mcp_second_brain.utils.log_filter`
 
 ## Priority 2 - Important Enhancements
 
@@ -42,5 +43,5 @@ Before deploying to production or making the server publicly accessible:
 ## Tracking
 
 - [ ] Path traversal protection
-- [ ] Automatic log redaction
+- [x] Automatic log redaction
 - [ ] Gitignore negation support
