@@ -120,7 +120,7 @@ class TestAttachmentSearchReal:
     @pytest.mark.asyncio
     async def test_search_attachments_basic(self, real_vector_store_client):
         """Test that attachment search tool is registered when vector stores exist."""
-        from mcp_second_brain.adapters.openai_adapter import OpenAIAdapter
+        from mcp_second_brain.adapters.openai import OpenAIAdapter
 
         # Create adapter
         adapter = OpenAIAdapter("gpt-4.1")
@@ -150,7 +150,7 @@ class TestAttachmentSearchReal:
     async def test_attachment_search_tool_registration(self, real_vector_store_client):
         """Test that search_session_attachments tool is registered for models."""
         # For OpenAI models
-        from mcp_second_brain.adapters.openai_adapter import OpenAIAdapter
+        from mcp_second_brain.adapters.openai import OpenAIAdapter
 
         adapter = OpenAIAdapter("gpt-4.1")
 
@@ -337,7 +337,7 @@ class TestAttachmentSearchIntegration:
     @pytest.mark.asyncio
     async def test_openai_tool_registration_with_attachments(self):
         """Test that OpenAI models get search_session_attachments when attachments exist."""
-        from mcp_second_brain.adapters.openai_adapter import OpenAIAdapter
+        from mcp_second_brain.adapters.openai import OpenAIAdapter
 
         adapter = OpenAIAdapter("gpt-4.1")
 
@@ -368,7 +368,7 @@ class TestAttachmentSearchIntegration:
         if not os.getenv("VERTEX_PROJECT"):
             pytest.skip("Requires VERTEX_PROJECT configuration")
 
-        from mcp_second_brain.adapters.vertex_adapter import VertexAdapter
+        from mcp_second_brain.adapters.vertex import VertexAdapter
 
         adapter = VertexAdapter("gemini-2.5-flash")  # Use flash for faster tests
 
