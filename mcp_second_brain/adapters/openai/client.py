@@ -19,7 +19,9 @@ class OpenAIClientFactory:
     client instance is garbage collected.
     """
 
-    _instances: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
+    _instances: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, AsyncOpenAI]" = (
+        weakref.WeakKeyDictionary()
+    )
     _lock = asyncio.Lock()
 
     @classmethod

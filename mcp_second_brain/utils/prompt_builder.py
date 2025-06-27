@@ -1,28 +1,22 @@
 from __future__ import annotations
 from pathlib import Path
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Any
 from lxml import etree as ET
 import time
 import logging
 from ..config import get_settings
 from .token_counter import count_tokens
 from .fs import gather_file_paths
+from ..adapters.model_registry import get_model_context_window
 
 logger = logging.getLogger(__name__)
 
 _set = get_settings()
 
-# Model context windows (actual limits)
-MODEL_CONTEXT_LIMITS = {
-    "gemini-2.5-pro": 1_000_000,  # 1M tokens
-    "gemini-2.5-flash": 1_000_000,  # 1M tokens
-    "gpt-4.1": 1_000_000,  # 1M tokens
-    "o3": 200_000,  # 200k tokens
-    "o3-pro": 200_000,  # 200k tokens
-}
 
-
-def _create_file_element(path: str, content: str) -> ET.Element:
+def _create_file_element(
+    path: str, content: str
+) -> Any:  # ET.Element is not a valid type annotation
     el = ET.Element("file", path=path)
     # Ensure content is safe for XML
     # Remove any remaining control characters except tab, newline, carriage return
@@ -59,9 +53,7 @@ def build_prompt(
     logger.info(f"Gathered {len(extras)} attachment files")
 
     # Get context limit based on model and configured percentage
-    model_limit = MODEL_CONTEXT_LIMITS.get(
-        model, 32_000
-    )  # Conservative fallback for unknown models
+    model_limit = get_model_context_window(model or "")
     context_percentage = _set.context_percentage
 
     # Calculate limit with safety margin

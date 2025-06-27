@@ -1,36 +1,40 @@
 from functools import lru_cache
 from pydantic import Field, PositiveInt
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    host: str = Field("127.0.0.1", env="HOST")
-    port: PositiveInt = Field(8000, env="PORT")
-    openai_api_key: str = Field("", env="OPENAI_API_KEY")
-    vertex_project: str = Field("", env="VERTEX_PROJECT")
-    vertex_location: str = Field("", env="VERTEX_LOCATION")
+    host: str = Field(default="127.0.0.1", validation_alias="HOST")
+    port: PositiveInt = Field(default=8000, validation_alias="PORT")
+    openai_api_key: str = Field(default="", validation_alias="OPENAI_API_KEY")
+    vertex_project: str = Field(default="", validation_alias="VERTEX_PROJECT")
+    vertex_location: str = Field(default="", validation_alias="VERTEX_LOCATION")
     context_percentage: float = Field(
-        0.85, env="CONTEXT_PERCENTAGE", ge=0.1, le=0.95
+        default=0.85, validation_alias="CONTEXT_PERCENTAGE", ge=0.1, le=0.95
     )  # Use 10-95% of model context
-    default_temperature: float = Field(0.2, env="DEFAULT_TEMPERATURE")
+    default_temperature: float = Field(
+        default=0.2, validation_alias="DEFAULT_TEMPERATURE"
+    )
 
     # Memory configuration
-    memory_enabled: bool = Field(True, env="MEMORY_ENABLED")
-    memory_rollover_limit: PositiveInt = Field(9500, env="MEMORY_ROLLOVER_LIMIT")
+    memory_enabled: bool = Field(default=True, validation_alias="MEMORY_ENABLED")
+    memory_rollover_limit: PositiveInt = Field(
+        default=9500, validation_alias="MEMORY_ROLLOVER_LIMIT"
+    )
     memory_session_cutoff_hours: PositiveInt = Field(
-        2, env="MEMORY_SESSION_CUTOFF_HOURS"
+        default=2, validation_alias="MEMORY_SESSION_CUTOFF_HOURS"
     )
     memory_summary_char_limit: PositiveInt = Field(
-        200000, env="MEMORY_SUMMARY_CHAR_LIMIT"
+        default=200000, validation_alias="MEMORY_SUMMARY_CHAR_LIMIT"
     )  # ~50k tokens
     memory_max_files_per_commit: PositiveInt = Field(
-        50, env="MEMORY_MAX_FILES_PER_COMMIT"
+        default=50, validation_alias="MEMORY_MAX_FILES_PER_COMMIT"
     )
-    session_db_path: str = Field(".mcp_sessions.sqlite3", env="SESSION_DB_PATH")
+    session_db_path: str = Field(
+        default=".mcp_sessions.sqlite3", validation_alias="SESSION_DB_PATH"
+    )
 
-    class Config:
-        env_file = ".env"
-        extra = "ignore"  # Ignore extra fields in .env file
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     @property
     def vertex_endpoint(self) -> str:
