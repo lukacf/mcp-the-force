@@ -47,7 +47,7 @@ class TestToolExecutor:
 
             # Also ensure the vertex client is mocked
             with patch(
-                "mcp_second_brain.adapters.vertex_adapter.get_client"
+                "mcp_second_brain.adapters.vertex.adapter.get_client"
             ) as mock_get_client:
                 mock_get_client.return_value = (
                     Mock()

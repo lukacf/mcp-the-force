@@ -145,3 +145,11 @@ class OpenAIRequest(BaseModel):
             data["input"] = data.pop("messages")
 
         return data
+
+
+def get_context_window(model: str) -> int:
+    """Get context window for a model, with fallback."""
+    capability = model_capabilities.get(model)
+    if capability:
+        return capability.context_window
+    return 32_000  # Conservative fallback for unknown models
