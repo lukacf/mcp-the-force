@@ -50,6 +50,9 @@ class ChatWithGemini25Pro(ToolSpec):
     temperature: Optional[float] = Route.adapter(
         default=0.2, description="Sampling temperature"
     )
+    session_id: str = Route.session(
+        description="Session ID for multi-turn conversations"
+    )
 
 
 @tool
@@ -78,6 +81,9 @@ class ChatWithGemini25Flash(ToolSpec):
     )
     temperature: Optional[float] = Route.adapter(
         default=0.3, description="Sampling temperature"
+    )
+    session_id: str = Route.session(
+        description="Session ID for multi-turn conversations"
     )
 
 
