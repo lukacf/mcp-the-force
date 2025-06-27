@@ -1,0 +1,40 @@
+# MCP Second-Brain Configuration Example
+# Copy this to config.yaml and customize for your environment
+
+mcp:
+  host: 127.0.0.1
+  port: 8000
+  context_percentage: 0.85  # Use 85% of model's context window
+  default_temperature: 0.2  # Low temperature for consistent responses
+
+logging:
+  level: INFO  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+
+# Provider configuration
+# API keys should go in secrets.yaml, not here
+providers:
+  openai:
+    enabled: true
+  vertex:
+    enabled: false
+    project: # your-gcp-project-id
+    location: us-central1
+  anthropic:
+    enabled: false
+
+# Session management
+session:
+  ttl_seconds: 3600  # 1 hour
+  db_path: .mcp_sessions.sqlite3
+  cleanup_probability: 0.01  # 1% chance to cleanup on each request
+
+# Memory system
+memory:
+  enabled: true
+  rollover_limit: 100  # Create new vector store after 100 items
+  session_cutoff_hours: 24  # Look back 24 hours for related sessions
+  summary_char_limit: 1000  # Max chars for conversation summaries
+  max_files_per_commit: 20  # Max files to list in commit summaries
+
+# Testing
+adapter_mock: false  # Set to true to use mock adapters
