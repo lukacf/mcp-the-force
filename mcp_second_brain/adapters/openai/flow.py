@@ -163,44 +163,9 @@ class BaseFlowStrategy(ABC):
         # Execute the function calls with bounded concurrency
         results = await self.context.tool_executor.run_all(function_calls)
 
-        # For reasoning models, we need to preserve ALL items since last user message
-        if self.context.request.model in ["o3", "o3-pro", "o4-mini"]:
-            # Build input with original message + all output items + results
-            follow_up_input = [
-                {
-                    "role": "user",
-                    "content": self.context.request.messages[-1]["content"],
-                }
-            ]
-
-            # Convert output items to proper dict format
-            for item in all_output_items:
-                if hasattr(item, "__dict__"):
-                    # Object with attributes - convert to dict
-                    item_dict = {}
-                    for key in [
-                        "type",
-                        "status",
-                        "content",
-                        "summary",
-                        "call_id",
-                        "name",
-                        "arguments",
-                    ]:
-                        if hasattr(item, key):
-                            item_dict[key] = getattr(item, key)
-                    follow_up_input.append(item_dict)
-                elif isinstance(item, dict):
-                    # Already a dict
-                    follow_up_input.append(item)
-                else:
-                    # Direct append for other types
-                    follow_up_input.append(item)
-
-            follow_up_input.extend(results)
-        else:
-            # Non-reasoning models only need the results
-            follow_up_input = results
+        # When using previous_response_id, we only send the function call results
+        # The API manages the conversation state server-side
+        follow_up_input = results
 
         # Build follow-up parameters
         follow_up_params: Dict[str, Any] = {
