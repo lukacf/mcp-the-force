@@ -17,7 +17,7 @@ help:
 dev:
 	@echo "Setting up development environment..."
 	@command -v uv >/dev/null 2>&1 || (echo "Installing uv..." && pip install uv)
-	uv pip install --frozen -e ".[test,dev]"
+	uv sync --frozen --all-extras
 	@echo "✓ Development environment ready!"
 
 install-hooks:

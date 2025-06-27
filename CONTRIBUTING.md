@@ -22,7 +22,7 @@ Thank you for your interest in contributing to MCP Second-Brain! This guide will
    ```bash
    make dev
    ```
-   This installs all dependencies with frozen versions to ensure consistency.
+   This installs all dependencies using the frozen lockfile to ensure consistency.
 
 3. Install pre-commit hooks:
    ```bash
@@ -62,9 +62,9 @@ make test-all
 
 To ensure your local environment matches CI/CD:
 
-1. **Always use frozen dependencies**:
+1. **Always use the frozen lockfile**:
    ```bash
-   uv pip install --frozen -e ".[test,dev]"
+   uv sync --frozen --all-extras
    ```
 
 2. **Test with tox** before pushing:
@@ -118,9 +118,9 @@ If tests pass locally but fail in CI:
    ```
 
 2. **Check for missing dependencies**:
-   Ensure you're using frozen dependencies:
+   Ensure you're using the frozen lockfile:
    ```bash
-   uv pip install --frozen -e ".[test]"
+   uv sync --frozen --extra test
    ```
 
 3. **Environment differences**:

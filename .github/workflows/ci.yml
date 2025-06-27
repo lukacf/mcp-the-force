@@ -24,7 +24,8 @@ jobs:
       - name: Install dependencies
         run: |
           pip install uv
-          uv pip install --frozen --system ruff mypy
+          # For linting we just need ruff and mypy
+          uv pip install --system ruff mypy
       
       - name: Run ruff
         run: ruff check .
@@ -57,7 +58,8 @@ jobs:
       - name: Install dependencies
         run: |
           pip install uv
-          uv pip install --frozen --system -e ".[test]"
+          # Use uv sync with frozen lockfile for consistency
+          uv sync --frozen --all-extras
       
       - name: Run unit tests
         run: pytest tests/unit -v --cov=mcp_second_brain --cov-report=xml --cov-report=term
@@ -88,7 +90,8 @@ jobs:
       - name: Install dependencies
         run: |
           pip install uv
-          uv pip install --frozen --system -e ".[test]"
+          # Use uv sync with frozen lockfile for consistency
+          uv sync --frozen --all-extras
       
       - name: Show environment info
         run: |
