@@ -106,9 +106,9 @@ ENV_ALIASES: Dict[str, str] = {
 def _mask_sensitive(data: Dict[str, Any]) -> Dict[str, Any]:
     """Recursively mask sensitive values in a dictionary."""
     if not isinstance(data, dict):
-        return data
+        return {}
 
-    result = {}
+    result: Dict[str, Any] = {}
     for key, value in data.items():
         if isinstance(value, dict):
             result[key] = _mask_sensitive(value)
@@ -187,19 +187,19 @@ def init(
     try:
         # Create config.yaml
         if CONFIG_FILE.exists() and not force:
-            typer.echo(f"⏭️  Skipping {CONFIG_FILE.name} (already exists)")
+            typer.echo(f"[SKIP] Skipping {CONFIG_FILE.name} (already exists)")
         else:
             CONFIG_FILE.write_text(INIT_CONFIG_TEMPLATE)
-            typer.echo(f"✅ Created {CONFIG_FILE.name}")
+            typer.echo(f"[OK] Created {CONFIG_FILE.name}")
 
         # Create secrets.yaml
         if SECRETS_FILE.exists() and not force:
-            typer.echo(f"⏭️  Skipping {SECRETS_FILE.name} (already exists)")
+            typer.echo(f"[SKIP] Skipping {SECRETS_FILE.name} (already exists)")
         else:
             SECRETS_FILE.touch(mode=0o600)  # Secure permissions
             SECRETS_FILE.write_text(INIT_SECRETS_TEMPLATE)
-            typer.echo(f"✅ Created {SECRETS_FILE.name}")
-            typer.echo("⚠️  Remember to add secrets.yaml to .gitignore!")
+            typer.echo(f"[OK] Created {SECRETS_FILE.name}")
+            typer.echo("[WARN] Remember to add secrets.yaml to .gitignore!")
 
         # Check .gitignore
         gitignore = Path(".gitignore")
@@ -207,13 +207,13 @@ def init(
             content = gitignore.read_text()
             if "secrets.yaml" not in content:
                 typer.echo(
-                    "⚠️  Add 'secrets.yaml' to .gitignore to prevent committing secrets!"
+                    "[WARN] Add 'secrets.yaml' to .gitignore to prevent committing secrets!"
                 )
     except PermissionError as e:
-        typer.echo(f"❌ Permission denied: {e}", err=True)
+        typer.echo(f"[ERROR] Permission denied: {e}", err=True)
         raise typer.Exit(1)
     except Exception as e:
-        typer.echo(f"❌ Failed to initialize configuration: {e}", err=True)
+        typer.echo(f"[ERROR] Failed to initialize configuration: {e}", err=True)
         raise typer.Exit(1)
 
 
@@ -222,7 +222,7 @@ def validate():
     """Validate configuration files."""
     try:
         settings = get_settings()
-        typer.echo("✅ Configuration is valid!")
+        typer.echo("[OK] Configuration is valid!")
 
         # Check for API keys
         missing_keys = []
@@ -239,12 +239,12 @@ def validate():
             missing_keys.append("ANTHROPIC_API_KEY")
 
         if missing_keys:
-            typer.echo("⚠️  Warning: Missing API keys:")
+            typer.echo("[WARN] Warning: Missing API keys:")
             for key in missing_keys:
                 typer.echo(f"    - {key}")
 
     except Exception as e:
-        typer.echo(f"❌ Configuration validation failed: {e}", err=True)
+        typer.echo(f"[ERROR] Configuration validation failed: {e}", err=True)
         raise typer.Exit(1)
 
 
@@ -286,13 +286,13 @@ def export_env(
                 lines.append(f"{key}={value}")
 
         output.write_text("\n".join(lines) + "\n")
-        typer.echo(f"✅ Exported configuration to {output}")
+        typer.echo(f"[OK] Exported configuration to {output}")
 
     except OSError as e:
-        typer.echo(f"❌ Failed to write to {output}: {e}", err=True)
+        typer.echo(f"[ERROR] Failed to write to {output}: {e}", err=True)
         raise typer.Exit(1)
     except Exception as e:
-        typer.echo(f"❌ Export failed: {e}", err=True)
+        typer.echo(f"[ERROR] Export failed: {e}", err=True)
         raise typer.Exit(1)
 
 
@@ -309,10 +309,10 @@ def export_client(
 
         # Pretty print JSON
         output.write_text(json.dumps(config, indent=2) + "\n")
-        typer.echo(f"✅ Exported MCP client configuration to {output}")
+        typer.echo(f"[OK] Exported MCP client configuration to {output}")
 
     except Exception as e:
-        typer.echo(f"❌ Export failed: {e}", err=True)
+        typer.echo(f"[ERROR] Export failed: {e}", err=True)
         raise typer.Exit(1)
 
 
@@ -334,7 +334,7 @@ def show(
             # Show specific key using helper function
             value = _get_config_value(config_dict, key)
             if value is None:
-                typer.echo(f"❌ Key '{key}' not found", err=True)
+                typer.echo(f"[ERROR] Key '{key}' not found", err=True)
                 raise typer.Exit(1)
 
             # Mask sensitive values for single key display
@@ -368,7 +368,7 @@ def show(
 
     except Exception as e:
         if "Key '" not in str(e):  # Avoid double error messages
-            typer.echo(f"❌ Failed to show configuration: {e}", err=True)
+            typer.echo(f"[ERROR] Failed to show configuration: {e}", err=True)
         raise typer.Exit(1)
 
 
@@ -387,7 +387,7 @@ def import_legacy(
 
     # Check if any legacy files exist
     if not env_file.exists() and (mcp_config is None or not mcp_config.exists()):
-        typer.echo("❌ No legacy configuration files found", err=True)
+        typer.echo("[ERROR] No legacy configuration files found", err=True)
         raise typer.Exit(1)
 
     config_data: Dict[str, Any] = {
@@ -459,7 +459,7 @@ def import_legacy(
             elif key == "MCP_ADAPTER_MOCK":
                 config_data["adapter_mock"] = value.lower() == "true"
 
-        typer.echo(f"✅ Imported configuration from {env_file}")
+        typer.echo(f"[OK] Imported configuration from {env_file}")
 
     # Import from mcp-config.json if provided
     if mcp_config and mcp_config.exists():
@@ -472,7 +472,7 @@ def import_legacy(
                 if key == "ADDITIONAL_KEY":  # Handle test-specific key
                     # Store it somewhere if needed
                     pass
-        typer.echo(f"✅ Imported configuration from {mcp_config}")
+        typer.echo(f"[OK] Imported configuration from {mcp_config}")
 
     # Write config files
 
@@ -487,17 +487,17 @@ def import_legacy(
 
     # Write config.yaml
     CONFIG_FILE.write_text(yaml.dump(config_data, default_flow_style=False))
-    typer.echo(f"✅ Created {CONFIG_FILE}")
+    typer.echo(f"[OK] Created {CONFIG_FILE}")
 
     # Write secrets.yaml if there are secrets
     if secrets_data.get("providers"):
         SECRETS_FILE.touch(mode=0o600)
         SECRETS_FILE.write_text(yaml.dump(secrets_data, default_flow_style=False))
-        typer.echo(f"✅ Created {SECRETS_FILE} (mode 600)")
-        typer.echo("⚠️  Remember to add secrets.yaml to .gitignore!")
+        typer.echo(f"[OK] Created {SECRETS_FILE} (mode 600)")
+        typer.echo("[WARN] Remember to add secrets.yaml to .gitignore!")
 
     # Final success message
-    typer.echo("✅ Successfully imported legacy configuration")
+    typer.echo("[OK] Successfully imported legacy configuration")
 
 
 def main():
