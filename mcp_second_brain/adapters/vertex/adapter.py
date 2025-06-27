@@ -189,7 +189,7 @@ class VertexAdapter(BaseAdapter):
                     logger.info(f"Executing search_project_memory: '{query}'")
 
                     # Import and execute the search
-                    from ..tools.search_memory import SearchMemoryAdapter
+                    from ...tools.search_memory import SearchMemoryAdapter
 
                     memory_search = SearchMemoryAdapter()
                     search_result_text = await memory_search.generate(
@@ -215,7 +215,7 @@ class VertexAdapter(BaseAdapter):
                     logger.info(f"Executing search_session_attachments: '{query}'")
 
                     # Import and execute the search
-                    from ..tools.search_attachments import SearchAttachmentAdapter
+                    from ...tools.search_attachments import SearchAttachmentAdapter
 
                     attachment_search = SearchAttachmentAdapter()
                     search_result_text = await attachment_search.generate(

@@ -59,21 +59,25 @@ class BaseFlowStrategy(ABC):
         """Build the tools list based on request and model capabilities."""
         tools = []
 
-        # Always add search_project_memory tool
-        tools.append(create_search_memory_declaration_openai())
+        capability = model_capabilities.get(self.context.request.model)
 
-        # Add attachment search if vector stores provided
-        if self.context.request.vector_store_ids:
-            tools.append(create_attachment_search_declaration_openai())
+        # Only add custom tools if the model supports them
+        if capability is None or capability.supports_custom_tools:
+            # Add search_project_memory tool
+            tools.append(create_search_memory_declaration_openai())
+
+            # Add attachment search if vector stores provided
+            if self.context.request.vector_store_ids:
+                tools.append(create_attachment_search_declaration_openai())
 
         # Add web search for supported models
-        capability = model_capabilities.get(self.context.request.model)
         if capability and capability.supports_web_search:
-            tools.append({"type": "web_search"})
+            tools.append({"type": capability.web_search_tool})
 
-        # Add any custom tools from request
-        if self.context.request.tools:
-            tools.extend(self.context.request.tools)
+        # Add any custom tools from request (only if allowed)
+        if capability is None or capability.supports_custom_tools:
+            if self.context.request.tools:
+                tools.extend(self.context.request.tools)
 
         return tools
 
@@ -219,7 +223,13 @@ class BackgroundFlowStrategy(BaseFlowStrategy):
             api_params["tools"] = self.context.tools
             api_params["parallel_tool_calls"] = self.context.request.parallel_tool_calls
 
-        if self.context.request.reasoning_effort:
+        # Only add reasoning parameters if the model supports them
+        capability = model_capabilities.get(self.context.request.model)
+        if (
+            self.context.request.reasoning_effort
+            and capability
+            and capability.supports_reasoning_effort
+        ):
             api_params["reasoning"] = {"effort": self.context.request.reasoning_effort}
             # Remove the flat reasoning_effort parameter that was included by to_api_format()
             api_params.pop("reasoning_effort", None)
@@ -253,11 +263,22 @@ class BackgroundFlowStrategy(BaseFlowStrategy):
 
         # Poll for completion with exponential backoff
         delay = INITIAL_POLL_DELAY_SEC
-        elapsed = 0
+        start_poll_time = asyncio.get_event_loop().time()
 
-        while elapsed < self.context.timeout_remaining:
+        logger.info(
+            f"Starting background polling for {response_id}, timeout={self.context.timeout_remaining}s"
+        )
+
+        while True:
             await asyncio.sleep(delay)
-            elapsed += int(delay)
+            elapsed = asyncio.get_event_loop().time() - start_poll_time
+
+            # Check if we've exceeded timeout
+            if elapsed >= self.context.timeout_remaining:
+                logger.info(
+                    f"Timeout reached: elapsed={elapsed:.1f}s >= timeout={self.context.timeout_remaining}s"
+                )
+                break
 
             # Check status
             job = await self.context.client.responses.retrieve(response_id)
@@ -311,13 +332,11 @@ class BackgroundFlowStrategy(BaseFlowStrategy):
             # Add jitter to prevent thundering herd
             delay += random.uniform(0, 0.2)
 
-            # Update timeout
-            self.context.update_timeout(elapsed)
-
         # Timeout reached
+        final_elapsed = asyncio.get_event_loop().time() - start_poll_time
         raise TimeoutException(
-            f"Job {response_id} timed out after {elapsed}s",
-            elapsed=elapsed,
+            f"Job {response_id} timed out after {final_elapsed:.1f}s",
+            elapsed=final_elapsed,
             timeout=self.context.request.timeout,
         )
 
@@ -336,7 +355,13 @@ class StreamingFlowStrategy(BaseFlowStrategy):
             api_params["tools"] = self.context.tools
             api_params["parallel_tool_calls"] = self.context.request.parallel_tool_calls
 
-        if self.context.request.reasoning_effort:
+        # Only add reasoning parameters if the model supports them
+        capability = model_capabilities.get(self.context.request.model)
+        if (
+            self.context.request.reasoning_effort
+            and capability
+            and capability.supports_reasoning_effort
+        ):
             api_params["reasoning"] = {"effort": self.context.request.reasoning_effort}
             # Remove the flat reasoning_effort parameter that was included by to_api_format()
             api_params.pop("reasoning_effort", None)
@@ -583,5 +608,10 @@ class FlowOrchestrator:
             elif data.get("timeout", 300) > STREAM_TIMEOUT_THRESHOLD:
                 data["background"] = True
                 data["stream"] = False
+
+            # Apply default reasoning_effort if not provided
+            if capability.supports_reasoning_effort and "reasoning_effort" not in data:
+                if capability.default_reasoning_effort:
+                    data["reasoning_effort"] = capability.default_reasoning_effort
 
         return data
