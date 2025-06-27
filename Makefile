@@ -1,16 +1,24 @@
-.PHONY: help lint test test-all test-unit test-integration test-e2e ci install-hooks clean
+.PHONY: help dev lint test test-all test-unit test-integration test-e2e test-matrix ci install-hooks clean
 
 help:
 	@echo "Available targets:"
-	@echo "  make install-hooks  - Install pre-commit hooks"
+	@echo "  make dev           - Set up development environment with frozen deps"
+	@echo "  make install-hooks - Install pre-commit hooks"
 	@echo "  make lint          - Run ruff and mypy"
 	@echo "  make test          - Run fast unit tests only"
 	@echo "  make test-all      - Run all tests (unit + integration + e2e)"
 	@echo "  make test-unit     - Run all unit tests"
 	@echo "  make test-integration - Run integration tests"
 	@echo "  make test-e2e      - Run e2e tests (requires Docker)"
+	@echo "  make test-matrix   - Run tests across Python versions with tox"
 	@echo "  make ci            - Run full CI suite locally"
 	@echo "  make clean         - Clean up generated files"
+
+dev:
+	@echo "Setting up development environment..."
+	@command -v uv >/dev/null 2>&1 || (echo "Installing uv..." && pip install uv)
+	uv pip install --frozen -e ".[test,dev]"
+	@echo "✓ Development environment ready!"
 
 install-hooks:
 	@echo "Installing pre-commit hooks..."
@@ -44,6 +52,11 @@ test-integration:
 test-e2e:
 	@echo "Running e2e tests (requires Docker)..."
 	cd tests/e2e && docker-compose up --build --abort-on-container-exit --exit-code-from test-runner
+
+test-matrix:
+	@echo "Running tests across Python versions..."
+	@command -v tox >/dev/null 2>&1 || (echo "Installing tox..." && pip install tox)
+	tox
 
 ci: lint test-unit test-integration
 	@echo "✓ CI checks passed locally!"

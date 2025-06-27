@@ -24,7 +24,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install uv
-          uv pip install --system ruff mypy
+          uv pip install --frozen --system ruff mypy
       
       - name: Run ruff
         run: ruff check .
@@ -57,7 +57,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install uv
-          uv pip install --system -e ".[test]"
+          uv pip install --frozen --system -e ".[test]"
       
       - name: Run unit tests
         run: pytest tests/unit -v --cov=mcp_second_brain --cov-report=xml --cov-report=term
@@ -88,7 +88,16 @@ jobs:
       - name: Install dependencies
         run: |
           pip install uv
-          uv pip install --system -e ".[test]"
+          uv pip install --frozen --system -e ".[test]"
+      
+      - name: Show environment info
+        run: |
+          echo "=== Environment Diagnostics ==="
+          python -VV
+          echo "=== Key package versions ==="
+          pip list | grep -E 'typer|click|rich|pytest' || true
+          echo "=== Locale info ==="
+          locale
       
       - name: Run CI diagnostics
         run: |
