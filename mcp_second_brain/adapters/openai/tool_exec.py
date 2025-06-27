@@ -31,7 +31,7 @@ class ToolExecutor:
 
         Returns:
             List of results in the same order as tool_calls.
-            Each result is a dict with 'tool_call_id' and 'output'.
+            Each result is a dict with 'call_id' and 'output'.
         """
         if not tool_calls:
             return []
@@ -107,8 +107,7 @@ class ToolExecutor:
             # Format successful result
             results[index] = {
                 "type": "function_call_output",
-                "tool_call_id": call_id,
-                "call_id": call_id,  # Some code expects this
+                "call_id": call_id,
                 "output": json.dumps(tool_output)
                 if not isinstance(tool_output, str)
                 else tool_output,
@@ -124,7 +123,6 @@ class ToolExecutor:
             # Return error as result to allow other tools to complete
             results[index] = {
                 "type": "function_call_output",
-                "tool_call_id": call_id,
                 "call_id": call_id,
                 "output": error_message,
             }
