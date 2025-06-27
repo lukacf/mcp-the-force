@@ -188,17 +188,21 @@ PORT=3000
 
     def test_vertex_oauth_configuration(self):
         """Test Vertex AI OAuth configuration for CI/CD environments."""
-        with patch.dict(os.environ, {
-            "GCLOUD_OAUTH_CLIENT_ID": "test-client-id",
-            "GCLOUD_OAUTH_CLIENT_SECRET": "test-client-secret",
-            "GCLOUD_USER_REFRESH_TOKEN": "test-refresh-token"
-        }, clear=True):
+        with patch.dict(
+            os.environ,
+            {
+                "GCLOUD_OAUTH_CLIENT_ID": "test-client-id",
+                "GCLOUD_OAUTH_CLIENT_SECRET": "test-client-secret",
+                "GCLOUD_USER_REFRESH_TOKEN": "test-refresh-token",
+            },
+            clear=True,
+        ):
             get_settings.cache_clear()
             settings = Settings()
             assert settings.vertex.oauth_client_id == "test-client-id"
             assert settings.vertex.oauth_client_secret == "test-client-secret"
             assert settings.vertex.user_refresh_token == "test-refresh-token"
-            
+
             # Also verify they're exported correctly
             env_vars = settings.export_env()
             assert env_vars["GCLOUD_OAUTH_CLIENT_ID"] == "test-client-id"
