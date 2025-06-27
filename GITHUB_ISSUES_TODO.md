@@ -91,6 +91,10 @@ Global `current_attachment_stores` can bleed between parallel calls, causing rac
 - Add tests for concurrent execution
 - Consider alternative approaches if ContextVars prove problematic
 
+### Status
+Resolved by passing attachment vector store IDs explicitly and ensuring
+each execution uses its own list.
+
 ---
 
 ## 6. Refactor Monolithic OpenAIAdapter
