@@ -368,7 +368,7 @@ class TestAttachmentSearchIntegration:
         if not os.getenv("VERTEX_PROJECT"):
             pytest.skip("Requires VERTEX_PROJECT configuration")
 
-        from mcp_second_brain.adapters.vertex_adapter import VertexAdapter
+        from mcp_second_brain.adapters.vertex import VertexAdapter
 
         adapter = VertexAdapter("gemini-2.5-flash")  # Use flash for faster tests
 

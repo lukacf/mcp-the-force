@@ -4,7 +4,7 @@ import os
 from typing import Dict, Tuple, Type, Optional
 from .base import BaseAdapter
 from .openai import OpenAIAdapter
-from .vertex_adapter import VertexAdapter
+from .vertex import VertexAdapter
 import logging
 
 logger = logging.getLogger(__name__)
