@@ -5,6 +5,7 @@ import logging
 import os
 import pytest
 from mcp_second_brain.config import Settings
+from mcp_second_brain.utils.log_filter import SecretRedactionFilter
 
 
 class TestLoggingSecurity:
@@ -52,7 +53,6 @@ class TestLoggingSecurity:
         assert "sk-1234567890abcdef" not in caplog.text
         assert "***" in caplog.text
     
-    @pytest.mark.xfail(reason="Logging sanitization not yet implemented")
     def test_automatic_secret_redaction(self, caplog, monkeypatch):
         """Test that secrets are automatically redacted from logs."""
         # This test documents a feature we should implement
@@ -62,6 +62,7 @@ class TestLoggingSecurity:
         
         monkeypatch.setenv("OPENAI_API_KEY", "sk-supersecret123")
         caplog.set_level(logging.DEBUG)
+        logging.getLogger().addFilter(SecretRedactionFilter())
         
         logger = logging.getLogger("mcp_second_brain")
         # Even if someone accidentally logs the key
@@ -69,4 +70,4 @@ class TestLoggingSecurity:
         
         # It should be automatically redacted
         assert "sk-supersecret123" not in caplog.text
-        assert "sk-***" in caplog.text or "[REDACTED]" in caplog.text
+        assert "Using key: [REDACTED]" in caplog.text
