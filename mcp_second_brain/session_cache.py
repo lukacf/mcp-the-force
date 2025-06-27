@@ -1,6 +1,5 @@
 """Session cache for OpenAI response ID management."""
 
-import os
 import sqlite3
 import time
 import random
@@ -8,12 +7,15 @@ import threading
 import logging
 from typing import Optional
 
+from mcp_second_brain.config import get_settings
+
 logger = logging.getLogger(__name__)
 
-# Configuration from environment
-_DEFAULT_TTL = int(os.getenv("SESSION_TTL_SECONDS", "3600"))
-_DB_PATH = os.getenv("SESSION_DB_PATH", ".mcp_sessions.sqlite3")
-_PURGE_PROB = float(os.getenv("SESSION_CLEANUP_PROBABILITY", "0.01"))
+# Get configuration from centralized settings
+_settings = get_settings()
+_DEFAULT_TTL = _settings.session_ttl_seconds
+_DB_PATH = _settings.session_db_path
+_PURGE_PROB = _settings.session_cleanup_probability
 
 
 class _SQLiteSessionCache:
