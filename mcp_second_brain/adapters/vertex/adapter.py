@@ -1,11 +1,12 @@
-from typing import Any, List
+from typing import Any, List, Optional
 import logging
 from google import genai
 from google.genai import types
-from ..config import get_settings
-from .base import BaseAdapter
-from .memory_search_declaration import create_search_memory_declaration_gemini
-from .attachment_search_declaration import create_attachment_search_declaration_gemini
+from google.genai.types import HarmCategory, HarmBlockThreshold
+from ...config import get_settings
+from ..base import BaseAdapter
+from ..memory_search_declaration import create_search_memory_declaration_gemini
+from ..attachment_search_declaration import create_attachment_search_declaration_gemini
 
 logger = logging.getLogger(__name__)
 
@@ -51,32 +52,25 @@ class VertexAdapter(BaseAdapter):
             types.Content(role="user", parts=[types.Part.from_text(text=prompt)])
         ]
 
-        # Configure generation
-        config_params = {
-            "temperature": temperature or get_settings().default_temperature,
-            "top_p": 0.95,
-            "max_output_tokens": 65535,
-            "safety_settings": [
-                types.SafetySetting(
-                    category="HARM_CATEGORY_HATE_SPEECH", threshold="OFF"
-                ),
-                types.SafetySetting(
-                    category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="OFF"
-                ),
-                types.SafetySetting(
-                    category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="OFF"
-                ),
-                types.SafetySetting(
-                    category="HARM_CATEGORY_HARASSMENT", threshold="OFF"
-                ),
-            ],
-        }
-
-        # Add thinking config for pro model with reasoning tokens
-        if "pro" in self.model_name and max_reasoning_tokens:
-            config_params["thinking_config"] = types.ThinkingConfig(
-                thinking_budget=max_reasoning_tokens if max_reasoning_tokens > 0 else -1
-            )
+        # Configure safety settings
+        safety_settings = [
+            types.SafetySetting(
+                category=HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+                threshold=HarmBlockThreshold.OFF,
+            ),
+            types.SafetySetting(
+                category=HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+                threshold=HarmBlockThreshold.OFF,
+            ),
+            types.SafetySetting(
+                category=HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+                threshold=HarmBlockThreshold.OFF,
+            ),
+            types.SafetySetting(
+                category=HarmCategory.HARM_CATEGORY_HARASSMENT,
+                threshold=HarmBlockThreshold.OFF,
+            ),
+        ]
 
         # Setup tools - always include search_project_memory
         function_declarations = []
@@ -93,12 +87,33 @@ class VertexAdapter(BaseAdapter):
             attachment_search_decl = create_attachment_search_declaration_gemini()
             function_declarations.append(attachment_search_decl)
 
-        # Add tools to config if we have any functions
+        # Build tools list
+        tools: Optional[List[Any]] = None
         if function_declarations:
             tools = [types.Tool(function_declarations=function_declarations)]
-            config_params["tools"] = tools
 
-        generate_content_config = types.GenerateContentConfig(**config_params)
+        # Build config with explicit parameters
+        if "pro" in self.model_name and max_reasoning_tokens:
+            generate_content_config = types.GenerateContentConfig(
+                temperature=temperature or get_settings().default_temperature,
+                top_p=0.95,
+                max_output_tokens=65535,
+                safety_settings=safety_settings,
+                tools=tools,
+                thinking_config=types.ThinkingConfig(
+                    thinking_budget=max_reasoning_tokens
+                    if max_reasoning_tokens > 0
+                    else -1
+                ),
+            )
+        else:
+            generate_content_config = types.GenerateContentConfig(
+                temperature=temperature or get_settings().default_temperature,
+                top_p=0.95,
+                max_output_tokens=65535,
+                safety_settings=safety_settings,
+                tools=tools,
+            )
 
         # Generate response
         client = get_client()

@@ -50,9 +50,12 @@ addopts = "--strict-markers --tb=short"
 markers = [
     "asyncio: Mark test as requiring asyncio",
     "anyio: Mark test as requiring anyio",
+    "unit: Pure logic tests, no I/O (<100ms)",
+    "integration: Mocked I/O tests (<1s)",
+    "expensive: Real API tests (manual only)",
+    "benchmark: Performance tests (warning only in CI)",
     "e2e: End-to-end tests that require Docker",
     "slow: Tests that take more than 10 seconds",
-    "integration: Integration tests that may require external services",
 ]
 # Note: plugins loading moved to conftest.py for better compatibility
 
