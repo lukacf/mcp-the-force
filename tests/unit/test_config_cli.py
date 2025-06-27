@@ -28,8 +28,8 @@ class TestConfigCLI:
         result = runner.invoke(app, ["init"])
 
         assert result.exit_code == 0
-        assert "✅ Created config.yaml" in result.stdout
-        assert "✅ Created secrets.yaml" in result.stdout
+        assert "[OK] Created config.yaml" in result.stdout
+        assert "[OK] Created secrets.yaml" in result.stdout
 
         # Check files were created
         assert (tmp_path / "config.yaml").exists()
@@ -62,8 +62,8 @@ class TestConfigCLI:
         # Without --force, should skip
         result = runner.invoke(app, ["init"])
         assert result.exit_code == 0
-        assert "⏭️  Skipping config.yaml (already exists)" in result.stdout
-        assert "⏭️  Skipping secrets.yaml (already exists)" in result.stdout
+        assert "[SKIP] Skipping config.yaml (already exists)" in result.stdout
+        assert "[SKIP] Skipping secrets.yaml (already exists)" in result.stdout
 
         # Verify files weren't overwritten
         assert (tmp_path / "config.yaml").read_text() == "existing: config"
@@ -71,8 +71,8 @@ class TestConfigCLI:
         # With --force, should overwrite
         result = runner.invoke(app, ["init", "--force"])
         assert result.exit_code == 0
-        assert "✅ Created config.yaml" in result.stdout
-        assert "✅ Created secrets.yaml" in result.stdout
+        assert "[OK] Created config.yaml" in result.stdout
+        assert "[OK] Created secrets.yaml" in result.stdout
 
         # Verify files were overwritten
         assert (tmp_path / "config.yaml").read_text() != "existing: config"
@@ -98,7 +98,7 @@ providers:
             result = runner.invoke(app, ["validate"])
 
         assert result.exit_code == 0
-        assert "✅ Configuration is valid!" in result.stdout
+        assert "[OK] Configuration is valid!" in result.stdout
 
     def test_validate_command_invalid(self, tmp_path, monkeypatch):
         """Test validate command with invalid configuration."""
@@ -119,7 +119,7 @@ logging:
             result = runner.invoke(app, ["validate"])
 
         assert result.exit_code == 1
-        assert "❌ Configuration validation failed" in result.stdout
+        assert "[ERROR] Configuration validation failed" in result.stdout
 
     def test_validate_command_missing_api_keys(self, tmp_path, monkeypatch):
         """Test validate command warns about missing API keys."""
@@ -137,7 +137,7 @@ mcp:
             result = runner.invoke(app, ["validate"])
 
         assert result.exit_code == 0
-        assert "⚠️  Warning: Missing API keys" in result.stdout
+        assert "[WARN] Warning: Missing API keys" in result.stdout
         assert "OPENAI_API_KEY" in result.stdout
 
     def test_export_env_command(self, tmp_path, monkeypatch):
@@ -251,7 +251,7 @@ logging:
             # Show non-existent key
             result = runner.invoke(app, ["show", "invalid.key"])
             assert result.exit_code == 1
-            assert "❌ Key 'invalid.key' not found" in result.stdout
+            assert "[ERROR] Key 'invalid.key' not found" in result.stdout
 
             # Different formats
             result = runner.invoke(app, ["show", "--format", "json"])
@@ -297,7 +297,7 @@ MEMORY_ENABLED=false
 
         result = runner.invoke(app, ["import-legacy"])
         assert result.exit_code == 0
-        assert "✅ Successfully imported legacy configuration" in result.stdout
+        assert "[OK] Successfully imported legacy configuration" in result.stdout
 
         # Check created files
         assert (tmp_path / "config.yaml").exists()
@@ -314,9 +314,17 @@ MEMORY_ENABLED=false
         with open(tmp_path / "secrets.yaml") as f:
             secrets = yaml.safe_load(f)
             assert secrets["providers"]["openai"]["api_key"] == "legacy-key"
-            assert secrets["providers"]["vertex"]["oauth_client_id"] == "legacy-client-id"
-            assert secrets["providers"]["vertex"]["oauth_client_secret"] == "legacy-client-secret"
-            assert secrets["providers"]["vertex"]["user_refresh_token"] == "legacy-refresh-token"
+            assert (
+                secrets["providers"]["vertex"]["oauth_client_id"] == "legacy-client-id"
+            )
+            assert (
+                secrets["providers"]["vertex"]["oauth_client_secret"]
+                == "legacy-client-secret"
+            )
+            assert (
+                secrets["providers"]["vertex"]["user_refresh_token"]
+                == "legacy-refresh-token"
+            )
 
     def test_import_legacy_no_files(self, tmp_path, monkeypatch):
         """Test import-legacy with no legacy files."""
@@ -324,7 +332,7 @@ MEMORY_ENABLED=false
 
         result = runner.invoke(app, ["import-legacy"])
         assert result.exit_code == 1
-        assert "❌ No legacy configuration files found" in result.stdout
+        assert "[ERROR] No legacy configuration files found" in result.stdout
 
     def test_cli_error_handling(self, tmp_path, monkeypatch):
         """Test CLI error handling."""
@@ -336,7 +344,7 @@ MEMORY_ENABLED=false
         ):
             result = runner.invoke(app, ["init"])
             assert result.exit_code == 1
-            assert "Permission denied" in result.stdout
+            assert "[ERROR] Permission denied" in result.stdout
 
         # Test export-env with write error
         (tmp_path / "config.yaml").write_text("mcp:\n  port: 8000")
