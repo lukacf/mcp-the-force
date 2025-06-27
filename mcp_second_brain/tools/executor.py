@@ -170,7 +170,6 @@ class ToolExecutor:
             if vs_id:
                 await vector_store_manager.delete(vs_id)
 
-
             # Wait for memory tasks to complete
             if memory_tasks:
                 try:
