@@ -4,10 +4,9 @@ This provides a unified way for all models (OpenAI and Gemini) to search
 across project memory stores without the 2-store limitation.
 """
 
-from typing import List, Dict, Any, TYPE_CHECKING, Set
+from typing import List, Dict, Any, TYPE_CHECKING
 import logging
 import asyncio
-import hashlib
 from ..utils.thread_pool import get_shared_executor
 
 from openai import OpenAI
@@ -23,6 +22,7 @@ from ..adapters.base import BaseAdapter
 from .base import ToolSpec
 from .descriptors import Route
 from .registry import tool
+from .search_dedup import SearchDeduplicator
 
 logger = logging.getLogger(__name__)
 
@@ -61,9 +61,8 @@ class SearchMemoryAdapter(BaseAdapter):
     context_window = 0  # Not applicable
     description_snippet = "Search project memory stores"
 
-    # Class-level deduplication cache shared across instances
-    _dedup_cache: Set[str] = set()
-    _dedup_lock = asyncio.Lock()
+    # Class-level deduplicator shared across instances
+    _deduplicator = SearchDeduplicator("memory")
 
     def __init__(self, model_name: str = "memory_search"):
         self.model_name = model_name
@@ -71,18 +70,9 @@ class SearchMemoryAdapter(BaseAdapter):
         self.client = OpenAI(api_key=settings.openai_api_key)
         self.memory_config = get_memory_config()
 
-    @staticmethod
-    def _compute_content_hash(content: str, file_id: str = "") -> str:
-        """Compute a hash for deduplication based on content and file_id."""
-        # Include both content and file_id to handle same content from different files
-        combined = f"{content}:{file_id}"
-        return hashlib.sha256(combined.encode()).hexdigest()[:16]
-
     async def clear_deduplication_cache(self):
         """Clear the deduplication cache."""
-        async with self._dedup_lock:
-            self._dedup_cache.clear()
-        logger.info("Cleared deduplication cache")
+        await self._deduplicator.clear_cache()
 
     async def generate(
         self,
@@ -154,34 +144,10 @@ class SearchMemoryAdapter(BaseAdapter):
             all_results.sort(key=lambda x: x.get("score", 0), reverse=True)
 
             # Apply deduplication
-            deduplicated_results = []
-            duplicate_count = 0
-
-            async with self._dedup_lock:
-                for search_result in all_results:
-                    # Compute hash for this result
-                    content = search_result.get("content", "")
-                    # Try to extract file_id from the result
-                    file_id = ""
-                    if "file_id" in search_result:
-                        file_id = search_result["file_id"]
-                    elif "metadata" in search_result and "file_id" in search_result.get(
-                        "metadata", {}
-                    ):
-                        file_id = search_result["metadata"]["file_id"]
-
-                    content_hash = self._compute_content_hash(content, file_id)
-
-                    # Check if we've seen this content before
-                    if content_hash not in self._dedup_cache:
-                        self._dedup_cache.add(content_hash)
-                        deduplicated_results.append(search_result)
-
-                        # Stop when we have enough results
-                        if len(deduplicated_results) >= max_results:
-                            break
-                    else:
-                        duplicate_count += 1
+            (
+                deduplicated_results,
+                duplicate_count,
+            ) = await self._deduplicator.deduplicate_results(all_results, max_results)
 
             # Format response
             if not deduplicated_results:
