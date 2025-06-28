@@ -79,3 +79,42 @@ class TestBasicMCP:
             
             data = json.loads(result[0].text)
             assert "vector_store_id" in data
+
+    async def test_search_project_memory_callable(self, mcp_server):
+        """Test search_project_memory tool via MCP."""
+        from fastmcp import Client
+        from fastmcp.client import FastMCPTransport
+
+        transport = FastMCPTransport(mcp_server)
+        async with Client(transport) as client:
+            result = await client.call_tool("search_project_memory", {"query": "test"})
+
+            assert isinstance(result, list)
+            assert len(result) == 1
+            assert isinstance(result[0], TextContent)
+
+    async def test_search_session_attachments_callable(self, mcp_server, tmp_path):
+        """Test search_session_attachments tool via MCP."""
+        from fastmcp import Client
+        from fastmcp.client import FastMCPTransport
+
+        test_file = tmp_path / "sample.txt"
+        test_file.write_text("hello world")
+
+        transport = FastMCPTransport(mcp_server)
+        async with Client(transport) as client:
+            vs_result = await client.call_tool(
+                "create_vector_store_tool", {"files": [str(test_file)]}
+            )
+
+            vs_data = json.loads(vs_result[0].text)
+            vs_id = vs_data.get("vector_store_id")
+
+            result = await client.call_tool(
+                "search_session_attachments",
+                {"query": "hello", "vector_store_ids": [vs_id]},
+            )
+
+            assert isinstance(result, list)
+            assert len(result) == 1
+            assert isinstance(result[0], TextContent)
