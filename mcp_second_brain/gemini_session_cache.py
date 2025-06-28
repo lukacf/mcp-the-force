@@ -7,6 +7,8 @@ import logging
 from typing import List, Dict
 
 from mcp_second_brain.config import get_settings
+import os
+import tempfile
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +22,10 @@ class _SQLiteGeminiSessionCache:
     """SQLite-backed store for Gemini conversation history."""
 
     def __init__(self, db_path: str = _DB_PATH, ttl: int = _DEFAULT_TTL):
+        if os.getenv("MCP_ADAPTER_MOCK") == "1" and db_path == _DB_PATH:
+            tmp = tempfile.NamedTemporaryFile(suffix=".sqlite3", delete=False)
+            db_path = tmp.name
+            tmp.close()
         self.db_path = db_path
         self.ttl = ttl
         self._lock = threading.RLock()

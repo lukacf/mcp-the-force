@@ -19,6 +19,7 @@ class TestToolExecutionIntegration:
             instructions="Analyze the Python files in this project",
             output_format="bullet points",
             context=[str(temp_project)],
+            session_id="gemini-real-files",
         )
 
         # With mock adapter, we get JSON metadata
@@ -195,6 +196,7 @@ class TestToolExecutionIntegration:
                 instructions=f"Task {i}",
                 output_format="text",
                 context=[],
+                session_id=f"gemini-{i}",
             )
             for i in range(3)
         ]
