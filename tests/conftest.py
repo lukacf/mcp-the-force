@@ -2,8 +2,12 @@
 Shared test fixtures and configuration for MCP Second-Brain tests.
 """
 
-import sys
+# Note: Test isolation is now handled automatically in config.py
+# When pytest is detected and no explicit config files are set,
+# default config.yaml/secrets.yaml files are skipped
 import os
+
+import sys
 from pathlib import Path
 import pytest
 import pytest_asyncio

@@ -3,6 +3,7 @@
 from typing import Any, Dict, List, Optional
 from inspect import Parameter, Signature
 from mcp.server.fastmcp import FastMCP
+import fastmcp.exceptions
 import logging
 from .registry import list_tools, ToolMetadata
 from .executor import executor
@@ -53,8 +54,8 @@ def create_tool_function(metadata: ToolMetadata):
             bound.apply_defaults()
             return await executor.execute(metadata, **bound.arguments)
         except TypeError as e:
-            # Provide helpful error message
-            return f"Error: Invalid arguments - {str(e)}"
+            # Provide helpful error message via MCP error mechanism
+            raise fastmcp.exceptions.ToolError(f"Invalid arguments: {e}")
 
     # Set metadata
     tool_function.__name__ = metadata.id

@@ -6,7 +6,7 @@ from typing import Optional, List
 from mcp_second_brain.tools.parameter_validator import ParameterValidator
 from mcp_second_brain.tools.registry import ToolMetadata, ParameterInfo
 from mcp_second_brain.tools.base import ToolSpec
-from mcp_second_brain.tools.descriptors import Route
+from mcp_second_brain.tools.descriptors import Route, RouteType
 
 
 class TestParameterValidator:
@@ -55,7 +55,7 @@ class TestParameterValidator:
                     name="instructions",
                     type=str,
                     type_str="str",
-                    route="prompt",
+                    route=RouteType.PROMPT,
                     position=0,
                     default=None,
                     required=True,
@@ -65,7 +65,7 @@ class TestParameterValidator:
                     name="output_format",
                     type=str,
                     type_str="str",
-                    route="prompt",
+                    route=RouteType.PROMPT,
                     position=1,
                     default=None,
                     required=True,
@@ -75,7 +75,7 @@ class TestParameterValidator:
                     name="context",
                     type=List[str],
                     type_str="List[str]",
-                    route="prompt",
+                    route=RouteType.PROMPT,
                     position=2,
                     default=None,
                     required=True,
@@ -85,7 +85,7 @@ class TestParameterValidator:
                     name="temperature",
                     type=Optional[float],
                     type_str="Optional[float]",
-                    route="adapter",
+                    route=RouteType.ADAPTER,
                     position=None,
                     default=0.7,
                     required=False,
@@ -95,7 +95,7 @@ class TestParameterValidator:
                     name="session_id",
                     type=Optional[str],
                     type_str="Optional[str]",
-                    route="session",
+                    route=RouteType.SESSION,
                     position=None,
                     default=None,
                     required=False,

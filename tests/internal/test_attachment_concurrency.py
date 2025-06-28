@@ -7,7 +7,7 @@ from mcp_second_brain.tools.search_attachments import SearchAttachmentAdapter
 
 
 @pytest.mark.asyncio
-async def test_concurrent_attachment_search_isolation():
+async def test_concurrent_attachment_search_isolation(monkeypatch):
     """Ensure attachment IDs do not bleed between concurrent searches."""
 
     async def fake_search(self, query: str, store_id: str, max_results: int):
@@ -15,6 +15,7 @@ async def test_concurrent_attachment_search_isolation():
         return [{"content": f"{store_id} result", "store_id": store_id, "score": 1.0}]
 
     with patch.object(SearchAttachmentAdapter, "_search_single_store", fake_search):
+        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
         adapter1 = SearchAttachmentAdapter()
         adapter2 = SearchAttachmentAdapter()
 
