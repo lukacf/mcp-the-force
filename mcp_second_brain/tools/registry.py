@@ -4,6 +4,7 @@ from typing import Type, Dict, Any, Callable, TypeVar, List
 from dataclasses import dataclass, field
 import logging
 from .base import ToolSpec
+from .descriptors import RouteType
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +29,7 @@ class ParameterInfo:
     name: str
     type: Type
     type_str: str
-    route: str
+    route: RouteType
     position: int | None
     default: Any
     required: bool

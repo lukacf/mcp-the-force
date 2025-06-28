@@ -9,11 +9,12 @@ import logging
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from ..utils.vector_store import get_client as get_openai_client
+from ..utils.thread_pool import get_shared_executor
 
 logger = logging.getLogger(__name__)
 
-# Thread pool for synchronous OpenAI calls
-executor = ThreadPoolExecutor(max_workers=20)
+# Thread pool for synchronous OpenAI calls (shared)
+executor = get_shared_executor()
 
 # Semaphore to limit concurrent searches
 MAX_CONCURRENT_SEARCHES = 20
