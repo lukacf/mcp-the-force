@@ -67,6 +67,21 @@ class ToolExecutor:
             assert isinstance(prompt_params, dict)  # Type hint for mypy
             prompt = await self.prompt_engine.build(metadata.spec_class, prompt_params)
 
+            # Include developer/system prompt for assistant models
+            from ..prompts import ASSISTANT_DEVELOPER_PROMPT
+            messages = None
+            final_prompt = prompt
+            if metadata.model_config["adapter_class"] == "openai":
+                messages = [
+                    {"role": "developer", "content": ASSISTANT_DEVELOPER_PROMPT},
+                    {"role": "user", "content": prompt},
+                ]
+                routed_params["adapter"]["messages"] = messages
+                # Store messages for conversation memory
+                prompt_params["messages"] = messages
+            else:
+                final_prompt = f"{prompt}\n\n{ASSISTANT_DEVELOPER_PROMPT}"
+
             # 4. Handle vector store if needed
             vs_id = None
             vector_store_ids = None
@@ -133,7 +148,7 @@ class ToolExecutor:
 
             result = await asyncio.wait_for(
                 adapter.generate(
-                    prompt=prompt,
+                    prompt=final_prompt,
                     vector_store_ids=vector_store_ids,
                     timeout=metadata.model_config["timeout"],
                     **adapter_params,

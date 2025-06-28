@@ -200,13 +200,23 @@ Vector Store Attachments: {'Yes' if user_components['has_attachments'] else 'No'
 """
 
         # Use Gemini Flash to create summary
-        summarization_prompt = f"""Summarize this AI consultation for future reference. Focus on:
-1. What the user asked for
-2. What the AI assistant ({tool_name}) provided/discovered/analyzed
-3. Any specific data, decisions, or recommendations made
-4. Important details that should be searchable later
+        summarization_prompt = f"""You are generating a knowledge base entry for Claude's project memory.
+Summaries must be dense with technical detail so future searches can locate this session.
+Focus on:
+1. The user's explicit request or question.
+2. Key findings or analysis produced by the tool ({tool_name}).
+3. Decisions or concrete recommendations, including file names or error messages.
+4. Any identifiers or values that uniquely describe the problem and solution.
 
-IMPORTANT: Keep the summary under 1000 words while ensuring ALL unique identifiers, specific values, names, and technical details are preserved for searchability.
+Bad summary example:
+- "We discussed a bug fix."
+
+Good summary example:
+- "User asked how to fix the 2024-05-12 JWT expiry bug in auth.py. {tool_name} traced
+  the issue to `validate_token` ignoring the `leeway` parameter and recommended adding
+  `jwt.decode(..., leeway=30)` at line 42."
+
+Keep the final summary under 1000 words and preserve all specific tokens exactly.
 
 Conversation to summarize:
 {conversation_text}
