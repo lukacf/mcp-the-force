@@ -1,7 +1,7 @@
 """
 Unit tests for the descriptor-based parameter routing system.
 """
-from mcp_second_brain.tools.descriptors import RouteDescriptor, Route
+from mcp_second_brain.tools.descriptors import RouteDescriptor, Route, RouteType
 from mcp_second_brain.tools.base import ToolSpec
 
 
@@ -10,26 +10,26 @@ class TestRouteDescriptor:
     
     def test_descriptor_metadata(self):
         """Test that descriptors store correct metadata."""
-        desc = RouteDescriptor(route="prompt", position=0, description="Test param")
-        assert desc.route == "prompt"
+        desc = RouteDescriptor(route=RouteType.PROMPT, position=0, description="Test param")
+        assert desc.route == RouteType.PROMPT
         assert desc.position == 0
         assert desc.description == "Test param"
     
     def test_descriptor_with_default(self):
         """Test descriptor with default value."""
-        desc = RouteDescriptor(route="adapter", default=0.7)
+        desc = RouteDescriptor(route=RouteType.ADAPTER, default=0.7)
         assert desc.default == 0.7
         assert desc.default_factory is None
     
     def test_descriptor_with_default_factory(self):
         """Test descriptor with default factory."""
-        desc = RouteDescriptor(route="prompt", default_factory=list)
+        desc = RouteDescriptor(route=RouteType.PROMPT, default_factory=list)
         assert desc.default is None
         assert desc.default_factory is list
         
     def test_descriptor_name_setting(self):
         """Test __set_name__ captures the attribute name."""
-        desc = RouteDescriptor(route="prompt")
+        desc = RouteDescriptor(route=RouteType.PROMPT)
         
         class TestTool:
             param = desc
@@ -45,27 +45,27 @@ class TestRoute:
         """Test Route.prompt() creates correct descriptor."""
         desc = Route.prompt(pos=0, description="Instructions")
         assert isinstance(desc, RouteDescriptor)
-        assert desc.route == "prompt"
+        assert desc.route == RouteType.PROMPT
         assert desc.position == 0
         assert desc.description == "Instructions"
     
     def test_adapter_route(self):
         """Test Route.adapter() creates correct descriptor."""
         desc = Route.adapter(default=0.5, description="Temperature")
-        assert desc.route == "adapter"
+        assert desc.route == RouteType.ADAPTER
         assert desc.default == 0.5
         assert desc.description == "Temperature"
     
     def test_vector_store_route(self):
         """Test Route.vector_store() creates correct descriptor."""
         desc = Route.vector_store(description="Attachments")
-        assert desc.route == "vector_store"
+        assert desc.route == RouteType.VECTOR_STORE
         assert desc.description == "Attachments"
     
     def test_session_route(self):
         """Test Route.session() creates correct descriptor."""
         desc = Route.session(description="Session ID")
-        assert desc.route == "session"
+        assert desc.route == RouteType.SESSION
         assert desc.description == "Session ID"
 
 
@@ -82,7 +82,7 @@ class TestDescriptorIntegration:
         
         # Check class-level access returns descriptors
         assert isinstance(TestTool.instructions, RouteDescriptor)
-        assert TestTool.instructions.route == "prompt"
+        assert TestTool.instructions.route == RouteType.PROMPT
         assert TestTool.temperature.default == 0.7
     
     def test_descriptor_get_on_instance(self):

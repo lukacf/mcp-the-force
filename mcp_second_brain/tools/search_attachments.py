@@ -8,8 +8,10 @@ from typing import List, Dict, Any
 import logging
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+from ..utils.thread_pool import get_shared_executor
 
 from openai import OpenAI
+import fastmcp.exceptions
 
 from ..config import get_settings
 from ..adapters.base import BaseAdapter
@@ -20,8 +22,8 @@ from .registry import tool
 logger = logging.getLogger(__name__)
 
 
-# Thread pool for synchronous OpenAI operations
-executor = ThreadPoolExecutor(max_workers=3)
+# Thread pool for synchronous OpenAI operations (shared)
+executor = get_shared_executor()
 
 # Semaphore to limit concurrent searches
 search_semaphore = asyncio.Semaphore(3)
@@ -42,7 +44,7 @@ class SearchSessionAttachments(ToolSpec):
         description="Maximum results to return (default: 20)",
         default=20,
     )  # type: ignore
-    vector_store_ids: List[str] = Route.adapter(
+    vector_store_ids: List[str] = Route.vector_store_ids(
         default_factory=list,
         description="IDs of vector stores to search",
     )
@@ -75,12 +77,14 @@ class SearchAttachmentAdapter(BaseAdapter):
         max_results = kwargs.get("max_results", 20)
 
         if not query:
-            return "Error: Search query is required"
+            raise fastmcp.exceptions.ToolError("Search query is required")
 
         # Use provided vector store IDs
         attachment_stores = vector_store_ids or []
         if not attachment_stores:
-            return "No attachments available to search in this session"
+            raise fastmcp.exceptions.ToolError(
+                "No attachments available to search in this session"
+            )
 
         try:
             # Support multiple queries (semicolon-separated)
@@ -107,7 +111,9 @@ class SearchAttachmentAdapter(BaseAdapter):
                 )
             except asyncio.TimeoutError:
                 logger.warning("Attachment search timed out")
-                return "Attachment search timed out after 30 seconds"
+                raise fastmcp.exceptions.ToolError(
+                    "Attachment search timed out after 30 seconds"
+                )
 
             # Aggregate and sort results
             all_results = []
@@ -158,7 +164,9 @@ class SearchAttachmentAdapter(BaseAdapter):
 
         except Exception as e:
             logger.error(f"Attachment search failed: {e}")
-            return f"Error searching attachments: {str(e)}"
+            raise fastmcp.exceptions.ToolError(
+                f"Error searching attachments: {e}"
+            )
 
     async def _search_single_store(
         self, query: str, store_id: str, max_results: int
