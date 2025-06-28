@@ -15,6 +15,7 @@ from .parameter_router import ParameterRouter
 # Project memory imports
 from ..memory import store_conversation_memory
 from ..config import get_settings
+from ..utils.redaction import redact_secrets
 
 logger = logging.getLogger(__name__)
 
@@ -114,9 +115,7 @@ class ToolExecutor:
             explicit_vs_ids = routed_params.get("vector_store_ids")
             assert isinstance(explicit_vs_ids, list)
             if explicit_vs_ids:
-                vector_store_ids = (
-                    (vector_store_ids or []) + list(explicit_vs_ids)
-                )
+                vector_store_ids = (vector_store_ids or []) + list(explicit_vs_ids)
 
             result = await asyncio.wait_for(
                 adapter.generate(
@@ -137,7 +136,10 @@ class ToolExecutor:
                         session_id, result["response_id"]
                     )
 
-                # 8a. Store conversation in memory
+                # Redact secrets from content
+                redacted_content = redact_secrets(str(content))
+
+                # 8a. Store conversation in memory (with redacted content)
                 if settings.memory_enabled and session_id:
                     try:
                         # Extract messages from prompt
@@ -147,17 +149,19 @@ class ToolExecutor:
                                 session_id=session_id,
                                 tool_name=tool_id,
                                 messages=messages,
-                                response=content,
+                                response=redacted_content,
                             )
                         )
                         memory_tasks.append(task)
                     except Exception as e:
                         logger.warning(f"Failed to store conversation memory: {e}")
 
-                return str(content)
+                return redacted_content
             else:
-                # Vertex adapter returns string directly
-                # Store conversation for Vertex models too
+                # Redact secrets from result
+                redacted_result = redact_secrets(str(result))
+
+                # Store conversation for Vertex models too (with redacted content)
                 if settings.memory_enabled and session_id:
                     try:
                         messages = prompt_params.get("messages", [])
@@ -166,20 +170,19 @@ class ToolExecutor:
                                 session_id=session_id,
                                 tool_name=tool_id,
                                 messages=messages,
-                                response=result,
+                                response=redacted_result,
                             )
                         )
                         memory_tasks.append(task)
                     except Exception as e:
                         logger.warning(f"Failed to store conversation memory: {e}")
 
-                return str(result)
+                return redacted_result
 
         finally:
             # Cleanup
             if vs_id:
                 await vector_store_manager.delete(vs_id)
-
 
             # Wait for memory tasks to complete
             if memory_tasks:

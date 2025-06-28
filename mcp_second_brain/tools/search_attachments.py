@@ -7,7 +7,6 @@ from attachments during the current execution.
 from typing import List, Dict, Any
 import logging
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
 from ..utils.thread_pool import get_shared_executor
 
 from openai import OpenAI
@@ -39,12 +38,12 @@ class SearchSessionAttachments(ToolSpec):
     timeout = 20  # 20 second timeout for searches
 
     # Parameters
-    query: str = Route.prompt(description="Search query or semicolon-separated queries")  # type: ignore
-    max_results: int = Route.prompt(
+    query = Route.prompt(description="Search query or semicolon-separated queries")
+    max_results = Route.prompt(
         description="Maximum results to return (default: 20)",
         default=20,
-    )  # type: ignore
-    vector_store_ids: List[str] = Route.vector_store_ids(
+    )
+    vector_store_ids = Route.vector_store_ids(
         default_factory=list,
         description="IDs of vector stores to search",
     )
@@ -164,9 +163,7 @@ class SearchAttachmentAdapter(BaseAdapter):
 
         except Exception as e:
             logger.error(f"Attachment search failed: {e}")
-            raise fastmcp.exceptions.ToolError(
-                f"Error searching attachments: {e}"
-            )
+            raise fastmcp.exceptions.ToolError(f"Error searching attachments: {e}")
 
     async def _search_single_store(
         self, query: str, store_id: str, max_results: int
