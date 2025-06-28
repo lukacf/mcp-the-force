@@ -45,11 +45,11 @@ providers:
     api_key: null  # This can be null
 """)
 
-        monkeypatch.setenv("MCP_CONFIG_FILE", str(config_yaml))
+        # Change to temp directory to avoid loading .env file
+        monkeypatch.chdir(tmp_path)
 
         # Clear environment to prevent leaking
-        with patch.dict(os.environ, {}, clear=True):
-            monkeypatch.setenv("MCP_CONFIG_FILE", str(config_yaml))
+        with patch.dict(os.environ, {"MCP_CONFIG_FILE": str(config_yaml)}, clear=True):
             get_settings.cache_clear()
 
             settings = Settings()
@@ -129,9 +129,11 @@ providers:
             encoding="utf-8",
         )
 
+        # Change to temp directory to avoid loading .env file
+        monkeypatch.chdir(tmp_path)
+
         # Clear environment to prevent real API keys from leaking in
-        with patch.dict(os.environ, {}, clear=True):
-            monkeypatch.setenv("MCP_CONFIG_FILE", str(config_yaml))
+        with patch.dict(os.environ, {"MCP_CONFIG_FILE": str(config_yaml)}, clear=True):
             get_settings.cache_clear()
 
             settings = Settings()
@@ -299,21 +301,19 @@ providers:
         """Test realistic migration from legacy to new configuration."""
         monkeypatch.chdir(tmp_path)
 
-        # Start with legacy .env file
-        env_file = tmp_path / ".env"
-        env_file.write_text("""
-OPENAI_API_KEY=legacy-openai-key
-VERTEX_PROJECT=legacy-project
-VERTEX_LOCATION=us-central1
-PORT=8000
-MEMORY_ENABLED=true
-MEMORY_ROLLOVER_LIMIT=5000
-SESSION_TTL_SECONDS=3600
-LOG_LEVEL=INFO
-""")
+        # 1. Load with legacy environment variables (no .env support)
+        legacy_env = {
+            "OPENAI_API_KEY": "legacy-openai-key",
+            "VERTEX_PROJECT": "legacy-project",
+            "VERTEX_LOCATION": "us-central1",
+            "PORT": "8000",
+            "MEMORY_ENABLED": "true",
+            "MEMORY_ROLLOVER_LIMIT": "5000",
+            "SESSION_TTL_SECONDS": "3600",
+            "LOG_LEVEL": "INFO",
+        }
 
-        # 1. Load with legacy configuration
-        with patch.dict(os.environ, {}, clear=True):
+        with patch.dict(os.environ, legacy_env, clear=True):
             get_settings.cache_clear()
             settings = Settings()
             assert settings.openai.api_key == "legacy-openai-key"
