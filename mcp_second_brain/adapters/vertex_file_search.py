@@ -7,7 +7,6 @@ models use, allowing Gemini to search vector stores with identical semantics.
 from typing import List, Dict, Any, Optional
 import logging
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
 from ..utils.vector_store import get_client as get_openai_client
 from ..utils.thread_pool import get_shared_executor
 
