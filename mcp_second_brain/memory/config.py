@@ -7,10 +7,15 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 from datetime import datetime, timezone
 
-from ..utils.vector_store import get_client
+from ..utils.vector_store import get_client as _get_client
 from ..config import get_settings
 
 logger = logging.getLogger(__name__)
+
+
+def get_client():
+    """Wrapper for vector store client to allow test patching."""
+    return _get_client()
 
 
 class MemoryConfig:
