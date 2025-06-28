@@ -1,5 +1,6 @@
 """Tool definitions for all supported models."""
 
+from __future__ import annotations
 from typing import List, Optional
 from .base import ToolSpec
 from .descriptors import Route
@@ -41,10 +42,16 @@ class ChatWithGemini25Pro(ToolSpec):
 </context_information>"""
 
     # Parameters
-    instructions = Route.prompt(pos=0, description="Task instructions for the model")
-    output_format = Route.prompt(pos=1, description="Desired output format")
-    context = Route.prompt(pos=2, description="List of file/directory paths to include")
-    temperature = Route.adapter(default=0.2, description="Sampling temperature")
+    instructions: str = Route.prompt(
+        pos=0, description="Task instructions for the model"
+    )
+    output_format: str = Route.prompt(pos=1, description="Desired output format")
+    context: List[str] = Route.prompt(
+        pos=2, description="List of file/directory paths to include"
+    )
+    temperature: Optional[float] = Route.adapter(
+        default=0.2, description="Sampling temperature"
+    )
 
 
 @tool
@@ -64,10 +71,16 @@ class ChatWithGemini25Flash(ToolSpec):
     timeout = 300
 
     # Parameters
-    instructions = Route.prompt(pos=0, description="Task instructions for the model")
-    output_format = Route.prompt(pos=1, description="Desired output format")
-    context = Route.prompt(pos=2, description="List of file/directory paths to include")
-    temperature = Route.adapter(default=0.3, description="Sampling temperature")
+    instructions: str = Route.prompt(
+        pos=0, description="Task instructions for the model"
+    )
+    output_format: str = Route.prompt(pos=1, description="Desired output format")
+    context: List[str] = Route.prompt(
+        pos=2, description="List of file/directory paths to include"
+    )
+    temperature: Optional[float] = Route.adapter(
+        default=0.3, description="Sampling temperature"
+    )
 
 
 @tool
@@ -100,16 +113,24 @@ class ChatWithO3(ToolSpec):
 Please approach this task step-by-step, showing your reasoning process."""
 
     # Parameters
-    instructions = Route.prompt(pos=0, description="Task instructions for the model")
-    output_format = Route.prompt(pos=1, description="Desired output format")
-    context = Route.prompt(pos=2, description="List of file/directory paths to include")
+    # Required parameters first
+    instructions: str = Route.prompt(
+        pos=0, description="Task instructions for the model"
+    )
+    output_format: str = Route.prompt(pos=1, description="Desired output format")
+    context: List[str] = Route.prompt(
+        pos=2, description="List of file/directory paths to include"
+    )
+    session_id: str = Route.session(
+        description="Session ID for multi-turn conversations"
+    )
+    # Optional parameters with defaults
     attachments: Optional[List[str]] = Route.vector_store(
         description="Files for vector store (RAG)"
     )
-    reasoning_effort = Route.adapter(
+    reasoning_effort: Optional[str] = Route.adapter(
         default="medium", description="Controls reasoning effort (low/medium/high)"
     )
-    session_id = Route.session(description="Session ID for multi-turn conversations")
 
 
 @tool
@@ -132,17 +153,27 @@ class ChatWithO3Pro(ToolSpec):
     timeout = 2700  # 45 minutes
 
     # Parameters
-    instructions = Route.prompt(pos=0, description="Task instructions for the model")
-    output_format = Route.prompt(pos=1, description="Desired output format")
-    context = Route.prompt(pos=2, description="List of file/directory paths to include")
+    # Required parameters first
+    instructions: str = Route.prompt(
+        pos=0, description="Task instructions for the model"
+    )
+    output_format: str = Route.prompt(pos=1, description="Desired output format")
+    context: List[str] = Route.prompt(
+        pos=2, description="List of file/directory paths to include"
+    )
+    session_id: str = Route.session(
+        description="Session ID for multi-turn conversations"
+    )
+    # Optional parameters with defaults
     attachments: Optional[List[str]] = Route.vector_store(
         description="Files for vector store (RAG)"
     )
-    reasoning_effort = Route.adapter(
+    reasoning_effort: Optional[str] = Route.adapter(
         default="high", description="Controls reasoning effort (low/medium/high)"
     )
-    max_reasoning_tokens = Route.adapter(description="Maximum reasoning tokens")
-    session_id = Route.session(description="Session ID for multi-turn conversations")
+    max_reasoning_tokens: Optional[int] = Route.adapter(
+        default=None, description="Maximum reasoning tokens"
+    )
 
 
 @tool
@@ -164,14 +195,24 @@ class ChatWithGPT4_1(ToolSpec):
     timeout = 300
 
     # Parameters
-    instructions = Route.prompt(pos=0, description="Task instructions for the model")
-    output_format = Route.prompt(pos=1, description="Desired output format")
-    context = Route.prompt(pos=2, description="List of file/directory paths to include")
+    # Required parameters first
+    instructions: str = Route.prompt(
+        pos=0, description="Task instructions for the model"
+    )
+    output_format: str = Route.prompt(pos=1, description="Desired output format")
+    context: List[str] = Route.prompt(
+        pos=2, description="List of file/directory paths to include"
+    )
+    session_id: str = Route.session(
+        description="Session ID for multi-turn conversations"
+    )
+    # Optional parameters with defaults
     attachments: Optional[List[str]] = Route.vector_store(
         description="Files for vector store (RAG)"
     )
-    temperature = Route.adapter(default=0.2, description="Sampling temperature")
-    session_id = Route.session(description="Session ID for multi-turn conversations")
+    temperature: Optional[float] = Route.adapter(
+        default=0.2, description="Sampling temperature"
+    )
 
 
 @tool
@@ -205,13 +246,21 @@ class ResearchWithO3DeepResearch(ToolSpec):
 Please approach this task step-by-step, showing your reasoning process."""
 
     # Parameters
-    instructions = Route.prompt(pos=0, description="Task instructions for the model")
-    output_format = Route.prompt(pos=1, description="Desired output format")
-    context = Route.prompt(pos=2, description="List of file/directory paths to include")
+    # Required parameters first
+    instructions: str = Route.prompt(
+        pos=0, description="Task instructions for the model"
+    )
+    output_format: str = Route.prompt(pos=1, description="Desired output format")
+    context: List[str] = Route.prompt(
+        pos=2, description="List of file/directory paths to include"
+    )
+    session_id: str = Route.session(
+        description="Session ID for multi-turn conversations"
+    )
+    # Optional parameters with defaults
     attachments: Optional[List[str]] = Route.vector_store(
         description="Files for vector store (RAG)"
     )
-    session_id = Route.session(description="Session ID for multi-turn conversations")
 
 
 @tool
@@ -233,10 +282,18 @@ class ResearchWithO4MiniDeepResearch(ToolSpec):
     timeout = 900  # 15 minutes
 
     # Parameters
-    instructions = Route.prompt(pos=0, description="Task instructions for the model")
-    output_format = Route.prompt(pos=1, description="Desired output format")
-    context = Route.prompt(pos=2, description="List of file/directory paths to include")
+    # Required parameters first
+    instructions: str = Route.prompt(
+        pos=0, description="Task instructions for the model"
+    )
+    output_format: str = Route.prompt(pos=1, description="Desired output format")
+    context: List[str] = Route.prompt(
+        pos=2, description="List of file/directory paths to include"
+    )
+    session_id: str = Route.session(
+        description="Session ID for multi-turn conversations"
+    )
+    # Optional parameters with defaults
     attachments: Optional[List[str]] = Route.vector_store(
         description="Files for vector store (RAG)"
     )
-    session_id = Route.session(description="Session ID for multi-turn conversations")
