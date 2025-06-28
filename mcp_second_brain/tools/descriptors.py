@@ -64,10 +64,19 @@ class Route:
 
     @staticmethod
     def prompt(
-        pos: Optional[int] = None, description: Optional[str] = None
+        pos: Optional[int] = None,
+        description: Optional[str] = None,
+        default: Any = None,
+        default_factory: Optional[Callable[[], Any]] = None,
     ) -> RouteDescriptor:
         """Parameter that goes to the prompt builder."""
-        return RouteDescriptor(route="prompt", position=pos, description=description)
+        return RouteDescriptor(
+            route="prompt",
+            position=pos,
+            description=description,
+            default=default,
+            default_factory=default_factory,
+        )
 
     @staticmethod
     def adapter(
