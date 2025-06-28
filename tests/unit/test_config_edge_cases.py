@@ -45,14 +45,14 @@ providers:
     api_key: null  # This can be null
 """)
 
-        monkeypatch.setenv("MCP_CONFIG_FILE", str(config_yaml))
+        # Change to temp directory to avoid loading .env file
+        monkeypatch.chdir(tmp_path)
 
         # Clear environment to prevent leaking
-        with patch.dict(os.environ, {}, clear=True):
-            monkeypatch.setenv("MCP_CONFIG_FILE", str(config_yaml))
+        with patch.dict(os.environ, {"MCP_CONFIG_FILE": str(config_yaml)}, clear=True):
             get_settings.cache_clear()
 
-            settings = Settings(_env_file=None)
+            settings = Settings()
             # Required fields use provided values
             assert settings.mcp.host == "127.0.0.1"
             assert settings.mcp.port == 8000
@@ -129,12 +129,14 @@ providers:
             encoding="utf-8",
         )
 
+        # Change to temp directory to avoid loading .env file
+        monkeypatch.chdir(tmp_path)
+
         # Clear environment to prevent real API keys from leaking in
-        with patch.dict(os.environ, {}, clear=True):
-            monkeypatch.setenv("MCP_CONFIG_FILE", str(config_yaml))
+        with patch.dict(os.environ, {"MCP_CONFIG_FILE": str(config_yaml)}, clear=True):
             get_settings.cache_clear()
 
-            settings = Settings(_env_file=None)
+            settings = Settings()
             assert settings.openai.api_key == "测试密钥🔑"
             assert settings.vertex.project == "プロジェクト"
             assert settings.vertex.location == "歐洲-西部1"

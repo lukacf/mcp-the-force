@@ -7,7 +7,6 @@ across project memory stores without the 2-store limitation.
 from typing import List, Dict, Any, TYPE_CHECKING
 import logging
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
 from ..utils.thread_pool import get_shared_executor
 
 from openai import OpenAI
@@ -43,12 +42,12 @@ class SearchProjectMemory(ToolSpec):
     timeout = 30  # 30 second timeout for searches
 
     # Parameters
-    query: str = Route.prompt(description="Search query or semicolon-separated queries")  # type: ignore
-    max_results: int = Route.prompt(
+    query = Route.prompt(description="Search query or semicolon-separated queries")
+    max_results = Route.prompt(
         description="Maximum results to return (default: 40)",
         default=40,
-    )  # type: ignore
-    store_types: List[str] = Route.prompt(  # type: ignore
+    )
+    store_types = Route.prompt(
         description="Types of stores to search (default: ['conversation', 'commit'])",
         default_factory=lambda: ["conversation", "commit"],
     )
