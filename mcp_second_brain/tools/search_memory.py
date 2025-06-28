@@ -43,10 +43,12 @@ class SearchProjectMemory(ToolSpec):
     # Parameters
     query: str = Route.prompt(description="Search query or semicolon-separated queries")  # type: ignore
     max_results: int = Route.prompt(
-        description="Maximum results to return (default: 40)"
+        description="Maximum results to return (default: 40)",
+        default=40,
     )  # type: ignore
     store_types: List[str] = Route.prompt(  # type: ignore
-        description="Types of stores to search (default: ['conversation', 'commit'])"
+        description="Types of stores to search (default: ['conversation', 'commit'])",
+        default_factory=lambda: ["conversation", "commit"],
     )
 
 

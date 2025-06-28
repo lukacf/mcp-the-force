@@ -39,8 +39,13 @@ class SearchSessionAttachments(ToolSpec):
     # Parameters
     query: str = Route.prompt(description="Search query or semicolon-separated queries")  # type: ignore
     max_results: int = Route.prompt(
-        description="Maximum results to return (default: 20)"
+        description="Maximum results to return (default: 20)",
+        default=20,
     )  # type: ignore
+    vector_store_ids: List[str] = Route.adapter(
+        default_factory=list,
+        description="IDs of vector stores to search",
+    )
 
 
 class SearchAttachmentAdapter(BaseAdapter):

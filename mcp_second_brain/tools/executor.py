@@ -108,6 +108,10 @@ class ToolExecutor:
             if previous_response_id:
                 adapter_params["previous_response_id"] = previous_response_id
 
+            extra_vs_ids = adapter_params.pop("vector_store_ids", None)
+            if extra_vs_ids:
+                vector_store_ids = extra_vs_ids
+
             result = await asyncio.wait_for(
                 adapter.generate(
                     prompt=prompt,

@@ -56,7 +56,11 @@ class ToolSpec:
                 # Extract type information
                 type_hint = hints.get(name, Any)
                 param_info["type_str"] = _type_to_string(type_hint)
-                param_info["required"] = not _is_optional(type_hint) and value.default is None
+                param_info["required"] = (
+                    not _is_optional(type_hint)
+                    and value.default is None
+                    and value.default_factory is None
+                )
                 
                 parameters[name] = param_info
         
