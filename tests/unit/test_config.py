@@ -88,7 +88,7 @@ class TestSettings:
             assert settings.vertex_project is None
 
     def test_dotenv_loading(self, tmp_path, monkeypatch):
-        """Test that .env file is loaded."""
+        """Test that .env files are ignored."""
         # Create a .env file
         env_file = tmp_path / ".env"
         env_file.write_text("""
@@ -100,14 +100,14 @@ PORT=3000
         # Change to temp directory
         monkeypatch.chdir(tmp_path)
 
-        # Clear environment first
+        # Clear environment first so only the .env file could provide values
         with patch.dict(os.environ, {}, clear=True):
             settings = Settings()
 
-            # Should load from .env
-            assert settings.openai_api_key == "from-dotenv"
-            assert settings.host == "192.168.1.1"
-            assert settings.port == 3000
+            # .env file should be ignored - defaults remain
+            assert settings.openai_api_key is None
+            assert settings.host == "127.0.0.1"
+            assert settings.port == 8000
 
     def test_env_precedence_over_dotenv(self, tmp_path, monkeypatch):
         """Test that environment variables take precedence over .env file."""

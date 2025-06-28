@@ -22,11 +22,11 @@ class TestConfigurationUpdates:
         settings = Settings()
 
         # Vertex defaults
-        assert settings.vertex.max_output_tokens is None  # No default, adapter decides
+        assert settings.vertex.max_output_tokens == 65536  # Default value
         assert settings.vertex.max_function_calls == 500
 
         # OpenAI defaults
-        assert settings.openai.max_output_tokens is None  # No default, adapter decides
+        assert settings.openai.max_output_tokens == 65536  # Default value
         assert settings.openai.max_function_calls == 500
 
     def test_thread_pool_config(self, tmp_path, monkeypatch):
