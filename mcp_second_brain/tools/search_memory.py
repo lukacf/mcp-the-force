@@ -4,9 +4,10 @@ This provides a unified way for all models (OpenAI and Gemini) to search
 across project memory stores without the 2-store limitation.
 """
 
-from typing import List, Dict, Any, TYPE_CHECKING
+from typing import List, Dict, Any, TYPE_CHECKING, Set
 import logging
 import asyncio
+import hashlib
 from ..utils.thread_pool import get_shared_executor
 
 from openai import OpenAI
@@ -44,8 +45,8 @@ class SearchProjectMemory(ToolSpec):
     # Parameters
     query = Route.prompt(description="Search query or semicolon-separated queries")
     max_results = Route.prompt(
-        description="Maximum results to return (default: 40)",
-        default=40,
+        description="Maximum results to return (default: 20)",
+        default=20,
     )
     store_types = Route.prompt(
         description="Types of stores to search (default: ['conversation', 'commit'])",
@@ -60,11 +61,28 @@ class SearchMemoryAdapter(BaseAdapter):
     context_window = 0  # Not applicable
     description_snippet = "Search project memory stores"
 
+    # Class-level deduplication cache shared across instances
+    _dedup_cache: Set[str] = set()
+    _dedup_lock = asyncio.Lock()
+
     def __init__(self, model_name: str = "memory_search"):
         self.model_name = model_name
         settings = get_settings()
         self.client = OpenAI(api_key=settings.openai_api_key)
         self.memory_config = get_memory_config()
+
+    @staticmethod
+    def _compute_content_hash(content: str, file_id: str = "") -> str:
+        """Compute a hash for deduplication based on content and file_id."""
+        # Include both content and file_id to handle same content from different files
+        combined = f"{content}:{file_id}"
+        return hashlib.sha256(combined.encode()).hexdigest()[:16]
+
+    async def clear_deduplication_cache(self):
+        """Clear the deduplication cache."""
+        async with self._dedup_lock:
+            self._dedup_cache.clear()
+        logger.info("Cleared deduplication cache")
 
     async def generate(
         self,
@@ -79,8 +97,9 @@ class SearchMemoryAdapter(BaseAdapter):
         """
         # Extract search parameters
         query = kwargs.get("query", prompt)
-        max_results = kwargs.get("max_results", 40)
+        max_results = kwargs.get("max_results", 20)
         store_types = kwargs.get("store_types", ["conversation", "commit"])
+        include_duplicates_metadata = kwargs.get("include_duplicates_metadata", False)
 
         if not query:
             raise fastmcp.exceptions.ToolError("Search query is required")
@@ -134,19 +153,51 @@ class SearchMemoryAdapter(BaseAdapter):
             # Sort by relevance score
             all_results.sort(key=lambda x: x.get("score", 0), reverse=True)
 
-            # Limit total results
-            all_results = all_results[:max_results]
+            # Apply deduplication
+            deduplicated_results = []
+            duplicate_count = 0
+
+            async with self._dedup_lock:
+                for search_result in all_results:
+                    # Compute hash for this result
+                    content = search_result.get("content", "")
+                    # Try to extract file_id from the result
+                    file_id = ""
+                    if "file_id" in search_result:
+                        file_id = search_result["file_id"]
+                    elif "metadata" in search_result and "file_id" in search_result.get(
+                        "metadata", {}
+                    ):
+                        file_id = search_result["metadata"]["file_id"]
+
+                    content_hash = self._compute_content_hash(content, file_id)
+
+                    # Check if we've seen this content before
+                    if content_hash not in self._dedup_cache:
+                        self._dedup_cache.add(content_hash)
+                        deduplicated_results.append(search_result)
+
+                        # Stop when we have enough results
+                        if len(deduplicated_results) >= max_results:
+                            break
+                    else:
+                        duplicate_count += 1
 
             # Format response
-            if not all_results:
+            if not deduplicated_results:
                 return f"No results found for query: '{query}'"
 
             # Build formatted response with metadata
             response_parts = [
-                f"Found {len(all_results)} results across {len(stores_to_search)} memory stores:"
+                f"Found {len(deduplicated_results)} results across {len(stores_to_search)} memory stores:"
             ]
 
-            for i, search_result in enumerate(all_results, 1):
+            if include_duplicates_metadata and duplicate_count > 0:
+                response_parts[0] += (
+                    f" ({duplicate_count} duplicate result{'s' if duplicate_count != 1 else ''} filtered)"
+                )
+
+            for i, search_result in enumerate(deduplicated_results, 1):
                 response_parts.append(f"\n--- Result {i} ---")
 
                 # Add metadata
@@ -217,6 +268,10 @@ class SearchMemoryAdapter(BaseAdapter):
                         "store_id": store_id,
                         "score": getattr(item, "score", 0),
                     }
+
+                    # Add file_id if available
+                    if hasattr(item, "file_id") and item.file_id:
+                        result["file_id"] = item.file_id
 
                     # Add metadata if available
                     if hasattr(item, "metadata") and item.metadata:
