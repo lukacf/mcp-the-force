@@ -1,5 +1,6 @@
 """Tool definitions for all supported models."""
 
+from typing import List, Optional
 from .base import ToolSpec
 from .descriptors import Route
 from .registry import tool
@@ -102,7 +103,9 @@ Please approach this task step-by-step, showing your reasoning process."""
     instructions = Route.prompt(pos=0, description="Task instructions for the model")
     output_format = Route.prompt(pos=1, description="Desired output format")
     context = Route.prompt(pos=2, description="List of file/directory paths to include")
-    attachments = Route.vector_store(description="Files for vector store (RAG)")
+    attachments: Optional[List[str]] = Route.vector_store(
+        description="Files for vector store (RAG)"
+    )
     reasoning_effort = Route.adapter(
         default="medium", description="Controls reasoning effort (low/medium/high)"
     )
@@ -132,7 +135,9 @@ class ChatWithO3Pro(ToolSpec):
     instructions = Route.prompt(pos=0, description="Task instructions for the model")
     output_format = Route.prompt(pos=1, description="Desired output format")
     context = Route.prompt(pos=2, description="List of file/directory paths to include")
-    attachments = Route.vector_store(description="Files for vector store (RAG)")
+    attachments: Optional[List[str]] = Route.vector_store(
+        description="Files for vector store (RAG)"
+    )
     reasoning_effort = Route.adapter(
         default="high", description="Controls reasoning effort (low/medium/high)"
     )
@@ -162,7 +167,9 @@ class ChatWithGPT4_1(ToolSpec):
     instructions = Route.prompt(pos=0, description="Task instructions for the model")
     output_format = Route.prompt(pos=1, description="Desired output format")
     context = Route.prompt(pos=2, description="List of file/directory paths to include")
-    attachments = Route.vector_store(description="Files for vector store (RAG)")
+    attachments: Optional[List[str]] = Route.vector_store(
+        description="Files for vector store (RAG)"
+    )
     temperature = Route.adapter(default=0.2, description="Sampling temperature")
     session_id = Route.session(description="Session ID for multi-turn conversations")
 
@@ -201,7 +208,9 @@ Please approach this task step-by-step, showing your reasoning process."""
     instructions = Route.prompt(pos=0, description="Task instructions for the model")
     output_format = Route.prompt(pos=1, description="Desired output format")
     context = Route.prompt(pos=2, description="List of file/directory paths to include")
-    attachments = Route.vector_store(description="Files for vector store (RAG)")
+    attachments: Optional[List[str]] = Route.vector_store(
+        description="Files for vector store (RAG)"
+    )
     session_id = Route.session(description="Session ID for multi-turn conversations")
 
 
@@ -227,5 +236,7 @@ class ResearchWithO4MiniDeepResearch(ToolSpec):
     instructions = Route.prompt(pos=0, description="Task instructions for the model")
     output_format = Route.prompt(pos=1, description="Desired output format")
     context = Route.prompt(pos=2, description="List of file/directory paths to include")
-    attachments = Route.vector_store(description="Files for vector store (RAG)")
+    attachments: Optional[List[str]] = Route.vector_store(
+        description="Files for vector store (RAG)"
+    )
     session_id = Route.session(description="Session ID for multi-turn conversations")
