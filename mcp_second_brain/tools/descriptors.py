@@ -2,8 +2,17 @@
 
 from typing import Any, Optional, TypeVar, Type, Callable
 from dataclasses import dataclass, field
+from enum import StrEnum
 
 T = TypeVar("T")
+
+
+class RouteType(StrEnum):
+    PROMPT = "prompt"
+    ADAPTER = "adapter"
+    VECTOR_STORE = "vector_store"
+    SESSION = "session"
+    VECTOR_STORE_IDS = "vector_store_ids"
 
 
 @dataclass
@@ -13,7 +22,7 @@ class RouteDescriptor:
     Uses default_factory for mutable defaults to avoid shared state between instances.
     """
 
-    route: str  # "prompt", "adapter", "vector_store", "session"
+    route: RouteType
     position: Optional[int] = None
     default: Any = field(default=None)
     default_factory: Optional[Callable[[], Any]] = field(default=None)
@@ -71,7 +80,7 @@ class Route:
     ) -> RouteDescriptor:
         """Parameter that goes to the prompt builder."""
         return RouteDescriptor(
-            route="prompt",
+            route=RouteType.PROMPT,
             position=pos,
             description=description,
             default=default,
@@ -86,7 +95,7 @@ class Route:
     ) -> RouteDescriptor:
         """Parameter that goes directly to the model adapter."""
         return RouteDescriptor(
-            route="adapter",
+            route=RouteType.ADAPTER,
             default=default,
             default_factory=default_factory,
             description=description,
@@ -99,7 +108,7 @@ class Route:
     ) -> RouteDescriptor:
         """Parameter that triggers vector store creation."""
         return RouteDescriptor(
-            route="vector_store",
+            route=RouteType.VECTOR_STORE,
             default=None,
             default_factory=default_factory,
             description=description,
@@ -112,7 +121,20 @@ class Route:
     ) -> RouteDescriptor:
         """Parameter for session management."""
         return RouteDescriptor(
-            route="session",
+            route=RouteType.SESSION,
+            default=None,
+            default_factory=default_factory,
+            description=description,
+        )
+
+    @staticmethod
+    def vector_store_ids(
+        description: Optional[str] = None,
+        default_factory: Optional[Callable[[], Any]] = None,
+    ) -> RouteDescriptor:
+        """Parameter for passing vector store IDs directly."""
+        return RouteDescriptor(
+            route=RouteType.VECTOR_STORE_IDS,
             default=None,
             default_factory=default_factory,
             description=description,

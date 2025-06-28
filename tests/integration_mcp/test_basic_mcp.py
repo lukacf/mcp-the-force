@@ -80,7 +80,7 @@ class TestBasicMCP:
             data = json.loads(result[0].text)
             assert "vector_store_id" in data
 
-    async def test_search_project_memory_callable(self, mcp_server):
+    async def test_search_project_memory_callable(self, mcp_server, mock_env):
         """Test search_project_memory tool via MCP."""
         from fastmcp import Client
         from fastmcp.client import FastMCPTransport
@@ -93,7 +93,7 @@ class TestBasicMCP:
             assert len(result) == 1
             assert isinstance(result[0], TextContent)
 
-    async def test_search_session_attachments_callable(self, mcp_server, tmp_path):
+    async def test_search_session_attachments_callable(self, mcp_server, tmp_path, mock_env):
         """Test search_session_attachments tool via MCP."""
         from fastmcp import Client
         from fastmcp.client import FastMCPTransport

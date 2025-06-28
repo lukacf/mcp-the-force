@@ -8,8 +8,10 @@ from typing import List, Dict, Any, TYPE_CHECKING
 import logging
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+from ..utils.thread_pool import get_shared_executor
 
 from openai import OpenAI
+import fastmcp.exceptions
 
 if TYPE_CHECKING:
     pass
@@ -24,8 +26,8 @@ from .registry import tool
 
 logger = logging.getLogger(__name__)
 
-# Thread pool for synchronous OpenAI operations
-executor = ThreadPoolExecutor(max_workers=5)
+# Thread pool for synchronous OpenAI operations (shared)
+executor = get_shared_executor()
 
 # Semaphore to limit concurrent searches
 search_semaphore = asyncio.Semaphore(5)
@@ -82,7 +84,7 @@ class SearchMemoryAdapter(BaseAdapter):
         store_types = kwargs.get("store_types", ["conversation", "commit"])
 
         if not query:
-            return "Error: Search query is required"
+            raise fastmcp.exceptions.ToolError("Search query is required")
 
         try:
             # Get memory store IDs filtered by type
@@ -115,7 +117,9 @@ class SearchMemoryAdapter(BaseAdapter):
                 )
             except asyncio.TimeoutError:
                 logger.warning("Memory search timed out")
-                return "Memory search timed out after 10 seconds"
+                raise fastmcp.exceptions.ToolError(
+                    "Memory search timed out after 10 seconds"
+                )
 
             # Aggregate and sort results
             all_results = []
@@ -173,7 +177,7 @@ class SearchMemoryAdapter(BaseAdapter):
 
         except Exception as e:
             logger.error(f"Memory search failed: {e}")
-            return f"Error searching memory: {str(e)}"
+            raise fastmcp.exceptions.ToolError(f"Error searching memory: {e}")
 
     async def _search_single_store(
         self, query: str, store_id: str, max_results: int

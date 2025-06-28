@@ -3,6 +3,7 @@
 import asyncio
 import logging
 from typing import Optional, List
+import fastmcp.exceptions
 from mcp_second_brain import adapters
 from mcp_second_brain import session_cache as session_cache_module
 from .registry import ToolMetadata
@@ -88,7 +89,9 @@ class ToolExecutor:
                 metadata.model_config["model_name"],
             )
             if not adapter:
-                return f"Error: Failed to initialize adapter: {error}"
+                raise fastmcp.exceptions.ToolError(
+                    f"Failed to initialize adapter: {error}"
+                )
 
             # 6. Handle session
             previous_response_id = None
@@ -108,9 +111,12 @@ class ToolExecutor:
             if previous_response_id:
                 adapter_params["previous_response_id"] = previous_response_id
 
-            extra_vs_ids = adapter_params.pop("vector_store_ids", None)
-            if extra_vs_ids:
-                vector_store_ids = extra_vs_ids
+            explicit_vs_ids = routed_params.get("vector_store_ids")
+            assert isinstance(explicit_vs_ids, list)
+            if explicit_vs_ids:
+                vector_store_ids = (
+                    (vector_store_ids or []) + list(explicit_vs_ids)
+                )
 
             result = await asyncio.wait_for(
                 adapter.generate(
