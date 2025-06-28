@@ -178,8 +178,8 @@ class SessionCache:
         return _instance.get_response_id(session_id)
 
     @staticmethod
-    def set_response_id(session_id: str, response_id: str):
-        return _instance.set_response_id(session_id, response_id)
+    def set_response_id(session_id: str, response_id: str) -> None:
+        _instance.set_response_id(session_id, response_id)
 
     @staticmethod
     def close():

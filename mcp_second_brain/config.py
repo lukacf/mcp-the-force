@@ -41,6 +41,13 @@ class ProviderConfig(BaseModel):
     oauth_client_id: Optional[str] = None
     oauth_client_secret: Optional[str] = None
     user_refresh_token: Optional[str] = None
+    max_output_tokens: int = Field(
+        default=65536, description="Default max output tokens"
+    )
+    max_function_calls: Optional[int] = Field(
+        default=500,
+        description="Maximum function call rounds (agentic systems do many calls)",
+    )
 
 
 class MCPConfig(BaseModel):
@@ -53,6 +60,9 @@ class MCPConfig(BaseModel):
     )
     default_temperature: float = Field(
         0.2, description="Default temperature for AI models", ge=0.0, le=2.0
+    )
+    thread_pool_workers: int = Field(
+        10, description="Max workers for shared thread pool", ge=1, le=100
     )
 
 
@@ -88,8 +98,12 @@ class Settings(BaseSettings):
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
 
     # Provider configs with legacy environment variable support
-    openai: ProviderConfig = Field(default_factory=ProviderConfig)
-    vertex: ProviderConfig = Field(default_factory=ProviderConfig)
+    openai: ProviderConfig = Field(
+        default_factory=lambda: ProviderConfig(max_output_tokens=65536)
+    )
+    vertex: ProviderConfig = Field(
+        default_factory=lambda: ProviderConfig(max_output_tokens=65536)
+    )
     anthropic: ProviderConfig = Field(default_factory=ProviderConfig)
 
     # Feature configs
@@ -101,7 +115,7 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_nested_delimiter="__",  # Allows OPENAI__API_KEY env var
-        env_file=".env",  # Support legacy .env files
+        # .env file support is now removed in favor of explicit YAML configuration
         extra="ignore",
         validate_default=True,
     )
@@ -115,12 +129,11 @@ class Settings(BaseSettings):
         dotenv_settings,
         file_secret_settings,
     ):
-        """Customize settings sources to include YAML files and legacy env mappings."""
-        # Create custom source instances
-        from pydantic_settings import PydanticBaseSettingsSource
+        """Customize settings sources to include YAML files and legacy env vars."""
+        from pydantic_settings.sources import PydanticBaseSettingsSource
 
-        class CombinedConfigSource(PydanticBaseSettingsSource):
-            """Single source that combines all config with proper precedence."""
+        class YamlConfigSource(PydanticBaseSettingsSource):
+            """Load settings from YAML files."""
 
             def get_field_value(
                 self, field_name: str, field_info
@@ -131,81 +144,29 @@ class Settings(BaseSettings):
                 return None, field_name, False
 
             def __call__(self) -> Dict[str, Any]:
-                # Build configuration with proper precedence:
-                # defaults < .env < YAML < env vars
+                return cls._yaml_config_source()
 
-                combined_data: Dict[str, Any] = {}
+        class LegacyEnvVars(PydanticBaseSettingsSource):
+            """Load legacy flat environment variables."""
 
-                # 1. Load .env file values (low precedence)
-                from dotenv import dotenv_values
+            def get_field_value(
+                self, field_name: str, field_info
+            ) -> Tuple[Any, str, bool]:
+                data = self()
+                if field_name in data:
+                    return data[field_name], field_name, True
+                return None, field_name, False
 
-                env_file = Path(".env")
-                if env_file.exists():
-                    dotenv_data = dotenv_values(env_file)
-                    mapped_dotenv = cls._apply_legacy_mappings(dotenv_data)
-                    combined_data = _deep_merge(combined_data, mapped_dotenv)
+            def __call__(self) -> Dict[str, Any]:
+                return cls._legacy_env_source()
 
-                # 2. Load YAML configuration (medium precedence)
-                yaml_data = cls._yaml_config_source()
-                combined_data = _deep_merge(combined_data, yaml_data)
-
-                # 3. Load environment variables (high precedence)
-                legacy_keys = {
-                    "OPENAI_API_KEY",
-                    "VERTEX_PROJECT",
-                    "VERTEX_LOCATION",
-                    "GCLOUD_OAUTH_CLIENT_ID",
-                    "GCLOUD_OAUTH_CLIENT_SECRET",
-                    "GCLOUD_USER_REFRESH_TOKEN",
-                    "ANTHROPIC_API_KEY",
-                    "HOST",
-                    "PORT",
-                    "CONTEXT_PERCENTAGE",
-                    "DEFAULT_TEMPERATURE",
-                    "LOG_LEVEL",
-                    "SESSION_TTL_SECONDS",
-                    "SESSION_DB_PATH",
-                    "SESSION_CLEANUP_PROBABILITY",
-                    "MEMORY_ENABLED",
-                    "MEMORY_ROLLOVER_LIMIT",
-                    "MEMORY_SESSION_CUTOFF_HOURS",
-                    "MEMORY_SUMMARY_CHAR_LIMIT",
-                    "MEMORY_MAX_FILES_PER_COMMIT",
-                    "MCP_ADAPTER_MOCK",
-                }
-
-                env_data = {}
-                for key in legacy_keys:
-                    if key in os.environ:
-                        env_data[key] = os.environ[key]
-                    elif key.lower() in os.environ:
-                        env_data[key] = os.environ[key.lower()]
-
-                if env_data:
-                    mapped_env = cls._apply_legacy_mappings(env_data)
-                    combined_data = _deep_merge(combined_data, mapped_env)
-
-                # 4. Also check for nested env vars (e.g., MCP__HOST)
-                for key, value in os.environ.items():
-                    if "__" in key:
-                        parts = key.split("__")
-                        current = combined_data
-                        for part in parts[:-1]:
-                            part_lower = part.lower()
-                            if part_lower not in current:
-                                current[part_lower] = {}
-                            current = current[part_lower]
-                        current[parts[-1].lower()] = value
-
-                return combined_data
-
-        # Return sources in priority order
-        # Use a single combined source to ensure proper merging
+        # Precedence (right to left): file_secrets > env_settings > legacy_env > yaml > init
+        # .env files are no longer supported.
         return (
             init_settings,
-            CombinedConfigSource(
-                settings_cls
-            ),  # All config merged with proper precedence
+            YamlConfigSource(settings_cls),
+            LegacyEnvVars(settings_cls),
+            env_settings,
             file_secret_settings,
         )
 
@@ -237,16 +198,16 @@ class Settings(BaseSettings):
             except Exception as e:
                 logger.warning(f"Failed to load {secrets_file}: {e}")
 
-        # Transform providers structure for backward compatibility
-        # YAML has providers.openai.api_key but Settings expects openai.api_key
         if "providers" in config_data:
             providers = config_data.pop("providers")
-            for provider_name, provider_config in providers.items():
-                if provider_name in ["openai", "vertex", "anthropic"]:
-                    # Ensure we never set None for provider configs
-                    if provider_config is None:
-                        provider_config = {}
-                    config_data[provider_name] = provider_config
+            if isinstance(providers, dict):
+                for provider_name, provider_config in providers.items():
+                    if provider_name in config_data:
+                        config_data[provider_name] = _deep_merge(
+                            config_data[provider_name], provider_config or {}
+                        )
+                    else:
+                        config_data[provider_name] = provider_config or {}
 
         return config_data
 
@@ -303,81 +264,6 @@ class Settings(BaseSettings):
 
                 # Set the final value
                 current[path[-1]] = value
-
-        return config_data
-
-    @classmethod
-    def _apply_legacy_mappings(cls, env_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Apply legacy environment variable mappings to flat env data."""
-        config_data: Dict[str, Any] = {}
-
-        # Map legacy environment variables to nested structure
-        legacy_mappings = {
-            # Provider API keys
-            "OPENAI_API_KEY": ("openai", "api_key"),
-            "VERTEX_PROJECT": ("vertex", "project"),
-            "VERTEX_LOCATION": ("vertex", "location"),
-            "GCLOUD_OAUTH_CLIENT_ID": ("vertex", "oauth_client_id"),
-            "GCLOUD_OAUTH_CLIENT_SECRET": ("vertex", "oauth_client_secret"),
-            "GCLOUD_USER_REFRESH_TOKEN": ("vertex", "user_refresh_token"),
-            "ANTHROPIC_API_KEY": ("anthropic", "api_key"),
-            # MCP settings
-            "HOST": ("mcp", "host"),
-            "PORT": ("mcp", "port"),
-            "CONTEXT_PERCENTAGE": ("mcp", "context_percentage"),
-            "DEFAULT_TEMPERATURE": ("mcp", "default_temperature"),
-            # Logging
-            "LOG_LEVEL": ("logging", "level"),
-            # Session settings
-            "SESSION_TTL_SECONDS": ("session", "ttl_seconds"),
-            "SESSION_DB_PATH": ("session", "db_path"),
-            "SESSION_CLEANUP_PROBABILITY": ("session", "cleanup_probability"),
-            # Memory settings
-            "MEMORY_ENABLED": ("memory", "enabled"),
-            "MEMORY_ROLLOVER_LIMIT": ("memory", "rollover_limit"),
-            "MEMORY_SESSION_CUTOFF_HOURS": ("memory", "session_cutoff_hours"),
-            "MEMORY_SUMMARY_CHAR_LIMIT": ("memory", "summary_char_limit"),
-            "MEMORY_MAX_FILES_PER_COMMIT": ("memory", "max_files_per_commit"),
-            # Testing
-            "MCP_ADAPTER_MOCK": ("adapter_mock",),
-        }
-
-        # Process all env data through legacy mappings
-        for key, value in env_data.items():
-            # Always check the uppercase version against legacy mappings
-            # since pydantic may lowercase the keys
-            upper_key = key.upper()
-
-            if upper_key in legacy_mappings:
-                path = legacy_mappings[upper_key]
-                # Navigate/create the nested structure
-                current = config_data
-                for path_key in path[:-1]:
-                    if path_key not in current:
-                        current[path_key] = {}
-                    current = current[path_key]
-                # Set the final value
-                current[path[-1]] = value
-            elif "__" in key:
-                # This is a nested env var (e.g., OPENAI__API_KEY or openai__api_key)
-                # Keep it as-is for later processing
-                config_data[key] = value
-            else:
-                # Non-legacy, non-nested keys - check if it might be a pydantic-normalized key
-                # (e.g., "openai_api_key" instead of "OPENAI_API_KEY")
-                # Try converting underscores to check against legacy mappings
-                potential_legacy = key.upper()
-                if potential_legacy in legacy_mappings:
-                    path = legacy_mappings[potential_legacy]
-                    current = config_data
-                    for path_key in path[:-1]:
-                        if path_key not in current:
-                            current[path_key] = {}
-                        current = current[path_key]
-                    current[path[-1]] = value
-                else:
-                    # Keep as-is
-                    config_data[key] = value
 
         return config_data
 
@@ -513,19 +399,7 @@ def _deep_merge(a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, Any]:
     return result
 
 
-# Legacy support - check for old .env file
-def _check_legacy_config():
-    """Check for legacy .env file and warn if found."""
-    config_file = Path(os.getenv("MCP_CONFIG_FILE", "config.yaml"))
-    if Path(".env").exists() and not config_file.exists():
-        logger.warning(
-            "Legacy .env file detected. Please migrate to config.yaml using 'mcp-config import-legacy'. "
-            "See documentation for migration guide."
-        )
-
-
 @lru_cache
 def get_settings() -> Settings:
     """Get cached settings instance."""
-    _check_legacy_config()
     return Settings()

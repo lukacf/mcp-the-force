@@ -74,10 +74,14 @@ class TestSettings:
             with pytest.raises(ValueError):
                 Settings()
 
-    def test_missing_api_keys_allowed(self):
+    def test_missing_api_keys_allowed(self, tmp_path, monkeypatch):
         """Test that missing API keys don't prevent initialization."""
+        # Change to a temp directory with no .env file
+        monkeypatch.chdir(tmp_path)
+
         with patch.dict(os.environ, {}, clear=True):
-            settings = Settings(_env_file=None)
+            get_settings.cache_clear()
+            settings = Settings()
 
             # Should be None when not set
             assert settings.openai_api_key is None
@@ -454,8 +458,11 @@ class TestConfigurationExport:
         """Clear settings cache before each test."""
         get_settings.cache_clear()
 
-    def test_export_env(self):
+    def test_export_env(self, tmp_path, monkeypatch):
         """Test exporting configuration as environment variables."""
+        # Change to temp directory to avoid loading .env file
+        monkeypatch.chdir(tmp_path)
+
         with patch.dict(
             os.environ,
             {
@@ -466,7 +473,8 @@ class TestConfigurationExport:
             },
             clear=True,
         ):
-            settings = Settings(_env_file=None)
+            get_settings.cache_clear()
+            settings = Settings()
             env_vars = settings.export_env()
 
             assert env_vars["OPENAI_API_KEY"] == "test-key"
@@ -478,8 +486,11 @@ class TestConfigurationExport:
             # Empty values should be filtered out
             assert "ANTHROPIC_API_KEY" not in env_vars
 
-    def test_export_mcp_config(self):
+    def test_export_mcp_config(self, tmp_path, monkeypatch):
         """Test exporting configuration as mcp-config.json."""
+        # Change to temp directory to avoid loading .env file
+        monkeypatch.chdir(tmp_path)
+
         with patch.dict(
             os.environ,
             {
@@ -488,6 +499,7 @@ class TestConfigurationExport:
             },
             clear=True,
         ):
+            get_settings.cache_clear()
             settings = Settings()
             mcp_config = settings.export_mcp_config()
 
