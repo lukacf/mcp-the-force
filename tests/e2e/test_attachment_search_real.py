@@ -307,7 +307,10 @@ class TestAttachmentSearchReal:
                     max_results=1,
                     vector_store_ids=[vs_id1],
                 )
-                assert f"{vs_id1}" in result
+                # Should find tech-related content from the first document
+                assert (
+                    "Technical Specification" in result or "ZEPHYR-AUTH-KEY" in result
+                )
 
             async def execution2():
                 adapter = SearchAttachmentAdapter()
@@ -317,7 +320,8 @@ class TestAttachmentSearchReal:
                     max_results=1,
                     vector_store_ids=[vs_id2],
                 )
-                assert f"{vs_id2}" in result
+                # Should find meeting-related content from the second document
+                assert "Meeting Notes" in result or "action items" in result
 
             # Run concurrently
             await asyncio.gather(execution1(), execution2())
