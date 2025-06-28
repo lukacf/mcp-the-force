@@ -1,22 +1,32 @@
 """Route descriptors for parameter routing in tool definitions."""
 
-from typing import Any, Optional, TypeVar, Type, Callable
+from __future__ import annotations
+from typing import Any, Optional, TypeVar, Type, Callable, Generic, overload
 from dataclasses import dataclass, field
+from enum import Enum
 
 T = TypeVar("T")
 
 
+class RouteType(Enum):
+    PROMPT = "prompt"
+    ADAPTER = "adapter"
+    VECTOR_STORE = "vector_store"
+    SESSION = "session"
+    VECTOR_STORE_IDS = "vector_store_ids"
+
+
 @dataclass
-class RouteDescriptor:
+class RouteDescriptor(Generic[T]):
     """Descriptor that defines how a parameter is routed during execution.
 
     Uses default_factory for mutable defaults to avoid shared state between instances.
     """
 
-    route: str  # "prompt", "adapter", "vector_store", "session"
+    route: RouteType
     position: Optional[int] = None
-    default: Any = field(default=None)
-    default_factory: Optional[Callable[[], Any]] = field(default=None)
+    default: Optional[T] = field(default=None)
+    default_factory: Optional[Callable[[], T]] = field(default=None)
     description: Optional[str] = None
 
     def __post_init__(self):
@@ -36,25 +46,28 @@ class RouteDescriptor:
         """Store the field name when the descriptor is bound to a class."""
         self.field_name = name
 
-    def __get__(self, obj: Any, objtype: Optional[Type] = None) -> Any:
+    def __get__(self, obj: Any, objtype: Optional[Type] = None) -> T:
         """Return the descriptor itself when accessed on the class."""
         if obj is None:
-            return self
+            return self  # type: ignore[return-value]
 
         # Check if value has been set
         stored_value = getattr(obj, f"_{self.field_name}", None)
         if stored_value is not None:
-            return stored_value
+            return stored_value  # type: ignore[no-any-return]
 
         # Return default value
         if self.default_factory is not None:
             # Create new instance from factory
             return self.default_factory()
-        else:
+        elif self.default is not None:
             # For immutable defaults, return directly
             return self.default
+        else:
+            # No default - could be required field
+            return None  # type: ignore[return-value]
 
-    def __set__(self, obj: Any, value: Any) -> None:
+    def __set__(self, obj: Any, value: T) -> None:
         """Store the value on the instance."""
         setattr(obj, f"_{self.field_name}", value)
 
@@ -62,12 +75,52 @@ class RouteDescriptor:
 class Route:
     """Factory for creating route descriptors."""
 
+    # Overloads for type-safe prompt creation
+    @staticmethod
+    @overload
+    def prompt(
+        *,
+        pos: Optional[int] = None,
+        description: Optional[str] = None,
+        default: T,
+        default_factory: None = None,
+    ) -> RouteDescriptor[T]: ...
+
+    @staticmethod
+    @overload
+    def prompt(
+        *,
+        pos: Optional[int] = None,
+        description: Optional[str] = None,
+        default: None = None,
+        default_factory: Callable[[], T],
+    ) -> RouteDescriptor[T]: ...
+
+    @staticmethod
+    @overload
+    def prompt(
+        *,
+        pos: Optional[int] = None,
+        description: Optional[str] = None,
+        default: None = None,
+        default_factory: None = None,
+    ) -> RouteDescriptor[Any]: ...
+
     @staticmethod
     def prompt(
-        pos: Optional[int] = None, description: Optional[str] = None
+        pos: Optional[int] = None,
+        description: Optional[str] = None,
+        default: Any = None,
+        default_factory: Optional[Callable[[], Any]] = None,
     ) -> RouteDescriptor:
         """Parameter that goes to the prompt builder."""
-        return RouteDescriptor(route="prompt", position=pos, description=description)
+        return RouteDescriptor(
+            route=RouteType.PROMPT,
+            position=pos,
+            description=description,
+            default=default,
+            default_factory=default_factory,
+        )
 
     @staticmethod
     def adapter(
@@ -77,7 +130,7 @@ class Route:
     ) -> RouteDescriptor:
         """Parameter that goes directly to the model adapter."""
         return RouteDescriptor(
-            route="adapter",
+            route=RouteType.ADAPTER,
             default=default,
             default_factory=default_factory,
             description=description,
@@ -90,7 +143,7 @@ class Route:
     ) -> RouteDescriptor:
         """Parameter that triggers vector store creation."""
         return RouteDescriptor(
-            route="vector_store",
+            route=RouteType.VECTOR_STORE,
             default=None,
             default_factory=default_factory,
             description=description,
@@ -103,7 +156,20 @@ class Route:
     ) -> RouteDescriptor:
         """Parameter for session management."""
         return RouteDescriptor(
-            route="session",
+            route=RouteType.SESSION,
+            default=None,
+            default_factory=default_factory,
+            description=description,
+        )
+
+    @staticmethod
+    def vector_store_ids(
+        description: Optional[str] = None,
+        default_factory: Optional[Callable[[], Any]] = None,
+    ) -> RouteDescriptor:
+        """Parameter for passing vector store IDs directly."""
+        return RouteDescriptor(
+            route=RouteType.VECTOR_STORE_IDS,
             default=None,
             default_factory=default_factory,
             description=description,
