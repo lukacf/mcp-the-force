@@ -7,7 +7,8 @@ from .registry import tool
 
 # Import tools to ensure registration
 from . import search_memory  # noqa: F401
-from . import search_attachments  # noqa: F401
+# Note: search_attachments is not imported here to prevent MCP exposure
+# It remains available for internal model function calling
 
 
 @tool
