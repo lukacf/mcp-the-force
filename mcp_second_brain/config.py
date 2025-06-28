@@ -160,20 +160,33 @@ class Settings(BaseSettings):
             def __call__(self) -> Dict[str, Any]:
                 return cls._legacy_env_source()
 
-        # Precedence (right to left): file_secrets > env_settings > legacy_env > yaml > init
-        # .env files are no longer supported.
+        # Precedence (left to right - first source wins):
+        # init_settings < env_settings < legacy_env < yaml < file_secrets
+        # This means env vars override YAML, which is the expected behavior
         return (
             init_settings,
+            env_settings,  # Standard nested env vars (e.g., OPENAI__API_KEY)
+            LegacyEnvVars(settings_cls),  # Flat legacy env vars (e.g., OPENAI_API_KEY)
             YamlConfigSource(settings_cls),
-            LegacyEnvVars(settings_cls),
-            env_settings,
             file_secret_settings,
         )
 
     @classmethod
     def _yaml_config_source(cls) -> Dict[str, Any]:
         """Load configuration from YAML files."""
+        import sys
+
         config_data: Dict[str, Any] = {}
+
+        # Automatic test isolation: When running under pytest and the caller has not
+        # explicitly provided MCP_CONFIG_FILE/MCP_SECRETS_FILE, skip the default
+        # config.yaml/secrets.yaml so tests cannot be polluted by real configuration
+        if (
+            "pytest" in sys.modules
+            and "MCP_CONFIG_FILE" not in os.environ
+            and "MCP_SECRETS_FILE" not in os.environ
+        ):
+            return {}  # Nothing to merge, stay with defaults
 
         # Get file paths from environment
         config_file = Path(os.getenv("MCP_CONFIG_FILE", str(CONFIG_FILE)))
