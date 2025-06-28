@@ -233,7 +233,7 @@ async def test_builtin_tool_dispatcher_search_attachments():
         "mcp_second_brain.tools.search_attachments.SearchAttachmentAdapter"
     ) as mock_adapter:
         mock_instance = AsyncMock()
-        mock_instance.generate.return_value = {"attachments": ["file1", "file2"]}
+        mock_instance.generate.return_value = {"attachment_paths": ["file1", "file2"]}
         mock_adapter.return_value = mock_instance
 
         result = await dispatcher.dispatch(
@@ -246,7 +246,7 @@ async def test_builtin_tool_dispatcher_search_attachments():
             max_results=5,
             vector_store_ids=vector_store_ids,
         )
-        assert result == {"attachments": ["file1", "file2"]}
+        assert result == {"attachment_paths": ["file1", "file2"]}
 
 
 @pytest.mark.unit

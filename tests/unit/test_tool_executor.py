@@ -58,7 +58,7 @@ class TestToolExecutor:
                     metadata,
                     instructions="Explain this code",
                     output_format="markdown",
-                    context=[str(test_file)],
+                    context_paths=[str(test_file)],
                     temperature=0.5,
                 )
 
@@ -96,7 +96,7 @@ class TestToolExecutor:
                     metadata,
                     instructions="Continue our discussion",
                     output_format="text",
-                    context=[],
+                    context_paths=[],
                     session_id="test-session",
                     reasoning_effort="high",
                 )
@@ -135,8 +135,8 @@ class TestToolExecutor:
                         metadata,
                         instructions="Analyze this",
                         output_format="text",
-                        context=[],
-                        attachments=[str(tmp_path)],  # Pass directory
+                        context_paths=[],
+                        attachment_paths=[str(tmp_path)],  # Pass directory
                         session_id="test",
                     )
 
@@ -182,6 +182,6 @@ class TestToolExecutor:
             # The executor returns error message instead of raising
             metadata = get_tool("chat_with_gemini25_flash")
             result = await executor.execute(
-                metadata, instructions="Test", output_format="text", context=[]
+                metadata, instructions="Test", output_format="text", context_paths=[]
             )
             assert "Error: Failed to initialize adapter" in result

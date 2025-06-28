@@ -123,7 +123,7 @@ class TestE2EScenarios:
         args1 = {
             "instructions": "I will tell you two facts. Remember them. My favorite programming language is Python and my favorite number is 42. Reply with OK if you understand.",
             "output_format": "text",
-            "context": [],
+            "context_paths": [],
             "session_id": session_id,
         }
         output1 = claude_code(
@@ -147,7 +147,7 @@ class TestE2EScenarios:
         args2 = {
             "instructions": "What is my favorite programming language? Answer in one word only.",
             "output_format": "text",
-            "context": [],
+            "context_paths": [],
             "session_id": session_id,
         }
         output2 = claude_code(
@@ -162,7 +162,7 @@ class TestE2EScenarios:
         args3 = {
             "instructions": "What is my favorite number multiplied by 2? Just give the number.",
             "output_format": "text",
-            "context": [],
+            "context_paths": [],
             "session_id": session_id,
         }
         output3 = claude_code(
@@ -214,7 +214,7 @@ Remember the unique identifier mentioned at the beginning.
 
         output = claude_code(
             f'Use second-brain chat_with_gemini25_flash with instructions="What is the unique identifier mentioned in the document? Just give the identifier.", '
-            f'output_format="text", context={context_json}'
+            f'output_format="text", context_paths={context_json}'
         )
 
         # Should find the unique identifier

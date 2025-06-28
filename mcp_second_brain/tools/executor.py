@@ -56,6 +56,16 @@ class ToolExecutor:
             tool_instance = metadata.spec_class()
             validated_params = self.validator.validate(tool_instance, metadata, kwargs)
 
+            warning_msg = None
+            for key in ("context_paths", "attachment_paths"):
+                val = validated_params.get(key)
+                if isinstance(val, list) and any(isinstance(v, str) and ("\n" in v or len(v) > 300) for v in val):
+                    warning_msg = (
+                        "It looks like file contents were provided in "
+                        f"{key}. Please pass absolute directory paths instead."
+                    )
+                    break
+
             # 2. Route parameters
             routed_params = self.router.route(metadata, validated_params)
 
@@ -144,6 +154,8 @@ class ToolExecutor:
                     except Exception as e:
                         logger.warning(f"Failed to store conversation memory: {e}")
 
+                if warning_msg:
+                    content += f"\nWARNING: {warning_msg}"
                 return str(content)
             else:
                 # Vertex adapter returns string directly
@@ -163,6 +175,8 @@ class ToolExecutor:
                     except Exception as e:
                         logger.warning(f"Failed to store conversation memory: {e}")
 
+                if warning_msg:
+                    result = f"{result}\nWARNING: {warning_msg}"
                 return str(result)
 
         finally:

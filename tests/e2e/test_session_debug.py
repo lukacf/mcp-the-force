@@ -22,7 +22,7 @@ class TestSessionDebug:
         # Method 1: Direct parameter specification
         output1 = claude_code(
             f'Use second-brain chat_with_gpt4_1 with instructions="Remember this: The secret word is BANANA. Just say OK.", '
-            f'output_format="text", context=[], and session_id="{session_id}"'
+            f'output_format="text", context_paths=[], and session_id="{session_id}"'
         )
         print("\n=== TURN 1 ===")
         print(f"Session ID: {session_id}")
@@ -31,7 +31,7 @@ class TestSessionDebug:
         # Second message - should remember
         output2 = claude_code(
             f'Use second-brain chat_with_gpt4_1 with instructions="What is the secret word? Just say the word.", '
-            f'output_format="text", context=[], and session_id="{session_id}"'
+            f'output_format="text", context_paths=[], and session_id="{session_id}"'
         )
         print("\n=== TURN 2 ===")
         print(f"Session ID: {session_id}")
@@ -52,7 +52,7 @@ class TestSessionDebug:
         args1 = {
             "instructions": "Remember this number: 42. Just acknowledge.",
             "output_format": "text",
-            "context": [],
+            "context_paths": [],
             "session_id": session_id,
             "reasoning_effort": "low",  # Keep it fast for testing
         }
@@ -64,7 +64,7 @@ class TestSessionDebug:
         args2 = {
             "instructions": "What number did I ask you to remember? Just say the number.",
             "output_format": "text",
-            "context": [],
+            "context_paths": [],
             "session_id": session_id,
             "reasoning_effort": "low",
         }

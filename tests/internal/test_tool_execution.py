@@ -18,7 +18,7 @@ class TestToolExecutionIntegration:
             "chat_with_gemini25_flash",
             instructions="Analyze the Python files in this project",
             output_format="bullet points",
-            context=[str(temp_project)],
+            context_paths=[str(temp_project)],
         )
 
         # With mock adapter, we get JSON metadata
@@ -43,7 +43,7 @@ class TestToolExecutionIntegration:
             "chat_with_o3",
             instructions="I need help with Python async programming",
             output_format="explanation",
-            context=[],
+            context_paths=[],
             session_id="test-session-1",
         )
 
@@ -57,7 +57,7 @@ class TestToolExecutionIntegration:
             "chat_with_o3",
             instructions="Show me an example",
             output_format="code",
-            context=[],
+            context_paths=[],
             session_id="test-session-1",
         )
 
@@ -103,8 +103,8 @@ class TestToolExecutionIntegration:
             "chat_with_gpt4_1",
             instructions="Analyze this large codebase",
             output_format="summary",
-            context=[],  # Empty context to force vector store usage
-            attachments=attachment_files,  # Use attachments parameter
+            context_paths=[],  # Empty context to force vector store usage
+            attachment_paths=attachment_files,  # Use attachments parameter
             session_id="test-large",
         )
 
@@ -138,10 +138,10 @@ class TestToolExecutionIntegration:
             "chat_with_gpt4_1",
             instructions="Test with all param types",
             output_format="json",
-            context=[],
+            context_paths=[],
             temperature=0.8,  # adapter param
             session_id="test-params",  # session param
-            attachments=[str(test_file)],  # vector_store param with real file
+            attachment_paths=[str(test_file)],  # vector_store param with real file
         )
 
         # Verify parameters were routed correctly
@@ -170,7 +170,7 @@ class TestToolExecutionIntegration:
                 "invalid_tool_name",
                 instructions="Test",
                 output_format="text",
-                context=[],
+                context_paths=[],
             )
 
     @pytest.mark.asyncio
@@ -185,7 +185,7 @@ class TestToolExecutionIntegration:
                 "chat_with_o3",
                 instructions=f"Task {i}",
                 output_format="text",
-                context=[],
+                context_paths=[],
                 session_id=f"session-{i}",
             )
             for i in range(3)
@@ -194,7 +194,7 @@ class TestToolExecutionIntegration:
                 "chat_with_gemini25_flash",
                 instructions=f"Task {i}",
                 output_format="text",
-                context=[],
+                context_paths=[],
             )
             for i in range(3)
         ]

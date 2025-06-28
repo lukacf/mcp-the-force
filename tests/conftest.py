@@ -159,7 +159,7 @@ def sample_tool_params():
     return {
         "instructions": "Test instruction",
         "output_format": "plain text",
-        "context": [],
+        "context_paths": [],
     }
 
 

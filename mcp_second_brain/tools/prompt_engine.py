@@ -16,7 +16,7 @@ DEFAULT_PROMPT_TEMPLATE = """<instructions>
 </output_format>
 
 <file_context>
-{context}
+{context_paths}
 </file_context>"""
 
 
@@ -46,10 +46,9 @@ class PromptEngine:
         # Get template from tool or use default
         template = getattr(spec_class, "prompt_template", None) or self.default_template
 
-        # Handle the current special case for context
-        # Convert list of paths to string if needed
-        if "context" in prompt_params and isinstance(prompt_params["context"], list):
-            if prompt_params["context"]:
+        # Handle the current special case for context paths
+        if "context_paths" in prompt_params and isinstance(prompt_params["context_paths"], list):
+            if prompt_params["context_paths"]:
                 # Use the existing build_prompt utility for now
                 # This maintains backward compatibility
                 from ..utils.prompt_builder import build_prompt
@@ -57,7 +56,7 @@ class PromptEngine:
 
                 instructions = prompt_params.get("instructions", "")
                 output_format = prompt_params.get("output_format", "")
-                context = prompt_params.get("context", [])
+                context = prompt_params.get("context_paths", [])
 
                 # Get model name from spec_class if available
                 model_name = getattr(spec_class, "model_name", None)
@@ -72,7 +71,7 @@ class PromptEngine:
                 )
                 return prompt
             else:
-                prompt_params["context"] = ""
+                prompt_params["context_paths"] = []
 
         # Format the template with available parameters
         try:
@@ -80,7 +79,7 @@ class PromptEngine:
             safe_params = {
                 "instructions": "",
                 "output_format": "",
-                "context": "",
+                "context_paths": [],
                 **prompt_params,
             }
 

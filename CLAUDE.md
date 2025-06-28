@@ -216,7 +216,7 @@ Is it urgent and needs < 5 second response?
   → chat_with_gemini25_flash
 
 Do you need to search/navigate a large codebase?
-  → chat_with_gpt4_1 (best with attachments)
+  → chat_with_gpt4_1 (best with `attachment_paths`)
 
 Do you need current information or web research?
   → chat_with_o3 / chat_with_o3_pro (now with web search!)
@@ -287,11 +287,11 @@ These models perform extensive reasoning and web research, requiring longer proc
 - All adapters must implement `BaseAdapter.generate()` method
 - Tools defined as dataclasses with `@tool` decorator
 - Parameters use `Route.prompt()`, `Route.adapter()`, etc. for routing
-- **Critical**: Always use absolute paths in context/attachments parameters
+- **Critical**: Always use absolute paths in `context_paths` and `attachment_paths` parameters
 
 ## File Paths
 
-**Important**: When using this server, always provide absolute paths in `context` and `attachments` parameters:
+**Important**: When using this server, always provide absolute paths in `context_paths` and `attachment_paths` parameters:
 - ✅ Correct: `["/Users/username/project/src/"]`
 - ❌ Avoid: `["./src/", "../other/"]`
 
@@ -300,7 +300,7 @@ Relative paths will be resolved relative to the MCP server's working directory, 
 ## Testing
 
 - **Basic functionality**: Use tools with small context arrays
-- **RAG capabilities**: Test with empty context and large attachments arrays
+- **RAG capabilities**: Test with empty `context_paths` and large `attachment_paths` arrays
 - **File filtering**: Verify .gitignore patterns and binary file exclusion work correctly
 - **Parameter routing**: Verify prompt, adapter, vector_store, and session parameters route correctly
 - **Multi-turn conversations**: Test session_id continuity with OpenAI models

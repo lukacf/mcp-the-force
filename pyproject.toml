@@ -23,6 +23,7 @@ dependencies = [
 [project.scripts]
 mcp-second-brain = "mcp_second_brain.server:main"
 mcp-config = "mcp_second_brain.cli.config_cli:main"
+mcp-path-helper = "mcp_second_brain.cli.path_helper:main"
 
 [project.optional-dependencies]
 test = [

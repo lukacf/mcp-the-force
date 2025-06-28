@@ -54,7 +54,7 @@ class TestSessionManagement:
             tool_metadata,
             instructions="I need help with Python decorators",
             output_format="explanation",
-            context=[],
+            context_paths=[],
             session_id="decorator-help"
         )
         
@@ -68,7 +68,7 @@ class TestSessionManagement:
             tool_metadata,
             instructions="Can you show me a concrete example?",
             output_format="code",
-            context=[],
+            context_paths=[],
             session_id="decorator-help"
         )
         
@@ -94,28 +94,28 @@ class TestSessionManagement:
                 tool_metadata,
                 instructions="First message session 1",
                 output_format="text",
-                context=[],
+                context_paths=[],
                 session_id="session-1"
             ),
             executor.execute(
                 tool_metadata,
                 instructions="First message session 2",
                 output_format="text",
-                context=[],
+                context_paths=[],
                 session_id="session-2"
             ),
             executor.execute(
                 tool_metadata,
                 instructions="Second message session 1",
                 output_format="text",
-                context=[],
+                context_paths=[],
                 session_id="session-1"
             ),
             executor.execute(
                 tool_metadata,
                 instructions="Second message session 2",
                 output_format="text",
-                context=[],
+                context_paths=[],
                 session_id="session-2"
             )
         )
@@ -144,7 +144,7 @@ class TestSessionManagement:
             o3_metadata,
             instructions="Start conversation",
             output_format="text",
-            context=[],
+            context_paths=[],
             session_id="cross-model"
         )
         
@@ -160,7 +160,7 @@ class TestSessionManagement:
             gpt4_metadata,
             instructions="Continue conversation",
             output_format="text",
-            context=[],
+            context_paths=[],
             session_id="cross-model"
         )
         
@@ -194,7 +194,7 @@ class TestSessionManagement:
                 tool_metadata,
                 instructions="Start",
                 output_format="text",
-                context=[],
+                context_paths=[],
                 session_id="expire-test"
             )
             
@@ -209,7 +209,7 @@ class TestSessionManagement:
                 tool_metadata,
                 instructions="Continue",
                 output_format="text",
-                context=[],
+                context_paths=[],
                 session_id="expire-test"
             )
             
@@ -230,7 +230,7 @@ class TestSessionManagement:
             tool_metadata,
             instructions="Test",
             output_format="text",
-            context=[],
+            context_paths=[],
             session_id="ignored-session"  # This should be ignored
         )
         
@@ -254,7 +254,7 @@ class TestSessionManagement:
                 tool_metadata,
                 instructions=f"Message {i}",
                 output_format="text",
-                context=[],
+                context_paths=[],
                 session_id="concurrent-test"
             )
             for i in range(3)
@@ -284,7 +284,7 @@ class TestSessionManagement:
             tool_metadata,
             instructions="Analyze this project",
             output_format="summary",
-            context=[str(temp_project)],
+            context_paths=[str(temp_project)],
             session_id="evolving-context"
         )
         
@@ -300,7 +300,7 @@ class TestSessionManagement:
             tool_metadata,
             instructions="What changed?",
             output_format="diff",
-            context=[str(temp_project)],
+            context_paths=[str(temp_project)],
             session_id="evolving-context"
         )
         

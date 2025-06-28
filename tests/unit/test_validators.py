@@ -71,8 +71,8 @@ class TestParameterValidator:
                     required=True,
                     description="Format"
                 ),
-                "context": ParameterInfo(
-                    name="context",
+                "context_paths": ParameterInfo(
+                    name="context_paths",
                     type=List[str],
                     type_str="List[str]",
                     route="prompt",
@@ -111,7 +111,7 @@ class TestParameterValidator:
         kwargs = {
             "instructions": "Test instruction",
             "output_format": "json",
-            "context": ["file1.py", "file2.py"]
+            "context_paths": ["file1.py", "file2.py"]
         }
         
         result = validator.validate(tool, tool_metadata, kwargs)
@@ -119,12 +119,12 @@ class TestParameterValidator:
         # Check all required params are validated
         assert "instructions" in result
         assert "output_format" in result
-        assert "context" in result
+        assert "context_paths" in result
         
         # Check values are set on tool instance
         assert tool.instructions == "Test instruction"
         assert tool.output_format == "json"
-        assert tool.context == ["file1.py", "file2.py"]
+        assert tool.context_paths == ["file1.py", "file2.py"]
     
     def test_missing_required_param(self, validator, sample_tool_class, tool_metadata):
         """Test that missing required parameter raises error."""
@@ -143,7 +143,7 @@ class TestParameterValidator:
         kwargs = {
             "instructions": "Test",
             "output_format": "text",
-            "context": []
+            "context_paths": []
         }
         
         validator.validate(tool, tool_metadata, kwargs)
@@ -157,7 +157,7 @@ class TestParameterValidator:
         kwargs = {
             "instructions": "Test",
             "output_format": "text",
-            "context": [],
+            "context_paths": [],
             "temperature": 0.9
         }
         
@@ -172,7 +172,7 @@ class TestParameterValidator:
         kwargs = {
             "instructions": "Test",
             "output_format": "text",
-            "context": [],
+            "context_paths": [],
             "unknown_param": "value"  # This is not defined
         }
         
@@ -188,7 +188,7 @@ class TestParameterValidator:
         kwargs = {
             "instructions": "Test",
             "output_format": "text",
-            "context": [],
+            "context_paths": [],
             "unknown_param": "value"  # This is not defined
         }
         
@@ -204,7 +204,7 @@ class TestParameterValidator:
         kwargs = {
             "instructions": "Test",
             "output_format": "text",
-            "context": [],
+            "context_paths": [],
             "temperature": "high"  # Should be float
         }
         
@@ -219,10 +219,10 @@ class TestParameterValidator:
         kwargs = {
             "instructions": "Test",
             "output_format": "text",
-            "context": "file.py"  # Should be list
+            "context_paths": "file.py"  # Should be list
         }
         
-        with pytest.raises(TypeError, match="Parameter 'context' expected"):
+        with pytest.raises(TypeError, match="Parameter 'context_paths' expected"):
             validator.validate(tool, tool_metadata, kwargs)
     
     def test_empty_kwargs(self, validator, sample_tool_class, tool_metadata):
@@ -240,7 +240,7 @@ class TestParameterValidator:
         kwargs = {
             "instructions": "Test",
             "output_format": "text",
-            "context": [],
+            "context_paths": [],
             "session_id": None  # Explicitly None
         }
         

@@ -220,10 +220,10 @@ Each parameter is automatically routed to the appropriate subsystem:
 |-----------|-------|---------|---------|
 | `instructions` | prompt | Main task description | `"Analyze this function"` |
 | `output_format` | prompt | Expected response format | `"Brief summary"` |
-| `context` | prompt | Files to inline in prompt | `["/path/to/file.py"]` |
+| `context_paths` | prompt | Directories or files to inline | `["/path/to/code/"]` |
 | `temperature` | adapter | Model creativity (0-1) | `0.7` |
 | `reasoning_effort` | adapter | o3/o3-pro reasoning depth | `"high"` |
-| `attachments` | vector_store | Files for RAG search | `["/large/codebase/"]` |
+| `attachment_paths` | vector_store | Directories for RAG search | `["/large/codebase/"]` |
 | `session_id` | session | Conversation continuity | `"debug-123"` |
 
 ## 🛠️ Available Tools
@@ -284,7 +284,7 @@ result = await mcp.call_tool(
     "chat_with_o3",
     instructions="Analyze this function for potential bugs",
     output_format="detailed analysis with recommendations",
-    context=["/path/to/file.py"],
+    context_paths=["/path/to/file.py"],
     reasoning_effort="medium",  # Optional: low, medium, high
     session_id="debug-session-123"  # Required for OpenAI models
 )
@@ -298,7 +298,7 @@ result = await mcp.call_tool(
     "chat_with_o3",
     instructions="Now optimize it for performance based on the issues we found",
     output_format="optimized code with explanations",
-    context=["/path/to/file.py"],
+    context_paths=["/path/to/file.py"],
     session_id="debug-session-123"  # Same session ID continues conversation
 )
 ```
@@ -355,8 +355,8 @@ result = await mcp.call_tool(
     "chat_with_gpt4_1",
     instructions="Analyze the test failures and identify the 3-5 most critical files that likely contain the root cause",
     output_format="prioritized list with file paths and reasoning",
-    context=["/Users/username/project/test_output.log"],
-    attachments=["/Users/username/project/src/", "/Users/username/project/tests/"],
+    context_paths=["/Users/username/project/test_output.log"],
+    attachment_paths=["/Users/username/project/src/", "/Users/username/project/tests/"],
     temperature=0.3  # Lower temperature for more focused analysis
 )
 ```
@@ -371,12 +371,12 @@ result = await mcp.call_tool(
     output_format="detailed technical analysis with fix proposals",
     reasoning_effort="high",  # Maximum reasoning effort
     max_reasoning_tokens=100000,  # Allow extensive reasoning
-    context=[
+    context_paths=[
         "/Users/username/project/src/auth/core.py",
         "/Users/username/project/src/database/connection.py", 
         "/Users/username/project/tests/auth_test.py"
     ],
-    attachments=["/Users/username/project/"]
+    attachment_paths=["/Users/username/project/"]
 )
 ```
 
@@ -385,7 +385,7 @@ result = await mcp.call_tool(
 {
   "instructions": "Analyze this codebase and identify potential security issues",
   "output_format": "structured report with recommendations", 
-  "context": ["/Users/username/my-project/src/"]
+  "context_paths": ["/Users/username/my-project/src/"]
 }
 ```
 
@@ -394,8 +394,8 @@ result = await mcp.call_tool(
 {
   "instructions": "How do I add a new authentication method to this system?",
   "output_format": "step-by-step implementation guide",
-  "context": [],
-  "attachments": ["/Users/username/large-project/"]
+  "context_paths": [],
+  "attachment_paths": ["/Users/username/large-project/"]
 }
 ```
 
@@ -405,7 +405,7 @@ result = await mcp.call_tool(
   "tool": "chat_with_gemini25_flash",
   "instructions": "Identify performance bottlenecks in this React application",
   "output_format": "quick summary of potential issues",
-  "context": ["/Users/username/react-app/src/"]
+  "context_paths": ["/Users/username/react-app/src/"]
 }
 ```
 
@@ -415,32 +415,42 @@ Then follow up with:
   "tool": "chat_with_gemini25_pro", 
   "instructions": "Deep dive into the identified performance issues. Analyze render patterns, state updates, and provide optimization strategies.",
   "output_format": "comprehensive performance audit with actionable fixes",
-  "context": ["/Users/username/react-app/src/components/Dashboard.tsx"],
-  "attachments": ["/Users/username/react-app/"]
+  "context_paths": ["/Users/username/react-app/src/components/Dashboard.tsx"],
+  "attachment_paths": ["/Users/username/react-app/"]
 }
 ```
 
 ## ⚠️ Important: Use Absolute Paths
 
-Always provide **absolute paths** in `context` and `attachments` parameters:
+Always provide **absolute paths** in `context_paths` and `attachment_paths` parameters.
+Directories are preferred so the server can recursively gather files:
 
 ✅ **Correct:**
 ```json
 {
-  "context": ["/Users/username/my-project/src/"],
-  "attachments": ["/Users/username/docs/"]
+  "context_paths": ["/Users/username/my-project/src/"],
+  "attachment_paths": ["/Users/username/docs/"]
 }
 ```
 
 ❌ **Avoid:**
 ```json
 {
-  "context": ["./src/", "../other-project/"],
-  "attachments": ["./docs/"]
+  "context_paths": ["./src/", "../other-project/"],
+  "attachment_paths": ["./docs/"]
 }
 ```
 
 Relative paths will be resolved relative to the MCP server's working directory, which may not match your expectation.
+
+### Path Helper CLI
+
+Use `mcp-path-helper` to convert relative paths to absolute ones:
+
+```bash
+mcp-path-helper expand ./src ./tests
+# => ["/abs/path/src", "/abs/path/tests"]
+```
 
 ## 🔌 MCP Integration
 
@@ -570,8 +580,8 @@ To test the vector store functionality:
 {
   "instructions": "Explain the complete architecture of this system",
   "output_format": "comprehensive technical documentation",
-  "context": [],
-  "attachments": ["/absolute/path/to/large/codebase/"]
+  "context_paths": [],
+  "attachment_paths": ["/absolute/path/to/large/codebase/"]
 }
 ```
 

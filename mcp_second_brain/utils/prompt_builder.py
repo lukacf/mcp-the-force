@@ -30,12 +30,12 @@ def _create_file_element(
 def build_prompt(
     instr: str,
     out_fmt: str,
-    ctx: List[str],
-    attach: List[str] | None = None,
+    context_paths: List[str],
+    attachment_paths: List[str] | None = None,
     model: Optional[str] = None,
 ) -> Tuple[str, List[str]]:
     # Short circuit if no context provided
-    if not ctx and not attach:
+    if not context_paths and not attachment_paths:
         task = ET.Element("Task")
         ET.SubElement(task, "Instructions").text = instr
         ET.SubElement(task, "OutputFormat").text = out_fmt
@@ -44,12 +44,12 @@ def build_prompt(
         return prompt, []
 
     gather_start = time.time()
-    ctx_files = gather_file_paths(ctx) if ctx else []
+    ctx_files = gather_file_paths(context_paths) if context_paths else []
     logger.info(
         f"Gathered {len(ctx_files)} context files in {time.time() - gather_start:.2f}s"
     )
 
-    extras = gather_file_paths(attach) if attach else []
+    extras = gather_file_paths(attachment_paths) if attachment_paths else []
     logger.info(f"Gathered {len(extras)} attachment files")
 
     # Get context limit based on model and configured percentage
@@ -66,7 +66,7 @@ def build_prompt(
         f"Using context limit of {max_tokens:,} tokens for model {model} ({context_percentage:.0%} of {model_limit:,} minus {safety_margin} safety margin)"
     )
 
-    inline_elements, attachments, used = [], [], 0
+    inline_elements, attachment_files, used = [], [], 0
 
     # For large context models, try to inline everything
     all_files = ctx_files + [f for f in extras if f not in ctx_files]
@@ -86,13 +86,13 @@ def build_prompt(
                 used += tok
             else:
                 # Only use vector store if we exceed model's context limit
-                attachments.append(f)
+                attachment_files.append(f)
         except Exception as e:
             logger.warning(f"Error reading file {f}: {e}")
-            attachments.append(f)
+            attachment_files.append(f)
 
     logger.info(
-        f"Inlined {len(inline_elements)} files ({used:,} tokens), {len(attachments)} files for vector store"
+        f"Inlined {len(inline_elements)} files ({used:,} tokens), {len(attachment_files)} files for vector store"
     )
 
     task = ET.Element("Task")
@@ -105,7 +105,7 @@ def build_prompt(
         CTX.append(elem)
 
     prompt = ET.tostring(task, encoding="unicode")
-    if attachments:
+    if attachment_files:
         prompt += "\n\nYou have additional information accessible through the file search tool."
 
-    return prompt, attachments
+    return prompt, attachment_files

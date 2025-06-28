@@ -24,7 +24,7 @@ class TestE2ESmoke:
         args = {
             "instructions": "Say hello in exactly 3 words",
             "output_format": "text",
-            "context": [],
+            "context_paths": [],
         }
         prompt = f"Use second-brain chat_with_gemini25_flash with {json.dumps(args)}"
         output = claude_code(prompt)

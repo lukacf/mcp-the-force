@@ -48,7 +48,7 @@ class TestE2EMemory:
         args1 = {
             "instructions": f"Remember this unique fact: {unique_fact}. Acknowledge that you've stored it.",
             "output_format": "brief acknowledgment only",
-            "context": [],
+            "context_paths": [],
             "session_id": session_id,
         }
 
@@ -68,7 +68,7 @@ class TestE2EMemory:
         args2 = {
             "instructions": f"Use the search_project_memory function to search for the exact string: {unique_fact}. This should search through all stored conversations. Report the results in the specified JSON format.",
             "output_format": f'JSON object: {{"found": true/false, "fact": "{unique_fact}" if found or null, "num_results": number}}',
-            "context": [],  # No context - relying on memory
+            "context_paths": [],  # No context - relying on memory
             "session_id": f"different-session-{uuid.uuid4().hex[:8]}",  # Different session
         }
 
@@ -96,7 +96,7 @@ class TestE2EMemory:
         args1 = {
             "instructions": f"I need you to analyze and describe this unique identifier: {unique_info}. What pattern do you see in it?",
             "output_format": "brief analysis mentioning the identifier",
-            "context": [],
+            "context_paths": [],
             "session_id": f"o3-memory-{uuid.uuid4().hex[:8]}",
         }
 
@@ -111,7 +111,7 @@ class TestE2EMemory:
         args2 = {
             "instructions": f"Use the search_project_memory function to search for '{unique_info}'. Report what you find in the search results.",
             "output_format": "found information only",
-            "context": [],
+            "context_paths": [],
         }
 
         output2 = claude_code(
@@ -131,7 +131,7 @@ class TestE2EMemory:
         store_args = {
             "instructions": f"Remember this test fact: '{test_id}_FACT'. Confirm you've stored it.",
             "output_format": "brief confirmation",
-            "context": [],
+            "context_paths": [],
             "session_id": f"store-{uuid.uuid4().hex[:8]}",
         }
 
@@ -148,7 +148,7 @@ class TestE2EMemory:
         search_args = {
             "instructions": f"Use the search_project_memory function to find any facts containing '{test_id}'. Report what you find.",
             "output_format": f"If you find '{test_id}_FACT', output exactly 'FOUND'. If not found, output 'NOT_FOUND'.",
-            "context": [],
+            "context_paths": [],
             "session_id": f"search-{uuid.uuid4().hex[:8]}",
         }
 
@@ -178,7 +178,7 @@ def {unique_func}():
         args1 = {
             "instructions": f"Analyze the function {unique_func} in the code. Describe what it does.",
             "output_format": "brief description",
-            "context": [str(tmp_path)],
+            "context_paths": [str(tmp_path)],
             "session_id": f"code-analysis-{uuid.uuid4().hex[:8]}",
         }
 
@@ -196,7 +196,7 @@ def {unique_func}():
         args2 = {
             "instructions": f"Use the search_project_memory function to search for information about the function {unique_func}. Report what you find.",
             "output_format": "what you remember about this function",
-            "context": [],  # No context!
+            "context_paths": [],  # No context!
             "session_id": f"memory-recall-{uuid.uuid4().hex[:8]}",
         }
 

@@ -33,7 +33,7 @@ class TestErrorHandlingIntegration:
                     tool_metadata,
                     instructions="Test",
                     output_format="text",
-                    context=[],
+                    context_paths=[],
                     session_id="test"
                 )
                 # Should get mock response even without API key
@@ -56,7 +56,7 @@ class TestErrorHandlingIntegration:
                     tool_metadata,
                     instructions="Test",
                     output_format="text",
-                    context=[],
+                    context_paths=[],
                     session_id="test"
                 )
     
@@ -73,7 +73,7 @@ class TestErrorHandlingIntegration:
                     tool_metadata,
                     instructions="Test",
                     output_format="text",
-                    context=[],
+                    context_paths=[],
                     session_id="test"
                 )
     
@@ -93,7 +93,7 @@ class TestErrorHandlingIntegration:
                     tool_metadata,
                     instructions="Test",
                     output_format="text",
-                    context=[],
+                    context_paths=[],
                     session_id="test"
                 )
     
@@ -109,7 +109,7 @@ class TestErrorHandlingIntegration:
                 tool_metadata,
                 instructions="Test",
                 output_format="text",
-                context="not-a-list"  # Should be list
+                context_paths="not-a-list"  # Should be list
             )
         
         # Wrong type for temperature
@@ -121,7 +121,7 @@ class TestErrorHandlingIntegration:
                 tool_metadata,
                 instructions="Test",
                 output_format="text",
-                context=[],
+                context_paths=[],
                 temperature="high"  # Should be float
             )
     
@@ -136,7 +136,7 @@ class TestErrorHandlingIntegration:
             tool_metadata,
             instructions="Analyze these files",
             output_format="text",
-            context=["/path/that/does/not/exist.py"]
+            context_paths=["/path/that/does/not/exist.py"]
         )
         
         # Should still work with MockAdapter
@@ -161,7 +161,7 @@ class TestErrorHandlingIntegration:
             tool_metadata,
             instructions="Analyze",
             output_format="text",
-            context=[str(huge_file)],
+            context_paths=[str(huge_file)],
             session_id="test"
         )
         
@@ -187,7 +187,7 @@ class TestErrorHandlingIntegration:
                     tool_metadata,
                     instructions="Test",
                     output_format="text",
-                    context=[],
+                    context_paths=[],
                     session_id="test"
                 )
     
@@ -206,7 +206,7 @@ class TestErrorHandlingIntegration:
                 tool_metadata,
                 instructions="Test",
                 output_format="text",
-                context=[]
+                context_paths=[]
             )
             assert "Failed to initialize adapter" in result
     
@@ -254,14 +254,14 @@ class TestErrorHandlingIntegration:
                     o3_metadata,
                     instructions="Should succeed",
                     output_format="text",
-                    context=[],
+                    context_paths=[],
                     session_id="test"
                 ),
                 executor.execute(
                     gemini_metadata,
                     instructions="Should fail",
                     output_format="text",
-                    context=[]
+                    context_paths=[]
                 )
             ]
             

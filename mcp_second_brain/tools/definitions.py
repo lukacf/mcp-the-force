@@ -18,7 +18,7 @@ class ChatWithGemini25Pro(ToolSpec):
     Example usage:
     - instructions: "Analyze this codebase architecture and identify potential performance bottlenecks"
     - output_format: "Provide a structured analysis with: 1) Architecture overview 2) Identified bottlenecks 3) Recommendations"
-    - context: ["/project/src", "/project/tests"]
+    - context_paths: ["/project/src", "/project/tests"]
     - temperature: 0.2 (default, for consistent analysis)"""
 
     model_name = "gemini-2.5-pro"
@@ -36,7 +36,7 @@ class ChatWithGemini25Pro(ToolSpec):
 </expected_output_format>
 
 <context_information>
-{context}
+{context_paths}
 </context_information>"""
 
     # Parameters
@@ -44,7 +44,7 @@ class ChatWithGemini25Pro(ToolSpec):
         pos=0, description="Task instructions for the model"
     )
     output_format: str = Route.prompt(pos=1, description="Desired output format")
-    context: List[str] = Route.prompt(
+    context_paths: List[str] = Route.prompt(
         pos=2, description="List of file/directory paths to include"
     )
     temperature: Optional[float] = Route.adapter(
@@ -60,7 +60,7 @@ class ChatWithGemini25Flash(ToolSpec):
     Example usage:
     - instructions: "Summarize the recent changes in this project and highlight any breaking changes"
     - output_format: "Bullet points with: • Summary of changes • Breaking changes (if any) • Migration notes"
-    - context: ["/project/CHANGELOG.md", "/project/src/api"]
+    - context_paths: ["/project/CHANGELOG.md", "/project/src/api"]
     - temperature: 0.3 (default, balanced for summaries)"""
 
     model_name = "gemini-2.5-flash"
@@ -73,7 +73,7 @@ class ChatWithGemini25Flash(ToolSpec):
         pos=0, description="Task instructions for the model"
     )
     output_format: str = Route.prompt(pos=1, description="Desired output format")
-    context: List[str] = Route.prompt(
+    context_paths: List[str] = Route.prompt(
         pos=2, description="List of file/directory paths to include"
     )
     temperature: Optional[float] = Route.adapter(
@@ -89,7 +89,7 @@ class ChatWithO3(ToolSpec):
     Example usage:
     - instructions: "Design an efficient algorithm to find all cycles in a directed graph"
     - output_format: "Show: 1) Algorithm approach 2) Step-by-step implementation 3) Time/space complexity"
-    - context: ["/project/src/graph.py"]
+    - context_paths: ["/project/src/graph.py"]
     - reasoning_effort: "medium" (default, increase to "high" for complex problems)
     - session_id: "graph-algo-001" (for multi-turn refinement)"""
 
@@ -106,7 +106,7 @@ class ChatWithO3(ToolSpec):
 {output_format}
 
 ## Provided Context
-{context}
+{context_paths}
 
 Please approach this task step-by-step, showing your reasoning process."""
 
@@ -115,10 +115,10 @@ Please approach this task step-by-step, showing your reasoning process."""
         pos=0, description="Task instructions for the model"
     )
     output_format: str = Route.prompt(pos=1, description="Desired output format")
-    context: List[str] = Route.prompt(
+    context_paths: List[str] = Route.prompt(
         pos=2, description="List of file/directory paths to include"
     )
-    attachments: Optional[List[str]] = Route.vector_store(
+    attachment_paths: Optional[List[str]] = Route.vector_store(
         description="Files for vector store (RAG)"
     )
     reasoning_effort: Optional[Literal["low", "medium", "high"]] = Route.adapter(
@@ -138,7 +138,7 @@ class ChatWithO3Pro(ToolSpec):
     Example usage:
     - instructions: "Prove the correctness of this distributed consensus algorithm and identify edge cases"
     - output_format: "Formal analysis with: 1) Correctness proof 2) Safety/liveness properties 3) Edge cases"
-    - context: ["/project/src/consensus", "/project/docs/algorithm.md"]
+    - context_paths: ["/project/src/consensus", "/project/docs/algorithm.md"]
     - reasoning_effort: "high" (default, for thorough analysis)
     - max_reasoning_tokens: 100000 (optional, for complex proofs)
     - session_id: "consensus-proof-001"""
@@ -153,10 +153,10 @@ class ChatWithO3Pro(ToolSpec):
         pos=0, description="Task instructions for the model"
     )
     output_format: str = Route.prompt(pos=1, description="Desired output format")
-    context: List[str] = Route.prompt(
+    context_paths: List[str] = Route.prompt(
         pos=2, description="List of file/directory paths to include"
     )
-    attachments: Optional[List[str]] = Route.vector_store(
+    attachment_paths: Optional[List[str]] = Route.vector_store(
         description="Files for vector store (RAG)"
     )
     reasoning_effort: Optional[Literal["low", "medium", "high"]] = Route.adapter(
@@ -178,8 +178,8 @@ class ChatWithGPT4_1(ToolSpec):
     Example usage:
     - instructions: "Refactor this codebase to use modern React patterns and hooks"
     - output_format: "Migration guide with: 1) Files to change 2) Specific refactoring steps 3) Testing checklist"
-    - context: ["/project/src/components"]
-    - attachments: ["/project/legacy"] (optional, for RAG on large codebases)
+    - context_paths: ["/project/src/components"]
+    - attachment_paths: ["/project/legacy"] (optional, for RAG on large codebases)
     - temperature: 0.2 (default, for consistent refactoring)
     - session_id: "react-refactor-001"""
 
@@ -193,10 +193,10 @@ class ChatWithGPT4_1(ToolSpec):
         pos=0, description="Task instructions for the model"
     )
     output_format: str = Route.prompt(pos=1, description="Desired output format")
-    context: List[str] = Route.prompt(
+    context_paths: List[str] = Route.prompt(
         pos=2, description="List of file/directory paths to include"
     )
-    attachments: Optional[List[str]] = Route.vector_store(
+    attachment_paths: Optional[List[str]] = Route.vector_store(
         description="Files for vector store (RAG)"
     )
     temperature: Optional[float] = Route.adapter(
@@ -217,7 +217,7 @@ class ResearchWithO3DeepResearch(ToolSpec):
     Example usage:
     - instructions: "Research the latest advances in quantum error correction codes and their practical implementations"
     - output_format: "Comprehensive report with: 1) Current state of the field 2) Recent breakthroughs 3) Implementation challenges 4) Future directions"
-    - context: [] (empty for pure web research, or include papers/code for analysis)
+    - context_paths: [] (empty for pure web research, or include papers/code for analysis)
     - session_id: "quantum-research-001" (for follow-up questions)"""
 
     model_name = "o3-deep-research"
@@ -233,7 +233,7 @@ class ResearchWithO3DeepResearch(ToolSpec):
 {output_format}
 
 ## Provided Context
-{context}
+{context_paths}
 
 Please approach this task step-by-step, showing your reasoning process."""
 
@@ -242,10 +242,10 @@ Please approach this task step-by-step, showing your reasoning process."""
         pos=0, description="Task instructions for the model"
     )
     output_format: str = Route.prompt(pos=1, description="Desired output format")
-    context: List[str] = Route.prompt(
+    context_paths: List[str] = Route.prompt(
         pos=2, description="List of file/directory paths to include"
     )
-    attachments: Optional[List[str]] = Route.vector_store(
+    attachment_paths: Optional[List[str]] = Route.vector_store(
         description="Files for vector store (RAG)"
     )
     session_id: str = Route.session(
@@ -263,7 +263,7 @@ class ResearchWithO4MiniDeepResearch(ToolSpec):
     Example usage:
     - instructions: "Research current best practices for API versioning and backwards compatibility"
     - output_format: "Summary with: 1) Common approaches 2) Pros/cons 3) Industry examples 4) Recommendations"
-    - context: ["/project/api/v1"] (optional, to analyze current implementation)
+    - context_paths: ["/project/api/v1"] (optional, to analyze current implementation)
     - session_id: "api-research-001"""
 
     model_name = "o4-mini-deep-research"
@@ -276,10 +276,10 @@ class ResearchWithO4MiniDeepResearch(ToolSpec):
         pos=0, description="Task instructions for the model"
     )
     output_format: str = Route.prompt(pos=1, description="Desired output format")
-    context: List[str] = Route.prompt(
+    context_paths: List[str] = Route.prompt(
         pos=2, description="List of file/directory paths to include"
     )
-    attachments: Optional[List[str]] = Route.vector_store(
+    attachment_paths: Optional[List[str]] = Route.vector_store(
         description="Files for vector store (RAG)"
     )
     session_id: str = Route.session(

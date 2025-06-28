@@ -73,8 +73,8 @@ class TestVectorStoreIntegration:
             tool_metadata,
             instructions="Analyze the documentation",
             output_format="summary",
-            context=[str(temp_project / "src")],  # Small context
-            attachments=[str(docs_dir)],  # Large attachments
+            context_paths=[str(temp_project / "src")],  # Small context
+            attachment_paths=[str(docs_dir)],  # Large attachments
             session_id="test-vs",
         )
 
@@ -151,8 +151,8 @@ class TestVectorStoreIntegration:
             tool_metadata,
             instructions="Analyze",
             output_format="text",
-            context=[],
-            attachments=[str(empty_dir)],
+            context_paths=[],
+            attachment_paths=[str(empty_dir)],
             session_id="test-empty",
         )
 
@@ -184,8 +184,8 @@ class TestVectorStoreIntegration:
             tool_metadata,
             instructions="Test",
             output_format="text",
-            context=[],
-            attachments=[str(tmp_path)],
+            context_paths=[],
+            attachment_paths=[str(tmp_path)],
             session_id="test-fail",
         )
 
@@ -224,8 +224,8 @@ class TestVectorStoreIntegration:
             tool_metadata,
             instructions="Analyze all files",
             output_format="summary",
-            context=[],
-            attachments=[str(tmp_path)],
+            context_paths=[],
+            attachment_paths=[str(tmp_path)],
             session_id="test-large",
         )
 
