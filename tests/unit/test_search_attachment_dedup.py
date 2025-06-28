@@ -128,16 +128,21 @@ class TestSearchAttachmentDeduplication:
         """Attachment deduplication should be independent from memory deduplication."""
         from mcp_second_brain.tools.search_memory import SearchMemoryAdapter
 
-        # Clear both caches
+        # Clear attachment cache
         await search_adapter.clear_deduplication_cache()
-        memory_adapter = SearchMemoryAdapter()
-        await memory_adapter.clear_deduplication_cache()
 
-        # Verify they use different deduplicators
-        assert search_adapter._deduplicator.cache_name == "attachment"
-        assert memory_adapter._deduplicator.cache_name == "memory"
-        # They should have different cache instances
-        assert search_adapter._deduplicator is not memory_adapter._deduplicator
+        # Create memory adapter with mocked dependencies
+        with patch("mcp_second_brain.tools.search_memory.get_settings"):
+            with patch("mcp_second_brain.tools.search_memory.get_memory_config"):
+                memory_adapter = SearchMemoryAdapter()
+                memory_adapter.client = Mock()  # Mock the OpenAI client
+                await memory_adapter.clear_deduplication_cache()
+
+                # Verify they use different deduplicators
+                assert search_adapter._deduplicator.cache_name == "attachment"
+                assert memory_adapter._deduplicator.cache_name == "memory"
+                # They should have different cache instances
+                assert search_adapter._deduplicator is not memory_adapter._deduplicator
 
     @pytest.mark.asyncio
     async def test_deduplication_with_metadata(
