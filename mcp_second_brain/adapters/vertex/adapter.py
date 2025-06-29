@@ -1,4 +1,4 @@
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Dict
 import asyncio
 import logging
 import threading
@@ -58,14 +58,23 @@ class VertexAdapter(BaseAdapter):
         max_reasoning_tokens: int | None = None,
         temperature: float | None = None,
         return_debug: bool = False,
+        messages: Optional[List[Dict[str, str]]] = None,
         **kwargs: Any,
     ) -> Any:
         self._ensure(prompt)
 
-        # Build initial content
-        contents = [
-            types.Content(role="user", parts=[types.Part.from_text(text=prompt)])
-        ]
+        if messages:
+            contents = [
+                types.Content(
+                    role=m.get("role", "user"),
+                    parts=[types.Part.from_text(text=m.get("content", ""))],
+                )
+                for m in messages
+            ]
+        else:
+            contents = [
+                types.Content(role="user", parts=[types.Part.from_text(text=prompt)])
+            ]
 
         # Configure safety settings
         safety_settings = [

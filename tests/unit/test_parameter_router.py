@@ -16,7 +16,13 @@ class TestParameterRouter:
         metadata = ToolMetadata(
             id="test_tool",
             spec_class=TestTool,
-            model_config={"adapter_class": "mock", "model_name": "mock", "context_window": 0, "timeout": 1, "description": ""},
+            model_config={
+                "adapter_class": "mock",
+                "model_name": "mock",
+                "context_window": 0,
+                "timeout": 1,
+                "description": "",
+            },
             parameters={
                 "query": ParameterInfo(
                     name="query",

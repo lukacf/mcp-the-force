@@ -1,13 +1,12 @@
 """Session cache for OpenAI response ID management."""
 
-import sqlite3
 import time
-import random
-import threading
 import logging
+import threading
 from typing import Optional
 
 from mcp_second_brain.config import get_settings
+from mcp_second_brain.sqlite_base_cache import BaseSQLiteCache
 
 logger = logging.getLogger(__name__)
 
@@ -18,101 +17,67 @@ _DB_PATH = _settings.session_db_path
 _PURGE_PROB = _settings.session_cleanup_probability
 
 
-class _SQLiteSessionCache:
+class _SQLiteSessionCache(BaseSQLiteCache):
     """SQLite-backed session cache for persistent storage."""
 
     def __init__(self, db_path: str = _DB_PATH, ttl: int = _DEFAULT_TTL):
-        self.db_path = db_path
-        self.ttl = ttl
-        self._lock = threading.RLock()
+        create_table_sql = """CREATE TABLE IF NOT EXISTS sessions(
+            session_id  TEXT PRIMARY KEY,
+            response_id TEXT NOT NULL,
+            updated_at  INTEGER NOT NULL
+        )"""
+        super().__init__(
+            db_path=db_path,
+            ttl=ttl,
+            table_name="sessions",
+            create_table_sql=create_table_sql,
+            purge_probability=_PURGE_PROB,
+        )
 
-        try:
-            # check_same_thread=False allows other threads to reuse connection
-            self._conn = sqlite3.connect(
-                db_path, detect_types=sqlite3.PARSE_DECLTYPES, check_same_thread=False
-            )
-            self._init_db()
-            logger.info(f"Session cache using SQLite at {db_path}")
-        except sqlite3.Error as e:
-            raise RuntimeError(f"SQLite init failed: {e}") from e
-
-    def _init_db(self):
-        """Initialize database schema and settings."""
-        with self._conn:
-            self._conn.executescript("""
-                PRAGMA journal_mode=WAL;
-                PRAGMA synchronous=NORMAL;
-                PRAGMA busy_timeout=5000;
-                
-                CREATE TABLE IF NOT EXISTS sessions(
-                    session_id  TEXT PRIMARY KEY,
-                    response_id TEXT NOT NULL,
-                    updated_at  INTEGER NOT NULL
-                );
-                
-                CREATE INDEX IF NOT EXISTS idx_sessions_updated 
-                ON sessions(updated_at);
-            """)
-
-    def get_response_id(self, session_id: str) -> Optional[str]:
+    async def get_response_id(self, session_id: str) -> Optional[str]:
         """Get the previous response ID for a session."""
-        if len(session_id) > 1024:
-            raise ValueError("session_id too long")
+        self._validate_session_id(session_id)
 
         now = int(time.time())
 
-        with self._lock, self._conn:
-            cur = self._conn.execute(
-                "SELECT response_id, updated_at FROM sessions WHERE session_id = ?",
-                (session_id,),
+        rows = await self._execute_async(
+            "SELECT response_id, updated_at FROM sessions WHERE session_id = ?",
+            (session_id,),
+        )
+
+        if not rows:
+            logger.info(f"No previous response found for session {session_id}")
+            return None
+
+        response_id, updated_at = str(rows[0][0]), rows[0][1]
+
+        # Check if expired
+        if now - updated_at >= self.ttl:
+            await self._execute_async(
+                "DELETE FROM sessions WHERE session_id = ?", (session_id,), fetch=False
             )
-            row = cur.fetchone()
+            return None
 
-            if not row:
-                logger.info(f"No previous response found for session {session_id}")
-                return None
+        logger.info(f"Retrieved response_id {response_id} for session {session_id}")
+        return response_id
 
-            response_id, updated_at = str(row[0]), row[1]
-
-            # Check if expired
-            if now - updated_at >= self.ttl:
-                self._conn.execute(
-                    "DELETE FROM sessions WHERE session_id = ?", (session_id,)
-                )
-                return None
-
-            logger.info(f"Retrieved response_id {response_id} for session {session_id}")
-            return response_id
-
-    def set_response_id(self, session_id: str, response_id: str):
+    async def set_response_id(self, session_id: str, response_id: str):
         """Store a response ID for a session."""
-        if len(session_id) > 1024 or len(response_id) > 1024:
-            raise ValueError("session_id or response_id too long")
+        self._validate_session_id(session_id)
+        if len(response_id) > 1024:
+            raise ValueError("response_id too long")
 
         now = int(time.time())
 
-        with self._lock, self._conn:
-            self._conn.execute(
-                "REPLACE INTO sessions(session_id, response_id, updated_at) VALUES(?, ?, ?)",
-                (session_id, response_id, now),
-            )
-            logger.info(f"Stored response_id {response_id} for session {session_id}")
-            logger.debug(f"Stored response_id for session {session_id}")
+        await self._execute_async(
+            "REPLACE INTO sessions(session_id, response_id, updated_at) VALUES(?, ?, ?)",
+            (session_id, response_id, now),
+            fetch=False,
+        )
+        logger.info(f"Stored response_id {response_id} for session {session_id}")
 
-            # Probabilistic cleanup
-            if random.random() < _PURGE_PROB:
-                cutoff = now - self.ttl
-                self._conn.execute(
-                    "DELETE FROM sessions WHERE updated_at < ?", (cutoff,)
-                )
-                logger.debug("Performed probabilistic session cleanup")
-
-    def close(self):
-        """Close database connection."""
-        try:
-            self._conn.close()
-        except Exception:
-            pass
+        # Probabilistic cleanup
+        await self._probabilistic_cleanup()
 
 
 class _InMemorySessionCache:
@@ -171,15 +136,17 @@ except Exception as exc:
 
 
 class SessionCache:
-    """Proxy class that maintains the original interface."""
+    """Proxy class that maintains the async interface."""
 
     @staticmethod
-    def get_response_id(session_id: str) -> Optional[str]:
-        return _instance.get_response_id(session_id)
+    async def get_response_id(session_id: str) -> Optional[str]:
+        """Get response ID asynchronously."""
+        return await _instance.get_response_id(session_id)
 
     @staticmethod
-    def set_response_id(session_id: str, response_id: str) -> None:
-        _instance.set_response_id(session_id, response_id)
+    async def set_response_id(session_id: str, response_id: str) -> None:
+        """Set response ID asynchronously."""
+        await _instance.set_response_id(session_id, response_id)
 
     @staticmethod
     def close():

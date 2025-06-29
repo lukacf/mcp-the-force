@@ -46,7 +46,12 @@ class TestBasicMCP:
         async with Client(transport) as client:
             result = await client.call_tool(
                 "chat_with_gemini25_pro",
-                {"instructions": "test", "output_format": "json", "context": []},
+                {
+                    "instructions": "test",
+                    "output_format": "json",
+                    "context": [],
+                    "session_id": "mcp-gemini",
+                },
             )
 
             # Tools return lists of TextContent
