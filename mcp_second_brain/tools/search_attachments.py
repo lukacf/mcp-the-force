@@ -17,6 +17,7 @@ from ..adapters.base import BaseAdapter
 from .base import ToolSpec
 from .descriptors import Route
 from .registry import tool
+from .search_dedup import SearchDeduplicator
 
 logger = logging.getLogger(__name__)
 
@@ -56,10 +57,17 @@ class SearchAttachmentAdapter(BaseAdapter):
     context_window = 0  # Not applicable
     description_snippet = "Search current session attachments"
 
+    # Class-level deduplicator shared across instances
+    _deduplicator = SearchDeduplicator("attachment")
+
     def __init__(self, model_name: str = "attachment_search"):
         self.model_name = model_name
         settings = get_settings()
         self.client = OpenAI(api_key=settings.openai_api_key)
+
+    async def clear_deduplication_cache(self):
+        """Clear the deduplication cache."""
+        await self._deduplicator.clear_cache()
 
     async def generate(
         self,
@@ -81,9 +89,7 @@ class SearchAttachmentAdapter(BaseAdapter):
         # Use provided vector store IDs
         attachment_stores = vector_store_ids or []
         if not attachment_stores:
-            raise fastmcp.exceptions.ToolError(
-                "No attachments available to search in this session"
-            )
+            return "No attachments available to search in this session"
 
         try:
             # Support multiple queries (semicolon-separated)
@@ -125,22 +131,33 @@ class SearchAttachmentAdapter(BaseAdapter):
                 elif isinstance(result, list):
                     all_results.extend(result)
 
+            logger.info(
+                f"Search completed. Total results: {len(all_results)}, Errors: {errors}"
+            )
+
             # Sort by relevance score
             all_results.sort(key=lambda x: x.get("score", 0), reverse=True)
 
-            # Limit total results
-            all_results = all_results[:max_results]
+            # Apply deduplication
+            (
+                deduplicated_results,
+                duplicate_count,
+            ) = await self._deduplicator.deduplicate_results(all_results, max_results)
 
             # Format response
-            if not all_results:
+            if not deduplicated_results:
+                logger.warning(
+                    f"No results after deduplication. Total results before: {len(all_results)}, "
+                    f"Duplicate count: {duplicate_count}, Query: '{query}'"
+                )
                 return f"No results found in attachments for query: '{query}'"
 
             # Build formatted response
             response_parts = [
-                f"Found {len(all_results)} results in session attachments:"
+                f"Found {len(deduplicated_results)} results in session attachments:"
             ]
 
-            for i, search_result in enumerate(all_results, 1):
+            for i, search_result in enumerate(deduplicated_results, 1):
                 response_parts.append(f"\n--- Result {i} ---")
                 response_parts.append(f"Score: {search_result.get('score', 'N/A')}")
 
@@ -205,12 +222,19 @@ class SearchAttachmentAdapter(BaseAdapter):
                         "score": getattr(item, "score", 0),
                     }
 
+                    # Add file_id if available
+                    if hasattr(item, "file_id") and item.file_id:
+                        result["file_id"] = item.file_id
+
                     # Add metadata if available
                     if hasattr(item, "metadata") and item.metadata:
                         result["metadata"] = item.metadata
 
                     results.append(result)
 
+                logger.info(
+                    f"Store {store_id} returned {len(results)} results for query '{query}'"
+                )
                 return results
 
             except Exception as e:
