@@ -1,5 +1,7 @@
 from typing import Any, List, Optional, Dict
+import asyncio
 import logging
+import threading
 from google import genai
 from google.genai import types
 from google.genai.types import HarmCategory, HarmBlockThreshold
@@ -10,21 +12,27 @@ from ..attachment_search_declaration import create_attachment_search_declaration
 
 logger = logging.getLogger(__name__)
 
-# Initialize client once
-_client = None
+# Thread-safe singleton implementation
+_client: Optional[genai.Client] = None
+_client_lock = threading.Lock()
 
 
 def get_client():
+    """Get the shared Vertex AI client instance (thread-safe singleton)."""
     global _client
     if _client is None:
-        settings = get_settings()
-        if not settings.vertex_project or not settings.vertex_location:
-            raise ValueError("VERTEX_PROJECT and VERTEX_LOCATION must be configured")
-        _client = genai.Client(
-            vertexai=True,
-            project=settings.vertex_project,
-            location=settings.vertex_location,
-        )
+        with _client_lock:
+            if _client is None:
+                settings = get_settings()
+                if not settings.vertex_project or not settings.vertex_location:
+                    raise ValueError(
+                        "VERTEX_PROJECT and VERTEX_LOCATION must be configured"
+                    )
+                _client = genai.Client(
+                    vertexai=True,
+                    project=settings.vertex_project,
+                    location=settings.vertex_location,
+                )
     return _client
 
 
@@ -35,6 +43,13 @@ class VertexAdapter(BaseAdapter):
         self.description_snippet = (
             "Deep multimodal reasoner" if "pro" in model else "Flash summary sprinter"
         )
+
+    async def _generate_async(self, client, **kwargs):
+        """Async wrapper for synchronous generate_content calls."""
+        try:
+            return await asyncio.to_thread(client.models.generate_content, **kwargs)
+        except asyncio.CancelledError:
+            raise
 
     async def generate(
         self,
@@ -102,11 +117,14 @@ class VertexAdapter(BaseAdapter):
             tools = [types.Tool(function_declarations=function_declarations)]
 
         # Build config with explicit parameters
+        settings = get_settings()
+        max_tokens = settings.vertex.max_output_tokens or 65535
+
         if "pro" in self.model_name and max_reasoning_tokens:
             generate_content_config = types.GenerateContentConfig(
-                temperature=temperature or get_settings().default_temperature,
+                temperature=temperature or settings.default_temperature,
                 top_p=0.95,
-                max_output_tokens=65535,
+                max_output_tokens=max_tokens,
                 safety_settings=safety_settings,
                 tools=tools,
                 thinking_config=types.ThinkingConfig(
@@ -117,16 +135,17 @@ class VertexAdapter(BaseAdapter):
             )
         else:
             generate_content_config = types.GenerateContentConfig(
-                temperature=temperature or get_settings().default_temperature,
+                temperature=temperature or settings.default_temperature,
                 top_p=0.95,
-                max_output_tokens=65535,
+                max_output_tokens=max_tokens,
                 safety_settings=safety_settings,
                 tools=tools,
             )
 
         # Generate response
         client = get_client()
-        response = client.models.generate_content(
+        response = await self._generate_async(
+            client,
             model=self.model_name,
             contents=contents,
             config=generate_content_config,
@@ -162,9 +181,12 @@ class VertexAdapter(BaseAdapter):
     ) -> str:
         """Handle function calls in the response."""
         client = get_client()
+        settings = get_settings()
+        max_function_calls = settings.vertex.max_function_calls or 500
+        function_call_rounds = 0
 
         # Process function calls iteratively
-        while response.candidates:
+        while response.candidates and function_call_rounds < max_function_calls:
             candidate = response.candidates[0]
             if not candidate.content or not candidate.content.parts:
                 break
@@ -187,57 +209,72 @@ class VertexAdapter(BaseAdapter):
             # Execute function calls
             function_responses = []
             for fc in function_calls:
-                if fc.function_call.name == "search_project_memory":
-                    # Extract parameters
-                    query = fc.function_call.args.get("query", "")
-                    max_results = fc.function_call.args.get("max_results", 40)
-                    store_types = fc.function_call.args.get(
-                        "store_types", ["conversation", "commit"]
-                    )
-
-                    logger.info(f"Executing search_project_memory: '{query}'")
-
-                    # Import and execute the search
-                    from ...tools.search_memory import SearchMemoryAdapter
-
-                    memory_search = SearchMemoryAdapter()
-                    search_result_text = await memory_search.generate(
-                        prompt=query,
-                        query=query,
-                        max_results=max_results,
-                        store_types=store_types,
-                    )
-
-                    # Create function response
-                    function_responses.append(
-                        types.Part.from_function_response(
-                            name=fc.function_call.name,
-                            response={"result": search_result_text},
+                try:
+                    if fc.function_call.name == "search_project_memory":
+                        # Extract parameters
+                        query = fc.function_call.args.get("query", "")
+                        max_results = fc.function_call.args.get("max_results", 40)
+                        store_types = fc.function_call.args.get(
+                            "store_types", ["conversation", "commit"]
                         )
+
+                        logger.info(f"Executing search_project_memory: '{query}'")
+
+                        # Import and execute the search
+                        from ...tools.search_memory import SearchMemoryAdapter
+
+                        memory_search = SearchMemoryAdapter()
+                        search_result_text = await memory_search.generate(
+                            prompt=query,
+                            query=query,
+                            max_results=max_results,
+                            store_types=store_types,
+                        )
+
+                        # Create function response
+                        function_responses.append(
+                            types.Part.from_function_response(
+                                name=fc.function_call.name,
+                                response={"result": search_result_text},
+                            )
+                        )
+
+                    elif fc.function_call.name == "search_session_attachments":
+                        # Extract parameters
+                        query = fc.function_call.args.get("query", "")
+                        max_results = fc.function_call.args.get("max_results", 20)
+
+                        logger.info(f"Executing search_session_attachments: '{query}'")
+
+                        # Import and execute the search
+                        from ...tools.search_attachments import SearchAttachmentAdapter
+
+                        attachment_search = SearchAttachmentAdapter()
+                        search_result_text = await attachment_search.generate(
+                            prompt=query,
+                            query=query,
+                            max_results=max_results,
+                        )
+
+                        # Create function response
+                        function_responses.append(
+                            types.Part.from_function_response(
+                                name=fc.function_call.name,
+                                response={"result": search_result_text},
+                            )
+                        )
+
+                except Exception as e:
+                    logger.error(
+                        f"Function {fc.function_call.name} failed", exc_info=True
                     )
-
-                elif fc.function_call.name == "search_session_attachments":
-                    # Extract parameters
-                    query = fc.function_call.args.get("query", "")
-                    max_results = fc.function_call.args.get("max_results", 20)
-
-                    logger.info(f"Executing search_session_attachments: '{query}'")
-
-                    # Import and execute the search
-                    from ...tools.search_attachments import SearchAttachmentAdapter
-
-                    attachment_search = SearchAttachmentAdapter()
-                    search_result_text = await attachment_search.generate(
-                        prompt=query,
-                        query=query,
-                        max_results=max_results,
-                    )
-
-                    # Create function response
+                    # Return error to model so it can handle gracefully
                     function_responses.append(
                         types.Part.from_function_response(
                             name=fc.function_call.name,
-                            response={"result": search_result_text},
+                            response={
+                                "error": f"Tool failed: {type(e).__name__}: {str(e)}"
+                            },
                         )
                     )
 
@@ -246,10 +283,16 @@ class VertexAdapter(BaseAdapter):
                 contents.append(types.Content(role="model", parts=function_responses))
 
             # Continue generation with function results
-            response = client.models.generate_content(
+            function_call_rounds += 1
+            response = await self._generate_async(
+                client,
                 model=self.model_name,
                 contents=contents,
                 config=config,
             )
+
+        # Check if we hit the function call limit
+        if function_call_rounds >= max_function_calls:
+            return f"TooManyFunctionCalls: Exceeded {max_function_calls} function call rounds"
 
         return "No response generated"

@@ -131,6 +131,16 @@ def create_vector_store(paths: List[str]) -> str:
             f"Batch upload completed in {time.time() - start_time:.2f}s - Status: {file_batch.status}, File counts: {file_batch.file_counts}"
         )
 
+        # Log details about each file
+        if hasattr(file_batch, "file_counts"):
+            logger.info(
+                f"Upload details - Completed: {file_batch.file_counts.completed}, "
+                f"In progress: {file_batch.file_counts.in_progress}, "
+                f"Failed: {file_batch.file_counts.failed}, "
+                f"Cancelled: {file_batch.file_counts.cancelled}, "
+                f"Total: {file_batch.file_counts.total}"
+            )
+
         if file_batch.file_counts.completed == 0:
             # No files were successfully uploaded
             logger.warning(

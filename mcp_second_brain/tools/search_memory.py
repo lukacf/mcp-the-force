@@ -7,9 +7,10 @@ across project memory stores without the 2-store limitation.
 from typing import List, Dict, Any, TYPE_CHECKING
 import logging
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
+from ..utils.thread_pool import get_shared_executor
 
 from openai import OpenAI
+import fastmcp.exceptions
 
 if TYPE_CHECKING:
     pass
@@ -21,11 +22,12 @@ from ..adapters.base import BaseAdapter
 from .base import ToolSpec
 from .descriptors import Route
 from .registry import tool
+from .search_dedup import SearchDeduplicator
 
 logger = logging.getLogger(__name__)
 
-# Thread pool for synchronous OpenAI operations
-executor = ThreadPoolExecutor(max_workers=5)
+# Thread pool for synchronous OpenAI operations (shared)
+executor = get_shared_executor()
 
 # Semaphore to limit concurrent searches
 search_semaphore = asyncio.Semaphore(5)
@@ -41,12 +43,14 @@ class SearchProjectMemory(ToolSpec):
     timeout = 30  # 30 second timeout for searches
 
     # Parameters
-    query: str = Route.prompt(description="Search query or semicolon-separated queries")  # type: ignore
-    max_results: int = Route.prompt(
-        description="Maximum results to return (default: 40)"
-    )  # type: ignore
-    store_types: List[str] = Route.prompt(  # type: ignore
-        description="Types of stores to search (default: ['conversation', 'commit'])"
+    query = Route.prompt(description="Search query or semicolon-separated queries")
+    max_results = Route.prompt(
+        description="Maximum results to return (default: 20)",
+        default=20,
+    )
+    store_types = Route.prompt(
+        description="Types of stores to search (default: ['conversation', 'commit'])",
+        default_factory=lambda: ["conversation", "commit"],
     )
 
 
@@ -57,11 +61,18 @@ class SearchMemoryAdapter(BaseAdapter):
     context_window = 0  # Not applicable
     description_snippet = "Search project memory stores"
 
+    # Class-level deduplicator shared across instances
+    _deduplicator = SearchDeduplicator("memory")
+
     def __init__(self, model_name: str = "memory_search"):
         self.model_name = model_name
         settings = get_settings()
         self.client = OpenAI(api_key=settings.openai_api_key)
         self.memory_config = get_memory_config()
+
+    async def clear_deduplication_cache(self):
+        """Clear the deduplication cache."""
+        await self._deduplicator.clear_cache()
 
     async def generate(
         self,
@@ -76,11 +87,12 @@ class SearchMemoryAdapter(BaseAdapter):
         """
         # Extract search parameters
         query = kwargs.get("query", prompt)
-        max_results = kwargs.get("max_results", 40)
+        max_results = kwargs.get("max_results", 20)
         store_types = kwargs.get("store_types", ["conversation", "commit"])
+        include_duplicates_metadata = kwargs.get("include_duplicates_metadata", False)
 
         if not query:
-            return "Error: Search query is required"
+            raise fastmcp.exceptions.ToolError("Search query is required")
 
         try:
             # Get memory store IDs filtered by type
@@ -113,7 +125,9 @@ class SearchMemoryAdapter(BaseAdapter):
                 )
             except asyncio.TimeoutError:
                 logger.warning("Memory search timed out")
-                return "Memory search timed out after 10 seconds"
+                raise fastmcp.exceptions.ToolError(
+                    "Memory search timed out after 10 seconds"
+                )
 
             # Aggregate and sort results
             all_results = []
@@ -129,19 +143,27 @@ class SearchMemoryAdapter(BaseAdapter):
             # Sort by relevance score
             all_results.sort(key=lambda x: x.get("score", 0), reverse=True)
 
-            # Limit total results
-            all_results = all_results[:max_results]
+            # Apply deduplication
+            (
+                deduplicated_results,
+                duplicate_count,
+            ) = await self._deduplicator.deduplicate_results(all_results, max_results)
 
             # Format response
-            if not all_results:
+            if not deduplicated_results:
                 return f"No results found for query: '{query}'"
 
             # Build formatted response with metadata
             response_parts = [
-                f"Found {len(all_results)} results across {len(stores_to_search)} memory stores:"
+                f"Found {len(deduplicated_results)} results across {len(stores_to_search)} memory stores:"
             ]
 
-            for i, search_result in enumerate(all_results, 1):
+            if include_duplicates_metadata and duplicate_count > 0:
+                response_parts[0] += (
+                    f" ({duplicate_count} duplicate result{'s' if duplicate_count != 1 else ''} filtered)"
+                )
+
+            for i, search_result in enumerate(deduplicated_results, 1):
                 response_parts.append(f"\n--- Result {i} ---")
 
                 # Add metadata
@@ -171,7 +193,7 @@ class SearchMemoryAdapter(BaseAdapter):
 
         except Exception as e:
             logger.error(f"Memory search failed: {e}")
-            return f"Error searching memory: {str(e)}"
+            raise fastmcp.exceptions.ToolError(f"Error searching memory: {e}")
 
     async def _search_single_store(
         self, query: str, store_id: str, max_results: int
@@ -212,6 +234,10 @@ class SearchMemoryAdapter(BaseAdapter):
                         "store_id": store_id,
                         "score": getattr(item, "score", 0),
                     }
+
+                    # Add file_id if available
+                    if hasattr(item, "file_id") and item.file_id:
+                        result["file_id"] = item.file_id
 
                     # Add metadata if available
                     if hasattr(item, "metadata") and item.metadata:

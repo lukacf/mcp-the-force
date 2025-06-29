@@ -5,6 +5,7 @@ Integration tests for error handling scenarios.
 import pytest
 import json
 from unittest.mock import patch
+import fastmcp.exceptions
 from mcp_second_brain.tools.executor import executor
 from mcp_second_brain.tools.registry import get_tool
 
@@ -210,18 +211,17 @@ class TestErrorHandlingIntegration:
                 "Failed to initialize adapter: Test error",
             )
 
-            # Executor returns an error string when adapter init fails
             tool_metadata = get_tool("chat_with_gemini25_flash")
             if not tool_metadata:
                 raise ValueError("Tool chat_with_gemini25_flash not found")
-            result = await executor.execute(
-                tool_metadata,
-                instructions="Test",
-                output_format="text",
-                context=[],
-                session_id="init-fail",
-            )
-            assert "Failed to initialize adapter" in result
+            with pytest.raises(fastmcp.exceptions.ToolError):
+                await executor.execute(
+                    tool_metadata,
+                    instructions="Test",
+                    output_format="text",
+                    context=[],
+                    session_id="init-fail",
+                )
 
     @pytest.mark.asyncio
     async def test_concurrent_error_isolation(

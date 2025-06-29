@@ -42,7 +42,7 @@ def get_adapter(
     Returns:
         Tuple of (adapter instance, error message)
     """
-    # Lazy load SearchMemoryAdapter to break circular import
+    # Lazy load search adapters to break circular imports
     if adapter_key == "SearchMemoryAdapter" and adapter_key not in ADAPTER_REGISTRY:
         try:
             from ..tools.search_memory import SearchMemoryAdapter
@@ -51,6 +51,18 @@ def get_adapter(
             logger.info("Lazily registered SearchMemoryAdapter")
         except ImportError as e:
             logger.error(f"Failed to lazy-load SearchMemoryAdapter: {e}")
+            return (
+                None,
+                f"Adapter {adapter_key} could not be loaded due to an import error.",
+            )
+    if adapter_key == "SearchAttachmentAdapter" and adapter_key not in ADAPTER_REGISTRY:
+        try:
+            from ..tools.search_attachments import SearchAttachmentAdapter
+
+            register_adapter("SearchAttachmentAdapter", SearchAttachmentAdapter)
+            logger.info("Lazily registered SearchAttachmentAdapter")
+        except ImportError as e:
+            logger.error(f"Failed to lazy-load SearchAttachmentAdapter: {e}")
             return (
                 None,
                 f"Adapter {adapter_key} could not be loaded due to an import error.",
