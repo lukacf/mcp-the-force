@@ -23,8 +23,8 @@ This file provides guidance to you when working with code in this repository.
 
 4. **Know Your Colleagues**:
    - **o3/o3_pro**: Analytical reasoning, multi-turn conversations (use session_id)
-   - **gemini25_pro**: Massive context windows (~1M tokens), smart, single-shot only
-   - **gemini25_flash**: Massive context windows (~1M tokens), fast, single-shot only
+   - **gemini25_pro**: Massive context windows (~1M tokens), smart, multi-turn conversations (use session_id)
+   - **gemini25_flash**: Massive context windows (~1M tokens), fast, multi-turn conversations (use session_id)
    - **gpt4_1**: Massive context windows (~1M tokens), Web search for current info (use session_id)
    - **IMPORTANT**: None of these assistants are aware of MCP (Model Context Protocol) or the Responses API
    - o3/o3_pro/gemini models have no knowledge of these APIs at all
@@ -118,12 +118,19 @@ using `search_session_attachments`.
 
 ### Conversation Support
 
-OpenAI tools (o3, o3-pro, gpt-4.1, research models) support optional multi-turn conversations:
+All AI tools now support multi-turn conversations:
+
+**OpenAI models (o3, o3-pro, gpt-4.1, research models)**:
 - Pass `session_id` parameter to maintain conversation continuity
 - Server maintains ephemeral cache (1 hour TTL) of OpenAI response IDs
 - No conversation history stored - OpenAI maintains full context
-- Gemini models remain single-shot (no session support)
 - Research models (o3-deep-research, o4-mini-deep-research) also support sessions
+
+**Gemini models (gemini-2.5-pro, gemini-2.5-flash)**:
+- Require `session_id` parameter for multi-turn conversations
+- Full conversation history stored locally in SQLite
+- Same TTL and cache management as OpenAI models
+- Each exchange (user + assistant messages) is persisted
 
 ### Configuration
 

@@ -234,8 +234,8 @@ The server provides tools defined through a descriptor-based system. Each tool h
 
 | Tool Name | Model | Purpose | Context | Session Support |
 |-----------|-------|---------|---------|------------------|
-| `chat_with_gemini25_pro` | Gemini 2.5 Pro | Deep multimodal analysis, bug fixing | ~1M tokens | ❌ |
-| `chat_with_gemini25_flash` | Gemini 2.5 Flash | Fast summarization, quick insights | ~1M tokens | ❌ |
+| `chat_with_gemini25_pro` | Gemini 2.5 Pro | Deep multimodal analysis, bug fixing | ~1M tokens | ✅ |
+| `chat_with_gemini25_flash` | Gemini 2.5 Flash | Fast summarization, quick insights | ~1M tokens | ✅ |
 | `chat_with_o3` | OpenAI o3 | Chain-of-thought reasoning, algorithms | ~200k tokens | ✅ |
 | `chat_with_o3_pro` | OpenAI o3-pro | Formal proofs, complex debugging | ~200k tokens | ✅ |
 | `chat_with_gpt4_1` | GPT-4.1 | Large-scale refactoring, RAG workflows | ~1M tokens | ✅ |
@@ -303,12 +303,41 @@ result = await mcp.call_tool(
 )
 ```
 
+Example with Gemini:
+
+```python
+# First turn with Gemini
+result = await mcp.call_tool(
+    "chat_with_gemini25_pro",
+    instructions="Analyze this architecture and identify areas for improvement",
+    output_format="structured analysis with diagrams if helpful",
+    context=["/project/src/"],
+    session_id="architecture-review"  # Required for Gemini models
+)
+
+# Follow-up question
+result = await mcp.call_tool(
+    "chat_with_gemini25_pro",
+    instructions="Can you elaborate on the microservices suggestion?",
+    output_format="detailed implementation plan",
+    context=[],  # Can be empty, session maintains context
+    session_id="architecture-review"  # Same session continues the conversation
+)
+```
+
 ### How It Works
+
+#### OpenAI Models (o3, o3-pro, gpt-4.1)
 - The server maintains a lightweight ephemeral cache (1 hour TTL)
 - Only stores the `previous_response_id` from OpenAI's Responses API
 - No conversation history is stored - OpenAI maintains the full context
 - Sessions expire automatically after 1 hour of inactivity
-- Gemini models remain single-shot (no session support)
+
+#### Gemini Models (gemini-2.5-pro, gemini-2.5-flash)
+- Full conversation history is stored locally in SQLite
+- Each exchange (user + assistant messages) is persisted
+- Same TTL and expiration as OpenAI models
+- Required `session_id` parameter for all Gemini tools
 
 ### Vector Store Management
 
