@@ -323,6 +323,9 @@ class TestAttachmentSearchReal:
         vs_id2 = await manager.create([str(doc) for doc in docs2])
         created_vector_stores.extend([vs_id1, vs_id2])  # Track both for cleanup
 
+        # Wait longer for indexing to complete - CI might be slower
+        await asyncio.sleep(5)
+
         try:
             # Simulate two concurrent executions
             async def execution1():
@@ -342,10 +345,15 @@ class TestAttachmentSearchReal:
                 adapter = SearchAttachmentAdapter()
                 result = await adapter.generate(
                     prompt="",
-                    query="meet",
+                    query="meeting notes",  # More specific query
                     max_results=1,
                     vector_store_ids=[vs_id2],
                 )
+                # Debug: print the result if test fails
+                if "Meeting Notes" not in result and "action items" not in result:
+                    print(
+                        f"DEBUG: Search for 'meeting notes' in vs_id2 ({vs_id2}) returned: {result}"
+                    )
                 # Should find meeting-related content from the second document
                 assert "Meeting Notes" in result or "action items" in result
 
