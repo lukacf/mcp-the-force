@@ -3,36 +3,25 @@
 import re
 from typing import Dict, Any
 
-# Common patterns for secrets
-SECRET_PATTERNS = [
-    # API Keys
-    (
-        r'(api[_-]?key|apikey|access[_-]?key)[\s:=]+[\'""]?([a-zA-Z0-9_\-]{20,})[\'""]?',
-        r"\1=REDACTED",
-    ),
-    (
-        r'(secret[_-]?key|secret)[\s:=]+[\'""]?([a-zA-Z0-9_\-]{20,})[\'""]?',
-        r"\1=REDACTED",
-    ),
-    # AWS
-    (r"(AKIA[A-Z0-9]{16})", "AWS_ACCESS_KEY_REDACTED"),
-    (
-        r'(aws[_-]?secret[_-]?access[_-]?key)[\s:=]+[\'""]?([a-zA-Z0-9/+=]{40})[\'""]?',
-        r"\1=REDACTED",
-    ),
+
+# Common patterns for secrets - compiled for efficiency
+SECRET_PATTERNS: list[re.Pattern] = [
+    # OpenAI keys (sk-), Anthropic keys (sk-ant-)
+    re.compile(r"sk-[a-zA-Z0-9-]{16,}"),
     # GitHub tokens
-    (r"(ghp_[a-zA-Z0-9]{36})", "GITHUB_TOKEN_REDACTED"),
-    (r"(gho_[a-zA-Z0-9]{36})", "GITHUB_OAUTH_REDACTED"),
-    # Generic tokens
-    (r'(token|bearer)[\s:=]+[\'""]?([a-zA-Z0-9_\-\.]{20,})[\'""]?', r"\1=REDACTED"),
-    # Database URLs
-    (r"(postgres|mysql|mongodb)://[^:]+:([^@]+)@", r"\1://user:REDACTED@"),
-    # Private keys (multiline)
-    (
-        r"-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----[\s\S]*?-----END (RSA |EC |OPENSSH )?PRIVATE KEY-----",
-        "-----BEGIN PRIVATE KEY-----\nREDACTED\n-----END PRIVATE KEY-----",
+    re.compile(r"ghp_[A-Za-z0-9]{36}"),
+    re.compile(r"github_pat_[A-Za-z0-9]{22,}"),
+    # AWS keys
+    re.compile(r"AKIA[0-9A-Z]{16}"),
+    # Generic patterns for key=value or key: value
+    # This pattern uses a capturing group for the key part.
+    re.compile(
+        r"(\b(api_key|apikey|api-key|token|access_token|password|pass|pwd|secret|auth_token)\b)\s*[:=]\s*['\"]?[^'\"\\\s]{8,}[^'\"\\\s]*['\"]?",
+        re.IGNORECASE,
     ),
 ]
+
+DB_URL_PATTERN = re.compile(r"([a-zA-Z0-9+]+://[^:]+:)([^@]+)(@)")
 
 
 def redact_secrets(text: str) -> str:
@@ -47,13 +36,21 @@ def redact_secrets(text: str) -> str:
     if not text:
         return text
 
-    result = text
-    for pattern, replacement in SECRET_PATTERNS:
-        result = re.sub(
-            pattern, replacement, result, flags=re.IGNORECASE | re.MULTILINE
-        )
+    # Apply specific patterns that match the whole secret
+    for pattern in SECRET_PATTERNS[:-1]:
+        text = pattern.sub("***", text)
 
-    return result
+    # Apply generic key=value pattern, preserving the key but always using =
+    def replace_key_value(match):
+        key = match.group(1)
+        return f"{key}=***"
+
+    text = SECRET_PATTERNS[-1].sub(replace_key_value, text)
+
+    # Special case for database URLs - redact passwords
+    text = DB_URL_PATTERN.sub(r"\1***\3", text)
+
+    return text
 
 
 def redact_dict(data: Dict[str, Any]) -> Dict[str, Any]:
