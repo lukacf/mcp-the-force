@@ -63,7 +63,11 @@ class SearchAttachmentAdapter(BaseAdapter):
     def __init__(self, model_name: str = "attachment_search"):
         self.model_name = model_name
         settings = get_settings()
-        self.client = OpenAI(api_key=settings.openai_api_key)
+        api_key = settings.openai_api_key
+        if api_key:
+            self.client = OpenAI(api_key=api_key)
+        else:
+            self.client = None
 
     async def clear_deduplication_cache(self):
         """Clear the deduplication cache."""
@@ -188,6 +192,8 @@ class SearchAttachmentAdapter(BaseAdapter):
         """Search a single vector store."""
         async with search_semaphore:  # Limit concurrent searches
             try:
+                if self.client is None:
+                    raise ValueError("OpenAI API key not configured")
                 # OpenAI search is synchronous, run in thread pool
                 loop = asyncio.get_event_loop()
                 response = await loop.run_in_executor(
