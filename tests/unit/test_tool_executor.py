@@ -4,6 +4,7 @@ Unit tests for ToolExecutor orchestration.
 
 import pytest
 from unittest.mock import Mock, patch, AsyncMock
+import fastmcp.exceptions
 from mcp_second_brain.tools.executor import ToolExecutor
 from mcp_second_brain.tools.registry import get_tool
 
@@ -89,8 +90,13 @@ class TestToolExecutor:
             mock_get_adapter.return_value = (mock_adapter, None)
 
             # Mock session cache
+            from unittest.mock import AsyncMock
+
             with patch("mcp_second_brain.session_cache.session_cache") as mock_cache:
-                mock_cache.get_response_id.return_value = "previous_response_id"
+                mock_cache.get_response_id = AsyncMock(
+                    return_value="previous_response_id"
+                )
+                mock_cache.set_response_id = AsyncMock()
 
                 metadata = get_tool("chat_with_o3")
                 await executor.execute(
@@ -116,11 +122,13 @@ class TestToolExecutor:
         test_file.write_text("Test content")
 
         # Mock session cache to avoid database access
+        from unittest.mock import AsyncMock
+
         with patch(
             "mcp_second_brain.session_cache.session_cache"
         ) as mock_session_cache:
-            mock_session_cache.get_response_id.return_value = None
-            mock_session_cache.set_response_id.return_value = None
+            mock_session_cache.get_response_id = AsyncMock(return_value=None)
+            mock_session_cache.set_response_id = AsyncMock()
 
             with patch("mcp_second_brain.adapters.get_adapter") as mock_get_adapter:
                 mock_get_adapter.return_value = (mock_adapter, None)
@@ -181,13 +189,12 @@ class TestToolExecutor:
                 "Failed to create adapter: Invalid API key",
             )
 
-            # The executor returns error message instead of raising
             metadata = get_tool("chat_with_gemini25_flash")
-            result = await executor.execute(
-                metadata,
-                instructions="Test",
-                output_format="text",
-                context=[],
-                session_id="adapter-error",
-            )
-            assert "Error: Failed to initialize adapter" in result
+            with pytest.raises(fastmcp.exceptions.ToolError):
+                await executor.execute(
+                    metadata,
+                    instructions="Test",
+                    output_format="text",
+                    context=[],
+                    session_id="adapter-error",
+                )

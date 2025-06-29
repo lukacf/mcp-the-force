@@ -3,6 +3,7 @@
 import logging
 from typing import Dict, Any, List, Union
 from .registry import ToolMetadata
+from .descriptors import RouteType
 
 logger = logging.getLogger(__name__)
 
@@ -25,12 +26,14 @@ class ParameterRouter:
             - "adapter": Dict of adapter parameters
             - "vector_store": List of file paths
             - "session": Dict of session parameters
+            - "vector_store_ids": List of store IDs
         """
         routed: Dict[str, Union[Dict[str, Any], List[Any]]] = {
             "prompt": {},
             "adapter": {},
             "vector_store": [],
             "session": {},
+            "vector_store_ids": [],
         }
 
         # Sort prompt parameters by position
@@ -43,18 +46,18 @@ class ParameterRouter:
             param_info = metadata.parameters[name]
             route = param_info.route
 
-            if route == "prompt":
+            if route == RouteType.PROMPT:
                 if param_info.position is not None:
                     prompt_params.append((param_info.position, name, value))
                 else:
                     prompt_dict = routed["prompt"]
                     assert isinstance(prompt_dict, dict)
                     prompt_dict[name] = value
-            elif route == "adapter":
+            elif route == RouteType.ADAPTER:
                 adapter_dict = routed["adapter"]
                 assert isinstance(adapter_dict, dict)
                 adapter_dict[name] = value
-            elif route == "vector_store":
+            elif route == RouteType.VECTOR_STORE:
                 # Handle multiple vector_store parameters
                 vector_list = routed["vector_store"]
                 assert isinstance(vector_list, list)
@@ -62,10 +65,17 @@ class ParameterRouter:
                     vector_list.extend(value)
                 else:
                     vector_list.append(value)
-            elif route == "session":
+            elif route == RouteType.SESSION:
                 session_dict = routed["session"]
                 assert isinstance(session_dict, dict)
                 session_dict[name] = value
+            elif route == RouteType.VECTOR_STORE_IDS:
+                vs_ids = routed["vector_store_ids"]
+                assert isinstance(vs_ids, list)
+                if isinstance(value, list):
+                    vs_ids.extend(value)
+                else:
+                    vs_ids.append(value)
             else:
                 logger.warning(f"Unknown route '{route}' for parameter '{name}'")
 

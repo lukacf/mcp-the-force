@@ -3,6 +3,7 @@
 import asyncio
 import logging
 from typing import Optional, List
+import fastmcp.exceptions
 from mcp_second_brain import adapters
 from mcp_second_brain import session_cache as session_cache_module
 from mcp_second_brain import gemini_session_cache as gemini_session_cache_module
@@ -15,6 +16,7 @@ from .parameter_router import ParameterRouter
 # Project memory imports
 from ..memory import store_conversation_memory
 from ..config import get_settings
+from ..utils.redaction import redact_secrets
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +91,9 @@ class ToolExecutor:
                 metadata.model_config["model_name"],
             )
             if not adapter:
-                return f"Error: Failed to initialize adapter: {error}"
+                raise fastmcp.exceptions.ToolError(
+                    f"Failed to initialize adapter: {error}"
+                )
 
             # 6. Handle session
             previous_response_id = None
@@ -100,15 +104,15 @@ class ToolExecutor:
             if session_id:
                 if metadata.model_config["adapter_class"] == "openai":
                     previous_response_id = (
-                        session_cache_module.session_cache.get_response_id(session_id)
+                        await session_cache_module.session_cache.get_response_id(
+                            session_id
+                        )
                     )
                     if previous_response_id:
                         logger.info(f"Continuing session {session_id}")
                 elif metadata.model_config["adapter_class"] == "vertex":
-                    gemini_messages = (
-                        gemini_session_cache_module.gemini_session_cache.get_messages(
-                            session_id
-                        )
+                    gemini_messages = await gemini_session_cache_module.gemini_session_cache.get_messages(
+                        session_id
                     )
 
             # 7. Execute model call
@@ -121,6 +125,11 @@ class ToolExecutor:
                 adapter_params["messages"] = gemini_messages + [
                     {"role": "user", "content": prompt}
                 ]
+
+            explicit_vs_ids = routed_params.get("vector_store_ids")
+            assert isinstance(explicit_vs_ids, list)
+            if explicit_vs_ids:
+                vector_store_ids = (vector_store_ids or []) + list(explicit_vs_ids)
 
             result = await asyncio.wait_for(
                 adapter.generate(
@@ -140,18 +149,21 @@ class ToolExecutor:
                     and metadata.model_config["adapter_class"] == "openai"
                     and "response_id" in result
                 ):
-                    session_cache_module.session_cache.set_response_id(
+                    await session_cache_module.session_cache.set_response_id(
                         session_id, result["response_id"]
                     )
                 if session_id and metadata.model_config["adapter_class"] == "vertex":
                     try:
-                        gemini_session_cache_module.gemini_session_cache.append_exchange(
+                        await gemini_session_cache_module.gemini_session_cache.append_exchange(
                             session_id, prompt, content
                         )
                     except Exception as e:
                         logger.warning(f"Failed to update Gemini session: {e}")
 
-                # 8a. Store conversation in memory
+                # Redact secrets from content
+                redacted_content = redact_secrets(str(content))
+
+                # 8a. Store conversation in memory (with redacted content)
                 if settings.memory_enabled and session_id:
                     try:
                         # Extract messages from prompt
@@ -161,17 +173,19 @@ class ToolExecutor:
                                 session_id=session_id,
                                 tool_name=tool_id,
                                 messages=messages,
-                                response=content,
+                                response=redacted_content,
                             )
                         )
                         memory_tasks.append(task)
                     except Exception as e:
                         logger.warning(f"Failed to store conversation memory: {e}")
 
-                return str(content)
+                return redacted_content
             else:
-                # Vertex adapter returns string directly
-                # Store conversation for Vertex models too
+                # Redact secrets from result
+                redacted_result = redact_secrets(str(result))
+
+                # Store conversation for Vertex models too (with redacted content)
                 if settings.memory_enabled and session_id:
                     try:
                         messages = prompt_params.get("messages", [])
@@ -180,7 +194,7 @@ class ToolExecutor:
                                 session_id=session_id,
                                 tool_name=tool_id,
                                 messages=messages,
-                                response=result,
+                                response=redacted_result,
                             )
                         )
                         memory_tasks.append(task)
@@ -189,13 +203,13 @@ class ToolExecutor:
 
                 if session_id and metadata.model_config["adapter_class"] == "vertex":
                     try:
-                        gemini_session_cache_module.gemini_session_cache.append_exchange(
-                            session_id, prompt, str(result)
+                        await gemini_session_cache_module.gemini_session_cache.append_exchange(
+                            session_id, prompt, redacted_result
                         )
                     except Exception as e:
                         logger.warning(f"Failed to update Gemini session: {e}")
 
-                return str(result)
+                return redacted_result
 
         finally:
             # Cleanup

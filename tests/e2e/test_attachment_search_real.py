@@ -11,6 +11,7 @@ import os
 os.environ["MCP_ADAPTER_MOCK"] = "0"
 
 import pytest  # noqa: E402
+import pytest_asyncio  # noqa: E402
 import asyncio  # noqa: E402
 from unittest.mock import patch  # noqa: E402
 
@@ -32,6 +33,26 @@ def real_vector_store_client():
 
     with patch.object(vs_module, "get_client", side_effect=get_real_client):
         yield
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def clear_all_dedup_caches():
+    """Clear all deduplication caches before each test."""
+    from mcp_second_brain.tools.search_memory import SearchMemoryAdapter
+    from mcp_second_brain.tools.search_attachments import SearchAttachmentAdapter
+
+    # Clear both caches
+    memory_adapter = SearchMemoryAdapter()
+    await memory_adapter.clear_deduplication_cache()
+
+    attachment_adapter = SearchAttachmentAdapter()
+    await attachment_adapter.clear_deduplication_cache()
+
+    yield
+
+    # Clean up after test too
+    await memory_adapter.clear_deduplication_cache()
+    await attachment_adapter.clear_deduplication_cache()
 
 
 @pytest.fixture
@@ -196,8 +217,12 @@ class TestAttachmentSearchReal:
         vs_id = await manager.create([str(doc) for doc in test_documents])
         created_vector_stores.append(vs_id)  # Track for cleanup
 
+        # Wait a moment for indexing to complete
+        await asyncio.sleep(2)
+
         try:
             adapter = SearchAttachmentAdapter()
+
             result = await adapter.generate(
                 prompt="",
                 query="ZEPHYR-AUTH-KEY-2024",
@@ -233,6 +258,7 @@ class TestAttachmentSearchReal:
         from mcp_second_brain.tools.search_attachments import SearchAttachmentAdapter
 
         adapter = SearchAttachmentAdapter()
+
         result = await adapter.generate(
             prompt="",
             query="anything",
@@ -307,7 +333,10 @@ class TestAttachmentSearchReal:
                     max_results=1,
                     vector_store_ids=[vs_id1],
                 )
-                assert f"{vs_id1}" in result
+                # Should find tech-related content from the first document
+                assert (
+                    "Technical Specification" in result or "ZEPHYR-AUTH-KEY" in result
+                )
 
             async def execution2():
                 adapter = SearchAttachmentAdapter()
@@ -317,7 +346,8 @@ class TestAttachmentSearchReal:
                     max_results=1,
                     vector_store_ids=[vs_id2],
                 )
-                assert f"{vs_id2}" in result
+                # Should find meeting-related content from the second document
+                assert "Meeting Notes" in result or "action items" in result
 
             # Run concurrently
             await asyncio.gather(execution1(), execution2())

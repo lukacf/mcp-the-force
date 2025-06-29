@@ -1,13 +1,15 @@
 """Tool definitions for all supported models."""
 
-from typing import List, Optional, Literal
+from __future__ import annotations
+from typing import List, Optional
 from .base import ToolSpec
 from .descriptors import Route
 from .registry import tool
 
 # Import tools to ensure registration
 from . import search_memory  # noqa: F401
-from . import search_attachments  # noqa: F401
+# Note: search_attachments is not imported here to prevent MCP exposure
+# It remains available for internal model function calling
 
 
 @tool
@@ -47,11 +49,11 @@ class ChatWithGemini25Pro(ToolSpec):
     context: List[str] = Route.prompt(
         pos=2, description="List of file/directory paths to include"
     )
-    temperature: Optional[float] = Route.adapter(
-        default=0.2, description="Sampling temperature"
-    )
     session_id: str = Route.session(
         description="Session ID for multi-turn conversations"
+    )
+    temperature: Optional[float] = Route.adapter(
+        default=0.2, description="Sampling temperature"
     )
 
 
@@ -79,11 +81,11 @@ class ChatWithGemini25Flash(ToolSpec):
     context: List[str] = Route.prompt(
         pos=2, description="List of file/directory paths to include"
     )
-    temperature: Optional[float] = Route.adapter(
-        default=0.3, description="Sampling temperature"
-    )
     session_id: str = Route.session(
         description="Session ID for multi-turn conversations"
+    )
+    temperature: Optional[float] = Route.adapter(
+        default=0.3, description="Sampling temperature"
     )
 
 
@@ -117,6 +119,7 @@ class ChatWithO3(ToolSpec):
 Please approach this task step-by-step, showing your reasoning process."""
 
     # Parameters
+    # Required parameters first
     instructions: str = Route.prompt(
         pos=0, description="Task instructions for the model"
     )
@@ -124,14 +127,15 @@ Please approach this task step-by-step, showing your reasoning process."""
     context: List[str] = Route.prompt(
         pos=2, description="List of file/directory paths to include"
     )
+    session_id: str = Route.session(
+        description="Session ID for multi-turn conversations"
+    )
+    # Optional parameters with defaults
     attachments: Optional[List[str]] = Route.vector_store(
         description="Files for vector store (RAG)"
     )
-    reasoning_effort: Optional[Literal["low", "medium", "high"]] = Route.adapter(
+    reasoning_effort: Optional[str] = Route.adapter(
         default="medium", description="Controls reasoning effort (low/medium/high)"
-    )
-    session_id: str = Route.session(
-        description="Session ID for multi-turn conversations"
     )
 
 
@@ -155,6 +159,7 @@ class ChatWithO3Pro(ToolSpec):
     timeout = 2700  # 45 minutes
 
     # Parameters
+    # Required parameters first
     instructions: str = Route.prompt(
         pos=0, description="Task instructions for the model"
     )
@@ -162,17 +167,18 @@ class ChatWithO3Pro(ToolSpec):
     context: List[str] = Route.prompt(
         pos=2, description="List of file/directory paths to include"
     )
+    session_id: str = Route.session(
+        description="Session ID for multi-turn conversations"
+    )
+    # Optional parameters with defaults
     attachments: Optional[List[str]] = Route.vector_store(
         description="Files for vector store (RAG)"
     )
-    reasoning_effort: Optional[Literal["low", "medium", "high"]] = Route.adapter(
+    reasoning_effort: Optional[str] = Route.adapter(
         default="high", description="Controls reasoning effort (low/medium/high)"
     )
     max_reasoning_tokens: Optional[int] = Route.adapter(
-        description="Maximum reasoning tokens"
-    )
-    session_id: str = Route.session(
-        description="Session ID for multi-turn conversations"
+        default=None, description="Maximum reasoning tokens"
     )
 
 
@@ -195,6 +201,7 @@ class ChatWithGPT4_1(ToolSpec):
     timeout = 300
 
     # Parameters
+    # Required parameters first
     instructions: str = Route.prompt(
         pos=0, description="Task instructions for the model"
     )
@@ -202,14 +209,15 @@ class ChatWithGPT4_1(ToolSpec):
     context: List[str] = Route.prompt(
         pos=2, description="List of file/directory paths to include"
     )
+    session_id: str = Route.session(
+        description="Session ID for multi-turn conversations"
+    )
+    # Optional parameters with defaults
     attachments: Optional[List[str]] = Route.vector_store(
         description="Files for vector store (RAG)"
     )
     temperature: Optional[float] = Route.adapter(
         default=0.2, description="Sampling temperature"
-    )
-    session_id: str = Route.session(
-        description="Session ID for multi-turn conversations"
     )
 
 
@@ -244,6 +252,7 @@ class ResearchWithO3DeepResearch(ToolSpec):
 Please approach this task step-by-step, showing your reasoning process."""
 
     # Parameters
+    # Required parameters first
     instructions: str = Route.prompt(
         pos=0, description="Task instructions for the model"
     )
@@ -251,11 +260,12 @@ Please approach this task step-by-step, showing your reasoning process."""
     context: List[str] = Route.prompt(
         pos=2, description="List of file/directory paths to include"
     )
-    attachments: Optional[List[str]] = Route.vector_store(
-        description="Files for vector store (RAG)"
-    )
     session_id: str = Route.session(
         description="Session ID for multi-turn conversations"
+    )
+    # Optional parameters with defaults
+    attachments: Optional[List[str]] = Route.vector_store(
+        description="Files for vector store (RAG)"
     )
 
 
@@ -278,6 +288,7 @@ class ResearchWithO4MiniDeepResearch(ToolSpec):
     timeout = 900  # 15 minutes
 
     # Parameters
+    # Required parameters first
     instructions: str = Route.prompt(
         pos=0, description="Task instructions for the model"
     )
@@ -285,9 +296,10 @@ class ResearchWithO4MiniDeepResearch(ToolSpec):
     context: List[str] = Route.prompt(
         pos=2, description="List of file/directory paths to include"
     )
-    attachments: Optional[List[str]] = Route.vector_store(
-        description="Files for vector store (RAG)"
-    )
     session_id: str = Route.session(
         description="Session ID for multi-turn conversations"
+    )
+    # Optional parameters with defaults
+    attachments: Optional[List[str]] = Route.vector_store(
+        description="Files for vector store (RAG)"
     )

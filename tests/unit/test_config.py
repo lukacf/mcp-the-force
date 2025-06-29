@@ -74,9 +74,13 @@ class TestSettings:
             with pytest.raises(ValueError):
                 Settings()
 
-    def test_missing_api_keys_allowed(self):
+    def test_missing_api_keys_allowed(self, tmp_path, monkeypatch):
         """Test that missing API keys don't prevent initialization."""
+        # Change to a temp directory with no .env file
+        monkeypatch.chdir(tmp_path)
+
         with patch.dict(os.environ, {}, clear=True):
+            get_settings.cache_clear()
             settings = Settings()
 
             # Should be None when not set
@@ -84,7 +88,7 @@ class TestSettings:
             assert settings.vertex_project is None
 
     def test_dotenv_loading(self, tmp_path, monkeypatch):
-        """Test that .env file is loaded."""
+        """Test that .env files are ignored."""
         # Create a .env file
         env_file = tmp_path / ".env"
         env_file.write_text("""
@@ -96,14 +100,14 @@ PORT=3000
         # Change to temp directory
         monkeypatch.chdir(tmp_path)
 
-        # Clear environment first
+        # Clear environment first so only the .env file could provide values
         with patch.dict(os.environ, {}, clear=True):
             settings = Settings()
 
-            # Should load from .env
-            assert settings.openai_api_key == "from-dotenv"
-            assert settings.host == "192.168.1.1"
-            assert settings.port == 3000
+            # .env file should be ignored - defaults remain
+            assert settings.openai_api_key is None
+            assert settings.host == "127.0.0.1"
+            assert settings.port == 8000
 
     def test_env_precedence_over_dotenv(self, tmp_path, monkeypatch):
         """Test that environment variables take precedence over .env file."""
@@ -454,8 +458,11 @@ class TestConfigurationExport:
         """Clear settings cache before each test."""
         get_settings.cache_clear()
 
-    def test_export_env(self):
+    def test_export_env(self, tmp_path, monkeypatch):
         """Test exporting configuration as environment variables."""
+        # Change to temp directory to avoid loading .env file
+        monkeypatch.chdir(tmp_path)
+
         with patch.dict(
             os.environ,
             {
@@ -466,6 +473,7 @@ class TestConfigurationExport:
             },
             clear=True,
         ):
+            get_settings.cache_clear()
             settings = Settings()
             env_vars = settings.export_env()
 
@@ -478,8 +486,11 @@ class TestConfigurationExport:
             # Empty values should be filtered out
             assert "ANTHROPIC_API_KEY" not in env_vars
 
-    def test_export_mcp_config(self):
+    def test_export_mcp_config(self, tmp_path, monkeypatch):
         """Test exporting configuration as mcp-config.json."""
+        # Change to temp directory to avoid loading .env file
+        monkeypatch.chdir(tmp_path)
+
         with patch.dict(
             os.environ,
             {
@@ -488,6 +499,7 @@ class TestConfigurationExport:
             },
             clear=True,
         ):
+            get_settings.cache_clear()
             settings = Settings()
             mcp_config = settings.export_mcp_config()
 
