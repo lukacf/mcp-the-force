@@ -34,3 +34,32 @@ async def test_expiration():
         cache.close()
     finally:
         os.unlink(db_path)
+
+
+@pytest.mark.asyncio
+async def test_corrupted_json_handling():
+    """Test that corrupted JSON in database is handled gracefully."""
+    with tempfile.NamedTemporaryFile(suffix=".sqlite3", delete=False) as f:
+        db_path = f.name
+    try:
+        cache = _SQLiteGeminiSessionCache(db_path=db_path, ttl=3600)
+
+        # Manually insert corrupted JSON
+        import sqlite3
+        import time
+
+        conn = sqlite3.connect(db_path)
+        conn.execute(
+            "INSERT INTO gemini_sessions (session_id, messages, updated_at) VALUES (?, ?, ?)",
+            ("corrupted", "{invalid json", int(time.time())),
+        )
+        conn.commit()
+        conn.close()
+
+        # Should return empty list instead of crashing
+        messages = await cache.get_messages("corrupted")
+        assert messages == []
+
+        cache.close()
+    finally:
+        os.unlink(db_path)
