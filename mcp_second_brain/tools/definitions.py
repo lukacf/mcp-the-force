@@ -49,6 +49,9 @@ class ChatWithGemini25Pro(ToolSpec):
     context: List[str] = Route.prompt(
         pos=2, description="List of file/directory paths to include"
     )
+    session_id: str = Route.session(
+        description="Session ID for multi-turn conversations"
+    )
     temperature: Optional[float] = Route.adapter(
         default=0.2, description="Sampling temperature"
     )
@@ -77,6 +80,9 @@ class ChatWithGemini25Flash(ToolSpec):
     output_format: str = Route.prompt(pos=1, description="Desired output format")
     context: List[str] = Route.prompt(
         pos=2, description="List of file/directory paths to include"
+    )
+    session_id: str = Route.session(
+        description="Session ID for multi-turn conversations"
     )
     temperature: Optional[float] = Route.adapter(
         default=0.3, description="Sampling temperature"
