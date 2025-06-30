@@ -89,8 +89,10 @@ class ToolExecutor:
                 # Store messages for conversation memory
                 prompt_params["messages"] = messages
             elif adapter_class == "vertex":
-                # Gemini models - prepend to beginning for better instruction following
-                final_prompt = f"{developer_prompt}\n\n### User Request\n{prompt}"
+                # Gemini models - use system_instruction parameter
+                adapter_params = routed_params["adapter"]
+                assert isinstance(adapter_params, dict)  # Type hint for mypy
+                adapter_params["system_instruction"] = developer_prompt
                 # Store messages for conversation memory
                 messages = [
                     {"role": "system", "content": developer_prompt},
