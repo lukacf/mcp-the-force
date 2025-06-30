@@ -190,7 +190,7 @@ def {unique_func}():
         assert "memory" in output1.lower()
 
         # Wait for storage using polling
-        wait_for_memory_indexed(claude_code, "calculate_compound_interest")
+        wait_for_memory_indexed(claude_code, unique_func)
 
         # Later, ask about the function without providing context
         args2 = {
