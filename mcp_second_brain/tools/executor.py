@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 import fastmcp.exceptions
 from mcp_second_brain import adapters
 from mcp_second_brain import session_cache as session_cache_module
@@ -68,19 +68,44 @@ class ToolExecutor:
             prompt = await self.prompt_engine.build(metadata.spec_class, prompt_params)
 
             # Include developer/system prompt for assistant models
-            from ..prompts import ASSISTANT_DEVELOPER_PROMPT
-            messages = None
+            from ..prompts import get_developer_prompt
+
+            model_name = metadata.model_config["model_name"]
+            adapter_class = metadata.model_config["adapter_class"]
+            developer_prompt = get_developer_prompt(model_name)
+
+            messages: Optional[List[Dict[str, Any]]] = None
             final_prompt = prompt
-            if metadata.model_config["adapter_class"] == "openai":
+
+            if adapter_class == "openai":
+                # OpenAI Responses API supports developer role
                 messages = [
-                    {"role": "developer", "content": ASSISTANT_DEVELOPER_PROMPT},
+                    {"role": "developer", "content": developer_prompt},
                     {"role": "user", "content": prompt},
                 ]
-                routed_params["adapter"]["messages"] = messages
+                adapter_params = routed_params["adapter"]
+                assert isinstance(adapter_params, dict)  # Type hint for mypy
+                adapter_params["messages"] = messages
                 # Store messages for conversation memory
                 prompt_params["messages"] = messages
+            elif adapter_class == "vertex":
+                # Gemini models - prepend to beginning for better instruction following
+                final_prompt = f"{developer_prompt}\n\n### User Request\n{prompt}"
+                # Store messages for conversation memory
+                messages = [
+                    {"role": "system", "content": developer_prompt},
+                    {"role": "user", "content": prompt},
+                ]
+                prompt_params["messages"] = messages
             else:
-                final_prompt = f"{prompt}\n\n{ASSISTANT_DEVELOPER_PROMPT}"
+                # Unknown adapter - use safe default of prepending
+                final_prompt = f"{developer_prompt}\n\n{prompt}"
+                # Store messages for conversation memory
+                messages = [
+                    {"role": "system", "content": developer_prompt},
+                    {"role": "user", "content": prompt},
+                ]
+                prompt_params["messages"] = messages
 
             # 4. Handle vector store if needed
             vs_id = None
@@ -182,12 +207,14 @@ class ToolExecutor:
                 if settings.memory_enabled and session_id:
                     try:
                         # Extract messages from prompt
-                        messages = prompt_params.get("messages", [])
+                        conv_messages = prompt_params.get("messages", [])
+                        if not isinstance(conv_messages, list):
+                            conv_messages = []
                         task = asyncio.create_task(
                             store_conversation_memory(
                                 session_id=session_id,
                                 tool_name=tool_id,
-                                messages=messages,
+                                messages=conv_messages,
                                 response=redacted_content,
                             )
                         )
@@ -203,12 +230,14 @@ class ToolExecutor:
                 # Store conversation for Vertex models too (with redacted content)
                 if settings.memory_enabled and session_id:
                     try:
-                        messages = prompt_params.get("messages", [])
+                        conv_messages = prompt_params.get("messages", [])
+                        if not isinstance(conv_messages, list):
+                            conv_messages = []
                         task = asyncio.create_task(
                             store_conversation_memory(
                                 session_id=session_id,
                                 tool_name=tool_id,
-                                messages=messages,
+                                messages=conv_messages,
                                 response=redacted_result,
                             )
                         )
