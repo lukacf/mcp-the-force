@@ -59,6 +59,7 @@ class VertexAdapter(BaseAdapter):
         temperature: float | None = None,
         return_debug: bool = False,
         messages: Optional[List[Dict[str, str]]] = None,
+        system_instruction: Optional[str] = None,
         **kwargs: Any,
     ) -> Any:
         self._ensure(prompt)
@@ -120,27 +121,26 @@ class VertexAdapter(BaseAdapter):
         settings = get_settings()
         max_tokens = settings.vertex.max_output_tokens or 65535
 
+        # Build base config
+        config_kwargs = {
+            "temperature": temperature or settings.default_temperature,
+            "top_p": 0.95,
+            "max_output_tokens": max_tokens,
+            "safety_settings": safety_settings,
+            "tools": tools,
+        }
+
+        # Add system instruction if provided
+        if system_instruction:
+            config_kwargs["system_instruction"] = system_instruction
+
+        # Add thinking config for pro models
         if "pro" in self.model_name and max_reasoning_tokens:
-            generate_content_config = types.GenerateContentConfig(
-                temperature=temperature or settings.default_temperature,
-                top_p=0.95,
-                max_output_tokens=max_tokens,
-                safety_settings=safety_settings,
-                tools=tools,
-                thinking_config=types.ThinkingConfig(
-                    thinking_budget=max_reasoning_tokens
-                    if max_reasoning_tokens > 0
-                    else -1
-                ),
+            config_kwargs["thinking_config"] = types.ThinkingConfig(
+                thinking_budget=max_reasoning_tokens if max_reasoning_tokens > 0 else -1
             )
-        else:
-            generate_content_config = types.GenerateContentConfig(
-                temperature=temperature or settings.default_temperature,
-                top_p=0.95,
-                max_output_tokens=max_tokens,
-                safety_settings=safety_settings,
-                tools=tools,
-            )
+
+        generate_content_config = types.GenerateContentConfig(**config_kwargs)
 
         # Generate response
         client = get_client()
