@@ -45,9 +45,14 @@ def claude_config_path(tmp_path_factory):
 def claude_code(claude_config_path):
     """Helper to run Claude Code commands."""
 
-    def run_command(prompt: str, timeout: int = 300) -> str:
+    def run_command(
+        prompt: str, timeout: int = 300, output_format: str = "text"
+    ) -> str:
         """Run claude-code with given prompt."""
-        cmd = f"claude -p --dangerously-skip-permissions {shlex.quote(prompt)}"
+        format_flag = (
+            f"--output-format {output_format}" if output_format != "text" else ""
+        )
+        cmd = f"claude -p --dangerously-skip-permissions {format_flag} {shlex.quote(prompt)}"
 
         env = os.environ.copy()
         env["XDG_CONFIG_HOME"] = str(claude_config_path)
@@ -57,7 +62,9 @@ def claude_code(claude_config_path):
         )
 
         if result.returncode != 0:
-            raise RuntimeError(f"Claude Code failed: {result.stderr}")
+            raise RuntimeError(
+                f"Claude Code failed: {result.stderr}\nSTDOUT: {result.stdout}"
+            )
 
         return result.stdout
 
