@@ -20,13 +20,32 @@ This directory contains end-to-end tests that use Claude Code to test the MCP Se
 
 ## Running Tests Locally
 
+### Quick Start
 Use the provided script:
 ```bash
-chmod +x tests/e2e/run-e2e-tests.sh
-./tests/e2e/run-e2e-tests.sh
+./tests/e2e/run-local-docker.sh pytest tests/e2e -xv
 ```
 
-Or run manually:
+### Parallel Execution
+Tests run in parallel by default with 3 workers for optimal performance. You can control parallelism:
+
+```bash
+# Run with single worker (sequential execution)
+./tests/e2e/run-local-docker.sh pytest tests/e2e -xv -n 1
+
+# Run with maximum parallelism (auto-detect CPU cores)
+./tests/e2e/run-local-docker.sh pytest tests/e2e -xv -n auto
+
+# Run with default 3 workers
+./tests/e2e/run-local-docker.sh pytest tests/e2e -xv
+
+# Run with custom number of workers (e.g., 16 for ~3.6x speedup)
+./tests/e2e/run-local-docker.sh pytest tests/e2e -xv -n 16
+```
+
+**Performance**: With 16 workers, the full E2E test suite completes in ~5 minutes instead of ~18 minutes!
+
+### Manual Docker Run
 ```bash
 # Build the Docker image
 docker build -f Dockerfile.e2e -t mcp-e2e-test .
@@ -56,7 +75,17 @@ For GitHub Actions, add these secrets:
 
 - `test_smoke.py` - Basic tests to verify the MCP server is working
 - `test_scenarios.py` - More complex scenarios including vector stores and model comparisons
+- `test_session_debug.py` - Tests for session persistence and multi-turn conversations
 - `conftest.py` - Pytest fixtures for Claude Code integration
+
+### Parallel Execution Implementation
+
+Tests use pytest-xdist for parallel execution. Each worker gets:
+- Unique `SESSION_DB_PATH` to avoid SQLite database locking
+- Isolated test execution environment
+- Automatic work distribution by pytest-xdist
+
+The implementation ensures thread-safe execution without conflicts.
 
 ## Writing E2E Tests
 

@@ -28,6 +28,7 @@ mcp-config = "mcp_second_brain.cli.config_cli:main"
 test = [
     "pytest>=7.4",
     "pytest-asyncio>=0.21",
+    "pytest-xdist>=3.5",
     "anyio>=4.0",
     "pytest-mock>=3.11",
     "pytest-timeout>=2.1",
