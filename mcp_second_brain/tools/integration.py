@@ -168,3 +168,26 @@ def create_vector_store_tool(mcp: FastMCP) -> None:
         except Exception as e:
             logger.error(f"Error creating vector store: {e}")
             return {"vector_store_id": "", "status": "error", "error": str(e)}
+
+
+def create_count_project_tokens_tool(mcp: FastMCP) -> None:
+    """Create the count_project_tokens utility tool."""
+
+    @mcp.tool()
+    async def count_project_tokens(items: List[str]) -> Dict[str, Any]:
+        """Count tokens for specified files or directories using the same
+        filtering logic as context/attachments parameters.
+
+        Args:
+            items: List of file paths or directory paths to count tokens for
+
+        Returns:
+            Dictionary containing:
+            - total_tokens: Total token count across all files
+            - per_file: Dictionary mapping file paths to their token counts
+        """
+        from .token_count import CountProjectTokens
+
+        tool = CountProjectTokens()
+        tool.items = items
+        return await tool.generate()
