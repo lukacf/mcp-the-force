@@ -1,7 +1,7 @@
 """Tool definitions for all supported models."""
 
 from __future__ import annotations
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from .base import ToolSpec
 from .descriptors import Route
 from .registry import tool
@@ -57,6 +57,9 @@ class ChatWithGemini25Pro(ToolSpec):
     attachments: Optional[List[str]] = Route.vector_store(
         description="Files for vector store (RAG)"
     )
+    structured_output_schema: Optional[Dict[str, Any]] = Route.structured_output(
+        description="JSON schema for structured output validation"
+    )
     temperature: Optional[float] = Route.adapter(
         default=0.2, description="Sampling temperature"
     )
@@ -93,6 +96,9 @@ class ChatWithGemini25Flash(ToolSpec):
     # Optional parameters
     attachments: Optional[List[str]] = Route.vector_store(
         description="Files for vector store (RAG)"
+    )
+    structured_output_schema: Optional[Dict[str, Any]] = Route.structured_output(
+        description="JSON schema for structured output validation"
     )
     temperature: Optional[float] = Route.adapter(
         default=0.3, description="Sampling temperature"
@@ -144,6 +150,9 @@ Please approach this task step-by-step, showing your reasoning process."""
     attachments: Optional[List[str]] = Route.vector_store(
         description="Files for vector store (RAG)"
     )
+    structured_output_schema: Optional[Dict[str, Any]] = Route.structured_output(
+        description="JSON schema for structured output validation"
+    )
     reasoning_effort: Optional[str] = Route.adapter(
         default="medium", description="Controls reasoning effort (low/medium/high)"
     )
@@ -184,11 +193,14 @@ class ChatWithO3Pro(ToolSpec):
     attachments: Optional[List[str]] = Route.vector_store(
         description="Files for vector store (RAG)"
     )
-    reasoning_effort: Optional[str] = Route.adapter(
-        default="high", description="Controls reasoning effort (low/medium/high)"
-    )
     max_reasoning_tokens: Optional[int] = Route.adapter(
         default=None, description="Maximum reasoning tokens"
+    )
+    structured_output_schema: Optional[Dict[str, Any]] = Route.structured_output(
+        description="JSON schema for structured output validation"
+    )
+    reasoning_effort: Optional[str] = Route.adapter(
+        default="high", description="Controls reasoning effort (low/medium/high)"
     )
 
 
@@ -225,6 +237,9 @@ class ChatWithGPT4_1(ToolSpec):
     # Optional parameters with defaults
     attachments: Optional[List[str]] = Route.vector_store(
         description="Files for vector store (RAG)"
+    )
+    structured_output_schema: Optional[Dict[str, Any]] = Route.structured_output(
+        description="JSON schema for structured output validation"
     )
     temperature: Optional[float] = Route.adapter(
         default=0.2, description="Sampling temperature"
