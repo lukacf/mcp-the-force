@@ -47,6 +47,18 @@ class VertexAdapter(BaseAdapter):
             "Deep multimodal reasoner" if "pro" in model else "Flash summary sprinter"
         )
 
+    def _extract_text_from_parts(self, parts: List[Any]) -> str:
+        """Extract text from response parts, handling both text and inline_data."""
+        response_text = ""
+        for part in parts:
+            if getattr(part, "text", None):
+                response_text += part.text
+            elif getattr(part, "inline_data", None):
+                # Handle JSON responses returned as inline_data
+                if part.inline_data.mime_type == "application/json":
+                    response_text += part.inline_data.data.decode("utf-8")
+        return response_text
+
     async def _generate_async(self, client, **kwargs):
         """Async wrapper for synchronous generate_content calls."""
         try:
@@ -180,9 +192,9 @@ class VertexAdapter(BaseAdapter):
         if response.candidates:
             for candidate in response.candidates:
                 if candidate.content and candidate.content.parts:
-                    for part in candidate.content.parts:
-                        if part.text:
-                            response_text += part.text
+                    response_text += self._extract_text_from_parts(
+                        candidate.content.parts
+                    )
 
         # Validate structured output if schema was provided
         if structured_output_schema:
@@ -228,10 +240,7 @@ class VertexAdapter(BaseAdapter):
             ]
             if not function_calls:
                 # No more function calls, extract final text
-                response_text = ""
-                for part in candidate.content.parts:
-                    if part.text:
-                        response_text += part.text
+                response_text = self._extract_text_from_parts(candidate.content.parts)
                 return response_text
 
             # Add model's response to conversation

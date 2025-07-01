@@ -196,7 +196,7 @@ class ChatWithO3Pro(ToolSpec):
     max_reasoning_tokens: Optional[int] = Route.adapter(
         default=None, description="Maximum reasoning tokens"
     )
-    structured_output_schema: Optional[Dict[str, Any]] = Route.structured_output(
+    structured_output_schema: Optional[Dict[str, Any]] = Route.structured_output(  # type: ignore[misc]
         description="JSON schema for structured output validation"
     )
     reasoning_effort: Optional[str] = Route.adapter(
