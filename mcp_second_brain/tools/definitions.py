@@ -42,6 +42,7 @@ class ChatWithGemini25Pro(ToolSpec):
 </context_information>"""
 
     # Parameters
+    # Required parameters first
     instructions: str = Route.prompt(
         pos=0, description="Task instructions for the model"
     )
@@ -51,6 +52,10 @@ class ChatWithGemini25Pro(ToolSpec):
     )
     session_id: str = Route.session(
         description="Session ID for multi-turn conversations"
+    )
+    # Optional parameters
+    attachments: Optional[List[str]] = Route.vector_store(
+        description="Files for vector store (RAG)"
     )
     temperature: Optional[float] = Route.adapter(
         default=0.2, description="Sampling temperature"
@@ -74,6 +79,7 @@ class ChatWithGemini25Flash(ToolSpec):
     timeout = 300
 
     # Parameters
+    # Required parameters first
     instructions: str = Route.prompt(
         pos=0, description="Task instructions for the model"
     )
@@ -83,6 +89,10 @@ class ChatWithGemini25Flash(ToolSpec):
     )
     session_id: str = Route.session(
         description="Session ID for multi-turn conversations"
+    )
+    # Optional parameters
+    attachments: Optional[List[str]] = Route.vector_store(
+        description="Files for vector store (RAG)"
     )
     temperature: Optional[float] = Route.adapter(
         default=0.3, description="Sampling temperature"
