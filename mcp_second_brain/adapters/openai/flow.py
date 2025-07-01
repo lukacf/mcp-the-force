@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import random
+import json
 from abc import ABC, abstractmethod
 from typing import Dict, Any, List, Set
 from dataclasses import dataclass
@@ -23,6 +24,8 @@ from .constants import (
 )
 from ..memory_search_declaration import create_search_memory_declaration_openai
 from ..attachment_search_declaration import create_attachment_search_declaration_openai
+from ...utils.validation import validate_json_schema
+from jsonschema import ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +60,10 @@ class BaseFlowStrategy(ABC):
 
     def _build_tools_list(self) -> List[Dict[str, Any]]:
         """Build the tools list based on request and model capabilities."""
+        import logging
+
+        logger = logging.getLogger(__name__)
+
         tools = []
 
         capability = model_capabilities.get(self.context.request.model)
@@ -67,6 +74,9 @@ class BaseFlowStrategy(ABC):
             tools.append(create_search_memory_declaration_openai())
 
             # Add attachment search if vector stores provided
+            logger.info(
+                f"{self.context.request.model}: vector_store_ids={self.context.request.vector_store_ids}"
+            )
             if self.context.request.vector_store_ids:
                 tools.append(create_attachment_search_declaration_openai())
 
@@ -152,6 +162,32 @@ class BaseFlowStrategy(ABC):
         if not hasattr(response, "output") or not response.output:
             return []
         return list(response.output)
+
+    def _validate_structured_output(self, content: str) -> None:
+        """Validate content against structured output schema if provided."""
+        if not self.context.request.structured_output_schema:
+            return
+
+        try:
+            # Parse JSON
+            parsed_json = json.loads(content)
+            # Validate against schema
+            validate_json_schema(
+                parsed_json, self.context.request.structured_output_schema
+            )
+            logger.info("Structured output validated successfully.")
+        except json.JSONDecodeError as e:
+            logger.error(f"Structured output JSON parse failed: {e}")
+            raise AdapterException(
+                category=ErrorCategory.PARSING,
+                message=f"Structured output validation failed: Invalid JSON. Error: {e}",
+            )
+        except ValidationError as e:
+            logger.error(f"Structured output schema validation failed: {e}")
+            raise AdapterException(
+                category=ErrorCategory.PARSING,
+                message=f"Structured output validation failed: {e.message}",
+            )
 
     async def _handle_function_calls(
         self,
@@ -255,6 +291,9 @@ class BackgroundFlowStrategy(BaseFlowStrategy):
                     function_calls, response_id, all_output_items
                 )
 
+            # Validate structured output
+            self._validate_structured_output(content)
+
             immediate_result: Dict[str, Any] = {
                 "content": content,
                 "response_id": response_id,
@@ -298,6 +337,9 @@ class BackgroundFlowStrategy(BaseFlowStrategy):
                     return await self._handle_function_calls(
                         function_calls, response_id, all_output_items
                     )
+
+                # Validate structured output
+                self._validate_structured_output(content)
 
                 # Return final result
                 polled_result: Dict[str, Any] = {
@@ -442,6 +484,9 @@ class StreamingFlowStrategy(BaseFlowStrategy):
             return await self._handle_function_calls(
                 function_calls, response_id or "", all_output_items
             )
+
+        # Validate structured output
+        self._validate_structured_output(content)
 
         # Return result
         logger.info(

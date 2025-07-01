@@ -119,9 +119,13 @@ class ToolExecutor:
                 from ..utils.fs import gather_file_paths
 
                 files = gather_file_paths(vector_store_param)
+                logger.info(f"Gathered {len(files)} files from attachments: {files}")
                 if files:
                     vs_id = await self.vector_store_manager.create(files)
                     vector_store_ids = [vs_id] if vs_id else None
+                    logger.info(
+                        f"Created vector store {vs_id}, vector_store_ids={vector_store_ids}"
+                    )
 
             # Memory stores are no longer auto-attached
             # Models should use search_project_memory function to access memory
@@ -167,6 +171,11 @@ class ToolExecutor:
                 adapter_params["messages"] = gemini_messages + [
                     {"role": "user", "content": prompt}
                 ]
+
+            # Merge structured_output parameters into adapter params
+            structured_output_params = routed_params.get("structured_output", {})
+            assert isinstance(structured_output_params, dict)
+            adapter_params.update(structured_output_params)
 
             explicit_vs_ids = routed_params.get("vector_store_ids")
             assert isinstance(explicit_vs_ids, list)

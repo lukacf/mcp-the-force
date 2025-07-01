@@ -339,6 +339,58 @@ result = await mcp.call_tool(
 - Same TTL and expiration as OpenAI models
 - Required `session_id` parameter for all Gemini tools
 
+## 📋 Structured Output Support (NEW)
+
+All chat tools now support structured JSON output through the `structured_output_schema` parameter. This ensures consistent, parseable responses for automation and testing.
+
+### Basic Usage
+
+```python
+# Request structured output with a JSON schema
+result = await mcp.call_tool(
+    "chat_with_gpt4_1",
+    instructions="Analyze this code for potential bugs",
+    output_format="JSON with bug list and severity",
+    context=["/src/main.py"],
+    structured_output_schema={
+        "type": "object",
+        "properties": {
+            "bugs": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "line": {"type": "integer"},
+                        "description": {"type": "string"},
+                        "severity": {"type": "string", "enum": ["low", "medium", "high"]}
+                    },
+                    "required": ["line", "description", "severity"]
+                }
+            },
+            "summary": {"type": "string"}
+        },
+        "required": ["bugs", "summary"]
+    }
+)
+
+# Response will be valid JSON matching the schema
+bugs_data = json.loads(result)
+for bug in bugs_data["bugs"]:
+    print(f"Line {bug['line']}: {bug['description']} (Severity: {bug['severity']})")
+```
+
+### Supported Models
+
+- **OpenAI Models** (o3, o3-pro, gpt-4.1): Uses the Responses API `text.format.json_schema`
+- **Gemini Models** (2.5-pro, 2.5-flash): Uses `response_schema` with OpenAPI subset
+
+### Benefits
+
+- ✅ **Guaranteed Structure**: Models must return valid JSON matching your schema
+- ✅ **Type Safety**: Enforce specific data types and formats
+- ✅ **Validation**: Automatic validation against the schema
+- ✅ **E2E Testing**: Reduce test flakiness with predictable outputs
+
 ### Vector Store Management
 
 Create persistent vector stores for RAG:
