@@ -41,7 +41,7 @@ claude mcp add-json second-brain "$(cat <<EOF
     "GOOGLE_APPLICATION_CREDENTIALS": "${GOOGLE_APPLICATION_CREDENTIALS}",
     "MCP_ADAPTER_MOCK": "0",
     "MEMORY_ENABLED": "true",
-    "SESSION_DB_PATH": "/tmp/e2e_sessions.sqlite3"
+    "SESSION_DB_PATH": "${SESSION_DB_PATH:-/tmp/e2e_sessions.sqlite3}"
   },
   "timeoutMs": 180000
 }

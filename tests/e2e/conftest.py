@@ -8,6 +8,11 @@ from pathlib import Path
 import asyncio
 from typing import List
 
+# Set unique SESSION_DB_PATH per pytest-xdist worker to avoid SQLite locking
+# This must be done before any imports that might use SessionCache
+worker_id = os.environ.get("PYTEST_XDIST_WORKER", "gw0")
+os.environ["SESSION_DB_PATH"] = f"/tmp/e2e_sessions_{worker_id}.sqlite3"
+
 # Cost guards removed - no longer needed
 
 # Skip E2E tests if not explicitly enabled
