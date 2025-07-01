@@ -187,6 +187,10 @@ class BaseFlowStrategy(ABC):
         if self.context.request.reasoning_effort:
             follow_up_params["reasoning_effort"] = self.context.request.reasoning_effort
 
+        # Preserve vector_store_ids for attachment search
+        if self.context.request.vector_store_ids:
+            follow_up_params["vector_store_ids"] = self.context.request.vector_store_ids
+
         # Execute follow-up with appropriate strategy
         follow_up_request = OpenAIRequest(**follow_up_params)
         follow_up_context = FlowContext(
