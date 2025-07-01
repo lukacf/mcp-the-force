@@ -154,7 +154,7 @@ class VertexAdapter(BaseAdapter):
         # Handle function calls if any
         if response.candidates and function_declarations:
             result = await self._handle_function_calls(
-                response, contents, generate_content_config
+                response, contents, generate_content_config, vector_store_ids
             )
             if return_debug:
                 return {"content": result, "_debug_tools": function_declarations}
@@ -178,6 +178,7 @@ class VertexAdapter(BaseAdapter):
         response: Any,
         contents: List[types.Content],
         config: types.GenerateContentConfig,
+        vector_store_ids: Optional[List[str]] = None,
     ) -> str:
         """Handle function calls in the response."""
         client = get_client()
@@ -254,6 +255,7 @@ class VertexAdapter(BaseAdapter):
                             prompt=query,
                             query=query,
                             max_results=max_results,
+                            vector_store_ids=vector_store_ids,
                         )
 
                         # Create function response
