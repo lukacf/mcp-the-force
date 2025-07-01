@@ -1,13 +1,12 @@
 from __future__ import annotations
-from pathlib import Path
 from typing import List, Tuple, Optional, Any
 from lxml import etree as ET
 import time
 import logging
 from ..config import get_settings
-from .token_counter import count_tokens
 from .fs import gather_file_paths
 from ..adapters.model_registry import get_model_context_window
+from .context_loader import load_text_files
 
 logger = logging.getLogger(__name__)
 
@@ -71,24 +70,21 @@ def build_prompt(
     # For large context models, try to inline everything
     all_files = ctx_files + [f for f in extras if f not in ctx_files]
 
+    # Use the shared context loader to get file contents and token counts
+    file_data = load_text_files(all_files)
+
+    for file_path, content, token_count in file_data:
+        if used + token_count <= max_tokens:
+            inline_elements.append(_create_file_element(file_path, content))
+            used += token_count
+        else:
+            # Only use vector store if we exceed model's context limit
+            attachments.append(file_path)
+
+    # Also add any files that couldn't be loaded
+    loaded_paths = {item[0] for item in file_data}
     for f in all_files:
-        try:
-            txt = Path(f).read_text(encoding="utf-8", errors="ignore")
-            # Remove NULL bytes which are not allowed in XML
-            if "\x00" in txt:
-                txt = txt.replace("\x00", "")
-                logger.debug(f"Removed NULL bytes from {f}")
-
-            tok = count_tokens([txt])
-
-            if used + tok <= max_tokens:
-                inline_elements.append(_create_file_element(f, txt))
-                used += tok
-            else:
-                # Only use vector store if we exceed model's context limit
-                attachments.append(f)
-        except Exception as e:
-            logger.warning(f"Error reading file {f}: {e}")
+        if f not in loaded_paths:
             attachments.append(f)
 
     logger.info(
