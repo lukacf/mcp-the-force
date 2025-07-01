@@ -67,23 +67,29 @@ class TestBasicMCP:
                 # If not JSON, just verify we got a response
                 assert len(result[0].text) > 0
 
-    async def test_vector_store_callable(self, mcp_server):
-        """Test vector store tool."""
+    async def test_count_project_tokens_callable(self, mcp_server):
+        """Test count_project_tokens tool."""
         from fastmcp import Client
         from fastmcp.client import FastMCPTransport
 
         transport = FastMCPTransport(mcp_server)
         async with Client(transport) as client:
+            # Use the current directory (should be the project root during tests)
             result = await client.call_tool(
-                "create_vector_store_tool", {"files": ["/tmp/test.txt"]}
+                "count_project_tokens", {"items": ["pyproject.toml"]}
             )
 
-            # This tool also returns a list
+            # This tool returns a dict
             assert isinstance(result, list)
             assert len(result) == 1
 
             data = json.loads(result[0].text)
-            assert "vector_store_id" in data
+            assert "total_tokens" in data
+            assert "per_file" in data
+            assert isinstance(data["total_tokens"], int)
+            assert data["total_tokens"] > 0
+            # Check that pyproject.toml is in the results
+            assert any("pyproject.toml" in path for path in data["per_file"])
 
     async def test_search_project_memory_callable(self, mcp_server, mock_env):
         """Test search_project_memory tool via MCP."""

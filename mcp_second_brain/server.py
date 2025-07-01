@@ -14,7 +14,7 @@ from .tools import search_memory  # noqa: F401 # Import search_project_memory to
 from .tools.integration import (
     register_all_tools,
     create_list_models_tool,
-    create_vector_store_tool,
+    create_count_project_tokens_tool,
 )
 
 # Set up logging
@@ -59,7 +59,8 @@ register_all_tools(mcp)
 
 # Register utility tools
 create_list_models_tool(mcp)
-create_vector_store_tool(mcp)
+create_count_project_tokens_tool(mcp)
+# Note: create_vector_store_tool is intentionally not registered to hide it from MCP clients
 
 logger.info("MCP Second-Brain server initialized with dataclass-based tools")
 
