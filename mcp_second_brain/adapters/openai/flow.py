@@ -227,6 +227,12 @@ class BaseFlowStrategy(ABC):
         if self.context.request.vector_store_ids:
             follow_up_params["vector_store_ids"] = self.context.request.vector_store_ids
 
+        # Preserve structured_output_schema for JSON responses
+        if self.context.request.structured_output_schema:
+            follow_up_params["structured_output_schema"] = (
+                self.context.request.structured_output_schema
+            )
+
         # Execute follow-up with appropriate strategy
         follow_up_request = OpenAIRequest(**follow_up_params)
         follow_up_context = FlowContext(
