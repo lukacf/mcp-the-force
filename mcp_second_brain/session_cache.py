@@ -10,17 +10,13 @@ from mcp_second_brain.sqlite_base_cache import BaseSQLiteCache
 
 logger = logging.getLogger(__name__)
 
-# Get configuration from centralized settings
-_settings = get_settings()
-_DEFAULT_TTL = _settings.session_ttl_seconds
-_DB_PATH = _settings.session_db_path
-_PURGE_PROB = _settings.session_cleanup_probability
+# Configuration will be read lazily to support test isolation
 
 
 class _SQLiteSessionCache(BaseSQLiteCache):
     """SQLite-backed session cache for persistent storage."""
 
-    def __init__(self, db_path: str = _DB_PATH, ttl: int = _DEFAULT_TTL):
+    def __init__(self, db_path: str, ttl: int):
         create_table_sql = """CREATE TABLE IF NOT EXISTS sessions(
             session_id  TEXT PRIMARY KEY,
             response_id TEXT NOT NULL,
@@ -31,7 +27,7 @@ class _SQLiteSessionCache(BaseSQLiteCache):
             ttl=ttl,
             table_name="sessions",
             create_table_sql=create_table_sql,
-            purge_probability=_PURGE_PROB,
+            purge_probability=get_settings().session_cleanup_probability,
         )
 
     async def get_response_id(self, session_id: str) -> Optional[str]:
@@ -83,7 +79,9 @@ class _SQLiteSessionCache(BaseSQLiteCache):
 class _InMemorySessionCache:
     """Original in-memory implementation as fallback."""
 
-    def __init__(self, ttl=_DEFAULT_TTL):
+    def __init__(self, ttl=None):
+        if ttl is None:
+            ttl = get_settings().session_ttl_seconds
         self._data = {}
         self.ttl = ttl
         self._lock = threading.RLock()
@@ -126,13 +124,33 @@ class _InMemorySessionCache:
 
 
 # Factory pattern - SQLite is required for persistent session state
-try:
-    _instance = _SQLiteSessionCache()
-    logger.info(f"Successfully initialized SQLite session cache at {_DB_PATH}")
-except Exception as exc:
-    # Log a critical error and re-raise
-    logger.critical(f"Failed to initialize persistent SQLite session cache: {exc}")
-    raise RuntimeError(f"Could not initialize session cache: {exc}") from exc
+# Use lazy initialization to support test isolation
+_instance: Optional[_SQLiteSessionCache] = None
+_instance_lock = threading.Lock()
+
+
+def _get_instance() -> _SQLiteSessionCache:
+    global _instance
+    with _instance_lock:
+        if _instance is None:
+            # Re-read settings to get current DB path
+            settings = get_settings()
+            db_path = settings.session_db_path
+            ttl = settings.session_ttl_seconds
+            try:
+                _instance = _SQLiteSessionCache(db_path=db_path, ttl=ttl)
+                logger.info(
+                    f"Successfully initialized SQLite session cache at {db_path}"
+                )
+            except Exception as exc:
+                # Log a critical error and re-raise
+                logger.critical(
+                    f"Failed to initialize persistent SQLite session cache: {exc}"
+                )
+                raise RuntimeError(
+                    f"Could not initialize session cache: {exc}"
+                ) from exc
+        return _instance
 
 
 class SessionCache:
@@ -141,16 +159,21 @@ class SessionCache:
     @staticmethod
     async def get_response_id(session_id: str) -> Optional[str]:
         """Get response ID asynchronously."""
-        return await _instance.get_response_id(session_id)
+        result = await _get_instance().get_response_id(session_id)
+        return result
 
     @staticmethod
     async def set_response_id(session_id: str, response_id: str) -> None:
         """Set response ID asynchronously."""
-        await _instance.set_response_id(session_id, response_id)
+        await _get_instance().set_response_id(session_id, response_id)
 
     @staticmethod
     def close():
-        return _instance.close()
+        global _instance
+        with _instance_lock:
+            if _instance is not None:
+                _instance.close()
+                _instance = None
 
 
 # Global session cache instance for backward compatibility

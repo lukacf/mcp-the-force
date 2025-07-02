@@ -1,7 +1,8 @@
 import time
 import json
 import logging
-from typing import List, Dict
+import threading
+from typing import List, Dict, Optional
 import os
 import tempfile
 
@@ -10,17 +11,14 @@ from mcp_second_brain.sqlite_base_cache import BaseSQLiteCache
 
 logger = logging.getLogger(__name__)
 
-_settings = get_settings()
-_DEFAULT_TTL = _settings.session_ttl_seconds
-_DB_PATH = _settings.session_db_path
-_PURGE_PROB = _settings.session_cleanup_probability
+# Configuration will be read lazily to support test isolation
 
 
 class _SQLiteGeminiSessionCache(BaseSQLiteCache):
     """SQLite-backed store for Gemini conversation history."""
 
-    def __init__(self, db_path: str = _DB_PATH, ttl: int = _DEFAULT_TTL):
-        if os.getenv("MCP_ADAPTER_MOCK") == "1" and db_path == _DB_PATH:
+    def __init__(self, db_path: str, ttl: int):
+        if os.getenv("MCP_ADAPTER_MOCK") == "1":
             tmp = tempfile.NamedTemporaryFile(suffix=".sqlite3", delete=False)
             db_path = tmp.name
             tmp.close()
@@ -35,7 +33,7 @@ class _SQLiteGeminiSessionCache(BaseSQLiteCache):
             ttl=ttl,
             table_name="gemini_sessions",
             create_table_sql=create_table_sql,
-            purge_probability=_PURGE_PROB,
+            purge_probability=get_settings().session_cleanup_probability,
         )
 
     async def get_messages(self, session_id: str) -> List[Dict[str, str]]:
@@ -103,12 +101,28 @@ class _SQLiteGeminiSessionCache(BaseSQLiteCache):
         await self._probabilistic_cleanup()
 
 
-try:
-    _instance = _SQLiteGeminiSessionCache()
-    logger.info(f"Initialized Gemini session cache at {_DB_PATH}")
-except Exception as exc:
-    logger.critical(f"Failed to initialize Gemini session cache: {exc}")
-    raise RuntimeError(f"Could not initialize Gemini session cache: {exc}") from exc
+# Use lazy initialization to support test isolation
+_instance: Optional[_SQLiteGeminiSessionCache] = None
+_instance_lock = threading.Lock()
+
+
+def _get_instance() -> _SQLiteGeminiSessionCache:
+    global _instance
+    with _instance_lock:
+        if _instance is None:
+            # Re-read settings to get current DB path
+            settings = get_settings()
+            db_path = settings.session_db_path
+            ttl = settings.session_ttl_seconds
+            try:
+                _instance = _SQLiteGeminiSessionCache(db_path=db_path, ttl=ttl)
+                logger.info(f"Initialized Gemini session cache at {db_path}")
+            except Exception as exc:
+                logger.critical(f"Failed to initialize Gemini session cache: {exc}")
+                raise RuntimeError(
+                    f"Could not initialize Gemini session cache: {exc}"
+                ) from exc
+        return _instance
 
 
 class GeminiSessionCache:
@@ -116,17 +130,22 @@ class GeminiSessionCache:
 
     @staticmethod
     async def get_messages(session_id: str) -> List[Dict[str, str]]:
-        return await _instance.get_messages(session_id)
+        result = await _get_instance().get_messages(session_id)
+        return result
 
     @staticmethod
     async def append_exchange(
         session_id: str, user_msg: str, assistant_msg: str
     ) -> None:
-        await _instance.append_exchange(session_id, user_msg, assistant_msg)
+        await _get_instance().append_exchange(session_id, user_msg, assistant_msg)
 
     @staticmethod
     def close() -> None:
-        return _instance.close()
+        global _instance
+        with _instance_lock:
+            if _instance is not None:
+                _instance.close()
+                _instance = None
 
 
 # Global instance for convenience
