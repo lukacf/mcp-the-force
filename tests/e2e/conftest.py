@@ -1,6 +1,8 @@
 """E2E test configuration and fixtures."""
 
 import os
+import json
+import tempfile
 import pytest
 import subprocess
 import shlex
@@ -8,10 +10,55 @@ from pathlib import Path
 import asyncio
 from typing import List
 
-# Set unique SESSION_DB_PATH per pytest-xdist worker to avoid SQLite locking
-# This must be done before any imports that might use SessionCache
+# ---------------------------------------------------------------------------
+# Isolate every pytest-xdist worker
+# ---------------------------------------------------------------------------
 worker_id = os.environ.get("PYTEST_XDIST_WORKER", "gw0")
+
+# unique SQLite DB so the MCP server instances never share the file
 os.environ["SESSION_DB_PATH"] = f"/tmp/e2e_sessions_{worker_id}.sqlite3"
+
+# unique HOME => unique ~/.claude.json
+_isolated_home = Path(tempfile.gettempdir()) / f"claude_home_{worker_id}"
+_isolated_home.mkdir(parents=True, exist_ok=True)
+os.environ["HOME"] = str(_isolated_home)  # ← this is what Claude uses
+
+# build the tool definition once per worker (idempotent)
+_config = _isolated_home / ".claude.json"
+if not _config.exists():
+    # Create skeleton settings to prevent onboarding
+    _config.write_text(json.dumps({"hasCompletedOnboarding": True}))
+
+    # Create MCP config
+    _claude_dir = _isolated_home / ".config" / "claude"
+    _claude_dir.mkdir(parents=True, exist_ok=True)
+
+    tool_spec = {
+        "mcpServers": {
+            "second-brain": {
+                "command": "uv",
+                "args": ["run", "--", "mcp-second-brain"],
+                "env": {
+                    "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY", ""),
+                    "VERTEX_PROJECT": os.getenv("VERTEX_PROJECT", ""),
+                    "VERTEX_LOCATION": os.getenv("VERTEX_LOCATION", ""),
+                    "GOOGLE_APPLICATION_CREDENTIALS": os.getenv(
+                        "GOOGLE_APPLICATION_CREDENTIALS", ""
+                    ),
+                    "MCP_ADAPTER_MOCK": "0",
+                    "MEMORY_ENABLED": "true",
+                    "SESSION_DB_PATH": os.environ["SESSION_DB_PATH"],
+                },
+                "timeoutMs": 180000,
+            }
+        }
+    }
+
+    # Write config atomically
+    mcp_config = _claude_dir / "config.json"
+    tmp = mcp_config.with_suffix(".tmp")
+    tmp.write_text(json.dumps(tool_spec, indent=2))
+    tmp.replace(mcp_config)
 
 # Cost guards removed - no longer needed
 
@@ -26,23 +73,8 @@ for var in REQUIRED_ENV_VARS:
         pytest.skip(f"Skipping E2E tests - {var} not set", allow_module_level=True)
 
 
-@pytest.fixture(scope="session")
-def claude_config_path(tmp_path_factory):
-    """Create Claude config in a temp directory."""
-    xdg_config_home = tmp_path_factory.mktemp("config")
-    claude_dir = xdg_config_home / "claude"
-    claude_dir.mkdir()
-
-    # Copy config template
-    template_path = Path(__file__).parent / "claude-config.json"
-    config_file = claude_dir / "config.json"
-    config_file.write_text(template_path.read_text())
-
-    return xdg_config_home
-
-
 @pytest.fixture
-def claude_code(claude_config_path):
+def claude_code():
     """Helper to run Claude Code commands."""
 
     def run_command(
@@ -54,11 +86,9 @@ def claude_code(claude_config_path):
         )
         cmd = f"claude -p --dangerously-skip-permissions {format_flag} {shlex.quote(prompt)}"
 
-        env = os.environ.copy()
-        env["XDG_CONFIG_HOME"] = str(claude_config_path)
-
+        # Each worker already has its own $HOME; no other isolation needed
         result = subprocess.run(
-            cmd, shell=True, capture_output=True, text=True, timeout=timeout, env=env
+            cmd, shell=True, capture_output=True, text=True, timeout=timeout
         )
 
         if result.returncode != 0:
