@@ -21,7 +21,8 @@ class ChatWithGemini25Pro(ToolSpec):
     - instructions: "Analyze this codebase architecture and identify potential performance bottlenecks"
     - output_format: "Provide a structured analysis with: 1) Architecture overview 2) Identified bottlenecks 3) Recommendations"
     - context: ["/project/src", "/project/tests"]
-    - temperature: 0.2 (default, for consistent analysis)"""
+    - temperature: 1.0 (default, neutral for Gemini)
+    - reasoning_effort: "medium" (default, increase to "high" for complex analysis)"""
 
     model_name = "gemini-2.5-pro"
     adapter_class = "vertex"
@@ -61,7 +62,11 @@ class ChatWithGemini25Pro(ToolSpec):
         description="JSON schema for structured output validation. For OpenAI models: requires strict validation with 'additionalProperties: false' at every object level and all properties with constraints (minimum, maximum, enum, pattern) must be listed in 'required'"
     )
     temperature: Optional[float] = Route.adapter(
-        default=0.2, description="Sampling temperature"
+        default=1.0, description="Sampling temperature (0.0-2.0 for Gemini)"
+    )
+    reasoning_effort: Optional[str] = Route.adapter(
+        default="medium",
+        description="Controls reasoning effort (low/medium/high) - maps to thinking_budget internally",
     )
 
 
@@ -101,7 +106,11 @@ class ChatWithGemini25Flash(ToolSpec):
         description="JSON schema for structured output validation. For OpenAI models: requires strict validation with 'additionalProperties: false' at every object level and all properties with constraints (minimum, maximum, enum, pattern) must be listed in 'required'"
     )
     temperature: Optional[float] = Route.adapter(
-        default=0.3, description="Sampling temperature"
+        default=1.0, description="Sampling temperature (0.0-2.0 for Gemini)"
+    )
+    reasoning_effort: Optional[str] = Route.adapter(
+        default="low",
+        description="Controls reasoning effort (low/medium/high) - maps to thinking_budget internally",
     )
 
 
