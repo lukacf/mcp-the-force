@@ -2,7 +2,7 @@
 
 import pytest
 import json
-from json_utils import safe_json
+from .json_utils import safe_json
 
 pytestmark = pytest.mark.e2e
 

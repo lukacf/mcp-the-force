@@ -28,15 +28,28 @@ for var in REQUIRED_ENV_VARS:
 
 @pytest.fixture(scope="session")
 def claude_config_path(tmp_path_factory):
-    """Create Claude config in a temp directory."""
-    xdg_config_home = tmp_path_factory.mktemp("config")
+    """
+    Create an *isolated* Claude config dir for **this worker only**
+    and point the CLI at it via XDG_CONFIG_HOME. Each xdist worker
+    receives its own path so there is no cross-process contention.
+    """
+    # Use worker_id to ensure each xdist worker gets its own config directory
+    worker_id = os.environ.get("PYTEST_XDIST_WORKER", "gw0")
+    xdg_config_home = tmp_path_factory.mktemp(f"claude_cfg_{worker_id}")
     claude_dir = xdg_config_home / "claude"
-    claude_dir.mkdir()
+    claude_dir.mkdir(parents=True, exist_ok=True)
 
     # Copy config template
     template_path = Path(__file__).parent / "claude-config.json"
     config_file = claude_dir / "config.json"
     config_file.write_text(template_path.read_text())
+
+    # Make every future subprocess (even ones created before fixtures
+    # are evaluated) use this directory.
+    os.environ["XDG_CONFIG_HOME"] = str(xdg_config_home)
+
+    # Disable auto-updates to prevent background writes to config
+    os.environ["CLAUDE_DISABLE_AUTO_UPDATE"] = "1"
 
     return xdg_config_home
 
@@ -54,8 +67,7 @@ def claude_code(claude_config_path):
         )
         cmd = f"claude -p --dangerously-skip-permissions {format_flag} {shlex.quote(prompt)}"
 
-        env = os.environ.copy()
-        env["XDG_CONFIG_HOME"] = str(claude_config_path)
+        env = os.environ.copy()  # already contains XDG_CONFIG_HOME
 
         result = subprocess.run(
             cmd, shell=True, capture_output=True, text=True, timeout=timeout, env=env
