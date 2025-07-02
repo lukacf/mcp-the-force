@@ -180,10 +180,12 @@ class VertexAdapter(BaseAdapter):
         if system_instruction:
             config_kwargs["system_instruction"] = system_instruction
 
+        # Get model capability once
+        capability = model_capabilities.get(self.model_name)
+
         # Add thinking config for models that support it
         # Map reasoning_effort to max_reasoning_tokens if not explicitly set
         if reasoning_effort and not max_reasoning_tokens:
-            capability = model_capabilities.get(self.model_name)
             if capability and capability.supports_thinking_budget:
                 # Use the reasoning map from the model's capability
                 max_reasoning_tokens = capability.reasoning_effort_map.get(
@@ -203,9 +205,7 @@ class VertexAdapter(BaseAdapter):
                 )
 
         # Add thinking config for models that support reasoning
-        if (
-            "pro" in self.model_name or "flash" in self.model_name
-        ) and max_reasoning_tokens:
+        if capability and capability.supports_thinking_budget and max_reasoning_tokens:
             config_kwargs["thinking_config"] = types.ThinkingConfig(
                 thinking_budget=max_reasoning_tokens if max_reasoning_tokens > 0 else -1
             )
