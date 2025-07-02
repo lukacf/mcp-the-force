@@ -29,6 +29,9 @@ elif [ -n "$GOOGLE_APPLICATION_CREDENTIALS_JSON" ]; then
     export GOOGLE_APPLICATION_CREDENTIALS="/tmp/service-account.json"
 fi
 
+# Remove existing second-brain config if it exists
+claude mcp remove second-brain 2>/dev/null || true
+
 # Create Claude Code config at runtime with actual environment variables
 claude mcp add-json second-brain "$(cat <<EOF
 {

@@ -27,8 +27,15 @@ ORDERED_TESTS = [
 
 def main():
     """Run tests in order."""
+    # Filter out duplicate pytest arguments
+    extra_args = []
+    for arg in sys.argv[1:]:
+        # Skip pytest command itself and test paths
+        if arg not in ["pytest", "tests/e2e"] and not arg.startswith("tests/e2e/"):
+            extra_args.append(arg)
+
     # Build pytest command
-    cmd = ["pytest", "-xv"] + sys.argv[1:] + ORDERED_TESTS
+    cmd = ["pytest", "-xv"] + extra_args + ORDERED_TESTS
 
     print(f"Running: {' '.join(cmd)}")
     result = subprocess.run(cmd)
