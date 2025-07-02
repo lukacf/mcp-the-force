@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 env:
-  PYTHON_VERSION: "3.11"
+  PYTHON_VERSION: "3.12"
   MCP_ADAPTER_MOCK: "1"  # Set globally to ensure all Python processes see it
 
 jobs:
@@ -34,25 +34,22 @@ jobs:
 
   unit-tests:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.10", "3.11", "3.12"]
     
     steps:
       - uses: actions/checkout@v4
       
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: ${{ env.PYTHON_VERSION }}
       
       - name: Cache dependencies
         uses: actions/cache@v4
         with:
           path: ~/.cache/uv
-          key: ${{ runner.os }}-uv-${{ matrix.python-version }}-${{ hashFiles('pyproject.toml') }}
+          key: ${{ runner.os }}-uv-py312-${{ hashFiles('pyproject.toml') }}
           restore-keys: |
-            ${{ runner.os }}-uv-${{ matrix.python-version }}-
+            ${{ runner.os }}-uv-py312-
       
       - name: Install dependencies
         run: |
@@ -66,8 +63,8 @@ jobs:
         uses: codecov/codecov-action@v4
         with:
           file: ./coverage.xml
-          flags: unit,py${{ matrix.python-version }}
-          name: coverage-py${{ matrix.python-version }}
+          flags: unit,py312
+          name: coverage-py312
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
 
