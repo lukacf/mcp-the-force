@@ -19,9 +19,9 @@ def get_model_context_window(model: str) -> int:
 
     # Try Vertex/Gemini models
     from .vertex.models import get_context_window as get_vertex_window
-    from .vertex.models import model_context_windows
+    from .vertex.models import model_capabilities as vertex_capabilities
 
-    if model in model_context_windows:
+    if model in vertex_capabilities:
         return get_vertex_window(model)
 
     # Conservative fallback for unknown models

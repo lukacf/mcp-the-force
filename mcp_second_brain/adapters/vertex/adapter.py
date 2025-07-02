@@ -12,6 +12,7 @@ from ..memory_search_declaration import create_search_memory_declaration_gemini
 from ..attachment_search_declaration import create_attachment_search_declaration_gemini
 from ...utils.validation import validate_json_schema
 from jsonschema import ValidationError
+from .models import model_capabilities
 
 logger = logging.getLogger(__name__)
 
@@ -42,10 +43,27 @@ def get_client():
 class VertexAdapter(BaseAdapter):
     def __init__(self, model: str):
         self.model_name = model
-        self.context_window = 2_000_000  # Gemini 2.5 supports up to 2M tokens
-        self.description_snippet = (
-            "Deep multimodal reasoner" if "pro" in model else "Flash summary sprinter"
-        )
+
+        # Load model capabilities
+        capability = model_capabilities.get(self.model_name)
+        if capability:
+            self.context_window = capability.context_window
+            self.description_snippet = (
+                f"Gemini {self.model_name}: "
+                f"{capability.context_window:,} token context, "
+                f"{capability.max_thinking_budget:,} thinking budget"
+            )
+        else:
+            # Fallback for unknown models
+            logger.warning(
+                f"Model '{self.model_name}' capabilities not found, using defaults"
+            )
+            self.context_window = 2_000_000
+            self.description_snippet = (
+                "Deep multimodal reasoner"
+                if "pro" in model
+                else "Flash summary sprinter"
+            )
 
     def _extract_text_from_parts(self, parts: List[Any]) -> str:
         """Extract text from response parts, handling both text and inline_data."""
@@ -71,6 +89,7 @@ class VertexAdapter(BaseAdapter):
         prompt: str,
         vector_store_ids: List[str] | None = None,
         max_reasoning_tokens: int | None = None,
+        reasoning_effort: str | None = None,
         temperature: float | None = None,
         return_debug: bool = False,
         messages: Optional[List[Dict[str, str]]] = None,
@@ -161,8 +180,32 @@ class VertexAdapter(BaseAdapter):
         if system_instruction:
             config_kwargs["system_instruction"] = system_instruction
 
-        # Add thinking config for pro models
-        if "pro" in self.model_name and max_reasoning_tokens:
+        # Add thinking config for models that support it
+        # Map reasoning_effort to max_reasoning_tokens if not explicitly set
+        if reasoning_effort and not max_reasoning_tokens:
+            capability = model_capabilities.get(self.model_name)
+            if capability and capability.supports_thinking_budget:
+                # Use the reasoning map from the model's capability
+                max_reasoning_tokens = capability.reasoning_effort_map.get(
+                    reasoning_effort
+                )
+                if max_reasoning_tokens is None:
+                    logger.warning(
+                        f"Unknown reasoning_effort '{reasoning_effort}' for {self.model_name}. "
+                        f"Falling back to medium."
+                    )
+                    # Fallback to medium if an invalid effort is provided
+                    max_reasoning_tokens = capability.reasoning_effort_map.get("medium")
+            else:
+                logger.warning(
+                    f"Model {self.model_name} not found in capabilities or does not support thinking budget. "
+                    f"Cannot apply reasoning_effort."
+                )
+
+        # Add thinking config for models that support reasoning
+        if (
+            "pro" in self.model_name or "flash" in self.model_name
+        ) and max_reasoning_tokens:
             config_kwargs["thinking_config"] = types.ThinkingConfig(
                 thinking_budget=max_reasoning_tokens if max_reasoning_tokens > 0 else -1
             )
