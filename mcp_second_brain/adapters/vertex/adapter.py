@@ -2,6 +2,7 @@ from typing import Any, List, Optional, Dict
 import asyncio
 import logging
 import threading
+import json
 from google import genai
 from google.genai import types
 from google.genai.types import HarmCategory, HarmBlockThreshold
@@ -9,6 +10,8 @@ from ...config import get_settings
 from ..base import BaseAdapter
 from ..memory_search_declaration import create_search_memory_declaration_gemini
 from ..attachment_search_declaration import create_attachment_search_declaration_gemini
+from ...utils.validation import validate_json_schema
+from jsonschema import ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +47,18 @@ class VertexAdapter(BaseAdapter):
             "Deep multimodal reasoner" if "pro" in model else "Flash summary sprinter"
         )
 
+    def _extract_text_from_parts(self, parts: List[Any]) -> str:
+        """Extract text from response parts, handling both text and inline_data."""
+        response_text = ""
+        for part in parts:
+            if getattr(part, "text", None):
+                response_text += part.text
+            elif getattr(part, "inline_data", None):
+                # Handle JSON responses returned as inline_data
+                if part.inline_data.mime_type == "application/json":
+                    response_text += part.inline_data.data.decode("utf-8")
+        return response_text
+
     async def _generate_async(self, client, **kwargs):
         """Async wrapper for synchronous generate_content calls."""
         try:
@@ -60,6 +75,7 @@ class VertexAdapter(BaseAdapter):
         return_debug: bool = False,
         messages: Optional[List[Dict[str, str]]] = None,
         system_instruction: Optional[str] = None,
+        structured_output_schema: Optional[Dict[str, Any]] = None,
         **kwargs: Any,
     ) -> Any:
         self._ensure(prompt)
@@ -130,6 +146,17 @@ class VertexAdapter(BaseAdapter):
             "tools": tools,
         }
 
+        # Add response_schema for structured output
+        if structured_output_schema:
+            config_kwargs["response_schema"] = structured_output_schema
+            # Response schema requires JSON mime type
+            config_kwargs["response_mime_type"] = "application/json"
+            # Ensure the model is prompted for JSON when using response_schema
+            if not system_instruction:
+                system_instruction = "Your response must be a valid JSON object conforming to the provided schema."
+            else:
+                system_instruction += "\nYour response must be a valid JSON object conforming to the provided schema."
+
         # Add system instruction if provided
         if system_instruction:
             config_kwargs["system_instruction"] = system_instruction
@@ -154,7 +181,7 @@ class VertexAdapter(BaseAdapter):
         # Handle function calls if any
         if response.candidates and function_declarations:
             result = await self._handle_function_calls(
-                response, contents, generate_content_config
+                response, contents, generate_content_config, vector_store_ids
             )
             if return_debug:
                 return {"content": result, "_debug_tools": function_declarations}
@@ -165,9 +192,24 @@ class VertexAdapter(BaseAdapter):
         if response.candidates:
             for candidate in response.candidates:
                 if candidate.content and candidate.content.parts:
-                    for part in candidate.content.parts:
-                        if part.text:
-                            response_text += part.text
+                    response_text += self._extract_text_from_parts(
+                        candidate.content.parts
+                    )
+
+        # Validate structured output if schema was provided
+        if structured_output_schema:
+            try:
+                parsed_json = json.loads(response_text)
+                validate_json_schema(parsed_json, structured_output_schema)
+                logger.info("Structured output validated successfully.")
+            except json.JSONDecodeError as e:
+                logger.error(f"Structured output JSON parse failed: {e}")
+                raise Exception(
+                    f"Structured output validation failed: Invalid JSON. Error: {e}"
+                )
+            except ValidationError as e:
+                logger.error(f"Structured output schema validation failed: {e}")
+                raise Exception(f"Structured output validation failed: {e.message}")
 
         if return_debug:
             return {"content": response_text, "_debug_tools": function_declarations}
@@ -178,6 +220,7 @@ class VertexAdapter(BaseAdapter):
         response: Any,
         contents: List[types.Content],
         config: types.GenerateContentConfig,
+        vector_store_ids: Optional[List[str]] = None,
     ) -> str:
         """Handle function calls in the response."""
         client = get_client()
@@ -197,10 +240,7 @@ class VertexAdapter(BaseAdapter):
             ]
             if not function_calls:
                 # No more function calls, extract final text
-                response_text = ""
-                for part in candidate.content.parts:
-                    if part.text:
-                        response_text += part.text
+                response_text = self._extract_text_from_parts(candidate.content.parts)
                 return response_text
 
             # Add model's response to conversation
@@ -254,6 +294,7 @@ class VertexAdapter(BaseAdapter):
                             prompt=query,
                             query=query,
                             max_results=max_results,
+                            vector_store_ids=vector_store_ids,
                         )
 
                         # Create function response

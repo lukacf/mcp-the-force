@@ -26,12 +26,19 @@ class TestBasicMCP:
             # Call the tool
             result = await client.call_tool("list_models")
 
-            # list_models returns a list of TextContent objects
-            assert isinstance(result, list)
-            assert len(result) > 0
+            # FastMCP 2.10+ returns CallToolResult objects
+            assert hasattr(
+                result, "content"
+            ), "Expected CallToolResult with content attribute"
+            assert not result.is_error, "Tool call returned an error"
+
+            # Access the content list
+            content = result.content
+            assert isinstance(content, list)
+            assert len(content) > 0
 
             # Each item should be parseable as JSON
-            for item in result:
+            for item in content:
                 assert isinstance(item, TextContent)
                 model_data = json.loads(item.text)
                 assert "id" in model_data
@@ -54,18 +61,25 @@ class TestBasicMCP:
                 },
             )
 
-            # Tools return lists of TextContent
-            assert isinstance(result, list)
-            assert len(result) == 1
-            assert isinstance(result[0], TextContent)
+            # FastMCP 2.10+ returns CallToolResult objects
+            assert hasattr(
+                result, "content"
+            ), "Expected CallToolResult with content attribute"
+            assert not result.is_error, "Tool call returned an error"
+
+            # Access the content list
+            content = result.content
+            assert isinstance(content, list)
+            assert len(content) == 1
+            assert isinstance(content[0], TextContent)
 
             # Mock should return JSON (but handle if it doesn't)
             try:
-                data = json.loads(result[0].text)
+                data = json.loads(content[0].text)
                 assert data["model"] == "gemini-2.5-pro"
             except json.JSONDecodeError:
                 # If not JSON, just verify we got a response
-                assert len(result[0].text) > 0
+                assert len(content[0].text) > 0
 
     async def test_count_project_tokens_callable(self, mcp_server):
         """Test count_project_tokens tool."""
@@ -79,11 +93,18 @@ class TestBasicMCP:
                 "count_project_tokens", {"items": ["pyproject.toml"]}
             )
 
-            # This tool returns a dict
-            assert isinstance(result, list)
-            assert len(result) == 1
+            # FastMCP 2.10+ returns CallToolResult objects
+            assert hasattr(
+                result, "content"
+            ), "Expected CallToolResult with content attribute"
+            assert not result.is_error, "Tool call returned an error"
 
-            data = json.loads(result[0].text)
+            # Access the content list
+            content = result.content
+            assert isinstance(content, list)
+            assert len(content) == 1
+
+            data = json.loads(content[0].text)
             assert "total_tokens" in data
             assert "per_file" in data
             assert isinstance(data["total_tokens"], int)
@@ -100,6 +121,14 @@ class TestBasicMCP:
         async with Client(transport) as client:
             result = await client.call_tool("search_project_memory", {"query": "test"})
 
-            assert isinstance(result, list)
-            assert len(result) == 1
-            assert isinstance(result[0], TextContent)
+            # FastMCP 2.10+ returns CallToolResult objects
+            assert hasattr(
+                result, "content"
+            ), "Expected CallToolResult with content attribute"
+            assert not result.is_error, "Tool call returned an error"
+
+            # Access the content list
+            content = result.content
+            assert isinstance(content, list)
+            assert len(content) == 1
+            assert isinstance(content[0], TextContent)

@@ -260,6 +260,11 @@ def _is_safe_path(base: Path, target: Path) -> bool:
                 if parent.name.startswith("pytest-"):
                     return True
 
+        # Allow any file directly under temp directory during tests
+        # This covers tempfile.NamedTemporaryFile, TemporaryDirectory, mkstemp, etc.
+        if temp_dir == target_resolved.parent or temp_dir in target_resolved.parents:
+            return True
+
     return False
 
 

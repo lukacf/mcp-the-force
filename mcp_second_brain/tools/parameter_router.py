@@ -34,6 +34,7 @@ class ParameterRouter:
             "vector_store": [],
             "session": {},
             "vector_store_ids": [],
+            "structured_output": {},
         }
 
         # Sort prompt parameters by position
@@ -76,6 +77,10 @@ class ParameterRouter:
                     vs_ids.extend(value)
                 else:
                     vs_ids.append(value)
+            elif route == RouteType.STRUCTURED_OUTPUT:
+                structured_dict = routed["structured_output"]
+                assert isinstance(structured_dict, dict)
+                structured_dict[name] = value
             else:
                 logger.warning(f"Unknown route '{route}' for parameter '{name}'")
 
