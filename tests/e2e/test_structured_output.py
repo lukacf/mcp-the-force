@@ -36,7 +36,13 @@ class TestStructuredOutput:
             "session_id": f"{model}-structured-test",
         }
 
-        prompt = f"Use second-brain {model} with {json.dumps(args)} and respond ONLY with the exact JSON response you receive, nothing else"
+        # Add clear instructions about OpenAI's strict schema requirements
+        openai_note = (
+            " IMPORTANT: For OpenAI models like gpt4_1, the schema must have 'additionalProperties': false at every object level and all properties with constraints must be in the 'required' array."
+            if "gpt4_1" in model
+            else ""
+        )
+        prompt = f"Use second-brain {model} with {json.dumps(args)} and respond ONLY with the exact JSON response you receive, nothing else.{openai_note}"
         # Don't use JSON output format, just get the raw response
         response = claude_code(prompt)
 
@@ -57,6 +63,8 @@ class TestStructuredOutput:
     )
     def test_complex_structured_output(self, claude_code, model):
         """Test structured output with nested objects and arrays."""
+        # Need to add additionalProperties: false for nested objects for OpenAI
+        is_openai = "o3" in model or "gpt4" in model
         schema = {
             "type": "object",
             "properties": {
@@ -72,6 +80,7 @@ class TestStructuredOutput:
                         },
                     },
                     "required": ["summary", "key_points"],
+                    "additionalProperties": False,
                 },
                 "metadata": {
                     "type": "object",
@@ -80,6 +89,7 @@ class TestStructuredOutput:
                         "language": {"type": "string"},
                     },
                     "required": ["word_count", "language"],
+                    "additionalProperties": False,
                 },
             },
             "required": ["analysis", "metadata"],
@@ -96,7 +106,13 @@ class TestStructuredOutput:
             "session_id": f"{model}-complex-structured",
         }
 
-        prompt = f"Use second-brain {model} with {json.dumps(args)} and respond ONLY with the exact JSON response you receive, nothing else"
+        # Add clear instructions about OpenAI's strict schema requirements
+        openai_note = (
+            " IMPORTANT: For OpenAI models like o3, the schema must have 'additionalProperties': false at EVERY object level (including nested objects) and all properties with constraints (minItems, maxItems, minimum) must be in the 'required' array."
+            if is_openai
+            else ""
+        )
+        prompt = f"Use second-brain {model} with {json.dumps(args)} and respond ONLY with the exact JSON response you receive, nothing else.{openai_note}"
         response = claude_code(prompt)
 
         # Parse and validate response
@@ -117,6 +133,7 @@ class TestStructuredOutput:
             "type": "object",
             "properties": {"count": {"type": "integer"}},
             "required": ["count"],
+            "additionalProperties": False,
         }
 
         args = {
@@ -150,10 +167,17 @@ class TestStructuredOutput:
             "type": "object",
             "properties": {
                 "name": {"type": "string"},
-                "age": {"type": "integer"},
+                "age": {
+                    "type": "integer",
+                    "minimum": 0,
+                },  # Adding constraint for strict validation
                 "email": {"type": "string", "format": "email"},  # Optional field
             },
-            "required": ["name", "age"],  # email is optional
+            "required": [
+                "name",
+                "age",
+            ],  # email is optional, but age now has constraint so must be required
+            "additionalProperties": False,
         }
 
         args = {
@@ -164,7 +188,8 @@ class TestStructuredOutput:
             "session_id": "optional-fields-test",
         }
 
-        prompt = f"Use second-brain chat_with_gpt4_1 with {json.dumps(args)} and respond ONLY with the exact JSON response you receive, nothing else"
+        # Add clear instructions about OpenAI's strict schema requirements
+        prompt = f"Use second-brain chat_with_gpt4_1 with {json.dumps(args)} and respond ONLY with the exact JSON response you receive, nothing else. IMPORTANT: For OpenAI models, the schema must have 'additionalProperties': false and all properties with constraints (like minimum on age) must be in the 'required' array."
         response = claude_code(prompt)
 
         parsed = json.loads(response)

@@ -58,7 +58,7 @@ class ChatWithGemini25Pro(ToolSpec):
         description="Files for vector store (RAG)"
     )
     structured_output_schema: Optional[Dict[str, Any]] = Route.structured_output(
-        description="JSON schema for structured output validation"
+        description="JSON schema for structured output validation. For OpenAI models: requires strict validation with 'additionalProperties: false' at every object level and all properties with constraints (minimum, maximum, enum, pattern) must be listed in 'required'"
     )
     temperature: Optional[float] = Route.adapter(
         default=0.2, description="Sampling temperature"
@@ -98,7 +98,7 @@ class ChatWithGemini25Flash(ToolSpec):
         description="Files for vector store (RAG)"
     )
     structured_output_schema: Optional[Dict[str, Any]] = Route.structured_output(
-        description="JSON schema for structured output validation"
+        description="JSON schema for structured output validation. For OpenAI models: requires strict validation with 'additionalProperties: false' at every object level and all properties with constraints (minimum, maximum, enum, pattern) must be listed in 'required'"
     )
     temperature: Optional[float] = Route.adapter(
         default=0.3, description="Sampling temperature"
@@ -151,7 +151,7 @@ Please approach this task step-by-step, showing your reasoning process."""
         description="Files for vector store (RAG)"
     )
     structured_output_schema: Optional[Dict[str, Any]] = Route.structured_output(
-        description="JSON schema for structured output validation"
+        description="JSON schema for structured output validation. For OpenAI models: requires strict validation with 'additionalProperties: false' at every object level and all properties with constraints (minimum, maximum, enum, pattern) must be listed in 'required'"
     )
     reasoning_effort: Optional[str] = Route.adapter(
         default="medium", description="Controls reasoning effort (low/medium/high)"
@@ -197,7 +197,7 @@ class ChatWithO3Pro(ToolSpec):
         default=None, description="Maximum reasoning tokens"
     )
     structured_output_schema: Optional[Dict[str, Any]] = Route.structured_output(  # type: ignore[misc]
-        description="JSON schema for structured output validation"
+        description="JSON schema for structured output validation. For OpenAI models: requires strict validation with 'additionalProperties: false' at every object level and all properties with constraints (minimum, maximum, enum, pattern) must be listed in 'required'"
     )
     reasoning_effort: Optional[str] = Route.adapter(
         default="high", description="Controls reasoning effort (low/medium/high)"
@@ -239,7 +239,7 @@ class ChatWithGPT4_1(ToolSpec):
         description="Files for vector store (RAG)"
     )
     structured_output_schema: Optional[Dict[str, Any]] = Route.structured_output(
-        description="JSON schema for structured output validation"
+        description="JSON schema for structured output validation. For OpenAI models: requires strict validation with 'additionalProperties: false' at every object level and all properties with constraints (minimum, maximum, enum, pattern) must be listed in 'required'"
     )
     temperature: Optional[float] = Route.adapter(
         default=0.2, description="Sampling temperature"

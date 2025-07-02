@@ -181,7 +181,12 @@ class Route:
         description: Optional[str] = None,
         default_factory: Optional[Callable[[], Any]] = None,
     ) -> RouteDescriptor:
-        """Parameter for structured output schema."""
+        """Parameter for structured output schema.
+
+        For OpenAI models, the schema must follow strict validation rules:
+        - 'additionalProperties: false' at every object level
+        - All properties with constraints (minimum, maximum, enum, pattern) must be listed in 'required'
+        """
         return RouteDescriptor(
             route=RouteType.STRUCTURED_OUTPUT,
             default=None,
