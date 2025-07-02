@@ -82,12 +82,12 @@ class TestToolFeatureParity:
             ChatWithGPT4_1, "reasoning_effort"
         ), "ChatWithGPT4_1 should not have reasoning_effort - it doesn't support reasoning parameters"
 
-    def test_gemini_models_dont_have_reasoning_effort(self):
-        """Gemini models should NOT have reasoning_effort (not supported)."""
+    def test_gemini_models_have_reasoning_effort(self):
+        """Gemini models should have reasoning_effort (now supported via thinking_budget)."""
         for model_class in GEMINI_MODELS:
-            assert not hasattr(
+            assert hasattr(
                 model_class, "reasoning_effort"
-            ), f"{model_class.__name__} should not have reasoning_effort - Gemini doesn't support it"
+            ), f"{model_class.__name__} should have reasoning_effort - Gemini now supports it via thinking_budget"
 
     def test_consistent_parameter_ordering(self):
         """Positional parameters should be in consistent order across models."""
