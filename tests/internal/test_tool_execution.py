@@ -33,7 +33,9 @@ class TestToolExecutionIntegration:
         assert "Analyze the Python files" in prompt
 
         # Verify adapter parameters
-        assert data["adapter_kwargs"]["temperature"] == 0.3  # Default for flash
+        assert (
+            data["adapter_kwargs"]["temperature"] == 1.0
+        )  # Default for flash (updated)
         assert data["adapter_kwargs"]["timeout"] == 300
 
     @pytest.mark.asyncio
