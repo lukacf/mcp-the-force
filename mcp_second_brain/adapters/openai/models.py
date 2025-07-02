@@ -121,6 +121,7 @@ class OpenAIRequest(BaseModel):
     timeout: float = 300.0  # Default timeout in seconds
     vector_store_ids: Optional[List[str]] = None
     return_debug: bool = False
+    structured_output_schema: Optional[Dict[str, Any]] = None
 
     @field_validator("model")
     def model_is_defined(cls, v: str) -> str:
@@ -192,6 +193,18 @@ class OpenAIRequest(BaseModel):
         data.pop("return_debug", None)
         data.pop("timeout", None)
         data.pop("vector_store_ids", None)
+
+        # Handle structured output schema
+        if "structured_output_schema" in data:
+            schema = data.pop("structured_output_schema")
+            data["text"] = {
+                "format": {
+                    "type": "json_schema",
+                    "name": "structured_response",  # Required by OpenAI API
+                    "schema": schema,
+                    "strict": True,
+                }
+            }
 
         # Transform messages format if needed
         if "messages" in data:

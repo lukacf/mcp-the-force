@@ -14,6 +14,7 @@ class RouteType(Enum):
     VECTOR_STORE = "vector_store"
     SESSION = "session"
     VECTOR_STORE_IDS = "vector_store_ids"
+    STRUCTURED_OUTPUT = "structured_output"
 
 
 @dataclass
@@ -170,6 +171,24 @@ class Route:
         """Parameter for passing vector store IDs directly."""
         return RouteDescriptor(
             route=RouteType.VECTOR_STORE_IDS,
+            default=None,
+            default_factory=default_factory,
+            description=description,
+        )
+
+    @staticmethod
+    def structured_output(
+        description: Optional[str] = None,
+        default_factory: Optional[Callable[[], Any]] = None,
+    ) -> RouteDescriptor:
+        """Parameter for structured output schema.
+
+        For OpenAI models, the schema must follow strict validation rules:
+        - 'additionalProperties: false' at every object level
+        - All properties with constraints (minimum, maximum, enum, pattern) must be listed in 'required'
+        """
+        return RouteDescriptor(
+            route=RouteType.STRUCTURED_OUTPUT,
             default=None,
             default_factory=default_factory,
             description=description,
