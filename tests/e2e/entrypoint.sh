@@ -29,24 +29,11 @@ elif [ -n "$GOOGLE_APPLICATION_CREDENTIALS_JSON" ]; then
     export GOOGLE_APPLICATION_CREDENTIALS="/tmp/service-account.json"
 fi
 
-# Create Claude Code config at runtime with actual environment variables
-claude mcp add-json second-brain "$(cat <<EOF
-{
-  "command": "uv",
-  "args": ["run", "--", "mcp-second-brain"],
-  "env": {
-    "OPENAI_API_KEY": "${OPENAI_API_KEY}",
-    "VERTEX_PROJECT": "${VERTEX_PROJECT}",
-    "VERTEX_LOCATION": "${VERTEX_LOCATION}",
-    "GOOGLE_APPLICATION_CREDENTIALS": "${GOOGLE_APPLICATION_CREDENTIALS}",
-    "MCP_ADAPTER_MOCK": "0",
-    "MEMORY_ENABLED": "true",
-    "SESSION_DB_PATH": "${SESSION_DB_PATH:-/tmp/e2e_sessions.sqlite3}"
-  },
-  "timeoutMs": 180000
-}
-EOF
-)"
+# NOTE:
+# Do not create a *user-scoped* Claude configuration here.
+# Each pytest-xdist worker now builds its own isolated configuration
+# under an XDG_CONFIG_HOME that lives in /tmp, so we avoid any
+# concurrent writes to ~/.claude.json.
 
 # Execute the command passed to docker run (defaults to pytest)
 exec "$@"
