@@ -61,6 +61,11 @@ class TestOpenAIStructuredOutput:
             "required": ["result"],
         }
 
+        # Mock the settings to provide API key
+        with patch("mcp_second_brain.config.get_settings") as mock_settings:
+            mock_settings.return_value.openai_api_key = "test-key"
+            adapter = OpenAIAdapter("gpt-4.1")
+
         # Mock the OpenAI client
         mock_client = AsyncMock()
         mock_response = MagicMock()
@@ -76,8 +81,6 @@ class TestOpenAIStructuredOutput:
             "mcp_second_brain.adapters.openai.client.OpenAIClientFactory.get_instance",
             return_value=mock_client,
         ):
-            adapter = OpenAIAdapter("gpt-4.1")
-
             await adapter.generate(
                 prompt="What is the answer to life?", structured_output_schema=schema
             )
@@ -103,6 +106,11 @@ class TestOpenAIStructuredOutput:
             "required": ["city", "temp"],
         }
 
+        # Mock the settings to provide API key
+        with patch("mcp_second_brain.config.get_settings") as mock_settings:
+            mock_settings.return_value.openai_api_key = "test-key"
+            adapter = OpenAIAdapter("gpt-4.1")
+
         mock_client = AsyncMock()
         mock_response = MagicMock()
         mock_response.id = "resp_123"
@@ -116,8 +124,6 @@ class TestOpenAIStructuredOutput:
             "mcp_second_brain.adapters.openai.client.OpenAIClientFactory.get_instance",
             return_value=mock_client,
         ):
-            adapter = OpenAIAdapter("gpt-4.1")
-
             result = await adapter.generate(
                 prompt="Weather in Paris?", structured_output_schema=schema
             )
@@ -134,6 +140,11 @@ class TestOpenAIStructuredOutput:
             "required": ["count"],
         }
 
+        # Mock the settings to provide API key
+        with patch("mcp_second_brain.config.get_settings") as mock_settings:
+            mock_settings.return_value.openai_api_key = "test-key"
+            adapter = OpenAIAdapter("gpt-4.1")
+
         mock_client = AsyncMock()
         mock_response = MagicMock()
         mock_response.id = "resp_123"
@@ -148,8 +159,6 @@ class TestOpenAIStructuredOutput:
             "mcp_second_brain.adapters.openai.client.OpenAIClientFactory.get_instance",
             return_value=mock_client,
         ):
-            adapter = OpenAIAdapter("gpt-4.1")
-
             with pytest.raises(Exception, match="Structured output validation failed"):
                 await adapter.generate(
                     prompt="Count something", structured_output_schema=schema
@@ -159,6 +168,11 @@ class TestOpenAIStructuredOutput:
     async def test_non_json_response_fails(self):
         """Test that non-JSON responses fail validation."""
         schema = {"type": "object"}
+
+        # Mock the settings to provide API key
+        with patch("mcp_second_brain.config.get_settings") as mock_settings:
+            mock_settings.return_value.openai_api_key = "test-key"
+            adapter = OpenAIAdapter("gpt-4.1")
 
         mock_client = AsyncMock()
         mock_response = MagicMock()
@@ -174,8 +188,6 @@ class TestOpenAIStructuredOutput:
             "mcp_second_brain.adapters.openai.client.OpenAIClientFactory.get_instance",
             return_value=mock_client,
         ):
-            adapter = OpenAIAdapter("gpt-4.1")
-
             with pytest.raises(Exception, match="Structured output validation failed"):
                 await adapter.generate(
                     prompt="Return text instead of JSON",
