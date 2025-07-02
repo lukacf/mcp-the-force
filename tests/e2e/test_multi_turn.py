@@ -13,8 +13,9 @@ class TestMultiTurn:
     @pytest.mark.timeout(300)
     def test_gpt4_multi_turn(self, claude_config_path):
         """Test GPT-4.1 multi-turn conversation with --continue flag."""
+        xdg_config_home, mcp_config_path = claude_config_path
         env = os.environ.copy()
-        env["XDG_CONFIG_HOME"] = str(claude_config_path)
+        # env already contains isolated HOME and XDG_CONFIG_HOME
 
         import uuid
 
@@ -48,8 +49,9 @@ class TestMultiTurn:
     @pytest.mark.timeout(600)
     def test_o3_multi_turn(self, claude_config_path):
         """Test o3 multi-turn conversation with --continue flag."""
+        xdg_config_home, mcp_config_path = claude_config_path
         env = os.environ.copy()
-        env["XDG_CONFIG_HOME"] = str(claude_config_path)
+        # env already contains isolated HOME and XDG_CONFIG_HOME
 
         import uuid
 
