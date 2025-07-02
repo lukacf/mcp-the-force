@@ -11,11 +11,9 @@ class TestMultiTurn:
     """Test multi-turn conversations using Claude Code's continue flag."""
 
     @pytest.mark.timeout(300)
-    def test_gpt4_multi_turn(self, claude_config_path):
+    def test_gpt4_multi_turn(self, claude_code):
         """Test GPT-4.1 multi-turn conversation with --continue flag."""
-        xdg_config_home = claude_config_path
         env = os.environ.copy()
-        env["XDG_CONFIG_HOME"] = str(xdg_config_home)
 
         import uuid
 
@@ -47,11 +45,9 @@ class TestMultiTurn:
         ), f"Expected evidence of remembering ELEPHANT but got: {result2.stdout}"
 
     @pytest.mark.timeout(600)
-    def test_o3_multi_turn(self, claude_config_path):
+    def test_o3_multi_turn(self, claude_code):
         """Test o3 multi-turn conversation with --continue flag."""
-        xdg_config_home = claude_config_path
         env = os.environ.copy()
-        env["XDG_CONFIG_HOME"] = str(xdg_config_home)
 
         import uuid
 
