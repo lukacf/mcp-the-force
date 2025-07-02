@@ -35,7 +35,8 @@ def main():
             extra_args.append(arg)
 
     # Build pytest command
-    cmd = ["pytest", "-xv"] + extra_args + ORDERED_TESTS
+    # Add --maxfail=1 for xdist to stop all workers after first failure
+    cmd = ["pytest", "-xv", "--maxfail=1"] + extra_args + ORDERED_TESTS
 
     print(f"Running: {' '.join(cmd)}")
     result = subprocess.run(cmd)
