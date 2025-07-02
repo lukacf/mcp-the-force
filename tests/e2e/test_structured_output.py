@@ -2,6 +2,7 @@
 
 import pytest
 import json
+from json_utils import safe_json
 
 pytestmark = pytest.mark.e2e
 
@@ -47,7 +48,7 @@ class TestStructuredOutput:
         response = claude_code(prompt)
 
         # Parse the JSON response directly - should be pure JSON due to our instructions
-        parsed = json.loads(response)
+        parsed = safe_json(response)
         assert isinstance(parsed, dict)
         assert "answer" in parsed
         assert "confidence" in parsed
@@ -116,7 +117,7 @@ class TestStructuredOutput:
         response = claude_code(prompt)
 
         # Parse and validate response
-        parsed = json.loads(response)
+        parsed = safe_json(response)
         assert "analysis" in parsed
         assert "metadata" in parsed
         assert "summary" in parsed["analysis"]
@@ -154,7 +155,7 @@ class TestStructuredOutput:
         # Either we get an error message or Gemini corrects it to a valid number
         # Let's check what actually happens
         try:
-            parsed = json.loads(response)
+            parsed = safe_json(response)
             # If it parsed, Gemini likely corrected the output
             assert isinstance(parsed.get("count"), int)
         except json.JSONDecodeError:
@@ -192,7 +193,7 @@ class TestStructuredOutput:
         prompt = f"Use second-brain chat_with_gpt4_1 with {json.dumps(args)} and respond ONLY with the exact JSON response you receive, nothing else. IMPORTANT: For OpenAI models, the schema must have 'additionalProperties': false and all properties with constraints (like minimum on age) must be in the 'required' array."
         response = claude_code(prompt)
 
-        parsed = json.loads(response)
+        parsed = safe_json(response)
         assert parsed["name"] == "Alice"
         assert parsed["age"] == 30
         # email may or may not be present - both are valid
