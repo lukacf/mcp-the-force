@@ -364,12 +364,14 @@ result = await mcp.call_tool(
                         "description": {"type": "string"},
                         "severity": {"type": "string", "enum": ["low", "medium", "high"]}
                     },
-                    "required": ["line", "description", "severity"]
+                    "required": ["line", "description", "severity"],
+                    "additionalProperties": false
                 }
             },
             "summary": {"type": "string"}
         },
-        "required": ["bugs", "summary"]
+        "required": ["bugs", "summary"],
+        "additionalProperties": false
     }
 )
 
@@ -382,6 +384,9 @@ for bug in bugs_data["bugs"]:
 ### Supported Models
 
 - **OpenAI Models** (o3, o3-pro, gpt-4.1): Uses the Responses API `text.format.json_schema`
+  - ⚠️ **Important**: OpenAI models require strict validation:
+    - Must include `"additionalProperties": false` at every object level
+    - All properties with constraints (minimum, maximum, enum, pattern) must be listed in `required`
 - **Gemini Models** (2.5-pro, 2.5-flash): Uses `response_schema` with OpenAPI subset
 
 ### Benefits
