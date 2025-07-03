@@ -44,11 +44,17 @@ async def test_corrupted_json_handling():
     try:
         cache = _SQLiteGeminiSessionCache(db_path=db_path, ttl=3600)
 
-        # Manually insert corrupted JSON
+        # Get the actual database path the cache is using (may be different in CI due to MCP_ADAPTER_MOCK)
+        real_db_path = cache.db_path
+
+        # Ensure table exists by doing a dummy operation first
+        await cache.get_messages("dummy")
+
+        # Manually insert corrupted JSON using the cache's actual database path
         import sqlite3
         import time
 
-        conn = sqlite3.connect(db_path)
+        conn = sqlite3.connect(real_db_path)
         conn.execute(
             "INSERT INTO gemini_sessions (session_id, messages, updated_at) VALUES (?, ?, ?)",
             ("corrupted", "{invalid json", int(time.time())),

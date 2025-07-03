@@ -132,8 +132,8 @@ class TestOpenAIStructuredOutput:
             assert result["content"] == '{"city": "Paris", "temp": 22.5}'
 
     @pytest.mark.asyncio
-    async def test_response_validation_failure(self):
-        """Test that invalid JSON responses raise validation errors."""
+    async def test_response_validation_skipped(self):
+        """Test that validation is skipped and responses are returned as-is."""
         schema = {
             "type": "object",
             "properties": {"count": {"type": "integer"}},
@@ -159,14 +159,15 @@ class TestOpenAIStructuredOutput:
             "mcp_second_brain.adapters.openai.client.OpenAIClientFactory.get_instance",
             return_value=mock_client,
         ):
-            with pytest.raises(Exception, match="Structured output validation failed"):
-                await adapter.generate(
-                    prompt="Count something", structured_output_schema=schema
-                )
+            # Should return response as-is without validation
+            result = await adapter.generate(
+                prompt="Count something", structured_output_schema=schema
+            )
+            assert result["content"] == '{"count": "not-a-number"}'
 
     @pytest.mark.asyncio
-    async def test_non_json_response_fails(self):
-        """Test that non-JSON responses fail validation."""
+    async def test_non_json_response_returned_as_is(self):
+        """Test that non-JSON responses are returned as-is without validation."""
         schema = {"type": "object"}
 
         # Mock the settings to provide API key
@@ -188,8 +189,9 @@ class TestOpenAIStructuredOutput:
             "mcp_second_brain.adapters.openai.client.OpenAIClientFactory.get_instance",
             return_value=mock_client,
         ):
-            with pytest.raises(Exception, match="Structured output validation failed"):
-                await adapter.generate(
-                    prompt="Return text instead of JSON",
-                    structured_output_schema=schema,
-                )
+            # Should return response as-is without validation
+            result = await adapter.generate(
+                prompt="Return text instead of JSON",
+                structured_output_schema=schema,
+            )
+            assert result["content"] == "This is not JSON"

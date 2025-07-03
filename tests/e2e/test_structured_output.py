@@ -2,7 +2,8 @@
 
 import pytest
 import json
-from json_utils import safe_json
+import uuid
+from .json_utils import safe_json
 
 pytestmark = pytest.mark.e2e
 
@@ -34,7 +35,7 @@ class TestStructuredOutput:
             "output_format": "Respond ONLY with a JSON object containing 'answer' (boolean) and 'confidence' (high/medium/low). Output nothing else except the JSON.",
             "context": [],
             "structured_output_schema": schema,
-            "session_id": f"{model}-structured-test",
+            "session_id": f"{model}-structured-test-{uuid.uuid4().hex[:8]}",
         }
 
         # Add clear instructions about OpenAI's strict schema requirements
@@ -104,7 +105,7 @@ class TestStructuredOutput:
             "output_format": "Provide analysis with summary, 2-5 key points, word count, and language",
             "context": [],
             "structured_output_schema": schema,
-            "session_id": f"{model}-complex-structured",
+            "session_id": f"{model}-complex-structured-{uuid.uuid4().hex[:8]}",
         }
 
         # Add clear instructions about OpenAI's strict schema requirements
@@ -142,7 +143,7 @@ class TestStructuredOutput:
             "output_format": "JSON with count as the word 'five'",
             "context": [],
             "structured_output_schema": schema,
-            "session_id": "validation-error-test",
+            "session_id": f"validation-error-test-{uuid.uuid4().hex[:8]}",
         }
 
         prompt = f"Use second-brain chat_with_gemini25_flash with {json.dumps(args)} and respond ONLY with the exact response you receive, nothing else"
@@ -186,7 +187,7 @@ class TestStructuredOutput:
             "output_format": "JSON object with name and age (email optional)",
             "context": [],
             "structured_output_schema": schema,
-            "session_id": "optional-fields-test",
+            "session_id": f"optional-fields-test-{uuid.uuid4().hex[:8]}",
         }
 
         # Add clear instructions about OpenAI's strict schema requirements
