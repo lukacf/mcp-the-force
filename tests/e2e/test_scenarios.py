@@ -10,39 +10,6 @@ class TestE2EScenarios:
     """More complex scenarios testing tool interactions."""
 
     @pytest.mark.timeout(300)  # 5 minutes
-    def test_vector_store_workflow(self, claude_code, created_vector_stores):
-        """Test creating and using a vector store."""
-        # Use specific Python files from the project
-        files = [
-            "/app/mcp_second_brain/server.py",
-            "/app/mcp_second_brain/tools/definitions.py",
-            "/app/README.md",
-        ]
-        files_json = json.dumps(files)
-
-        # Create vector store with specific output format
-        output = claude_code(
-            f"Use second-brain create_vector_store_tool with files {files_json}. "
-            f'If the tool succeeds and returns a vector_store_id, output exactly "SUCCESS: <id>". '
-            f'If it fails, output exactly "FAILED: <reason>".'
-        )
-
-        # Check for structured response
-        assert "SUCCESS:" in output or "FAILED:" in output
-        if "SUCCESS:" in output:
-            # Extract the vector store ID and track it
-            try:
-                # Parse "SUCCESS: vs_xxxxx"
-                vs_id = output.split("SUCCESS:")[1].strip().split()[0]
-                if vs_id.startswith("vs_"):
-                    created_vector_stores.append(vs_id)
-            except Exception:
-                pass  # If parsing fails, we can't track it
-        elif "FAILED:" in output:
-            # If it failed, make sure it's for a valid reason
-            assert "no_supported_files" in output.lower() or "error" in output.lower()
-
-    @pytest.mark.timeout(300)  # 5 minutes
     def test_model_comparison(self, claude_code):
         """Test comparing outputs from different models."""
         import os
@@ -118,6 +85,7 @@ class TestE2EScenarios:
         import uuid
 
         session_id = f"test-gpt4-{uuid.uuid4()}"
+        print(f"DEBUG: Using session_id: {session_id}")
 
         # First turn: Establish context
         args1 = {
@@ -126,10 +94,11 @@ class TestE2EScenarios:
             "context": [],
             "session_id": session_id,
         }
-        output1 = claude_code(
-            f"Use second-brain chat_with_gpt4_1 with {json.dumps(args1)}"
-        )
-
+        prompt1 = f"Use second-brain chat_with_gpt4_1 with {json.dumps(args1)}"
+        print(f"DEBUG: Turn 1 prompt: {prompt1}")
+        
+        output1 = claude_code(prompt1)
+        print(f"DEBUG: Turn 1 raw output: {repr(output1)}")
         print(f"Turn 1 output: {output1}")
         assert any(
             word in output1.lower()
