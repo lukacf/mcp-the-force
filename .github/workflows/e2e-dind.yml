@@ -1,0 +1,56 @@
+name: E2E Tests (Docker-in-Docker)
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  e2e-tests:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario:
+          - smoke
+          - memory  
+          - attachments
+          - large_context
+          - cross_model
+          - failures
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build test-runner image
+        run: docker build -f tests/e2e_dind/Dockerfile.runner -t mcp-e2e-runner .
+
+      - name: Run scenario ${{ matrix.scenario }}
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          VERTEX_PROJECT: ${{ secrets.VERTEX_PROJECT }}
+          VERTEX_LOCATION: ${{ secrets.VERTEX_LOCATION }}
+          E2E_ARTIFACT_DIR: /tmp/artifacts
+        run: |
+          mkdir -p /tmp/artifacts
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v $PWD:/workspace \
+            -e OPENAI_API_KEY -e ANTHROPIC_API_KEY -e VERTEX_PROJECT -e VERTEX_LOCATION \
+            -e E2E_ARTIFACT_DIR \
+            mcp-e2e-runner tests/e2e_dind/scenarios/test_${{ matrix.scenario }}.py -v --tb=short
+
+      - name: Upload artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-${{ matrix.scenario }}
+          path: /tmp/artifacts
+          if-no-files-found: ignore

@@ -1,0 +1,70 @@
+# Docker-in-Docker test runner image
+FROM python:3.12-slim
+
+ARG DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends docker.io curl ca-certificates git jq nodejs npm && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install Docker Compose plugin manually (architecture-aware)
+RUN mkdir -p /usr/local/lib/docker/cli-plugins && \
+    ARCH=$(uname -m) && \
+    curl -SL https://github.com/docker/compose/releases/download/v2.32.1/docker-compose-linux-$ARCH \
+         -o /usr/local/lib/docker/cli-plugins/docker-compose && \
+    chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+
+# Claude-Code CLI + test tools + uv for MCP server
+RUN npm install -g @anthropic-ai/claude-code
+RUN pip install --no-cache-dir \
+      pytest pytest-timeout testcontainers[compose] \
+      anyio pytest-asyncio rich uv uvicorn httpx
+
+# Copy project under /host-project where inner compose stack expects it
+WORKDIR /host-project
+COPY . /host-project
+      
+# Install the MCP server dependencies
+RUN uv pip install --system .
+ENV PYTHONPATH=/host-project
+
+# Copy fixed compose files to a safe location that won't be overridden by volume mounts
+COPY tests/e2e_dind/compose/ /compose-template/
+
+# ------------------------------------------------------------------------------
+#  Create non-root user that will run the Claude CLI
+# ------------------------------------------------------------------------------
+
+# 1. lightweight 'gosu' binary lets us drop privileges (≈ sudo –u but no PAM)
+RUN apt-get update && apt-get install -y --no-install-recommends gosu \
+ && rm -rf /var/lib/apt/lists/*
+
+# 2. create user & group
+ARG CLAUDE_UID=1000
+ARG CLAUDE_GID=1000
+RUN groupadd -g $CLAUDE_GID claude \
+ && useradd  -m -u $CLAUDE_UID -g claude -s /bin/bash claude
+
+# 3. give the user access to the docker socket that is mounted from the host
+#    (socket is usually root:docker on Linux; this keeps both cases working)
+RUN usermod -aG docker claude || true
+
+# 4. make sure the workspace is writable by the new user
+RUN chown -R claude:claude /host-project
+
+# 5. Create .config/gcloud directory for ADC credentials
+RUN mkdir -p /home/claude/.config/gcloud && chown -R claude:claude /home/claude/.config
+
+# 6. Verify claude command is installed globally
+RUN which claude
+
+# 7. Find where gosu is installed
+RUN which gosu
+
+# 8. Test that claude command is accessible as non-root user
+RUN gosu claude which claude
+
+# 9. Ensure gosu is available in PATH at runtime
+ENV PATH=/usr/sbin:/usr/local/sbin:/usr/local/bin:/usr/bin:/sbin:/bin
+
+# Entrypoint just forwards to pytest; real magic is in fixtures
+ENTRYPOINT ["pytest"]
