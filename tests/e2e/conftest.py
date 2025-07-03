@@ -11,11 +11,16 @@ import pytest
 
 # Set up environment BEFORE any MCP imports
 wid = os.getenv("PYTEST_XDIST_WORKER", "gw0")
+wid_num = int(wid.lstrip("gw"))  # gw0 → 0, gw1 → 1, etc.
+port = 8000 + wid_num  # Unique port per worker (8000-8015 for -n 16)
+
 # Also need to set these in the actual os.environ for subprocess inheritance
 os.environ["SESSION_DB_PATH"] = f"/tmp/e2e_sessions_{wid}.sqlite3"
 os.environ["HOME"] = str(Path(tempfile.gettempdir()) / f"claude_home_{wid}")
 os.environ["CLAUDE_HOME"] = os.environ["HOME"]
 os.environ["CLAUDE_CONFIG_DIR"] = str(Path(os.environ["HOME"]) / ".config" / "claude")
+os.environ["PORT"] = str(port)
+os.environ["HOST"] = "127.0.0.1"
 
 
 # -----------------------------------------------------------------------------
@@ -23,6 +28,9 @@ os.environ["CLAUDE_CONFIG_DIR"] = str(Path(os.environ["HOME"]) / ".config" / "cl
 # -----------------------------------------------------------------------------
 def _build_worker_env() -> tuple[Path, dict]:
     wid = os.getenv("PYTEST_XDIST_WORKER", "gw0")  # gw0, gw1, …
+    wid_num = int(wid.lstrip("gw"))  # gw0 → 0, gw1 → 1, etc.
+    port = 8000 + wid_num  # Unique port per worker (8000-8015 for -n 16)
+
     home = Path(tempfile.gettempdir()) / f"claude_home_{wid}"
     home.mkdir(parents=True, exist_ok=True)
 
@@ -34,8 +42,10 @@ def _build_worker_env() -> tuple[Path, dict]:
             # Claude Code also honours these two (see GitHub issues #1652/#519)
             "CLAUDE_HOME": str(home),
             "CLAUDE_CONFIG_DIR": str(home / ".config" / "claude"),
-            # Also need unique session DB
+            # Also need unique session DB and port
             "SESSION_DB_PATH": f"/tmp/e2e_sessions_{wid}.sqlite3",
+            "PORT": str(port),
+            "HOST": "127.0.0.1",
         }
     )
     return home, env
@@ -73,6 +83,8 @@ cfg_dir.mkdir(parents=True, exist_ok=True)
                         "MCP_ADAPTER_MOCK": "0",
                         "MEMORY_ENABLED": "true",
                         "SESSION_DB_PATH": _ENV["SESSION_DB_PATH"],
+                        "HOST": _ENV["HOST"],
+                        "PORT": _ENV["PORT"],
                     },
                     "timeoutMs": 180_000,
                 }
