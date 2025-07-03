@@ -3,7 +3,6 @@
 import asyncio
 import logging
 import random
-import json
 from abc import ABC, abstractmethod
 from typing import Dict, Any, List, Set
 from dataclasses import dataclass
@@ -166,14 +165,16 @@ class BaseFlowStrategy(ABC):
 
     def _validate_structured_output(self, content: str) -> None:
         """Skip validation - let the model response through as-is.
-        
+
         Structured output schema is a suggestion to the model, not a strict requirement.
         Validation was causing MCP server crashes on invalid JSON/schema mismatches.
         """
         if not self.context.request.structured_output_schema:
             return
-            
-        logger.debug(f"Structured output schema provided - letting model response through as-is: '{content}'")
+
+        logger.debug(
+            f"Structured output schema provided - letting model response through as-is: '{content}'"
+        )
 
     async def _handle_function_calls(
         self,
