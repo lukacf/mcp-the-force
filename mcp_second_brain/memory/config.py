@@ -4,7 +4,7 @@ import logging
 import sqlite3
 import threading
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict
 from datetime import datetime, timezone
 
 from ..utils.vector_store import get_client
@@ -221,14 +221,20 @@ class MemoryConfig:
 
 
 # Global instance and lock
-_memory_config: Optional[MemoryConfig] = None
+# Use a dict to store per-path instances for test isolation
+_memory_configs: Dict[str, MemoryConfig] = {}
 _memory_config_lock = threading.RLock()
 
 
 def get_memory_config() -> MemoryConfig:
     """Get or create global memory configuration instance."""
-    global _memory_config
+    global _memory_configs
+
+    # Get the current session DB path
+    settings = get_settings()
+    db_path = settings.session_db_path
+
     with _memory_config_lock:
-        if _memory_config is None:
-            _memory_config = MemoryConfig()
-        return _memory_config
+        if db_path not in _memory_configs:
+            _memory_configs[db_path] = MemoryConfig()
+        return _memory_configs[db_path]

@@ -46,15 +46,22 @@ if [ -z "$VERTEX_LOCATION" ]; then
     export VERTEX_LOCATION="us-central1"
 fi
 
-# Check if ADC exists
-ADC_PATH="$HOME/.config/gcloud/application_default_credentials.json"
-if [ ! -f "$ADC_PATH" ]; then
-    echo -e "${RED}Error: ADC file not found at $ADC_PATH${NC}"
-    echo -e "${YELLOW}Run 'gcloud auth application-default login' first${NC}"
+# Check for project-specific credentials first, then fall back to global ADC
+PROJECT_CREDS_PATH="$(pwd)/.gcloud/king_credentials.json"
+GLOBAL_ADC_PATH="$HOME/.config/gcloud/application_default_credentials.json"
+
+if [ -f "$PROJECT_CREDS_PATH" ]; then
+    ADC_PATH="$PROJECT_CREDS_PATH"
+    echo -e "${GREEN}Found project-specific credentials at $ADC_PATH${NC}"
+elif [ -f "$GLOBAL_ADC_PATH" ]; then
+    ADC_PATH="$GLOBAL_ADC_PATH"
+    echo -e "${YELLOW}Using global ADC credentials at $ADC_PATH${NC}"
+    echo -e "${YELLOW}Note: For Gemini tests, you may need project-specific credentials${NC}"
+else
+    echo -e "${RED}Error: No credentials found${NC}"
+    echo -e "${YELLOW}Either run 'gcloud auth application-default login' or see README.md for project-specific setup${NC}"
     exit 1
 fi
-
-echo -e "${GREEN}Found ADC credentials at $ADC_PATH${NC}"
 
 # Check for UID mismatch warning
 if [[ "$(id -u)" != "1000" ]]; then
@@ -64,7 +71,7 @@ fi
 
 # Build the Docker image
 echo -e "${GREEN}Building E2E Docker image...${NC}"
-docker build -f Dockerfile.e2e -t mcp-e2e:latest .
+docker build -f tests/e2e/Dockerfile -t mcp-e2e:latest .
 
 # Run the tests with ADC mounted
 echo -e "${GREEN}Running E2E tests...${NC}"

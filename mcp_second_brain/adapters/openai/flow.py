@@ -3,7 +3,6 @@
 import asyncio
 import logging
 import random
-import json
 from abc import ABC, abstractmethod
 from typing import Dict, Any, List, Set
 from dataclasses import dataclass
@@ -24,8 +23,9 @@ from .constants import (
 )
 from ..memory_search_declaration import create_search_memory_declaration_openai
 from ..attachment_search_declaration import create_attachment_search_declaration_openai
-from ...utils.validation import validate_json_schema
-from jsonschema import ValidationError
+# Removed validation imports - no longer validating structured output
+# from ...utils.validation import validate_json_schema
+# from jsonschema import ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -164,30 +164,17 @@ class BaseFlowStrategy(ABC):
         return list(response.output)
 
     def _validate_structured_output(self, content: str) -> None:
-        """Validate content against structured output schema if provided."""
+        """Skip validation - let the model response through as-is.
+
+        Structured output schema is a suggestion to the model, not a strict requirement.
+        Validation was causing MCP server crashes on invalid JSON/schema mismatches.
+        """
         if not self.context.request.structured_output_schema:
             return
 
-        try:
-            # Parse JSON
-            parsed_json = json.loads(content)
-            # Validate against schema
-            validate_json_schema(
-                parsed_json, self.context.request.structured_output_schema
-            )
-            logger.info("Structured output validated successfully.")
-        except json.JSONDecodeError as e:
-            logger.error(f"Structured output JSON parse failed: {e}")
-            raise AdapterException(
-                category=ErrorCategory.PARSING,
-                message=f"Structured output validation failed: Invalid JSON. Error: {e}",
-            )
-        except ValidationError as e:
-            logger.error(f"Structured output schema validation failed: {e}")
-            raise AdapterException(
-                category=ErrorCategory.PARSING,
-                message=f"Structured output validation failed: {e.message}",
-            )
+        logger.debug(
+            f"Structured output schema provided - letting model response through as-is: '{content}'"
+        )
 
     async def _handle_function_calls(
         self,

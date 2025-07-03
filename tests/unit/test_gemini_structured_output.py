@@ -169,8 +169,8 @@ class TestGeminiStructuredOutput:
             assert parsed["count"] == 42
 
     @pytest.mark.asyncio
-    async def test_response_validation_failure(self):
-        """Test that invalid JSON responses raise validation errors."""
+    async def test_response_validation_skipped(self):
+        """Test that validation is skipped and responses are returned as-is."""
         adapter = VertexAdapter("gemini-2.5-flash")
 
         schema = {
@@ -181,8 +181,11 @@ class TestGeminiStructuredOutput:
 
         mock_client = MagicMock()
         mock_response = MagicMock()
-        # An empty candidates list makes the adapter run the validation branch
-        mock_response.candidates = []
+        mock_response.candidates = [MagicMock()]
+        mock_response.candidates[0].content.parts = [MagicMock()]
+        # Invalid JSON - but should not raise error
+        mock_response.candidates[0].content.parts[0].text = '{"age": "not_a_number"}'
+        mock_response.candidates[0].content.parts[0].function_call = None
 
         mock_client.models.generate_content.return_value = mock_response
 
@@ -190,22 +193,28 @@ class TestGeminiStructuredOutput:
             "mcp_second_brain.adapters.vertex.adapter.get_client",
             return_value=mock_client,
         ):
-            # The validation happens after getting the response,
-            # so we expect it to raise during generate()
-            with pytest.raises(Exception, match="Structured output validation failed"):
-                await adapter.generate(prompt="My age", structured_output_schema=schema)
+            # Should return response as-is without validation
+            result = await adapter.generate(
+                prompt="My age", structured_output_schema=schema
+            )
+            assert result == '{"age": "not_a_number"}'
 
     @pytest.mark.asyncio
-    async def test_non_json_response_fails(self):
-        """Test that non-JSON responses fail validation."""
+    async def test_non_json_response_returned_as_is(self):
+        """Test that non-JSON responses are returned as-is without validation."""
         adapter = VertexAdapter("gemini-2.5-pro")
 
         schema = {"type": "object"}
 
         mock_client = MagicMock()
         mock_response = MagicMock()
-        # An empty candidates list makes the adapter run the validation branch
-        mock_response.candidates = []
+        mock_response.candidates = [MagicMock()]
+        mock_response.candidates[0].content.parts = [MagicMock()]
+        # Plain text response - should not raise error
+        mock_response.candidates[0].content.parts[
+            0
+        ].text = "This is plain text, not JSON"
+        mock_response.candidates[0].content.parts[0].function_call = None
 
         mock_client.models.generate_content.return_value = mock_response
 
@@ -213,7 +222,8 @@ class TestGeminiStructuredOutput:
             "mcp_second_brain.adapters.vertex.adapter.get_client",
             return_value=mock_client,
         ):
-            with pytest.raises(Exception, match="Structured output validation failed"):
-                await adapter.generate(
-                    prompt="Return plain text", structured_output_schema=schema
-                )
+            # Should return response as-is without validation
+            result = await adapter.generate(
+                prompt="Return plain text", structured_output_schema=schema
+            )
+            assert result == "This is plain text, not JSON"
