@@ -195,14 +195,85 @@ See [docs/configuration.md](docs/configuration.md) for the complete configuratio
 
 ### Google Cloud Authentication
 
-The server requires Google Cloud authentication for Gemini models. See [docs/authentication-guide.md](docs/authentication-guide.md) for detailed setup instructions.
+The server requires Google Cloud authentication for Gemini models. Multiple authentication methods are supported:
 
-**Recommended methods:**
-- **Development**: Use `gcloud auth application-default login`
-- **Production**: Use service accounts with proper IAM roles
-- **CI/CD**: Use Workload Identity Federation (no stored secrets)
+#### Method 1: Project-Specific Credentials (Recommended for Multi-Project Setups)
 
-The server uses Google's Application Default Credentials (ADC) discovery, automatically finding credentials in standard locations.
+If you work with multiple Google Cloud projects, use project-specific credentials to avoid conflicts:
+
+```bash
+# 1. Create a project-specific gcloud configuration
+gcloud config configurations create your-project-name \
+  --account=your-account@domain.com \
+  --project=your-vertex-project-id
+
+# 2. Activate the configuration and generate credentials
+gcloud config configurations activate your-project-name
+gcloud auth application-default login --account=your-account@domain.com
+gcloud auth application-default set-quota-project your-vertex-project-id
+
+# 3. Save project-specific credentials
+mkdir -p .gcloud
+cp ~/.config/gcloud/application_default_credentials.json .gcloud/king_credentials.json
+
+# 4. Restore your global credentials if needed
+gcloud config configurations activate default
+gcloud auth application-default login --account=your-main-account@domain.com
+
+# 5. The E2E test runner will automatically use .gcloud/king_credentials.json
+```
+
+#### Method 2: Global Application Default Credentials
+
+For single-project setups:
+
+```bash
+# Set up your account and project
+gcloud auth login your-account@domain.com
+gcloud config set project your-vertex-project-id
+gcloud auth application-default login
+
+# Set quota project
+gcloud auth application-default set-quota-project your-vertex-project-id
+```
+
+#### Method 3: Service Account (Production)
+
+For production environments:
+
+```bash
+# 1. Create service account (requires admin permissions)
+gcloud iam service-accounts create mcp-second-brain \
+  --display-name="MCP Second Brain Server"
+
+# 2. Grant required permissions
+gcloud projects add-iam-policy-binding your-project-id \
+  --member="serviceAccount:mcp-second-brain@your-project-id.iam.gserviceaccount.com" \
+  --role="roles/aiplatform.user"
+
+# 3. Create and download key
+gcloud iam service-accounts keys create .gcloud/service-account-key.json \
+  --iam-account=mcp-second-brain@your-project-id.iam.gserviceaccount.com
+
+# 4. Set environment variable
+export GOOGLE_APPLICATION_CREDENTIALS=.gcloud/service-account-key.json
+```
+
+#### Authentication Priority
+
+The system searches for credentials in this order:
+1. `.gcloud/king_credentials.json` (project-specific)
+2. `GOOGLE_APPLICATION_CREDENTIALS` environment variable  
+3. `~/.config/gcloud/application_default_credentials.json` (global ADC)
+4. Google Cloud metadata service (for GCP environments)
+
+#### Troubleshooting
+
+- **"Permission denied" errors**: Ensure your account has `roles/aiplatform.user` or similar
+- **"Quota exceeded" errors**: Set the correct quota project with `gcloud auth application-default set-quota-project`
+- **Multiple project conflicts**: Use Method 1 (project-specific credentials)
+
+See [docs/authentication-guide.md](docs/authentication-guide.md) for detailed setup instructions and troubleshooting.
 
 ### Architecture Overview
 
