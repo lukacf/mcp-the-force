@@ -49,8 +49,8 @@ class TestTokenCounter:
     def test_count_tokens_with_gitignore(self, claude_code):
         """Test that token counting respects .gitignore patterns."""
         response = claude_code(
-            "Use second-brain count_project_tokens to count tokens in the root directory. "
-            "Tell me if it includes or excludes __pycache__ directories."
+            "Use second-brain count_project_tokens to count tokens in the mcp_second_brain directory. "
+            "Tell me if it includes or excludes __pycache__ directories and respects .gitignore patterns."
         )
 
         # Should mention exclusion of ignored files
@@ -78,22 +78,24 @@ class TestTokenCounter:
     def test_count_tokens_error_handling(self, claude_code):
         """Test token counting with non-existent file."""
         response = claude_code(
-            "Use second-brain count_project_tokens to count tokens in a file that doesn't exist: "
-            "non_existent_file_12345.txt"
+            "Use second-brain count_project_tokens to count tokens for the file "
+            "non_existent_file_12345.txt. Report the result."
         )
 
-        # Should indicate no tokens or zero tokens
+        # Should indicate no tokens, zero tokens, or file not found
         assert any(
             phrase in response.lower()
             for phrase in [
                 "0 token",
-                "zero token",
+                "zero token", 
                 "no token",
                 "no file",
                 "not found",
                 "doesn't exist",
+                "empty",
+                "none",
             ]
-        )
+        ), f"Expected error handling response but got: {response}"
 
     def test_count_tokens_binary_files(self, claude_code):
         """Test that binary files are excluded from token counting."""

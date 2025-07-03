@@ -2,6 +2,7 @@
 
 import pytest
 import json
+import uuid
 
 pytestmark = pytest.mark.e2e
 
@@ -51,7 +52,7 @@ class TestAttachmentSearch:
             "output_format": "Brief summary of machine learning content found",
             "context": [],
             "attachments": test_documents,
-            "session_id": "test-attachment-search-o3",
+            "session_id": f"test-attachment-search-o3-{uuid.uuid4().hex[:8]}",
             "reasoning_effort": "low",
         }
 
@@ -69,7 +70,7 @@ class TestAttachmentSearch:
             "output_format": "List of Python development best practices found in the documents",
             "context": [],
             "attachments": test_documents,
-            "session_id": "test-attachment-search-gemini",
+            "session_id": f"test-attachment-search-gemini-{uuid.uuid4().hex[:8]}",
         }
 
         prompt = f"Use second-brain chat_with_gemini25_pro with {json.dumps(args)}"
