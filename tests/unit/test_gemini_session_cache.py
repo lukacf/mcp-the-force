@@ -47,6 +47,10 @@ async def test_corrupted_json_handling():
         # Ensure table exists by doing a dummy operation first
         await cache.get_messages("dummy")
 
+        # Force any pending transactions to commit by closing and reopening the cache connection
+        cache.close()
+        cache = _SQLiteGeminiSessionCache(db_path=db_path, ttl=3600)
+
         # Manually insert corrupted JSON
         import sqlite3
         import time
