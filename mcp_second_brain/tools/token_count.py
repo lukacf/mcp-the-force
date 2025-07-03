@@ -2,6 +2,7 @@
 Token counting tool for project files.
 """
 
+import asyncio
 from typing import List, Dict, Any
 
 from ..utils.context_loader import load_text_files
@@ -30,7 +31,8 @@ class CountProjectTokens:
             raise ValueError("At least one file or directory path must be provided")
 
         # Load files and get their content + token counts
-        file_data = load_text_files(self.items)
+        # Use asyncio.to_thread to prevent blocking the event loop during file I/O
+        file_data = await asyncio.to_thread(load_text_files, self.items)
 
         # Build the result
         per_file = {}

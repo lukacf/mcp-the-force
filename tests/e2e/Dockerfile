@@ -1,29 +1,54 @@
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y \
-    git \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        git \
+        curl \
+        ca-certificates \
+        nodejs \
+        npm && \
+    rm -rf /var/lib/apt/lists/*
 
-# Install uv
-RUN pip install --no-cache-dir uv
+# Install Claude Code CLI
+RUN npm install -g @anthropic-ai/claude-code
+
+# Install uv for faster Python package management
+RUN pip install uv
 
 # Set working directory
 WORKDIR /app
 
 # Copy project files
-COPY . /app
+COPY pyproject.toml README.md ./
+COPY mcp_second_brain ./mcp_second_brain
+COPY *.md *.py ./
 
-# Install project in editable mode with test dependencies
-RUN uv pip install -e ".[test]"
+# Install the package and dependencies
+RUN uv pip install --system .
 
-# Create non-root user for security
-RUN useradd -m -u 1000 mcp && chown -R mcp:mcp /app
-USER mcp
+# Copy test files
+COPY tests/e2e ./tests/e2e
 
-# Expose MCP server port
-EXPOSE 8000
+# Install test dependencies
+RUN pip install pytest pytest-asyncio anyio pytest-timeout pytest-xdist
 
-# Default command runs the tests
-CMD ["pytest", "-xvs", "-m", "e2e", "tests/e2e/"]
+# Create a non-root user for running tests
+RUN useradd -m -u 1000 tester && \
+    chown -R tester:tester /app && \
+    chmod -R 755 /app && \
+    mkdir -p /tmp && chmod 1777 /tmp
+
+# Create necessary directories for Claude config
+RUN mkdir -p /home/tester/.config/claude /home/tester/.config/gcloud
+
+# Copy entrypoint script
+COPY --chown=tester:tester tests/e2e/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# Switch to non-root user
+USER tester
+
+# Set entrypoint
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["pytest", "tests/e2e", "-v"]

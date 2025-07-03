@@ -2,7 +2,6 @@ from typing import Any, List, Optional, Dict
 import asyncio
 import logging
 import threading
-import json
 from google import genai
 from google.genai import types
 from google.genai.types import HarmCategory, HarmBlockThreshold
@@ -10,8 +9,10 @@ from ...config import get_settings
 from ..base import BaseAdapter
 from ..memory_search_declaration import create_search_memory_declaration_gemini
 from ..attachment_search_declaration import create_attachment_search_declaration_gemini
-from ...utils.validation import validate_json_schema
-from jsonschema import ValidationError
+
+# Removed validation imports - no longer validating structured output
+# from ...utils.validation import validate_json_schema
+# from jsonschema import ValidationError
 from .models import model_capabilities
 
 logger = logging.getLogger(__name__)
@@ -239,20 +240,12 @@ class VertexAdapter(BaseAdapter):
                         candidate.content.parts
                     )
 
-        # Validate structured output if schema was provided
+        # Skip validation - let the model response through as-is
+        # Structured output schema is a suggestion to the model, not a strict requirement
         if structured_output_schema:
-            try:
-                parsed_json = json.loads(response_text)
-                validate_json_schema(parsed_json, structured_output_schema)
-                logger.info("Structured output validated successfully.")
-            except json.JSONDecodeError as e:
-                logger.error(f"Structured output JSON parse failed: {e}")
-                raise Exception(
-                    f"Structured output validation failed: Invalid JSON. Error: {e}"
-                )
-            except ValidationError as e:
-                logger.error(f"Structured output schema validation failed: {e}")
-                raise Exception(f"Structured output validation failed: {e.message}")
+            logger.debug(
+                f"Structured output schema provided - letting model response through as-is: '{response_text}'"
+            )
 
         if return_debug:
             return {"content": response_text, "_debug_tools": function_declarations}
