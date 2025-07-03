@@ -1,0 +1,13 @@
+# Simple claude runner container  
+FROM python:3.12-slim
+
+ARG DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends curl ca-certificates nodejs npm && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install Claude Code CLI
+RUN npm install -g @anthropic-ai/claude-code
+
+# Keep alive
+CMD ["tail", "-f", "/dev/null"]

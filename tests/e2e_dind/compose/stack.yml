@@ -1,0 +1,13 @@
+services:
+  test-runner:
+    image: mcp-e2e-runner:latest
+    environment:
+      PYTHONPATH: /host-project
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      VERTEX_PROJECT: ${VERTEX_PROJECT}
+      VERTEX_LOCATION: ${VERTEX_LOCATION}
+      LOG_LEVEL: INFO
+      CI_E2E: "1"
+    working_dir: /host-project
+    entrypoint: ["tail", "-f", "/dev/null"]  # Override pytest entrypoint and keep alive
