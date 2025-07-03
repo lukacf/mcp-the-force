@@ -163,7 +163,7 @@ class TestOpenAIStructuredOutput:
             result = await adapter.generate(
                 prompt="Count something", structured_output_schema=schema
             )
-            assert result == '{"count": "not-a-number"}'
+            assert result["content"] == '{"count": "not-a-number"}'
 
     @pytest.mark.asyncio
     async def test_non_json_response_returned_as_is(self):
@@ -194,4 +194,4 @@ class TestOpenAIStructuredOutput:
                 prompt="Return text instead of JSON",
                 structured_output_schema=schema,
             )
-            assert result == "This is not JSON"
+            assert result["content"] == "This is not JSON"
