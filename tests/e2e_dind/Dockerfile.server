@@ -1,0 +1,46 @@
+FROM python:3.12-slim
+
+# Install system dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        git \
+        curl \
+        ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install uv for faster Python package management
+RUN pip install uv
+
+# Set working directory
+WORKDIR /app
+
+# Copy project files
+COPY pyproject.toml README.md ./
+COPY mcp_second_brain ./mcp_second_brain
+COPY *.md *.py ./
+
+# Install the package and dependencies
+RUN uv pip install --system .
+
+# Create directories for runtime
+RUN mkdir -p /tmp && chmod 1777 /tmp
+
+# Create a simple health check script
+RUN echo '#!/bin/bash\n\
+# Check if the MCP server process is running\n\
+if pgrep -f "mcp-second-brain" > /dev/null; then\n\
+    echo "MCP server process is running"\n\
+    exit 0\n\
+else\n\
+    echo "MCP server process is not running"\n\
+    exit 1\n\
+fi' > /health.sh && chmod +x /health.sh
+
+# No port exposure needed - MCP runs over stdio
+
+# Add health check
+HEALTHCHECK --interval=5s --timeout=3s --retries=10 --start-period=10s \
+    CMD /health.sh
+
+# Run the MCP server
+CMD ["uv", "run", "--", "mcp-second-brain"]
