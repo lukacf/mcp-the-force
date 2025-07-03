@@ -2,8 +2,6 @@ from typing import Any, List, Optional, Dict
 import asyncio
 import logging
 import threading
-import json
-import fastmcp.exceptions
 from google import genai
 from google.genai import types
 from google.genai.types import HarmCategory, HarmBlockThreshold
@@ -11,8 +9,9 @@ from ...config import get_settings
 from ..base import BaseAdapter
 from ..memory_search_declaration import create_search_memory_declaration_gemini
 from ..attachment_search_declaration import create_attachment_search_declaration_gemini
+
 # Removed validation imports - no longer validating structured output
-# from ...utils.validation import validate_json_schema  
+# from ...utils.validation import validate_json_schema
 # from jsonschema import ValidationError
 from .models import model_capabilities
 
@@ -244,7 +243,9 @@ class VertexAdapter(BaseAdapter):
         # Skip validation - let the model response through as-is
         # Structured output schema is a suggestion to the model, not a strict requirement
         if structured_output_schema:
-            logger.debug(f"Structured output schema provided - letting model response through as-is: '{response_text}'")
+            logger.debug(
+                f"Structured output schema provided - letting model response through as-is: '{response_text}'"
+            )
 
         if return_debug:
             return {"content": response_text, "_debug_tools": function_declarations}

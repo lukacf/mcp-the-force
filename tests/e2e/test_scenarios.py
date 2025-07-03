@@ -96,7 +96,7 @@ class TestE2EScenarios:
         }
         prompt1 = f"Use second-brain chat_with_gpt4_1 with {json.dumps(args1)}"
         print(f"DEBUG: Turn 1 prompt: {prompt1}")
-        
+
         output1 = claude_code(prompt1)
         print(f"DEBUG: Turn 1 raw output: {repr(output1)}")
         print(f"Turn 1 output: {output1}")
