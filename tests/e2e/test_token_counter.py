@@ -87,7 +87,7 @@ class TestTokenCounter:
             phrase in response.lower()
             for phrase in [
                 "0 token",
-                "zero token", 
+                "zero token",
                 "no token",
                 "no file",
                 "not found",

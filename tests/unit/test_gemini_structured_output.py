@@ -194,7 +194,9 @@ class TestGeminiStructuredOutput:
             return_value=mock_client,
         ):
             # Should return response as-is without validation
-            result = await adapter.generate(prompt="My age", structured_output_schema=schema)
+            result = await adapter.generate(
+                prompt="My age", structured_output_schema=schema
+            )
             assert result == '{"age": "not_a_number"}'
 
     @pytest.mark.asyncio
@@ -209,7 +211,9 @@ class TestGeminiStructuredOutput:
         mock_response.candidates = [MagicMock()]
         mock_response.candidates[0].content.parts = [MagicMock()]
         # Plain text response - should not raise error
-        mock_response.candidates[0].content.parts[0].text = "This is plain text, not JSON"
+        mock_response.candidates[0].content.parts[
+            0
+        ].text = "This is plain text, not JSON"
         mock_response.candidates[0].content.parts[0].function_call = None
 
         mock_client.models.generate_content.return_value = mock_response
