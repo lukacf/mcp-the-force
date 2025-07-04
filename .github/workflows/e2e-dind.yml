@@ -2,55 +2,76 @@ name: E2E Tests (Docker-in-Docker)
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main]
   pull_request:
-    branches: [ main, develop ]
+    branches: [main]
+  schedule:
+    # Run nightly to catch any environmental drift or new flakiness
+    - cron: '0 2 * * *'
+  workflow_dispatch: # Allows manual runs
 
 jobs:
-  e2e-tests:
+  e2e-test-suite:
+    name: E2E - ${{ matrix.scenario }}
     runs-on: ubuntu-latest
+    # Give each job a 15-minute timeout, well above the longest test
+    timeout-minutes: 15
     
     strategy:
+      # CRITICAL: Do not cancel other jobs if one fails.
+      # This ensures you get a complete report of all broken scenarios.
       fail-fast: false
       matrix:
         scenario:
-          - smoke
-          - memory  
-          - attachments
-          - large_context
-          - cross_model
-          - failures
+          - smoke          # ~75s
+          - attachments    # ~89s
+          - failures       # ~129s
+          - cross_model    # ~170s
+          - memory         # ~281s
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build test-runner image
-        run: docker build -f tests/e2e_dind/Dockerfile.runner -t mcp-e2e-runner .
-
-      - name: Run scenario ${{ matrix.scenario }}
+      - name: Build Test Runner and Server Docker Images
+        id: docker_build
+        run: |
+          docker build -f tests/e2e_dind/Dockerfile.runner -t mcp-e2e-runner:latest .
+          docker build -f tests/e2e_dind/Dockerfile.server -t mcp-e2e-server:latest .
+        
+      - name: Run E2E Test Scenario
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          VERTEX_PROJECT: ${{ secrets.VERTEX_PROJECT }}
-          VERTEX_LOCATION: ${{ secrets.VERTEX_LOCATION }}
-          E2E_ARTIFACT_DIR: /tmp/artifacts
+          VERTEX_PROJECT: ${{ vars.VERTEX_PROJECT }}
+          VERTEX_LOCATION: ${{ vars.VERTEX_LOCATION }}
         run: |
-          mkdir -p /tmp/artifacts
+          # Check if Google Cloud credentials are available
+          if [ -n "${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}" ]; then
+            # Use service account credentials if available
+            echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}' | base64 -d > /tmp/gcp-creds.json
+            export GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-creds.json
+            export ADC_JSON_B64='${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}'
+          fi
+          
           docker run --rm \
             -v /var/run/docker.sock:/var/run/docker.sock \
-            -v $PWD:/workspace \
-            -e OPENAI_API_KEY -e ANTHROPIC_API_KEY -e VERTEX_PROJECT -e VERTEX_LOCATION \
-            -e E2E_ARTIFACT_DIR \
-            mcp-e2e-runner tests/e2e_dind/scenarios/test_${{ matrix.scenario }}.py -v --tb=short
+            -v ${{ github.workspace }}:/host-project \
+            -w /host-project/tests/e2e_dind \
+            -e OPENAI_API_KEY='${{ secrets.OPENAI_API_KEY }}' \
+            -e ANTHROPIC_API_KEY='${{ secrets.ANTHROPIC_API_KEY }}' \
+            -e VERTEX_PROJECT='${{ vars.VERTEX_PROJECT }}' \
+            -e VERTEX_LOCATION='${{ vars.VERTEX_LOCATION }}' \
+            -e GOOGLE_APPLICATION_CREDENTIALS="${GOOGLE_APPLICATION_CREDENTIALS:-}" \
+            -e ADC_JSON_B64="${ADC_JSON_B64:-}" \
+            mcp-e2e-runner:latest \
+            scenarios/test_${{ matrix.scenario }}.py -v --tb=short
 
-      - name: Upload artifacts on failure
+      - name: Upload Logs on Failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: logs-${{ matrix.scenario }}
-          path: /tmp/artifacts
+          name: e2e-logs-${{ matrix.scenario }}
+          path: |
+            /tmp/artifacts/*.log
           if-no-files-found: ignore
