@@ -60,27 +60,30 @@ All tests run concurrently with 100% pass rate. Each test validates a complete u
 - **Duration**: ~129 seconds
 - **Key Validation**: System fails safely with helpful error messages
 
-### 4. Cross-Model Continuity (`test_cross_model.py`)
-- **Purpose**: Session persistence and information sharing between different AI models
-- **Models Used**: Gemini 2.5 Pro → o3 → GPT-4.1 (session continuity chain)
+### 4. Session Isolation and Continuity (`test_cross_model.py`)
+- **Purpose**: Validates session state persistence within models and isolation between models
+- **Models Used**: o3 (session continuity testing), Gemini 2.5 Pro (isolation testing)
 - **Tests**:
-  - Store information using one AI model with session_id
-  - Retrieve stored information using different AI model with same session_id
-  - Validate session isolation (different session_id cannot access data)
-  - Cross-model conversation threading and context preservation
+  - Store information using o3 with specific session_id
+  - Retrieve stored information using same o3 session_id (validates OpenAI session continuity)
+  - Test session isolation using Gemini with different session_id (should not access o3 data)
+  - Validate reasoning_effort parameter routing
+  - Verify session persistence across multiple operations
 - **Duration**: ~170 seconds
-- **Key Validation**: Session-based memory works across different AI providers
+- **Key Validation**: Session isolation works correctly - no cross-provider session sharing
 
-### 5. Memory Lifecycle (`test_memory.py`)
-- **Purpose**: Project memory storage, retrieval, and lifecycle management
-- **Models Used**: o3 (reasoning-heavy memory operations)
+### 5. Session Management and Parameter Routing (`test_memory.py`)
+- **Purpose**: Comprehensive session state management and parameter validation across models
+- **Models Used**: Gemini 2.5 Pro (primary session), o3 (isolation testing), GPT-4.1 (parameter testing)
 - **Tests**:
-  - Store project information and design decisions
-  - Search project memory with different query patterns
-  - Validate memory persistence across multiple operations
-  - Test memory search relevance and ranking
-- **Duration**: ~281 seconds (longest due to complex memory operations)
-- **Key Validation**: Long-term project knowledge storage and retrieval works reliably
+  - Store information in Gemini session and validate recall within same session
+  - Test session isolation between Gemini and o3 (different providers)
+  - Test session isolation within same provider (different session_ids)
+  - Validate reasoning_effort parameter with o3
+  - Validate temperature parameter with GPT-4.1
+  - Verify session persistence across multiple operations and models
+- **Duration**: ~281 seconds (longest due to multiple model interactions)
+- **Key Validation**: Session state is properly isolated between providers and session IDs
 
 ## Running Tests
 
@@ -151,7 +154,12 @@ The old `tests/e2e/` approach had fundamental issues:
 - Inconsistent pass rates and flaky results
 
 This new approach achieves:
-- **5 comprehensive user workflow tests** covering all critical functionality
+- **5 comprehensive system validation tests** covering all critical functionality:
+  * Core system health and basic model functionality
+  * RAG workflow with file attachments and vector store creation
+  * Error handling and graceful failure scenarios
+  * Session state isolation and parameter routing validation
+  * Multi-model session management and provider isolation
 - **Complete isolation** via Docker-in-Docker with fresh containers per test
 - **100% pass rate** with parallel execution at the job level
 - **Robust communication** via Docker networks instead of pipes
