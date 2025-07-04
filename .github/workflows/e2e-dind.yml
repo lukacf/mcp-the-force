@@ -2,9 +2,7 @@ name: E2E Tests (Docker-in-Docker)
 
 on:
   push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+    branches: [main]  # Only on merge to main
   schedule:
     # Run nightly to catch any environmental drift or new flakiness
     - cron: '0 2 * * *'
