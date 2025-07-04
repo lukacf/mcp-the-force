@@ -134,13 +134,27 @@ All AI tools now support multi-turn conversations:
 
 ### Configuration
 
-Environment variables (via `.env` file):
-- `OPENAI_API_KEY`: Required for OpenAI models (o3, o3-pro, gpt-4.1)
-- `VERTEX_PROJECT`, `VERTEX_LOCATION`: Required for Google Vertex AI models
-- `HOST`, `PORT`: Server configuration
-- `CONTEXT_PERCENTAGE`: Percentage of model context to use (default: 0.85 = 85%)
-- `DEFAULT_TEMPERATURE`: AI model temperature setting
-- `LOG_LEVEL`: Logging verbosity
+The project uses YAML-based configuration managed by the `mcp-config` CLI tool:
+
+**Setup:**
+```bash
+# Initialize configuration files
+mcp-config init
+
+# This creates:
+# - config.yaml: Non-sensitive configuration (can be committed)
+# - secrets.yaml: API keys and sensitive data (gitignored)
+```
+
+**Key Configuration:**
+- `providers.openai.api_key`: Required for OpenAI models (o3, o3-pro, gpt-4.1)
+- `providers.vertex.project`, `providers.vertex.location`: Required for Google Vertex AI models
+- `mcp.host`, `mcp.port`: Server configuration
+- `mcp.context_percentage`: Percentage of model context to use (default: 0.85 = 85%)
+- `mcp.default_temperature`: AI model temperature setting
+- `logging.level`: Logging verbosity
+
+Environment variables can still be used to override YAML settings if needed.
 
 ## Second Brain MCP Mandate for Claude
 
