@@ -35,14 +35,12 @@ The system loads configuration from multiple sources with clear precedence (high
 
 1. **Environment Variables** - Override any setting for CI/CD and production
 2. **YAML Files** - Primary configuration method (`config.yaml` + `secrets.yaml`)
-3. **Legacy .env** - Backward compatibility for existing setups
-4. **Defaults** - Sensible defaults built into the application
+3. **Defaults** - Sensible defaults built into the application
 
 This design allows you to:
 - ✅ Commit non-sensitive config to version control
 - ✅ Keep secrets separate and secure
 - ✅ Override any setting via environment variables
-- ✅ Migrate smoothly from legacy .env files
 
 ### Quick Configuration Setup
 
@@ -125,11 +123,11 @@ mcp-config show --format json     # As JSON
 mcp-config show --format env      # As environment variables
 
 # Export configuration
-mcp-config export-env             # Generate .env file
+mcp-config show                   # View merged configuration
 mcp-config export-client          # Generate mcp-config.json for Claude
 
-# Import from legacy files
-mcp-config import-legacy          # Migrate from .env
+# Validate configuration
+mcp-config validate               # Check for errors
 ```
 
 ### Environment Variable Override
@@ -156,22 +154,20 @@ Common environment variables:
 | Vertex AI | `VERTEX_PROJECT`, `VERTEX_LOCATION` |
 | Vertex OAuth (CI/CD) | `GCLOUD_OAUTH_CLIENT_ID`, `GCLOUD_OAUTH_CLIENT_SECRET`, `GCLOUD_USER_REFRESH_TOKEN` |
 
-### Migration from Legacy .env
+### Migration from Legacy Environment Variables
 
-If upgrading from an older version:
+If upgrading from an older version that used only environment variables:
 
 ```bash
-# Option 1: Automatic migration
-mcp-config import-legacy
+# Initialize YAML configuration files
+mcp-config init
 
-# Option 2: Continue using .env (lower precedence)
-# Your .env will still work but YAML takes precedence
-cp .env.example .env
+# Copy your environment variable values to:
+# - config.yaml (non-sensitive settings)
+# - secrets.yaml (API keys and credentials)
 
-# Option 3: Manual migration
-# 1. Copy non-sensitive values to config.yaml
-# 2. Copy secrets to secrets.yaml
-# 3. Run: mcp-config validate
+# Validate your configuration
+mcp-config validate
 ```
 
 ### Best Practices
@@ -188,7 +184,6 @@ cp .env.example .env
 
 3. **Production**:
    - Use environment variables for all secrets
-   - Generate .env with `mcp-config export-env` for Docker
    - Use `mcp-config export-client` for MCP client configuration
 
 See [docs/configuration.md](docs/configuration.md) for the complete configuration reference including all available settings, Docker integration, and troubleshooting.
@@ -321,8 +316,9 @@ This makes it clear what type of interaction each tool provides.
 
 ### Additional Tools
 
-- `create_vector_store_tool` - Create vector stores for RAG workflows
 - `list_models` - List all available models and their capabilities
+- `search_project_memory` - Search past conversations and git commits
+- `search_session_attachments` - Search files attached to current session
 
 ## 📁 Smart Context Management
 
@@ -416,7 +412,10 @@ result = await mcp.call_tool(
 
 ## 📋 Structured Output Support (NEW)
 
-All chat tools now support structured JSON output through the `structured_output_schema` parameter. This ensures consistent, parseable responses for automation and testing.
+Most chat tools support structured JSON output through the `structured_output_schema` parameter. This ensures consistent, parseable responses for automation and testing.
+
+**Supported Models**: `o3`, `o3-pro`, `gpt-4.1`, `gemini-2.5-pro`, `gemini-2.5-flash`  
+**Not Supported**: Research models (`o3-deep-research`, `o4-mini-deep-research`) do not support custom structured output schemas.
 
 ### Basic Usage
 
@@ -473,19 +472,21 @@ for bug in bugs_data["bugs"]:
 
 ### Vector Store Management
 
-Create persistent vector stores for RAG:
+Use large codebases with RAG via attachments:
 
 ```python
-# Create a vector store from your codebase
+# Attach files for automatic RAG processing
 result = await mcp.call_tool(
-    "create_vector_store_tool",
-    files=["/path/to/docs/", "/path/to/src/"],
-    name="project-knowledge-base"
+    "chat_with_gpt4_1",
+    instructions="Analyze this codebase for patterns",
+    output_format="Structured analysis",
+    context=[],
+    attachments=["/path/to/docs/", "/path/to/src/"],
+    session_id="analysis-session"
 )
-# Returns: {"vector_store_id": "vs_...", "status": "created"}
 ```
 
-Then use the returned `vector_store_id` with any OpenAI tool by passing it in the `attachments` parameter.
+The system automatically creates ephemeral vector stores for large attachments and cleans them up after processing.
 
 ## 📖 Usage Examples
 
@@ -677,9 +678,8 @@ The configuration system is built on pydantic-settings v2 with custom source han
 ```python
 # Configuration is loaded and merged in this order:
 1. Default values (in pydantic models)
-2. .env file (if exists)
-3. YAML files (config.yaml + secrets.yaml)
-4. Environment variables (highest precedence)
+2. YAML files (config.yaml + secrets.yaml)
+3. Environment variables (highest precedence)
 ```
 
 #### Key Components
