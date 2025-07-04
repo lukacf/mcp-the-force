@@ -112,8 +112,16 @@ jobs:
         timeout-minutes: 10
 
 
-  all-tests-passed:
+  e2e-tests:
+    name: E2E Tests
     needs: [lint, unit-tests, integration-tests]
+    uses: ./.github/workflows/e2e-dind.yml
+    secrets: inherit
+    # Only run E2E tests on main branch, feature branches, or PRs from same repo
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/feature/') || github.event.pull_request.head.repo.full_name == github.repository
+
+  all-tests-passed:
+    needs: [lint, unit-tests, integration-tests, e2e-tests]
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -121,7 +129,8 @@ jobs:
         run: |
           if [[ "${{ needs.lint.result }}" != "success" || \
                 "${{ needs.unit-tests.result }}" != "success" || \
-                "${{ needs.integration-tests.result }}" != "success" ]]; then
+                "${{ needs.integration-tests.result }}" != "success" || \
+                "${{ needs.e2e-tests.result }}" != "success" ]]; then
             echo "One or more required tests failed"
             exit 1
           fi
