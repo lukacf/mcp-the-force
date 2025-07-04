@@ -1,0 +1,34 @@
+services:
+  test-runner:
+    image: mcp-e2e-runner:latest
+    environment:
+      PYTHONPATH: /host-project
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      VERTEX_PROJECT: ${VERTEX_PROJECT}
+      VERTEX_LOCATION: ${VERTEX_LOCATION}
+      LOG_LEVEL: INFO
+      CI_E2E: "1"
+    working_dir: /host-project
+    entrypoint: ["tail", "-f", "/dev/null"]  # Override pytest entrypoint and keep alive
+    volumes:
+      - shared-tmp:/tmp  # Share temp directory with server
+
+  server:
+    image: mcp-e2e-server:latest
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      VERTEX_PROJECT: ${VERTEX_PROJECT}
+      VERTEX_LOCATION: ${VERTEX_LOCATION}
+      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS}
+      ADC_JSON_B64: ${ADC_JSON_B64}
+      HOST: 0.0.0.0
+      PORT: 8000
+      LOG_LEVEL: DEBUG
+    entrypoint: ["tail", "-f", "/dev/null"]  # Override server start and keep alive
+    volumes:
+      - shared-tmp:/tmp  # Share temp directory with runner
+
+volumes:
+  shared-tmp:
