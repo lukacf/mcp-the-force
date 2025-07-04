@@ -14,7 +14,7 @@ The project memory system is **partially implemented** with significant architec
 5. **No Pollution** - Project memory remains clean; temporary attachments never contaminate it
 
 ### Key Architectural Insight (from O3 analysis)
-**Attachments are already isolated!** The system creates temporary vector stores for attachments that are deleted immediately after use. There's no risk of pollution, and no need for a separate `search_session_attachments` function.
+**Attachments are intentionally isolated!** The system creates temporary vector stores for attachments that are deleted immediately after use. The `search_session_attachments` function provides models with the ability to search these ephemeral attachments during execution, maintaining clean separation from permanent project memory.
 
 ## Core Idea
 
@@ -223,13 +223,13 @@ def retrieve_context(query, k_conv=40, k_commit=40):
     return truncate_to_token_budget(context)
 ```
 
-## What Still Needs Implementation
+## Implementation Status
 
-### 1. Git Commit Memory Storage
+### 1. Git Commit Memory Storage - ✅ Implemented
 
-Currently, only conversation memory is stored. Git commits need to be added:
+Both conversation memory and git commits are stored via the following system:
 
-### Git Post-Commit Hook (To Be Implemented)
+### Git Post-Commit Hook (Implemented)
 ```python
 import os, sqlite3, json, datetime, hashlib, re
 from pathlib import Path

@@ -313,7 +313,11 @@ The server provides tools defined through a descriptor-based system. Each tool h
 
 ### Tool Naming Convention
 
-All tools follow the pattern `chat_with_{model_name}` for clarity and consistency. This makes it clear that these tools enable chatting with specific AI models.
+Tools follow these naming patterns for clarity and consistency:
+- `chat_with_{model_name}` - Conversational AI assistance with specific models
+- `research_with_{model_name}` - Autonomous research tools with web search capabilities
+
+This makes it clear what type of interaction each tool provides.
 
 ### Additional Tools
 
