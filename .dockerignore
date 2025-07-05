@@ -76,5 +76,5 @@ temp/
 .travis.yml
 
 # Don't ignore test files we need
-!tests/e2e/
-!tests/e2e/**
+!tests/e2e_dind/
+!tests/e2e_dind/**
