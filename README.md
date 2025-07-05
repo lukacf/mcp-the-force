@@ -24,6 +24,10 @@ mcp-config validate
 uv run -- mcp-second-brain
 ```
 
+## 🤖 Claude Code Integration
+
+This MCP server is designed to work seamlessly with Claude Code. Once running, Claude Code automatically discovers and connects to the server, giving you access to advanced AI model orchestration with multiple specialized models (OpenAI o3/o3-pro/gpt-4.1, Google Gemini 2.5) and intelligent context management for large codebases.
+
 ## 🔧 Configuration
 
 MCP Second-Brain uses a unified YAML-based configuration system with environment variable overlay support.
@@ -280,46 +284,42 @@ result = await mcp.call_tool(
 
 ## 📖 Usage Examples
 
-### Basic Analysis
+### Basic Analysis with Claude Code
 
-```python
+```
 # Simple code review
-result = await mcp.call_tool(
-    "chat_with_gemini25_flash",
-    instructions="Review this function for potential improvements",
-    output_format="Bullet points with specific suggestions",
-    context=["/src/utils.py"],
-    session_id="code-review-session"
-)
+Use second-brain chat_with_gemini25_flash with {"instructions": "Review this function for potential improvements", "output_format": "Bullet points with specific suggestions", "context": ["/src/utils.py"], "session_id": "code-review-session"}
 ```
 
-### Large Codebase RAG
+### Large Codebase Analysis with RAG
 
-```python
-# Attach files for automatic RAG processing
-result = await mcp.call_tool(
-    "chat_with_gpt4_1",
-    instructions="Analyze this codebase for patterns",
-    output_format="Structured analysis",
-    context=[],
-    attachments=["/path/to/docs/", "/path/to/src/"],
-    session_id="analysis-session"
-)
+```
+# Analyze large codebase using attachments for RAG
+Use second-brain chat_with_gpt4_1 with {"instructions": "Analyze this codebase for architectural patterns and potential improvements", "output_format": "Structured analysis with specific recommendations", "context": [], "attachments": ["/path/to/docs/", "/path/to/src/"], "session_id": "architecture-analysis"}
 ```
 
-The system automatically creates ephemeral vector stores for large attachments and cleans them up after processing.
+### Structured Output for Reliable Results
+
+```
+# Get structured JSON output for programmatic use
+Use second-brain chat_with_o3 with {"instructions": "Calculate the complexity and provide metrics for this codebase", "output_format": "JSON object with metrics", "context": ["/src"], "session_id": "complexity-analysis", "structured_output_schema": {"type": "object", "properties": {"cyclomatic_complexity": {"type": "integer"}, "lines_of_code": {"type": "integer"}, "maintainability_score": {"type": "string"}}, "required": ["cyclomatic_complexity", "lines_of_code", "maintainability_score"]}}
+```
 
 ### Research with Web Search
 
-```python
+```
 # Deep research with autonomous web search
-result = await mcp.call_tool(
-    "research_with_o3_deep_research",
-    instructions="Research the latest advances in vector databases and their applications in RAG",
-    output_format="Comprehensive report with recent developments and practical applications",
-    context=[],
-    session_id="vector-db-research"
-)
+Use second-brain research_with_o3_deep_research with {"instructions": "Research the latest advances in vector databases and their applications in RAG", "output_format": "Comprehensive report with recent developments and practical applications", "context": [], "session_id": "vector-db-research"}
+```
+
+### Cross-Model Collaboration
+
+```
+# Use multiple models for comprehensive analysis
+Use second-brain chat_with_gemini25_flash with {"instructions": "What are the main security concerns in this authentication system?", "output_format": "List of potential security issues", "context": ["/src/auth/"], "session_id": "security-review-quick"}
+
+# Then deep dive with reasoning model
+Use second-brain chat_with_o3_pro with {"instructions": "Analyze the authentication system for subtle security vulnerabilities", "output_format": "Detailed security analysis with remediation steps", "context": ["/src/auth/"], "session_id": "security-review-deep"}
 ```
 
 ## 🧠 Project Memory
@@ -329,13 +329,9 @@ The server automatically captures and indexes:
 - **Git Commits**: Commit messages, diffs, and metadata for institutional memory
 
 Search across project memory:
-```python
+```
 # Search past decisions and commit history
-result = await mcp.call_tool(
-    "search_project_memory",
-    query="authentication implementation decisions",
-    max_results=10
-)
+Use second-brain search_project_memory with {"query": "authentication implementation decisions", "max_results": 10}
 ```
 
 ## 📚 Documentation
@@ -346,4 +342,4 @@ result = await mcp.call_tool(
 
 ## 📄 License
 
-Private repository - see license terms.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
