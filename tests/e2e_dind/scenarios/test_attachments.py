@@ -55,11 +55,64 @@ with efficiency rating O(log³ n) and operates on 256-qubit systems.
 
         print("✅ Attachment test passed with project-safe path!")
 
+        # Step 3: Test deduplication cache is cleared - create different document
+        doc2 = os.path.join(test_dir, "different_paper.txt")
+        with open(doc2, "w") as f:
+            f.write("""Completely Different Topic: History of Ancient Rome
+
+This document is about Roman history and has nothing to do with machine learning.
+The Roman Empire lasted from 27 BC to 476 AD.
+Julius Caesar was assassinated in 44 BC.
+""")
+
+        print(f"📄 Created second test file: {doc2}")
+
+        # Step 4: Search for the ORIGINAL content with new attachment
+        # If dedup cache persists, it might return cached results from first search
+        args2 = {
+            "instructions": "Search the attached documents for information about the QALG-9000 quantum algorithm.",
+            "output_format": "Tell me if you found anything about QALG-9000",
+            "context": [],
+            "attachments": [doc2],  # Different document that doesn't contain QALG-9000
+            "session_id": "rag-test-2",
+        }
+
+        response2 = claude(
+            f"Use second-brain chat_with_gpt4_1 with {json.dumps(args2)}"
+        )
+        print(f"✅ Second response: {response2}")
+
+        # The second search should NOT find QALG-9000 (it's not in doc2)
+        # Check if the response indicates QALG-9000 was not found
+        response2_lower = response2.lower()
+        found_qalg = "qalg-9000" in response2_lower
+        indicates_not_found = any(
+            phrase in response2_lower
+            for phrase in [
+                "not found",
+                "no information",
+                "doesn't contain",
+                "no mention",
+                "couldn't find",
+                "not present",
+                "no results",
+            ]
+        )
+
+        # Either it shouldn't mention QALG-9000 at all, or it should clearly indicate it wasn't found
+        assert (
+            not found_qalg or indicates_not_found
+        ), f"Second search found QALG-9000 in a document that doesn't contain it - possible deduplication cache bug! Response: {response2}"
+
+        print("✅ Deduplication test passed - cache properly cleared between searches!")
+
     finally:
         # Cleanup test files
         try:
             if os.path.exists(doc1):
                 os.remove(doc1)
+            if "doc2" in locals() and os.path.exists(doc2):
+                os.remove(doc2)
             if os.path.exists(test_dir):
                 os.rmdir(test_dir)
         except Exception as e:
