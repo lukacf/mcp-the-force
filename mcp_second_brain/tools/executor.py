@@ -118,8 +118,7 @@ class ToolExecutor:
                 # Clear attachment search cache for new attachments
                 from .search_attachments import SearchAttachmentAdapter
 
-                search_adapter = SearchAttachmentAdapter()
-                await search_adapter.clear_deduplication_cache()
+                await SearchAttachmentAdapter.clear_deduplication_cache()
                 logger.info(
                     "Cleared SearchAttachmentAdapter deduplication cache for new attachments"
                 )

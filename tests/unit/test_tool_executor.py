@@ -228,12 +228,10 @@ class TestToolExecutor:
             ) as mock_create:
                 mock_create.return_value = "vs_123"
 
-                # Patch SearchAttachmentAdapter at import location
+                # Patch SearchAttachmentAdapter.clear_deduplication_cache class method
                 with patch(
-                    "mcp_second_brain.tools.search_attachments.SearchAttachmentAdapter"
-                ) as mock_adapter_class:
-                    mock_adapter_class.return_value = mock_search_adapter
-
+                    "mcp_second_brain.tools.search_attachments.SearchAttachmentAdapter.clear_deduplication_cache"
+                ) as mock_clear_cache:
                     metadata = get_tool("chat_with_gpt4_1")
                     await executor.execute(
                         metadata,
@@ -245,4 +243,4 @@ class TestToolExecutor:
                     )
 
                     # Verify cache was cleared
-                    mock_search_adapter.clear_deduplication_cache.assert_called_once()
+                    mock_clear_cache.assert_called_once()
