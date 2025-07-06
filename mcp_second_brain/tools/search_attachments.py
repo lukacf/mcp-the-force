@@ -69,9 +69,10 @@ class SearchAttachmentAdapter(BaseAdapter):
         else:
             self.client = None
 
-    async def clear_deduplication_cache(self):
+    @classmethod
+    async def clear_deduplication_cache(cls):
         """Clear the deduplication cache."""
-        await self._deduplicator.clear_cache()
+        await cls._deduplicator.clear_cache()
 
     async def generate(
         self,
