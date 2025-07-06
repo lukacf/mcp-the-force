@@ -48,11 +48,13 @@ class TestCountProjectTokens:
         result = await tool.generate()
 
         assert result["total_tokens"] > 0
-        # Check that file1.txt is in the results (path may be absolute)
-        assert any("file1.txt" in path for path in result["per_file"])
+        assert result["total_files"] == 1
+        # Check that file1.txt is in the largest_files
+        assert len(result["largest_files"]) == 1
+        assert any("file1.txt" in f["path"] for f in result["largest_files"])
         # Get the token count for file1.txt
         file1_tokens = next(
-            v for k, v in result["per_file"].items() if "file1.txt" in k
+            f["tokens"] for f in result["largest_files"] if "file1.txt" in f["path"]
         )
         assert file1_tokens > 0
 
@@ -62,17 +64,23 @@ class TestCountProjectTokens:
         tool.items = ["."]
         result = await tool.generate()
 
-        # Should include text files
-        assert any("file1.txt" in path for path in result["per_file"])
-        assert any("file2.py" in path for path in result["per_file"])
-        assert any("nested.txt" in path for path in result["per_file"])
+        # Should have correct number of files
+        assert result["total_files"] >= 3  # At least file1.txt, file2.py, nested.txt
+
+        # Should include text files in largest_files
+        file_paths = [f["path"] for f in result["largest_files"]]
+        assert any("file1.txt" in path for path in file_paths)
+        assert any("file2.py" in path for path in file_paths)
+        # nested.txt might not be in top N if there are other larger files
 
         # Should have non-zero total
         assert result["total_tokens"] > 0
 
-        # Total should equal sum of individual files
-        total_from_files = sum(result["per_file"].values())
-        assert result["total_tokens"] == total_from_files
+        # Should have directory aggregation
+        assert len(result["largest_directories"]) > 0
+        # Check that subdir is included
+        dir_paths = [d["path"] for d in result["largest_directories"]]
+        assert any("subdir" in path for path in dir_paths)
 
     async def test_skips_binary_files(self, temp_project_dir):
         """Should skip binary files like images."""
@@ -80,8 +88,9 @@ class TestCountProjectTokens:
         tool.items = ["."]
         result = await tool.generate()
 
-        # Binary file should not be included
-        assert not any("binary.png" in path for path in result["per_file"])
+        # Binary file should not be included in largest_files
+        file_paths = [f["path"] for f in result["largest_files"]]
+        assert not any("binary.png" in path for path in file_paths)
 
     async def test_respects_gitignore(self, temp_project_dir):
         """Should skip files matching .gitignore patterns."""
@@ -89,9 +98,10 @@ class TestCountProjectTokens:
         tool.items = ["."]
         result = await tool.generate()
 
-        # Ignored files should not be included
-        assert not any("ignored.txt" in path for path in result["per_file"])
-        assert not any("test.log" in path for path in result["per_file"])
+        # Ignored files should not be included in largest_files
+        file_paths = [f["path"] for f in result["largest_files"]]
+        assert not any("ignored.txt" in path for path in file_paths)
+        assert not any("test.log" in path for path in file_paths)
 
     async def test_handles_large_files(self, temp_project_dir):
         """Should handle or skip files exceeding size limits."""
@@ -102,7 +112,9 @@ class TestCountProjectTokens:
         # Large file might be skipped or included depending on MAX_FILE_SIZE
         # Just ensure it doesn't crash
         assert isinstance(result["total_tokens"], int)
-        assert isinstance(result["per_file"], dict)
+        assert isinstance(result["total_files"], int)
+        assert isinstance(result["largest_files"], list)
+        assert isinstance(result["largest_directories"], list)
 
     async def test_rejects_paths_outside_project(self, temp_project_dir):
         """Should reject paths that try to escape project root."""
@@ -112,7 +124,9 @@ class TestCountProjectTokens:
 
         # Should get empty results since path is outside project
         assert result["total_tokens"] == 0
-        assert len(result["per_file"]) == 0
+        assert result["total_files"] == 0
+        assert len(result["largest_files"]) == 0
+        assert len(result["largest_directories"]) == 0
 
     async def test_handles_non_utf8_files(self, temp_project_dir):
         """Should handle files with non-UTF8 encoding gracefully."""
@@ -125,7 +139,9 @@ class TestCountProjectTokens:
         result = await tool.generate()
 
         # Should process file without crashing
-        assert any("bad_encoding.txt" in path for path in result["per_file"])
+        assert result["total_files"] == 1
+        file_paths = [f["path"] for f in result["largest_files"]]
+        assert any("bad_encoding.txt" in path for path in file_paths)
         assert result["total_tokens"] > 0
 
     async def test_empty_directory(self, temp_project_dir):
@@ -138,7 +154,9 @@ class TestCountProjectTokens:
         result = await tool.generate()
 
         assert result["total_tokens"] == 0
-        assert len(result["per_file"]) == 0
+        assert result["total_files"] == 0
+        assert len(result["largest_files"]) == 0
+        assert len(result["largest_directories"]) == 0
 
     async def test_multiple_paths(self, temp_project_dir):
         """Should handle multiple paths in items list."""
@@ -147,10 +165,12 @@ class TestCountProjectTokens:
         result = await tool.generate()
 
         # Should include file1.txt and nested.txt
-        assert any("file1.txt" in path for path in result["per_file"])
-        assert any("nested.txt" in path for path in result["per_file"])
+        assert result["total_files"] == 2
+        file_paths = [f["path"] for f in result["largest_files"]]
+        assert any("file1.txt" in path for path in file_paths)
+        assert any("nested.txt" in path for path in file_paths)
         # But not file2.py since we didn't include parent dir
-        assert not any("file2.py" in path for path in result["per_file"])
+        assert not any("file2.py" in path for path in file_paths)
 
     @patch("mcp_second_brain.utils.token_counter.tiktoken")
     async def test_fallback_when_tiktoken_missing(
@@ -166,4 +186,70 @@ class TestCountProjectTokens:
 
         # Should still return a reasonable estimate
         assert result["total_tokens"] > 0
-        assert any("file1.txt" in path for path in result["per_file"])
+        assert result["total_files"] == 1
+        file_paths = [f["path"] for f in result["largest_files"]]
+        assert any("file1.txt" in path for path in file_paths)
+
+    async def test_top_n_parameter(self, temp_project_dir):
+        """Should respect the top_n parameter."""
+        # Create more files than default top_n
+        for i in range(15):
+            (temp_project_dir / f"file{i}.txt").write_text(f"Content {i}" * (i + 1))
+
+        tool = CountProjectTokens()
+        tool.items = ["."]
+        tool.top_n = 5  # Request only top 5
+        result = await tool.generate()
+
+        # Should only return 5 files and directories
+        assert len(result["largest_files"]) <= 5
+        assert len(result["largest_directories"]) <= 5
+
+        # Total files should still count all files
+        assert result["total_files"] >= 15
+
+    async def test_directory_aggregation(self, temp_project_dir):
+        """Should correctly aggregate tokens by directory."""
+        # Create nested directory structure
+        deep_dir = temp_project_dir / "level1" / "level2" / "level3"
+        deep_dir.mkdir(parents=True)
+
+        # Add files at different levels
+        (temp_project_dir / "level1" / "file1.txt").write_text("Level 1 content" * 10)
+        (temp_project_dir / "level1" / "level2" / "file2.txt").write_text(
+            "Level 2 content" * 20
+        )
+        (deep_dir / "file3.txt").write_text("Level 3 content" * 30)
+
+        tool = CountProjectTokens()
+        tool.items = ["level1"]
+        result = await tool.generate()
+
+        # Should have directories in the aggregation
+
+        # level1 should have the most tokens (includes all subdirs)
+        level1_dir = next(
+            (
+                d
+                for d in result["largest_directories"]
+                if "level1" in d["path"] and "level2" not in d["path"]
+            ),
+            None,
+        )
+        assert level1_dir is not None
+
+        # level2 should have fewer tokens
+        level2_dir = next(
+            (
+                d
+                for d in result["largest_directories"]
+                if "level2" in d["path"] and "level3" not in d["path"]
+            ),
+            None,
+        )
+        if level2_dir:
+            assert level2_dir["tokens"] < level1_dir["tokens"]
+
+        # All directories should have correct file counts
+        for dir_info in result["largest_directories"]:
+            assert dir_info["file_count"] > 0
