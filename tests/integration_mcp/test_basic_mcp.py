@@ -106,11 +106,16 @@ class TestBasicMCP:
 
             data = json.loads(content[0].text)
             assert "total_tokens" in data
-            assert "per_file" in data
+            assert "total_files" in data
+            assert "largest_files" in data
+            assert "largest_directories" in data
             assert isinstance(data["total_tokens"], int)
+            assert isinstance(data["total_files"], int)
             assert data["total_tokens"] > 0
-            # Check that pyproject.toml is in the results
-            assert any("pyproject.toml" in path for path in data["per_file"])
+            assert data["total_files"] == 1
+            # Check that pyproject.toml is in the largest_files
+            assert len(data["largest_files"]) == 1
+            assert any("pyproject.toml" in f["path"] for f in data["largest_files"])
 
     async def test_search_project_memory_callable(self, mcp_server, mock_env):
         """Test search_project_memory tool via MCP."""

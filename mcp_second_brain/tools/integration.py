@@ -174,20 +174,26 @@ def create_count_project_tokens_tool(mcp: FastMCP) -> None:
     """Create the count_project_tokens utility tool."""
 
     @mcp.tool()
-    async def count_project_tokens(items: List[str]) -> Dict[str, Any]:
+    async def count_project_tokens(
+        items: List[str], top_n: Optional[int] = 10
+    ) -> Dict[str, Any]:
         """Count tokens for specified files or directories using the same
         filtering logic as context/attachments parameters.
 
         Args:
             items: List of file paths or directory paths to count tokens for
+            top_n: Number of top files/directories to list (default: 10)
 
         Returns:
             Dictionary containing:
             - total_tokens: Total token count across all files
-            - per_file: Dictionary mapping file paths to their token counts
+            - total_files: Total number of files analyzed
+            - largest_files: List of top N files by token count
+            - largest_directories: List of top N directories by aggregated token count
         """
         from .token_count import CountProjectTokens
 
         tool = CountProjectTokens()
         tool.items = items
+        tool.top_n = top_n
         return await tool.generate()
