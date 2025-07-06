@@ -115,6 +115,14 @@ class ToolExecutor:
             vector_store_param = routed_params["vector_store"]
             assert isinstance(vector_store_param, list)  # Type hint for mypy
             if vector_store_param:
+                # Clear attachment search cache for new attachments
+                from .search_attachments import SearchAttachmentAdapter
+
+                await SearchAttachmentAdapter.clear_deduplication_cache()
+                logger.info(
+                    "Cleared SearchAttachmentAdapter deduplication cache for new attachments"
+                )
+
                 # Gather files from directories
                 from ..utils.fs import gather_file_paths
 
