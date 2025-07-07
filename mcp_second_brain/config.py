@@ -90,6 +90,14 @@ class MemoryConfig(BaseModel):
     max_files_per_commit: int = Field(50, description="Max files per commit", ge=1)
 
 
+class FeaturesConfig(BaseModel):
+    """Feature flags configuration."""
+
+    enable_stable_inline_list: bool = Field(
+        False, description="Enable stable inline list for context overflow management"
+    )
+
+
 class Settings(BaseSettings):
     """Unified settings for mcp-second-brain server."""
 
@@ -109,6 +117,7 @@ class Settings(BaseSettings):
     # Feature configs
     session: SessionConfig = Field(default_factory=SessionConfig)
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
+    features: FeaturesConfig = Field(default_factory=FeaturesConfig)
 
     # Testing
     adapter_mock: bool = Field(False, description="Use mock adapters for testing")
@@ -256,6 +265,8 @@ class Settings(BaseSettings):
             "MEMORY_SESSION_CUTOFF_HOURS": ("memory", "session_cutoff_hours"),
             "MEMORY_SUMMARY_CHAR_LIMIT": ("memory", "summary_char_limit"),
             "MEMORY_MAX_FILES_PER_COMMIT": ("memory", "max_files_per_commit"),
+            # Features
+            "ENABLE_STABLE_INLINE_LIST": ("features", "enable_stable_inline_list"),
             # Testing
             "MCP_ADAPTER_MOCK": ("adapter_mock",),
         }
