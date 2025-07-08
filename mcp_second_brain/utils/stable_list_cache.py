@@ -187,7 +187,7 @@ class StableListCache(BaseSQLiteCache):
         try:
             stat = os.stat(file_path)
             current_size = stat.st_size
-            current_mtime = int(stat.st_mtime)
+            current_mtime = int(stat.st_mtime_ns)
 
             return (
                 current_size != last_info["size"] or current_mtime != last_info["mtime"]
