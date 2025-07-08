@@ -243,6 +243,15 @@ def _is_safe_path(base: Path, target: Path) -> bool:
     import os
     import tempfile
 
+    # Check if we're in CI e2e test environment
+    if os.environ.get("CI_E2E") == "1":
+        # In e2e tests, allow /tmp paths since containers share a /tmp volume
+        if str(target_resolved).startswith("/tmp/"):
+            logger.info(
+                f"DEBUG _is_safe_path: Allowing /tmp path in CI_E2E mode: {target_resolved}"
+            )
+            return True
+
     # Check if we're in a test environment (pytest sets PYTEST_CURRENT_TEST)
     if os.environ.get("PYTEST_CURRENT_TEST"):
         temp_dir = Path(tempfile.gettempdir()).resolve()
@@ -346,6 +355,10 @@ def gather_file_paths(items: List[str]) -> List[str]:
     logger.info(f"gather_file_paths called with {len(items)} items: {items}")
 
     project_root = Path.cwd()
+    logger.info(
+        f"DEBUG gather_file_paths: CWD/project_root={project_root}, UID={os.getuid()}"
+    )
+
     seen: Set[str] = set()
     out: List[str] = []
     total_size = 0
@@ -361,12 +374,26 @@ def gather_file_paths(items: List[str]) -> List[str]:
             pass
 
         raw_path = Path(item).expanduser()
+        logger.info(
+            f"DEBUG gather_file_paths: Processing item '{item}' -> raw_path='{raw_path}'"
+        )
+
         if not _is_safe_path(project_root, raw_path):
             logger.warning(f"Skipping unsafe path outside project root: {raw_path}")
             continue
 
         path = raw_path.resolve()
+        logger.info(
+            f"DEBUG gather_file_paths: Resolved path='{path}', exists={path.exists()}"
+        )
+
         if not path.exists():
+            logger.warning(f"DEBUG gather_file_paths: Path does not exist: '{path}'")
+            # Check if the original item exists without resolve
+            if Path(item).exists():
+                logger.warning(
+                    f"DEBUG gather_file_paths: But original item DOES exist: '{item}'"
+                )
             continue
 
         if path.is_file():

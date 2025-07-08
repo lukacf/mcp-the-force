@@ -253,7 +253,7 @@ def stack(request):
 
 
 @pytest.fixture
-def claude(stack) -> Callable[[str, int], str]:
+def claude(stack, request) -> Callable[[str, int], str]:
     """
     Returns a callable `claude(prompt: str, timeout=60) -> str`
     with proper MCP configuration.
@@ -271,9 +271,13 @@ def claude(stack) -> Callable[[str, int], str]:
             ),  # Use the resolved project
             "VERTEX_LOCATION": os.getenv("VERTEX_LOCATION", "us-central1"),
             "GOOGLE_APPLICATION_CREDENTIALS": "/home/claude/.config/gcloud/application_default_credentials.json",
-            "LOG_LEVEL": "ERROR",
+            "LOG_LEVEL": "DEBUG",
             "CI_E2E": "1",
             "PYTHONPATH": "/host-project",
+            # Feature flag - default to False (old path) if no parameter given
+            "MCP__FEATURES__ENABLE_STABLE_INLINE_LIST": "true"
+            if getattr(request, "param", False)
+            else "false",
         },
         "timeout": 60000,
         "description": "MCP Second-Brain server",

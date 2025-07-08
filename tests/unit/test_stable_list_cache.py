@@ -257,7 +257,7 @@ async def test_file_changed_since_last_send_no_change():
         # Mock os.stat to return same values
         mock_stat = MagicMock()
         mock_stat.st_size = 12345  # Same size
-        mock_stat.st_mtime = 1700000000  # Same mtime
+        mock_stat.st_mtime_ns = 1700000000  # Same mtime (in nanoseconds)
 
         with patch("os.stat", return_value=mock_stat):
             result = await cache.file_changed_since_last_send(

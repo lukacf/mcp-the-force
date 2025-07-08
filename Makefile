@@ -67,7 +67,7 @@ e2e-setup:
 	docker build -f tests/e2e_dind/Dockerfile.runner -t mcp-e2e-runner .; \
 	echo "Testing Claude MCP configuration in parallel..."; \
 	( \
-		for scenario in smoke memory attachments cross_model failures; do \
+		for scenario in smoke memory attachments cross_model failures stable_list; do \
 			( \
 				echo "Starting setup test: $$scenario"; \
 				docker run --rm \
@@ -130,7 +130,7 @@ e2e:
 	docker build -f tests/e2e_dind/Dockerfile.runner -t mcp-e2e-runner .; \
 	echo "Running all e2e scenarios in parallel..."; \
 	( \
-		for scenario in smoke memory attachments cross_model failures; do \
+		for scenario in smoke memory attachments cross_model failures stable_list; do \
 			( \
 				echo "[$$scenario] Starting at $$(date)"; \
 				docker run --rm \

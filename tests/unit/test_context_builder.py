@@ -234,15 +234,15 @@ class TestBuildContextWithStableList:
             stable_files = ["/api/file1.py", "/api/file2.py", "/api/file3.py"]
             await cache.save_stable_list("test_session", stable_files)
 
-            # Save sent file info
+            # Save sent file info (using nanosecond precision)
             await cache.update_sent_file_info(
-                "test_session", "/api/file1.py", 1000, 1700000000
+                "test_session", "/api/file1.py", 1000, 1700000000000000000
             )
             await cache.update_sent_file_info(
-                "test_session", "/api/file2.py", 1000, 1700000000
+                "test_session", "/api/file2.py", 1000, 1700000000000000000
             )
             await cache.update_sent_file_info(
-                "test_session", "/api/file3.py", 1000, 1700000000
+                "test_session", "/api/file3.py", 1000, 1700000000000000000
             )
 
             # Mock file system - file2 has changed
@@ -251,9 +251,11 @@ class TestBuildContextWithStableList:
                 if path == "/api/file2.py":
                     stat.st_size = 1500  # Changed size
                     stat.st_mtime = 1700001000
+                    stat.st_mtime_ns = 1700001000000000000  # Changed mtime_ns
                 else:
                     stat.st_size = 1000
                     stat.st_mtime = 1700000000
+                    stat.st_mtime_ns = 1700000000000000000  # Unchanged mtime_ns
                 return stat
 
             files = {
