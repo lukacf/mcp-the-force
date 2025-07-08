@@ -246,7 +246,12 @@ def _is_safe_path(base: Path, target: Path) -> bool:
     import tempfile
 
     # Check if we're in CI e2e test environment
-    if os.environ.get("CI_E2E") == "1":
+    ci_e2e = os.environ.get("CI_E2E")
+    logger.info(
+        f"DEBUG _is_safe_path: CI_E2E={ci_e2e}, checking path {target_unresolved_str}"
+    )
+
+    if ci_e2e == "1":
         # In e2e tests, allow /tmp paths since containers share a /tmp volume
         # Check both the unresolved and resolved paths to handle symlinks gracefully.
         if str(target_resolved).startswith("/tmp/") or target_unresolved_str.startswith(
@@ -383,7 +388,12 @@ def gather_file_paths(items: List[str]) -> List[str]:
             f"DEBUG gather_file_paths: Processing item '{item}' -> raw_path='{raw_path}'"
         )
 
-        if not _is_safe_path(project_root, raw_path):
+        is_safe = _is_safe_path(project_root, raw_path)
+        logger.info(
+            f"DEBUG gather_file_paths: _is_safe_path returned {is_safe} for {raw_path}"
+        )
+
+        if not is_safe:
             logger.warning(f"Skipping unsafe path outside project root: {raw_path}")
             continue
 

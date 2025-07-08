@@ -17,7 +17,6 @@ TOKEN_ATTACHMENT_2 = "stable-list-attach2-bar-456"
 TOKEN_MODIFIED_FILE = "stable-list-modified-baz-789"
 
 
-@pytest.mark.parametrize("claude", [True], indirect=True)
 class TestStableInlineList:
     """Test the stable-inline list feature for context overflow management."""
 
@@ -53,6 +52,7 @@ class TestStableInlineList:
         if os.path.exists(self.test_dir):
             shutil.rmtree(self.test_dir, ignore_errors=True)
 
+    @pytest.mark.parametrize("claude", [True], indirect=True)
     def test_initial_split_and_multimodal_access(self, claude):
         """Test that files are correctly split between inline and vector store on first call."""
         print("🔍 Testing initial split and multi-modal access...")
@@ -119,6 +119,7 @@ class TestStableInlineList:
             "✅ Initial split test passed - model accessed both inline and vector store content!"
         )
 
+    @pytest.mark.parametrize("claude", [True], indirect=True)
     def test_context_deduplication_and_statefulness(self, claude):
         """Test that unchanged files are not resent in subsequent calls."""
         print("🔍 Testing context deduplication and statefulness...")
@@ -196,6 +197,7 @@ class TestStableInlineList:
             "✅ Deduplication test passed - model remembered context without resending!"
         )
 
+    @pytest.mark.parametrize("claude", [True], indirect=True)
     def test_changed_file_detection(self, claude):
         """Test that modified files are detected and resent."""
         print("🔍 Testing changed file detection...")
