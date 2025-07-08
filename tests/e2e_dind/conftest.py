@@ -274,10 +274,6 @@ def claude(stack, request) -> Callable[[str, int], str]:
             "LOG_LEVEL": "DEBUG",
             "CI_E2E": "1",
             "PYTHONPATH": "/host-project",
-            # Pass through proxy settings from the host environment
-            "HTTP_PROXY": os.getenv("HTTP_PROXY", ""),
-            "HTTPS_PROXY": os.getenv("HTTPS_PROXY", ""),
-            "NO_PROXY": os.getenv("NO_PROXY", ""),
             # Feature flag - default to False (old path) if no parameter given
             "MCP__FEATURES__ENABLE_STABLE_INLINE_LIST": "true"
             if getattr(request, "param", False)
