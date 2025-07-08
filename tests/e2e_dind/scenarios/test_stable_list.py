@@ -41,7 +41,9 @@ class TestStableInlineList:
         env["CI_E2E"] = "1"
         try:
             subprocess.run(["chown", "-R", "claude:claude", path], check=True, env=env)
-            subprocess.run(["chmod", "-R", "755", path], check=True, env=env)
+            # Make files world-readable as a temporary fix
+            subprocess.run(["chmod", "-R", "a+rX", path], check=True, env=env)
+            print(f"DEBUG: Set world-readable permissions on {path}")
         except subprocess.CalledProcessError as e:
             print(f"Warning: Failed to set permissions on {path}: {e}")
 
@@ -123,6 +125,12 @@ class TestStableInlineList:
     def test_context_deduplication_and_statefulness(self, claude):
         """Test that unchanged files are not resent in subsequent calls."""
         print("🔍 Testing context deduplication and statefulness...")
+
+        # Debug: Add a sleep to allow checking container state
+        import time
+
+        print("DEBUG: Sleeping 5s to allow container inspection...")
+        time.sleep(5)
 
         # Create initial files
         context_file = os.path.join(self.test_dir, "context_file.txt")
