@@ -25,7 +25,9 @@ def test_attachment_search_workflow(claude):
 
     try:
         subprocess.run(["chown", "-R", "claude:claude", test_dir], check=True)
-        subprocess.run(["chmod", "-R", "755", test_dir], check=True)
+        # Make files world-readable as a temporary fix
+        subprocess.run(["chmod", "-R", "a+rX", test_dir], check=True)
+        print(f"DEBUG: Set world-readable permissions on {test_dir}")
     except subprocess.CalledProcessError as e:
         print(f"Warning: Failed to set permissions on {test_dir}: {e}")
 
@@ -45,7 +47,8 @@ def test_attachment_search_workflow(claude):
         # Fix permissions after creating the file
         try:
             subprocess.run(["chown", "claude:claude", doc1], check=True)
-            subprocess.run(["chmod", "644", doc1], check=True)
+            subprocess.run(["chmod", "a+r", doc1], check=True)
+            print(f"DEBUG: Set world-readable permissions on {doc1}")
         except subprocess.CalledProcessError as e:
             print(f"Warning: Failed to set permissions on {doc1}: {e}")
 
@@ -79,7 +82,8 @@ def test_attachment_search_workflow(claude):
         # Fix permissions after creating the file
         try:
             subprocess.run(["chown", "claude:claude", doc2], check=True)
-            subprocess.run(["chmod", "644", doc2], check=True)
+            subprocess.run(["chmod", "a+r", doc2], check=True)
+            print(f"DEBUG: Set world-readable permissions on {doc2}")
         except subprocess.CalledProcessError as e:
             print(f"Warning: Failed to set permissions on {doc2}: {e}")
 

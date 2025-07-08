@@ -375,7 +375,7 @@ def gather_file_paths(items: List[str]) -> List[str]:
 
     project_root = Path.cwd()
     logger.info(
-        f"DEBUG gather_file_paths: CWD/project_root={project_root}, UID={os.getuid()}"
+        f"DEBUG gather_file_paths: CWD/project_root={project_root}, UID={os.getuid()}, USER={os.getenv('USER', 'unknown')}, EUID={os.geteuid()}"
     )
 
     seen: Set[str] = set()
@@ -428,9 +428,15 @@ def gather_file_paths(items: List[str]) -> List[str]:
                     if path_str not in seen:
                         seen.add(path_str)
                         out.append(path_str)
+                        logger.info(
+                            f"DEBUG gather_file_paths: Added file {path_str} to output"
+                        )
                         try:
                             total_size += path.stat().st_size
-                        except OSError:
+                        except OSError as e:
+                            logger.warning(
+                                f"DEBUG gather_file_paths: Could not stat {path_str}: {e}"
+                            )
                             pass
             except (OSError, PermissionError) as e:
                 logger.warning(f"Skipping {path} due to permission error: {e}")
