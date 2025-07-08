@@ -248,14 +248,23 @@ def _is_safe_path(base: Path, target: Path) -> bool:
     # Check if we're in CI e2e test environment
     ci_e2e = os.environ.get("CI_E2E")
     logger.info(
-        f"DEBUG _is_safe_path: CI_E2E={ci_e2e}, checking path {target_unresolved_str}"
+        f"DEBUG _is_safe_path: CI_E2E={ci_e2e}, checking path {target_unresolved_str}, resolved to {target_resolved}"
     )
 
     if ci_e2e == "1":
         # In e2e tests, allow /tmp paths since containers share a /tmp volume
         # Check both the unresolved and resolved paths to handle symlinks gracefully.
-        if str(target_resolved).startswith("/tmp/") or target_unresolved_str.startswith(
-            "/tmp/"
+        # Also check if the path is exactly /tmp (without trailing slash)
+        # Also check if the resolved path is under the temp directory
+        temp_dir = Path(tempfile.gettempdir()).resolve()
+
+        if (
+            str(target_resolved).startswith("/tmp/")
+            or str(target_resolved) == "/tmp"
+            or target_unresolved_str.startswith("/tmp/")
+            or target_unresolved_str == "/tmp"
+            or temp_dir in target_resolved.parents
+            or temp_dir == target_resolved
         ):
             logger.info(
                 f"DEBUG _is_safe_path: Allowing /tmp path in CI_E2E mode: {target_resolved}"
