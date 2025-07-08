@@ -81,6 +81,26 @@ async def build_context_with_stable_list(
         - files_to_send_inline: List of (path, content, tokens) tuples
         - files_for_vector_store: List of file paths
     """
+    # Debug logging to understand file access issues
+    logger.info(f"DEBUG: CWD inside context_builder: {os.getcwd()}")
+    logger.info(f"DEBUG: Received context_paths: {context_paths}")
+
+    # Check existence of each path
+    for p in context_paths:
+        abs_p = os.path.abspath(p)
+        exists = os.path.exists(abs_p)
+        logger.info(
+            f"DEBUG: Checking path '{p}' | abspath: '{abs_p}' | Exists? {exists}"
+        )
+        if exists:
+            try:
+                stat = os.stat(abs_p)
+                logger.info(
+                    f"DEBUG: File stats - size: {stat.st_size}, mtime: {stat.st_mtime}"
+                )
+            except Exception as e:
+                logger.info(f"DEBUG: Error statting file: {e}")
+
     # Gather all files from context paths
     all_files = gather_file_paths(context_paths)
     logger.info(f"Gathered {len(all_files)} files from context paths")
@@ -130,7 +150,7 @@ async def build_context_with_stable_list(
                 try:
                     stat = os.stat(file_path)
                     await cache.update_sent_file_info(
-                        session_id, file_path, int(stat.st_size), int(stat.st_mtime)
+                        session_id, file_path, int(stat.st_size), int(stat.st_mtime_ns)
                     )
                 except OSError:
                     pass
@@ -139,6 +159,16 @@ async def build_context_with_stable_list(
             logger.info("All files fit inline, no stable list needed")
             files_to_send = file_data
             overflow_paths = []
+
+            # Record baseline for change detection even when no overflow
+            for file_path, _, _ in files_to_send:
+                try:
+                    stat = os.stat(file_path)
+                    await cache.update_sent_file_info(
+                        session_id, file_path, int(stat.st_size), int(stat.st_mtime_ns)
+                    )
+                except OSError:
+                    pass
     else:
         # Subsequent call - only send changed files
         logger.info(f"Using existing stable list for session {session_id}")
@@ -162,7 +192,7 @@ async def build_context_with_stable_list(
                                 session_id,
                                 file_path,
                                 int(stat.st_size),
-                                int(stat.st_mtime),
+                                int(stat.st_mtime_ns),
                             )
                         except OSError:
                             pass

@@ -3,6 +3,7 @@
 import os
 import json
 import sys
+import pytest
 
 # Add scenarios directory to path for imports
 sys.path.insert(0, os.path.dirname(__file__))
@@ -11,12 +12,23 @@ sys.path.insert(0, os.path.dirname(__file__))
 UNIQUE_TOKEN = "mcp-e2e-flibbertigibbet-772-token"
 
 
+@pytest.mark.parametrize("claude", [True, False], indirect=True)
 def test_attachment_search_workflow(claude):
     """Test RAG workflow using attachments parameter for automatic vector store creation."""
     print("🔍 Starting robust attachment test...")
 
-    test_dir = "/host-project/tests/e2e_dind/test_attachments_data"
+    test_dir = "/tmp/test_attachments_data"
     os.makedirs(test_dir, exist_ok=True)
+
+    # Fix permissions - chown to claude user so MCP server can access
+    import subprocess
+
+    try:
+        subprocess.run(["chown", "-R", "claude:claude", test_dir], check=True)
+        subprocess.run(["chmod", "-R", "755", test_dir], check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"Warning: Failed to set permissions on {test_dir}: {e}")
+
     doc1, doc2 = None, None  # Ensure they are defined for the finally block
 
     try:
@@ -29,6 +41,13 @@ def test_attachment_search_workflow(claude):
                 f"Do not share this code with anyone."
             )
         print(f"📄 Created test file with token: {doc1}")
+
+        # Fix permissions after creating the file
+        try:
+            subprocess.run(["chown", "claude:claude", doc1], check=True)
+            subprocess.run(["chmod", "644", doc1], check=True)
+        except subprocess.CalledProcessError as e:
+            print(f"Warning: Failed to set permissions on {doc1}: {e}")
 
         # Step 2: Search for the token where it exists to confirm baseline functionality.
         args1 = {
@@ -56,6 +75,13 @@ def test_attachment_search_workflow(claude):
                 "It has no secret codes or special tokens."
             )
         print(f"📄 Created second test file without token: {doc2}")
+
+        # Fix permissions after creating the file
+        try:
+            subprocess.run(["chown", "claude:claude", doc2], check=True)
+            subprocess.run(["chmod", "644", doc2], check=True)
+        except subprocess.CalledProcessError as e:
+            print(f"Warning: Failed to set permissions on {doc2}: {e}")
 
         # Step 4: Search for the unique token in the document where it does NOT exist.
         # This is the crucial test for the deduplication cache fix.
