@@ -229,6 +229,8 @@ def _is_ignored(
 
 def _is_safe_path(base: Path, target: Path) -> bool:
     """Return True if target is within base directory after resolving."""
+    # Keep the unresolved path string for checks before resolving
+    target_unresolved_str = str(target)
     try:
         base_resolved = base.resolve()
         target_resolved = target.resolve()
@@ -246,7 +248,10 @@ def _is_safe_path(base: Path, target: Path) -> bool:
     # Check if we're in CI e2e test environment
     if os.environ.get("CI_E2E") == "1":
         # In e2e tests, allow /tmp paths since containers share a /tmp volume
-        if str(target_resolved).startswith("/tmp/"):
+        # Check both the unresolved and resolved paths to handle symlinks gracefully.
+        if str(target_resolved).startswith("/tmp/") or target_unresolved_str.startswith(
+            "/tmp/"
+        ):
             logger.info(
                 f"DEBUG _is_safe_path: Allowing /tmp path in CI_E2E mode: {target_resolved}"
             )
