@@ -77,10 +77,11 @@ class ToolExecutor:
             assert isinstance(session_params, dict)  # Type hint for mypy
             session_id = session_params.get("session_id")
 
-            # Check if we should use stable list
+            # Use stable-inline list for context management
             settings = get_settings()
-            if settings.features.enable_stable_inline_list and session_id:
-                # NEW PATH: Use stable-inline list
+
+            # Session ID is required for stable list functionality
+            if session_id:
                 logger.info(f"Using stable-inline list for session {session_id}")
 
                 # Initialize cache
@@ -143,9 +144,9 @@ class ToolExecutor:
                 # Store overflow files for vector store creation
                 files_for_vector_store = overflow_files
             else:
-                # OLD PATH: Use original prompt engine
+                # Fallback for cases without session_id (backwards compatibility)
                 logger.info(
-                    "Using original prompt engine (feature flag off or no session_id)"
+                    "No session_id provided, using original prompt engine for backwards compatibility"
                 )
                 prompt = await self.prompt_engine.build(
                     metadata.spec_class, prompt_params
@@ -198,12 +199,8 @@ class ToolExecutor:
             vs_id = None
             vector_store_ids = None
 
-            if (
-                settings.features.enable_stable_inline_list
-                and session_id
-                and files_for_vector_store
-            ):
-                # NEW PATH: Use pre-calculated overflow files
+            if session_id and files_for_vector_store:
+                # Use pre-calculated overflow files from stable list
                 # Clear attachment search cache for new attachments
                 from .search_attachments import SearchAttachmentAdapter
 
@@ -221,7 +218,7 @@ class ToolExecutor:
                     f"Created vector store {vs_id}, vector_store_ids={vector_store_ids}"
                 )
             else:
-                # OLD PATH: Gather files from vector_store parameter
+                # Fallback: Gather files from vector_store parameter if no session_id
                 vector_store_param = routed_params.get("vector_store", [])
                 assert isinstance(vector_store_param, list)  # Type hint for mypy
                 if vector_store_param:

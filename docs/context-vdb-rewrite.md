@@ -386,10 +386,10 @@ def reset_stable_list(session_id: str):
 2. ✅ Simplify prompt builder logic
 3. ✅ Add reset command for users (reset_session method)
 
-### Rollback Plan ✅ IMPLEMENTED
-- ✅ Feature flag: `enable_stable_inline_list` in config.yaml
-- ✅ If issues arise, disable flag to revert to full resend
-- ✅ Tables remain harmless if unused
+### Stable List Feature Status
+- ✅ Stable list functionality is now always enabled
+- ✅ Provides deterministic file ordering and efficient context management
+- ✅ Automatically handles file overflow to vector stores
 
 ## Implementation Status (as of 2025-01-07)
 
@@ -408,13 +408,13 @@ def reset_stable_list(session_id: str):
    - Records baseline file info for all sent files
 
 3. **Tool Executor Integration** (`mcp_second_brain/tools/executor.py`)
-   - Feature flag check: only uses new path when enabled AND session_id present
+   - Stable list is always used when session_id is present
    - Calculates token budget based on model context window
    - Properly routes attachments to vector store
 
 4. **Configuration** (`mcp_second_brain/config.py`)
-   - Feature flag: `features.enable_stable_inline_list` (default: False)
-   - Supports both YAML config and environment variable override
+   - Stable list functionality is now always enabled
+   - No feature flag needed - provides consistent behavior
 
 ### E2E Testing Status
 
