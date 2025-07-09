@@ -32,3 +32,5 @@ services:
 
 volumes:
   shared-tmp:
+    external: true
+    name: ${SHARED_TMP_VOLUME}
