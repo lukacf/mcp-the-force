@@ -15,8 +15,15 @@ SECRET_PATTERNS: list[re.Pattern] = [
     re.compile(r"AKIA[0-9A-Z]{16}"),
     # Generic patterns for key=value or key: value
     # This pattern uses a capturing group for the key part.
+    # Modified to be more specific - only match when used as a key-value pair, not in sentences
     re.compile(
-        r"(\b(api_key|apikey|api-key|token|access_token|password|pass|pwd|secret|auth_token)\b)\s*[:=]\s*['\"]?[^'\"\\\s]{8,}[^'\"\\\s]*['\"]?",
+        r"(\b(api_key|apikey|api-key|access_token|password|pass|pwd|secret|auth_token)\b)\s*[:=]\s*['\"]?[^'\"\\\s]{8,}[^'\"\\\s]*['\"]?",
+        re.IGNORECASE,
+    ),
+    # Separate pattern for "token" that requires it to be in a programming context
+    # Must be preceded by underscore, dot, or start of line (not regular prose)
+    re.compile(
+        r"(?:^|[._])(\btoken\b)\s*[:=]\s*['\"]?[^'\"\\\s]{8,}[^'\"\\\s]*['\"]?",
         re.IGNORECASE,
     ),
 ]
@@ -37,14 +44,16 @@ def redact_secrets(text: str) -> str:
         return text
 
     # Apply specific patterns that match the whole secret
-    for pattern in SECRET_PATTERNS[:-1]:
+    for pattern in SECRET_PATTERNS[:-2]:  # Skip the last two patterns
         text = pattern.sub("***", text)
 
-    # Apply generic key=value pattern, preserving the key but always using =
+    # Apply generic key=value patterns, preserving the key but always using =
     def replace_key_value(match):
         key = match.group(1)
         return f"{key}=***"
 
+    # Apply the two key-value patterns
+    text = SECRET_PATTERNS[-2].sub(replace_key_value, text)
     text = SECRET_PATTERNS[-1].sub(replace_key_value, text)
 
     # Special case for database URLs - redact passwords
