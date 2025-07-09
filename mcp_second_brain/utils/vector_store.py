@@ -82,10 +82,14 @@ def create_vector_store(paths: List[str]) -> str:
 
     start_time = time.time()
     logger.info(f"create_vector_store called with {len(paths)} paths")
+    logger.info(f"Input paths: {paths}")
 
     # Filter for supported file extensions
     supported_paths = [p for p in paths if _is_supported_for_vector_store(p)]
     logger.info(f"Filtered to {len(supported_paths)} supported files")
+    if len(supported_paths) < len(paths):
+        unsupported = [p for p in paths if p not in supported_paths]
+        logger.warning(f"Skipped {len(unsupported)} unsupported files: {unsupported}")
 
     if not supported_paths:
         # No supported files to upload
@@ -103,9 +107,15 @@ def create_vector_store(paths: List[str]) -> str:
         file_streams = []
         for path in supported_paths:
             try:
+                logger.info(f"Opening file for vector store: {path}")
+                with open(path, "rb") as f:
+                    # Read to verify we can access it
+                    f.read(1)
+                    f.seek(0)
                 file_streams.append(open(path, "rb"))
+                logger.info(f"Successfully opened {path}")
             except Exception as e:
-                logger.warning(f"Failed to open {path}: {e}")
+                logger.error(f"Failed to open {path}: {type(e).__name__}: {e}")
 
         if not file_streams:
             # No files could be opened

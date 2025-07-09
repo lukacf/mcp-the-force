@@ -32,14 +32,25 @@ def safe_json(response: str) -> dict:
         except json.JSONDecodeError:
             pass
 
-    # Look for JSON objects in the text
-    json_pattern = r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}"
+    # Look for JSON objects in the text - improved regex for nested objects
+    json_pattern = r"\{(?:[^{}]|(?:\{[^{}]*\}))*\}"
     matches = re.findall(json_pattern, response, re.DOTALL)
     for match in matches:
         try:
             return json.loads(match)
         except json.JSONDecodeError:
             continue
+
+    # Try to find JSON starting with { and ending with }
+    start = response.find("{")
+    if start != -1:
+        # Try different end positions to handle nested objects
+        for end in range(len(response), start, -1):
+            if response[end - 1] == "}":
+                try:
+                    return json.loads(response[start:end])
+                except json.JSONDecodeError:
+                    continue
 
     # If all parsing attempts fail
     assert False, f"No valid JSON found in response: {response}"

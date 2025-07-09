@@ -18,6 +18,12 @@ from ..memory import store_conversation_memory
 from ..config import get_settings
 from ..utils.redaction import redact_secrets
 
+# Stable list imports
+from ..utils.context_builder import build_context_with_stable_list
+from ..utils.stable_list_cache import StableListCache
+from ..adapters.model_registry import get_model_context_window
+from lxml import etree as ET
+
 logger = logging.getLogger(__name__)
 
 
@@ -65,7 +71,86 @@ class ToolExecutor:
             # 3. Build prompt
             prompt_params = routed_params["prompt"]
             assert isinstance(prompt_params, dict)  # Type hint for mypy
-            prompt = await self.prompt_engine.build(metadata.spec_class, prompt_params)
+
+            # Get session info
+            session_params = routed_params["session"]
+            assert isinstance(session_params, dict)  # Type hint for mypy
+            session_id = session_params.get("session_id")
+
+            # Check if we should use stable list
+            settings = get_settings()
+            if settings.features.enable_stable_inline_list and session_id:
+                # NEW PATH: Use stable-inline list
+                logger.info(f"Using stable-inline list for session {session_id}")
+
+                # Initialize cache
+                cache = StableListCache()
+
+                # Calculate token budget
+                model_name = metadata.model_config["model_name"]
+                model_limit = get_model_context_window(model_name)
+                context_percentage = settings.mcp.context_percentage
+                safety_margin = 2000  # Consistent with old builder
+                token_budget = max(
+                    int(model_limit * context_percentage) - safety_margin, 1000
+                )
+
+                # Get context and attachment paths
+                context_paths = prompt_params.get("context", [])
+                attachment_paths_raw = routed_params.get("vector_store", [])
+                # Ensure it's a list
+                attachment_paths = (
+                    attachment_paths_raw
+                    if isinstance(attachment_paths_raw, list)
+                    else []
+                )
+
+                # Call the new context builder
+                inline_files, overflow_files = await build_context_with_stable_list(
+                    context_paths=context_paths,
+                    session_id=session_id,
+                    cache=cache,
+                    token_budget=token_budget,
+                    attachments=attachment_paths,
+                )
+
+                # Format the prompt with inline files
+                task = ET.Element("Task")
+                ET.SubElement(task, "Instructions").text = prompt_params.get(
+                    "instructions", ""
+                )
+                ET.SubElement(task, "OutputFormat").text = prompt_params.get(
+                    "output_format", ""
+                )
+                CTX = ET.SubElement(task, "CONTEXT")
+
+                # Helper function to create file elements
+                def _create_file_element(path: str, content: str) -> Any:
+                    el = ET.Element("file", path=path)
+                    safe_content = "".join(
+                        c for c in content if ord(c) >= 32 or c in "\t\n\r"
+                    )
+                    el.text = safe_content
+                    return el
+
+                for path, content, _ in inline_files:
+                    CTX.append(_create_file_element(path, content))
+
+                prompt = ET.tostring(task, encoding="unicode")
+                if overflow_files:
+                    prompt += "\n\nYou have additional information accessible through the file search tool."
+
+                # Store overflow files for vector store creation
+                files_for_vector_store = overflow_files
+            else:
+                # OLD PATH: Use original prompt engine
+                logger.info(
+                    "Using original prompt engine (feature flag off or no session_id)"
+                )
+                prompt = await self.prompt_engine.build(
+                    metadata.spec_class, prompt_params
+                )
+                files_for_vector_store = None
 
             # Include developer/system prompt for assistant models
             from ..prompts import get_developer_prompt
@@ -112,9 +197,13 @@ class ToolExecutor:
             # 4. Handle vector store if needed
             vs_id = None
             vector_store_ids = None
-            vector_store_param = routed_params["vector_store"]
-            assert isinstance(vector_store_param, list)  # Type hint for mypy
-            if vector_store_param:
+
+            if (
+                settings.features.enable_stable_inline_list
+                and session_id
+                and files_for_vector_store
+            ):
+                # NEW PATH: Use pre-calculated overflow files
                 # Clear attachment search cache for new attachments
                 from .search_attachments import SearchAttachmentAdapter
 
@@ -123,17 +212,42 @@ class ToolExecutor:
                     "Cleared SearchAttachmentAdapter deduplication cache for new attachments"
                 )
 
-                # Gather files from directories
-                from ..utils.fs import gather_file_paths
+                logger.info(
+                    f"Creating vector store with {len(files_for_vector_store)} overflow/attachment files: {files_for_vector_store}"
+                )
+                vs_id = await self.vector_store_manager.create(files_for_vector_store)
+                vector_store_ids = [vs_id] if vs_id else None
+                logger.info(
+                    f"Created vector store {vs_id}, vector_store_ids={vector_store_ids}"
+                )
+            else:
+                # OLD PATH: Gather files from vector_store parameter
+                vector_store_param = routed_params.get("vector_store", [])
+                assert isinstance(vector_store_param, list)  # Type hint for mypy
+                if vector_store_param:
+                    # Clear attachment search cache for new attachments
+                    from .search_attachments import SearchAttachmentAdapter
 
-                files = gather_file_paths(vector_store_param)
-                logger.info(f"Gathered {len(files)} files from attachments: {files}")
-                if files:
-                    vs_id = await self.vector_store_manager.create(files)
-                    vector_store_ids = [vs_id] if vs_id else None
+                    await SearchAttachmentAdapter.clear_deduplication_cache()
                     logger.info(
-                        f"Created vector store {vs_id}, vector_store_ids={vector_store_ids}"
+                        "Cleared SearchAttachmentAdapter deduplication cache for new attachments"
                     )
+
+                    # Gather files from directories (skip safety check for attachments)
+                    from ..utils.fs import gather_file_paths
+
+                    files = gather_file_paths(
+                        vector_store_param, skip_safety_check=True
+                    )
+                    logger.info(
+                        f"Gathered {len(files)} files from attachments: {files}"
+                    )
+                    if files:
+                        vs_id = await self.vector_store_manager.create(files)
+                        vector_store_ids = [vs_id] if vs_id else None
+                        logger.info(
+                            f"Created vector store {vs_id}, vector_store_ids={vector_store_ids}"
+                        )
 
             # Memory stores are no longer auto-attached
             # Models should use search_project_memory function to access memory
@@ -229,7 +343,7 @@ class ToolExecutor:
                         conv_messages = prompt_params.get("messages", [])
                         if not isinstance(conv_messages, list):
                             conv_messages = []
-                        task = asyncio.create_task(
+                        memory_task = asyncio.create_task(
                             store_conversation_memory(
                                 session_id=session_id,
                                 tool_name=tool_id,
@@ -237,7 +351,7 @@ class ToolExecutor:
                                 response=redacted_content,
                             )
                         )
-                        memory_tasks.append(task)
+                        memory_tasks.append(memory_task)
                     except Exception as e:
                         logger.warning(f"Failed to store conversation memory: {e}")
 
@@ -252,7 +366,7 @@ class ToolExecutor:
                         conv_messages = prompt_params.get("messages", [])
                         if not isinstance(conv_messages, list):
                             conv_messages = []
-                        task = asyncio.create_task(
+                        memory_task = asyncio.create_task(
                             store_conversation_memory(
                                 session_id=session_id,
                                 tool_name=tool_id,
@@ -260,7 +374,7 @@ class ToolExecutor:
                                 response=redacted_result,
                             )
                         )
-                        memory_tasks.append(task)
+                        memory_tasks.append(memory_task)
                     except Exception as e:
                         logger.warning(f"Failed to store conversation memory: {e}")
 

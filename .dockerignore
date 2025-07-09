@@ -65,7 +65,6 @@ docs/_build/
 docs/.doctrees/
 
 # Temporary files
-tmp/
 temp/
 *.tmp
 *.bak
