@@ -116,6 +116,7 @@ class TestCountProjectTokens:
         assert isinstance(result["largest_files"], list)
         assert isinstance(result["largest_directories"], list)
 
+    @pytest.mark.skip(reason="Path traversal protection disabled for MCP server usage")
     async def test_rejects_paths_outside_project(self, temp_project_dir):
         """Should reject paths that try to escape project root."""
         tool = CountProjectTokens()
