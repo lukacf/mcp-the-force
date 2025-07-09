@@ -228,6 +228,7 @@ class TestGatherFiles:
 class TestPathTraversal:
     """Tests for path traversal protection."""
 
+    @pytest.mark.skip(reason="Path traversal protection disabled for MCP server usage")
     def test_path_traversal_blocked(self, tmp_path, monkeypatch):
         """Paths escaping the project root should be rejected."""
         # Ensure CI_E2E is not set during this test
