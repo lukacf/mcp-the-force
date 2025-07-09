@@ -9,98 +9,101 @@ import time
 # Add scenarios directory to path for imports
 sys.path.insert(0, os.path.dirname(__file__))
 
-# Unique tokens for test verification
-TOKEN_SMALL_FILE = "stable-list-small-xyzzy-42"
-TOKEN_LARGE_FILE = "stable-list-large-quux-99"
-TOKEN_ATTACHMENT_1 = "stable-list-attach1-foo-123"
-TOKEN_ATTACHMENT_2 = "stable-list-attach2-bar-456"
-TOKEN_MODIFIED_FILE = "stable-list-modified-baz-789"
+# Unique markers for test verification (avoid "token" which triggers redaction)
+MARKER_SMALL_FILE = "stable-list-small-xyzzy-42"
+MARKER_LARGE_FILE = "stable-list-large-quux-99"
+MARKER_ATTACHMENT_1 = "stable-list-attach1-foo-123"
+MARKER_ATTACHMENT_2 = "stable-list-attach2-bar-456"
+MARKER_MODIFIED_FILE = "stable-list-modified-baz-789"
 
 
 class TestStableInlineList:
     """Test the stable-inline list feature for context overflow management."""
 
-    def setup_method(self):
-        """Create test directory for each test."""
-        # Ensure CI_E2E is set for the MCP server to allow /tmp paths
-        os.environ["CI_E2E"] = "1"
+    def _setup_test_dir(self, stack):
+        """Setup test directory inside the container with unique UUID."""
+        import os
+        import uuid
 
-        # Use /tmp which is shared between containers
-        self.test_dir = "/tmp/test_stable_list_data"
+        # Store the stack
+        self.stack = stack
+
+        # Use /tmp with UUID for per-test isolation - shared between containers via named volume
+        test_uuid = uuid.uuid4().hex[:8]
+        self.test_dir = f"/tmp/test_stable_list_data_{test_uuid}"
+
+        # Create directory directly with Python (running as root in test-runner)
         os.makedirs(self.test_dir, exist_ok=True)
+        os.chmod(self.test_dir, 0o755)
+        print(f"DEBUG: Created test directory {self.test_dir} inside container")
 
-        # Fix permissions - chown to claude user so MCP server can access
-        self._fix_permissions(self.test_dir)
+    def _exec_in_container(self, cmd, check=True):
+        """Execute a command inside the test-runner container."""
+        stdout, stderr, return_code = self.stack.exec_in_container(
+            ["bash", "-c", cmd], "test-runner"
+        )
+        if check and return_code != 0:
+            raise RuntimeError(f"Command failed: {cmd}\nStderr: {stderr}")
+        return stdout, stderr, return_code
 
-    def _fix_permissions(self, path):
-        """Fix permissions so claude user can access files."""
-        import subprocess
+    def _create_file(self, path, content):
+        """Create a file inside the container with the given content."""
+        # Running as root in test-runner, create world-readable files
+        import os
 
-        # Ensure CI_E2E is set for subprocess calls
-        env = os.environ.copy()
-        env["CI_E2E"] = "1"
-        try:
-            subprocess.run(["chown", "-R", "claude:claude", path], check=True, env=env)
-            # Make files world-readable as a temporary fix
-            subprocess.run(["chmod", "-R", "a+rX", path], check=True, env=env)
-            print(f"DEBUG: Set world-readable permissions on {path}")
-        except subprocess.CalledProcessError as e:
-            print(f"Warning: Failed to set permissions on {path}: {e}")
-
-    def teardown_method(self):
-        """Clean up test files after each test."""
-        import shutil
-
-        if os.path.exists(self.test_dir):
-            shutil.rmtree(self.test_dir, ignore_errors=True)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as f:
+            f.write(content)
+        # Make world-readable so claude user in sub-containers can read
+        os.chmod(path, 0o644)
 
     @pytest.mark.parametrize("claude", [True], indirect=True)
-    def test_initial_split_and_multimodal_access(self, claude):
+    def test_initial_split_and_multimodal_access(self, claude, stack):
         """Test that files are correctly split between inline and vector store on first call."""
         print("🔍 Testing initial split and multi-modal access...")
 
+        # Setup test directory
+        self._setup_test_dir(stack)
+
         # Create a small file that will fit in inline context
         small_file = os.path.join(self.test_dir, "small_file.txt")
-        with open(small_file, "w") as f:
-            f.write(f"This is a small file.\nThe secret token is: {TOKEN_SMALL_FILE}\n")
+        small_content = (
+            f"This is a small file.\nThe secret token is: {MARKER_SMALL_FILE}\n"
+        )
+        self._create_file(small_file, small_content)
 
         # Create a large file that will overflow to vector store
         large_file = os.path.join(self.test_dir, "large_file.txt")
-        with open(large_file, "w") as f:
-            # Make it large enough to trigger overflow
-            f.write("This is a very large file with lots of content.\n" * 10000)
-            f.write(f"\nThe large file token is: {TOKEN_LARGE_FILE}\n")
-            f.write("More content to ensure overflow.\n" * 10000)
+        # Make it large enough to trigger overflow
+        large_content = "This is a very large file with lots of content.\n" * 10000
+        large_content += f"\nThe large file token is: {MARKER_LARGE_FILE}\n"
+        large_content += "More content to ensure overflow.\n" * 10000
+        self._create_file(large_file, large_content)
 
         # Create an attachment (always goes to vector store)
         attachment = os.path.join(self.test_dir, "attachment1.txt")
-        with open(attachment, "w") as f:
-            f.write(
-                f"This is an attachment.\nThe attachment token is: {TOKEN_ATTACHMENT_1}\n"
-            )
-
-        # Fix permissions on all created files so MCP server can access them
-        self._fix_permissions(self.test_dir)
-
-        # Debug: verify files exist and check permissions
-        print(f"DEBUG: test_dir = {self.test_dir}")
-        import subprocess
-
-        result = subprocess.run(
-            ["ls", "-la", self.test_dir], capture_output=True, text=True
+        attachment_content = (
+            f"This is an attachment.\nThe attachment token is: {MARKER_ATTACHMENT_1}\n"
         )
-        print(f"DEBUG: Directory listing:\n{result.stdout}")
+        self._create_file(attachment, attachment_content)
 
-        # Also check environment
-        print(f"DEBUG: CI_E2E = {os.environ.get('CI_E2E', 'not set')}")
-        print(f"DEBUG: CWD = {os.getcwd()}")
+        # Debug: verify files exist and check permissions inside container
+        print(f"DEBUG: test_dir = {self.test_dir}")
+        stdout, _, _ = self._exec_in_container(f"ls -la {self.test_dir}")
+        print(f"DEBUG: Directory listing:\n{stdout}")
+
+        # Also check environment inside container
+        stdout, _, _ = self._exec_in_container("echo CI_E2E=$CI_E2E")
+        print(f"DEBUG: {stdout.strip()}")
+        stdout, _, _ = self._exec_in_container("pwd")
+        print(f"DEBUG: CWD = {stdout.strip()}")
 
         # Call with context that will trigger overflow
         args = {
             "instructions": (
                 f"Search for and quote the exact sentences containing these tokens:\n"
-                f"1. '{TOKEN_SMALL_FILE}' (from context)\n"
-                f"2. '{TOKEN_ATTACHMENT_1}' (from attachment)\n"
+                f"1. '{MARKER_SMALL_FILE}' (from context)\n"
+                f"2. '{MARKER_ATTACHMENT_1}' (from attachment)\n"
                 f"Note: There may be files you cannot see directly but can search."
             ),
             "output_format": "List each token found with the quoted sentence containing it.",
@@ -113,44 +116,41 @@ class TestStableInlineList:
         print(f"✅ First response: {response}")
 
         # Verify both tokens are found
-        assert TOKEN_SMALL_FILE in response, "Failed to find token from inline context"
+        assert MARKER_SMALL_FILE in response, "Failed to find token from inline context"
         assert (
-            TOKEN_ATTACHMENT_1 in response
+            MARKER_ATTACHMENT_1 in response
         ), "Failed to find token from attachment in vector store"
         print(
             "✅ Initial split test passed - model accessed both inline and vector store content!"
         )
 
+        # Cleanup
+        self._exec_in_container(f"rm -rf {self.test_dir}", check=False)
+
     @pytest.mark.parametrize("claude", [True], indirect=True)
-    def test_context_deduplication_and_statefulness(self, claude):
+    def test_context_deduplication_and_statefulness(self, claude, stack):
         """Test that unchanged files are not resent in subsequent calls."""
         print("🔍 Testing context deduplication and statefulness...")
 
-        # Debug: Add a sleep to allow checking container state
-        import time
-
-        print("DEBUG: Sleeping 5s to allow container inspection...")
-        time.sleep(5)
+        # Setup test directory
+        self._setup_test_dir(stack)
 
         # Create initial files
         context_file = os.path.join(self.test_dir, "context_file.txt")
-        with open(context_file, "w") as f:
-            f.write(
-                f"This is a context file.\nThe context token is: {TOKEN_SMALL_FILE}\n"
-            )
+        context_content = (
+            f"This is a context file.\nThe context token is: {MARKER_SMALL_FILE}\n"
+        )
+        self._create_file(context_file, context_content)
 
         attachment1 = os.path.join(self.test_dir, "attachment1.txt")
-        with open(attachment1, "w") as f:
-            f.write(
-                f"First attachment.\nFirst attachment token: {TOKEN_ATTACHMENT_1}\n"
-            )
-
-        # Fix permissions on all created files
-        self._fix_permissions(self.test_dir)
+        attachment1_content = (
+            f"First attachment.\nFirst attachment token: {MARKER_ATTACHMENT_1}\n"
+        )
+        self._create_file(attachment1, attachment1_content)
 
         # First call - establish the stable list
         args1 = {
-            "instructions": f"Find and quote the exact sentence containing the token '{TOKEN_SMALL_FILE}' from the context files provided.",
+            "instructions": f"Find and quote the exact sentence containing the token '{MARKER_SMALL_FILE}' from the context files provided.",
             "output_format": "Quote the exact sentence containing the token.",
             "context": [context_file],
             "attachments": [attachment1],
@@ -162,25 +162,22 @@ class TestStableInlineList:
         )
         print(f"✅ First response: {response1}")
         assert (
-            TOKEN_SMALL_FILE in response1
+            MARKER_SMALL_FILE in response1
         ), f"Failed to find token in first call. Response: {response1}"
 
         # Second call - same context, new attachment
         # The context file should NOT be resent since it's unchanged
         attachment2 = os.path.join(self.test_dir, "attachment2.txt")
-        with open(attachment2, "w") as f:
-            f.write(
-                f"Second attachment.\nSecond attachment token: {TOKEN_ATTACHMENT_2}\n"
-            )
-
-        # Fix permissions for the new attachment
-        self._fix_permissions(attachment2)
+        attachment2_content = (
+            f"Second attachment.\nSecond attachment token: {MARKER_ATTACHMENT_2}\n"
+        )
+        self._create_file(attachment2, attachment2_content)
 
         args2 = {
             "instructions": (
                 f"In this multi-turn conversation:\n"
-                f"1. You should already remember the token '{TOKEN_SMALL_FILE}' from our previous exchange.\n"
-                f"2. Now find and quote the sentence containing '{TOKEN_ATTACHMENT_2}' from the new attachment."
+                f"1. You should already remember the token '{MARKER_SMALL_FILE}' from our previous exchange.\n"
+                f"2. Now find and quote the sentence containing '{MARKER_ATTACHMENT_2}' from the new attachment."
             ),
             "output_format": (
                 "1. Confirm you remember the previous token and state what it was.\n"
@@ -198,29 +195,32 @@ class TestStableInlineList:
 
         # Verify the model recalls the first token from memory (not re-reading)
         assert (
-            TOKEN_SMALL_FILE in response2
+            MARKER_SMALL_FILE in response2
         ), "Failed to recall token from previous turn"
-        assert TOKEN_ATTACHMENT_2 in response2, "Failed to find new attachment token"
+        assert MARKER_ATTACHMENT_2 in response2, "Failed to find new attachment token"
         print(
             "✅ Deduplication test passed - model remembered context without resending!"
         )
 
+        # Cleanup
+        self._exec_in_container(f"rm -rf {self.test_dir}", check=False)
+
     @pytest.mark.parametrize("claude", [True], indirect=True)
-    def test_changed_file_detection(self, claude):
+    def test_changed_file_detection(self, claude, stack):
         """Test that modified files are detected and resent."""
         print("🔍 Testing changed file detection...")
 
+        # Setup test directory
+        self._setup_test_dir(stack)
+
         # Create initial file
         changing_file = os.path.join(self.test_dir, "changing_file.txt")
-        with open(changing_file, "w") as f:
-            f.write(f"Original content.\nOriginal token: {TOKEN_SMALL_FILE}\n")
-
-        # Fix permissions
-        self._fix_permissions(changing_file)
+        original_content = f"Original content.\nOriginal token: {MARKER_SMALL_FILE}\n"
+        self._create_file(changing_file, original_content)
 
         # First call - establish baseline
         args1 = {
-            "instructions": f"Find and quote the sentence containing token '{TOKEN_SMALL_FILE}'.",
+            "instructions": f"Find and quote the sentence containing token '{MARKER_SMALL_FILE}'.",
             "output_format": "Quote the exact sentence containing the token.",
             "context": [changing_file],
             "attachments": [],
@@ -231,23 +231,18 @@ class TestStableInlineList:
             f"Use second-brain chat_with_gpt4_1 with {json.dumps(args1)}"
         )
         print(f"✅ First response: {response1}")
-        assert TOKEN_SMALL_FILE in response1, "Failed to find original token"
+        assert MARKER_SMALL_FILE in response1, "Failed to find original token"
 
         # Wait a moment to ensure mtime difference
         time.sleep(1)
 
         # Modify the file - ensure size changes too
-        with open(changing_file, "w") as f:
-            f.write(
-                f"Modified content with different size.\nModified token: {TOKEN_MODIFIED_FILE}\nExtra line to ensure size difference.\n"
-            )
-
-        # Fix permissions after modification
-        self._fix_permissions(changing_file)
+        modified_content = f"Modified content with different size.\nModified token: {MARKER_MODIFIED_FILE}\nExtra line to ensure size difference.\n"
+        self._create_file(changing_file, modified_content)
 
         # Second call - should detect the change and resend
         args2 = {
-            "instructions": f"Find and quote the sentence containing token '{TOKEN_MODIFIED_FILE}'.",
+            "instructions": f"Find and quote the sentence containing token '{MARKER_MODIFIED_FILE}'.",
             "output_format": "Quote the exact sentence containing the token.",
             "context": [changing_file],  # Same file, but modified
             "attachments": [],
@@ -261,9 +256,12 @@ class TestStableInlineList:
 
         # Verify the new token is found (proving file was resent)
         assert (
-            TOKEN_MODIFIED_FILE in response2
+            MARKER_MODIFIED_FILE in response2
         ), "Failed to find modified token - file was not resent"
         assert (
-            TOKEN_SMALL_FILE not in response2
+            MARKER_SMALL_FILE not in response2
         ), "Old token found - file change not detected"
         print("✅ Change detection test passed - modified file was resent!")
+
+        # Cleanup
+        self._exec_in_container(f"rm -rf {self.test_dir}", check=False)

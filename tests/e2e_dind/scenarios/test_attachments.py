@@ -13,44 +13,54 @@ UNIQUE_TOKEN = "mcp-e2e-flibbertigibbet-772-token"
 
 
 @pytest.mark.parametrize("claude", [True, False], indirect=True)
-def test_attachment_search_workflow(claude):
+def test_attachment_search_workflow(claude, stack):
     """Test RAG workflow using attachments parameter for automatic vector store creation."""
     print("🔍 Starting robust attachment test...")
 
-    test_dir = "/tmp/test_attachments_data"
+    def _exec_in_container(cmd, check=True):
+        """Execute a command inside the test-runner container."""
+        stdout, stderr, return_code = stack.exec_in_container(
+            ["bash", "-c", cmd], "test-runner"
+        )
+        if check and return_code != 0:
+            raise RuntimeError(f"Command failed: {cmd}\nStderr: {stderr}")
+        return stdout, stderr, return_code
+
+    def _create_file(path, content):
+        """Create a file inside the container with the given content."""
+        # Running as root in test-runner, create world-readable files
+        import os
+
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as f:
+            f.write(content)
+        # Make world-readable so claude user in sub-containers can read
+        os.chmod(path, 0o644)
+
+    # Create unique test directory with UUID for per-test isolation
+    import os
+    import uuid
+
+    test_uuid = uuid.uuid4().hex[:8]
+    test_dir = f"/tmp/test_attachments_data_{test_uuid}"
+
+    # Create directory directly with Python (running as root in test-runner)
     os.makedirs(test_dir, exist_ok=True)
-
-    # Fix permissions - chown to claude user so MCP server can access
-    import subprocess
-
-    try:
-        subprocess.run(["chown", "-R", "claude:claude", test_dir], check=True)
-        # Make files world-readable as a temporary fix
-        subprocess.run(["chmod", "-R", "a+rX", test_dir], check=True)
-        print(f"DEBUG: Set world-readable permissions on {test_dir}")
-    except subprocess.CalledProcessError as e:
-        print(f"Warning: Failed to set permissions on {test_dir}: {e}")
+    os.chmod(test_dir, 0o755)
+    print(f"DEBUG: Created test directory {test_dir} inside container")
 
     doc1, doc2 = None, None  # Ensure they are defined for the finally block
 
     try:
         # Step 1: Create a document that CONTAINS the unique token.
         doc1 = os.path.join(test_dir, "doc_with_token.txt")
-        with open(doc1, "w") as f:
-            f.write(
-                f"This document contains a highly secret value.\n"
-                f"The secret code is: {UNIQUE_TOKEN}.\n"
-                f"Do not share this code with anyone."
-            )
-        print(f"📄 Created test file with token: {doc1}")
-
-        # Fix permissions after creating the file
-        try:
-            subprocess.run(["chown", "claude:claude", doc1], check=True)
-            subprocess.run(["chmod", "a+r", doc1], check=True)
-            print(f"DEBUG: Set world-readable permissions on {doc1}")
-        except subprocess.CalledProcessError as e:
-            print(f"Warning: Failed to set permissions on {doc1}: {e}")
+        doc1_content = (
+            f"This document contains a highly secret value.\n"
+            f"The secret code is: {UNIQUE_TOKEN}.\n"
+            f"Do not share this code with anyone."
+        )
+        _create_file(doc1, doc1_content)
+        print(f"📄 Created test file with token inside container: {doc1}")
 
         # Step 2: Search for the token where it exists to confirm baseline functionality.
         args1 = {
@@ -72,20 +82,12 @@ def test_attachment_search_workflow(claude):
 
         # Step 3: Create a different document that DOES NOT contain the unique token.
         doc2 = os.path.join(test_dir, "doc_without_token.txt")
-        with open(doc2, "w") as f:
-            f.write(
-                "This document discusses the history of the Roman Empire. "
-                "It has no secret codes or special tokens."
-            )
-        print(f"📄 Created second test file without token: {doc2}")
-
-        # Fix permissions after creating the file
-        try:
-            subprocess.run(["chown", "claude:claude", doc2], check=True)
-            subprocess.run(["chmod", "a+r", doc2], check=True)
-            print(f"DEBUG: Set world-readable permissions on {doc2}")
-        except subprocess.CalledProcessError as e:
-            print(f"Warning: Failed to set permissions on {doc2}: {e}")
+        doc2_content = (
+            "This document discusses the history of the Roman Empire. "
+            "It has no secret codes or special tokens."
+        )
+        _create_file(doc2, doc2_content)
+        print(f"📄 Created second test file without token inside container: {doc2}")
 
         # Step 4: Search for the unique token in the document where it does NOT exist.
         # This is the crucial test for the deduplication cache fix.
@@ -123,13 +125,6 @@ def test_attachment_search_workflow(claude):
         print("✅ Deduplication cache test passed!")
 
     finally:
-        # Cleanup test files
-        try:
-            if doc1 and os.path.exists(doc1):
-                os.remove(doc1)
-            if doc2 and os.path.exists(doc2):
-                os.remove(doc2)
-            if os.path.exists(test_dir):
-                os.rmdir(test_dir)
-        except Exception as e:
-            print(f"⚠️ Cleanup warning: {e}")
+        # Cleanup test files inside the container
+        _exec_in_container(f"rm -rf {test_dir}", check=False)
+        print("🧹 Cleaned up test directory inside container")

@@ -228,49 +228,43 @@ def _is_ignored(
 
 
 def _is_safe_path(base: Path, target: Path) -> bool:
-    """Return True if target is within base directory after resolving."""
+    """Return True if target is within base directory after resolving.
+
+    For MCP server usage, we're more permissive since:
+    - AI models are read-only
+    - MCP server is local/containerized
+    - Explicit file paths are provided by users
+    """
     import os
 
     # In CI/E2E environments, allow all paths
     if os.environ.get("CI_E2E") == "1":
-        logger.debug(f"_is_safe_path: CI_E2E mode - allowing path: {target}")
         return True
 
-    # Check if we're running in a Docker container
+    # In containerized environments, be more permissive
     if os.path.exists("/.dockerenv"):
-        logger.debug(f"_is_safe_path: Docker environment - allowing path: {target}")
         return True
+
+    # For local development, still allow temp directory access
+    import tempfile
 
     try:
-        with open("/proc/1/cgroup", "r") as f:
-            cgroup_contents = f.read()
-            if "docker" in cgroup_contents or "containerd" in cgroup_contents:
-                logger.debug(
-                    f"_is_safe_path: Docker cgroup detected - allowing path: {target}"
-                )
-                return True
+        target_resolved = target.resolve()
+        temp_dir = Path(tempfile.gettempdir()).resolve()
+        if temp_dir in target_resolved.parents or temp_dir == target_resolved:
+            return True
     except Exception:
         pass
 
-    # Otherwise, apply normal security checks
+    # Traditional path traversal protection for other cases
     try:
         base_resolved = base.resolve()
         target_resolved = target.resolve()
+        return (
+            base_resolved == target_resolved or base_resolved in target_resolved.parents
+        )
     except Exception:
         return False
-
-    # Allow paths within project directory
-    if base_resolved == target_resolved or base_resolved in target_resolved.parents:
-        return True
-
-    # Allow temp directory access
-    import tempfile
-
-    temp_dir = Path(tempfile.gettempdir()).resolve()
-    if temp_dir in target_resolved.parents or temp_dir == target_resolved:
-        return True
-
-    return False
 
 
 def _should_skip_dir(dir_path: Path) -> bool:
@@ -390,7 +384,14 @@ def gather_file_paths(items: List[str], skip_safety_check: bool = False) -> List
             logger.warning(f"Skipping unsafe path outside project root: {raw_path}")
             continue
 
-        path = raw_path.resolve()
+        try:
+            path = raw_path.resolve()
+        except (OSError, FileNotFoundError) as e:
+            logger.warning(
+                f"DEBUG gather_file_paths: Could not resolve path '{raw_path}': {e}"
+            )
+            continue
+
         logger.info(
             f"DEBUG gather_file_paths: Resolved path='{path}', exists={path.exists()}"
         )

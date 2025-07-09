@@ -66,5 +66,6 @@ RUN gosu claude which claude
 # 9. Ensure gosu is available in PATH at runtime
 ENV PATH=/usr/sbin:/usr/local/sbin:/usr/local/bin:/usr/bin:/sbin:/bin
 
-# Entrypoint just forwards to pytest; real magic is in fixtures
+# Entrypoint just forwards to pytest - test runner runs as root
+# Only the sub-containers need to run Claude CLI as claude user
 ENTRYPOINT ["pytest"]
