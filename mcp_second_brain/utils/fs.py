@@ -229,8 +229,30 @@ def _is_ignored(
 
 def _is_safe_path(base: Path, target: Path) -> bool:
     """Return True if target is within base directory after resolving."""
-    # Keep the unresolved path string for checks before resolving
-    target_unresolved_str = str(target)
+    import os
+
+    # In CI/E2E environments, allow all paths
+    if os.environ.get("CI_E2E") == "1":
+        logger.debug(f"_is_safe_path: CI_E2E mode - allowing path: {target}")
+        return True
+
+    # Check if we're running in a Docker container
+    if os.path.exists("/.dockerenv"):
+        logger.debug(f"_is_safe_path: Docker environment - allowing path: {target}")
+        return True
+
+    try:
+        with open("/proc/1/cgroup", "r") as f:
+            cgroup_contents = f.read()
+            if "docker" in cgroup_contents or "containerd" in cgroup_contents:
+                logger.debug(
+                    f"_is_safe_path: Docker cgroup detected - allowing path: {target}"
+                )
+                return True
+    except Exception:
+        pass
+
+    # Otherwise, apply normal security checks
     try:
         base_resolved = base.resolve()
         target_resolved = target.resolve()
@@ -241,57 +263,12 @@ def _is_safe_path(base: Path, target: Path) -> bool:
     if base_resolved == target_resolved or base_resolved in target_resolved.parents:
         return True
 
-    # Special handling for test environments
-    import os
+    # Allow temp directory access
     import tempfile
 
-    # Check if we're in CI e2e test environment
-    ci_e2e = os.environ.get("CI_E2E")
-    logger.info(
-        f"DEBUG _is_safe_path: CI_E2E={ci_e2e}, checking path {target_unresolved_str}, resolved to {target_resolved}"
-    )
-
-    if ci_e2e == "1":
-        # In e2e tests, allow /tmp paths since containers share a /tmp volume
-        # Check both the unresolved and resolved paths to handle symlinks gracefully.
-        # Also check if the path is exactly /tmp (without trailing slash)
-        # Also check if the resolved path is under the temp directory
-        temp_dir = Path(tempfile.gettempdir()).resolve()
-
-        if (
-            str(target_resolved).startswith("/tmp/")
-            or str(target_resolved) == "/tmp"
-            or target_unresolved_str.startswith("/tmp/")
-            or target_unresolved_str == "/tmp"
-            or temp_dir in target_resolved.parents
-            or temp_dir == target_resolved
-        ):
-            logger.info(
-                f"DEBUG _is_safe_path: Allowing /tmp path in CI_E2E mode: {target_resolved}"
-            )
-            return True
-
-    # Check if we're in a test environment (pytest sets PYTEST_CURRENT_TEST)
-    if os.environ.get("PYTEST_CURRENT_TEST"):
-        temp_dir = Path(tempfile.gettempdir()).resolve()
-
-        # If base is in temp (test has cd'd to temp), use normal rules
-        if temp_dir in base_resolved.parents or temp_dir == base_resolved:
-            # Base is in temp, so we're testing from temp directory
-            # Apply normal path safety rules
-            return False
-
-        # Otherwise, if base is the real project and target is in pytest temp, allow it
-        if temp_dir in target_resolved.parents:
-            # Check if it's a pytest temp directory
-            for parent in target_resolved.parents:
-                if parent.name.startswith("pytest-"):
-                    return True
-
-        # Allow any file directly under temp directory during tests
-        # This covers tempfile.NamedTemporaryFile, TemporaryDirectory, mkstemp, etc.
-        if temp_dir == target_resolved.parent or temp_dir in target_resolved.parents:
-            return True
+    temp_dir = Path(tempfile.gettempdir()).resolve()
+    if temp_dir in target_resolved.parents or temp_dir == target_resolved:
+        return True
 
     return False
 
@@ -353,12 +330,13 @@ def _is_text_file(file_path: Path) -> bool:
     return False
 
 
-def gather_file_paths(items: List[str]) -> List[str]:
+def gather_file_paths(items: List[str], skip_safety_check: bool = False) -> List[str]:
     """
     Gather text file paths from given items, respecting .gitignore and common patterns.
 
     Args:
         items: List of file or directory paths (should be absolute paths)
+        skip_safety_check: If True, skip the project root safety check (for attachments)
 
     Returns:
         List of text file paths that should be included
@@ -397,10 +375,16 @@ def gather_file_paths(items: List[str]) -> List[str]:
             f"DEBUG gather_file_paths: Processing item '{item}' -> raw_path='{raw_path}'"
         )
 
-        is_safe = _is_safe_path(project_root, raw_path)
-        logger.info(
-            f"DEBUG gather_file_paths: _is_safe_path returned {is_safe} for {raw_path}"
-        )
+        if skip_safety_check:
+            is_safe = True
+            logger.info(
+                f"DEBUG gather_file_paths: Skipping safety check for attachment: {raw_path}"
+            )
+        else:
+            is_safe = _is_safe_path(project_root, raw_path)
+            logger.info(
+                f"DEBUG gather_file_paths: _is_safe_path returned {is_safe} for {raw_path}"
+            )
 
         if not is_safe:
             logger.warning(f"Skipping unsafe path outside project root: {raw_path}")

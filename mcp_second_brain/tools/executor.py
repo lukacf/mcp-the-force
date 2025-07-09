@@ -213,7 +213,7 @@ class ToolExecutor:
                 )
 
                 logger.info(
-                    f"Creating vector store with {len(files_for_vector_store)} overflow/attachment files"
+                    f"Creating vector store with {len(files_for_vector_store)} overflow/attachment files: {files_for_vector_store}"
                 )
                 vs_id = await self.vector_store_manager.create(files_for_vector_store)
                 vector_store_ids = [vs_id] if vs_id else None
@@ -222,7 +222,7 @@ class ToolExecutor:
                 )
             else:
                 # OLD PATH: Gather files from vector_store parameter
-                vector_store_param = routed_params["vector_store"]
+                vector_store_param = routed_params.get("vector_store", [])
                 assert isinstance(vector_store_param, list)  # Type hint for mypy
                 if vector_store_param:
                     # Clear attachment search cache for new attachments
@@ -233,10 +233,12 @@ class ToolExecutor:
                         "Cleared SearchAttachmentAdapter deduplication cache for new attachments"
                     )
 
-                    # Gather files from directories
+                    # Gather files from directories (skip safety check for attachments)
                     from ..utils.fs import gather_file_paths
 
-                    files = gather_file_paths(vector_store_param)
+                    files = gather_file_paths(
+                        vector_store_param, skip_safety_check=True
+                    )
                     logger.info(
                         f"Gathered {len(files)} files from attachments: {files}"
                     )

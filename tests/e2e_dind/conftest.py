@@ -272,7 +272,7 @@ def claude(stack, request) -> Callable[[str, int], str]:
             "VERTEX_LOCATION": os.getenv("VERTEX_LOCATION", "us-central1"),
             "GOOGLE_APPLICATION_CREDENTIALS": "/home/claude/.config/gcloud/application_default_credentials.json",
             "LOG_LEVEL": "DEBUG",
-            "CI_E2E": "1",
+            "CI_E2E": "1",  # This MUST be set for the MCP server to allow /tmp paths
             "PYTHONPATH": "/host-project",
             # Feature flag - default to False (old path) if no parameter given
             "MCP__FEATURES__ENABLE_STABLE_INLINE_LIST": "true"

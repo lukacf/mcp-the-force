@@ -35,6 +35,9 @@ def load_text_files(items: List[str]) -> List[Tuple[str, str, int]]:
     )
     logger.info(f"DEBUG load_text_files: Input items={items}")
 
+    # Always use gather_file_paths to robustly handle files, directories,
+    # and filtering in one place. This avoids race conditions with file
+    # existence checks in Docker volume mounts.
     paths = gather_file_paths(items)
     logger.info(
         f"DEBUG load_text_files: gather_file_paths returned {len(paths)} paths: {paths}"
@@ -54,12 +57,6 @@ def load_text_files(items: List[str]) -> List[Tuple[str, str, int]]:
                 stat = os.stat(abs_path)
                 logger.info(
                     f"DEBUG load_text_files: File exists! size={stat.st_size}, mode={oct(stat.st_mode)}, uid={stat.st_uid}, gid={stat.st_gid}"
-                )
-
-                # Try to read file
-                content = Path(path).read_text(encoding="utf-8", errors="ignore")
-                logger.info(
-                    f"DEBUG load_text_files: Successfully read {len(content)} chars from {path}"
                 )
             else:
                 logger.warning(
@@ -88,6 +85,9 @@ def load_text_files(items: List[str]) -> List[Tuple[str, str, int]]:
 
             # Read file content with UTF-8 encoding, ignoring errors
             content = Path(path).read_text(encoding="utf-8", errors="ignore")
+            logger.info(
+                f"DEBUG load_text_files: Successfully read {len(content)} chars from {path}"
+            )
 
             # Remove null bytes which can cause issues
             content = content.replace("\x00", "")
@@ -97,9 +97,9 @@ def load_text_files(items: List[str]) -> List[Tuple[str, str, int]]:
 
             result.append((path, content, token_count))
 
-        except Exception:
-            # Skip files that can't be read (permissions, etc.)
-            # This matches the behavior of the prompt builder
+        except Exception as e:
+            # Log the error before skipping
+            logger.warning(f"Failed to read file {path}: {type(e).__name__}: {e}")
             continue
 
     return result

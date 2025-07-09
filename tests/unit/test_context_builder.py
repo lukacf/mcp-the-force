@@ -205,12 +205,19 @@ class TestBuildContextWithStableList:
                     "mcp_second_brain.utils.context_builder.gather_file_paths",
                     side_effect=mock_gather_files,
                 ):
-                    inline_files, overflow_files = await build_context_with_stable_list(
-                        context_paths=["/api"],
-                        session_id="test_session",
-                        cache=cache,
-                        token_budget=500,
-                    )
+                    with patch(
+                        "mcp_second_brain.utils.context_loader.gather_file_paths",
+                        side_effect=mock_gather_files,
+                    ):
+                        (
+                            inline_files,
+                            overflow_files,
+                        ) = await build_context_with_stable_list(
+                            context_paths=["/api"],
+                            session_id="test_session",
+                            cache=cache,
+                            token_budget=500,
+                        )
 
             # No files should be sent inline (none changed)
             assert len(inline_files) == 0
