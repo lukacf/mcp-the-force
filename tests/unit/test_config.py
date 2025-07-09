@@ -24,7 +24,7 @@ class TestSettings:
             assert settings.host == "127.0.0.1"
             assert settings.port == 8000
             assert settings.context_percentage == 0.85  # 85% by default
-            assert settings.default_temperature == 0.2
+            assert settings.default_temperature == 1.0
 
     def test_env_var_override(self, mock_env):
         """Test that environment variables override defaults."""
@@ -180,7 +180,7 @@ PORT=3000
             assert settings.vertex_project == "test-proj"
             assert settings.vertex_location == "test-loc"
             assert settings.context_percentage == 0.85
-            assert settings.default_temperature == 0.2
+            assert settings.default_temperature == 1.0
             assert settings.session_ttl_seconds == 7200
             assert settings.session_db_path == ".mcp_sessions.sqlite3"
             assert settings.session_cleanup_probability == 0.01
@@ -586,7 +586,7 @@ logging:
             assert settings.mcp.host == "127.0.0.1"
             assert settings.mcp.port == 8000
             assert settings.mcp.context_percentage == 0.85
-            assert settings.mcp.default_temperature == 0.2
+            assert settings.mcp.default_temperature == 1.0
             assert settings.logging.level == "INFO"
             assert settings.session.ttl_seconds == 3600
             assert settings.memory.enabled is True
