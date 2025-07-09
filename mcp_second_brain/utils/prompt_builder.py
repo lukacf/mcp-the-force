@@ -43,13 +43,14 @@ def build_prompt(
         return prompt, []
 
     gather_start = time.time()
+    logger.info(f"DEBUG build_prompt: ctx={ctx}, attach={attach}")
     ctx_files = gather_file_paths(ctx) if ctx else []
     logger.info(
-        f"Gathered {len(ctx_files)} context files in {time.time() - gather_start:.2f}s"
+        f"Gathered {len(ctx_files)} context files in {time.time() - gather_start:.2f}s - files: {ctx_files}"
     )
 
     extras = gather_file_paths(attach) if attach else []
-    logger.info(f"Gathered {len(extras)} attachment files")
+    logger.info(f"Gathered {len(extras)} attachment files - files: {extras}")
 
     # Get context limit based on model and configured percentage
     model_limit = get_model_context_window(model or "")

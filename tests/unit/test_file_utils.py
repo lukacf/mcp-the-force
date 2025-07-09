@@ -230,14 +230,29 @@ class TestPathTraversal:
 
     def test_path_traversal_blocked(self, tmp_path, monkeypatch):
         """Paths escaping the project root should be rejected."""
-        monkeypatch.chdir(tmp_path)
+        # Ensure CI_E2E is not set during this test
+        monkeypatch.delenv("CI_E2E", raising=False)
 
-        outside = tmp_path.parent / "outside.txt"
-        outside.write_text("secret")
+        # Create a non-temp directory to test from
+        real_dir = Path.home() / ".test_path_traversal"
+        real_dir.mkdir(exist_ok=True)
 
-        files = gather_file_paths([str(tmp_path / ".." / "outside.txt")])
+        try:
+            monkeypatch.chdir(real_dir)
 
-        assert files == []
+            # Create file outside the directory
+            outside = real_dir.parent / "test_outside.txt"
+            outside.write_text("secret")
+
+            try:
+                files = gather_file_paths([str(outside)])
+                assert files == []
+            finally:
+                outside.unlink(missing_ok=True)
+        finally:
+            import shutil
+
+            shutil.rmtree(real_dir, ignore_errors=True)
 
     def test_safe_path_allowed(self, tmp_path, monkeypatch):
         """Paths inside the project root should be processed."""

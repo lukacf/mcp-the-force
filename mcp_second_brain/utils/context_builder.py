@@ -205,7 +205,7 @@ async def build_context_with_stable_list(
 
     # Add attachments to overflow (they always go to vector store)
     if attachments:
-        attachment_files = gather_file_paths(attachments)
+        attachment_files = gather_file_paths(attachments, skip_safety_check=True)
         overflow_paths.extend(attachment_files)
         logger.info(f"Added {len(attachment_files)} attachment files to vector store")
 
