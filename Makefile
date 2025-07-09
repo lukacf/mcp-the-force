@@ -133,9 +133,12 @@ e2e:
 		for scenario in smoke memory attachments cross_model failures stable_list; do \
 			( \
 				echo "[$$scenario] Starting at $$(date)"; \
+				VOL="e2e-tmp-$$scenario-$$$$"; \
+				docker volume create "$$VOL" >/dev/null; \
 				docker run --rm \
 					--name "e2e-test-$$scenario-$$$$" \
 					-v /var/run/docker.sock:/var/run/docker.sock \
+					-v "$$VOL":/tmp \
 					-v "$$ADC_PATH:/home/claude/.config/gcloud/application_default_credentials.json:ro" \
 					-w /host-project/tests/e2e_dind \
 					-e OPENAI_API_KEY="$${OPENAI_API_KEY}" \
@@ -143,9 +146,15 @@ e2e:
 					-e VERTEX_PROJECT="$${VERTEX_PROJECT:-mcp-test-project}" \
 					-e VERTEX_LOCATION="$${VERTEX_LOCATION:-us-central1}" \
 					-e GOOGLE_APPLICATION_CREDENTIALS="/home/claude/.config/gcloud/application_default_credentials.json" \
-					mcp-e2e-runner scenarios/test_$$scenario.py -v --tb=short \
-					&& echo "[$$scenario] ✓ PASSED at $$(date)" \
-					|| echo "[$$scenario] ✗ FAILED at $$(date)" \
+					-e SHARED_TMP_VOLUME="$$VOL" \
+					mcp-e2e-runner scenarios/test_$$scenario.py -v --tb=short; \
+				EXIT_CODE=$$?; \
+				docker volume rm "$$VOL" >/dev/null 2>&1 || true; \
+				if [ $$EXIT_CODE -eq 0 ]; then \
+					echo "[$$scenario] ✓ PASSED at $$(date)"; \
+				else \
+					echo "[$$scenario] ✗ FAILED at $$(date)"; \
+				fi \
 			) & \
 		done; \
 		echo "All scenarios launched, waiting for completion..."; \
