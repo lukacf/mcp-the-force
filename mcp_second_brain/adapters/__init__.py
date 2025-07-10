@@ -4,6 +4,7 @@ from typing import Dict, Tuple, Type, Optional
 from .base import BaseAdapter
 from .openai import OpenAIAdapter
 from .vertex import VertexAdapter
+from .grok import GrokAdapter
 import logging
 
 from mcp_second_brain.config import get_settings
@@ -14,6 +15,7 @@ logger = logging.getLogger(__name__)
 ADAPTER_REGISTRY: Dict[str, Type[BaseAdapter]] = {
     "openai": OpenAIAdapter,
     "vertex": VertexAdapter,
+    "xai": GrokAdapter,
 }
 
 # Mock adapter injection for testing
@@ -105,6 +107,7 @@ __all__ = [
     "BaseAdapter",
     "OpenAIAdapter",
     "VertexAdapter",
+    "GrokAdapter",
     "get_adapter",
     "register_adapter",
 ]

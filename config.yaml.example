@@ -27,6 +27,9 @@ providers:
     location: us-central1
   anthropic:
     enabled: false
+  xai:
+    enabled: false
+    # api_key should go in secrets.yaml
 
 # Session management
 session:
