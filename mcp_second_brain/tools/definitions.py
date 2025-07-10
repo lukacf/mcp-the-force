@@ -417,8 +417,17 @@ class ChatWithGrok4(ToolSpec):
     structured_output_schema: Optional[Dict[str, Any]] = Route.structured_output(
         description="JSON Schema for structured output (optional)"
     )
+    search_parameters: Optional[Dict[str, Any]] = Route.adapter(
+        description="Advanced Live Search overrides (allowedWebsites, maxSearchResults, etc.)"
+    )
     temperature: Optional[float] = Route.adapter(
         default=0.7, description="Sampling temperature (0-2)"
+    )
+    search_mode: Optional[str] = Route.adapter(
+        default="auto", description="Grok Live Search: 'auto' (default), 'on', or 'off'"
+    )
+    return_citations: Optional[bool] = Route.adapter(
+        default=True, description="Return source list when search is used (True/False)"
     )
 
 
@@ -453,8 +462,17 @@ class ChatWithGrok3Reasoning(ToolSpec):
     structured_output_schema: Optional[Dict[str, Any]] = Route.structured_output(
         description="JSON Schema for structured output (optional)"
     )
+    search_parameters: Optional[Dict[str, Any]] = Route.adapter(
+        description="Advanced Live Search overrides (allowedWebsites, maxSearchResults, etc.)"
+    )
     temperature: Optional[float] = Route.adapter(
         default=0.3, description="Lower temp for consistent reasoning"
+    )
+    search_mode: Optional[str] = Route.adapter(
+        default="auto", description="Grok Live Search: 'auto' (default), 'on', or 'off'"
+    )
+    return_citations: Optional[bool] = Route.adapter(
+        default=True, description="Return source list when search is used (True/False)"
     )
 
 

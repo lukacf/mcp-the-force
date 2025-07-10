@@ -146,6 +146,7 @@ class TestGeminiMechanics:
         )
 
     @pytest.mark.asyncio
+    @pytest.mark.timeout(30)  # Increase timeout for multiple executions
     async def test_session_isolation(self, clean_session_caches, session_id_generator):
         """Test that different sessions maintain separate histories."""
         metadata = get_tool("chat_with_gemini25_pro")

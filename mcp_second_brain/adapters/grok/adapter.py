@@ -89,6 +89,35 @@ class GrokAdapter(BaseAdapter):
             # Default to the largest common context window
             self.context_window = 131_000
 
+    def _build_search_params(
+        self,
+        mode: Optional[str],
+        custom: Optional[Dict[str, Any]],
+        return_citations: bool = True,
+    ) -> Optional[Dict[str, Any]]:
+        """Build search parameters for Grok Live Search.
+
+        Args:
+            mode: Search mode - 'auto', 'on', 'off', or None
+            custom: Custom search parameters to merge
+            return_citations: Whether to return source citations
+
+        Returns:
+            Search parameters dict or None if search is disabled
+        """
+        if mode is None:  # User did not ask for search → keep legacy behavior
+            return None
+        if mode not in {"auto", "on", "off"}:
+            raise ValueError("search_mode must be 'auto', 'on', or 'off'")
+
+        # Start with minimal defaults for low latency
+        params: Dict[str, Any] = {"mode": mode, "returnCitations": return_citations}
+
+        if custom:  # Allow power users to inject full spec
+            params.update(custom)
+
+        return params
+
     async def generate(
         self,
         prompt: str,
@@ -143,6 +172,18 @@ class GrokAdapter(BaseAdapter):
             temperature = kwargs.get("temperature", 1.0)
             stream = kwargs.get("stream", False)
 
+            # Extract search parameters
+            search_mode = kwargs.pop("search_mode", None)
+            search_parameters = kwargs.pop("search_parameters", None)
+            return_citations = kwargs.pop("return_citations", True)
+
+            # Build search parameters
+            search_params = self._build_search_params(
+                mode=search_mode,
+                custom=search_parameters,
+                return_citations=return_citations,
+            )
+
             # Build base request parameters
             request_params = {
                 "model": model,
@@ -150,6 +191,14 @@ class GrokAdapter(BaseAdapter):
                 "temperature": temperature,
                 "stream": stream,
             }
+
+            # Add search parameters to provider options if present
+            if search_params:
+                provider_options = kwargs.get("provider_options", {})
+                provider_options.setdefault("xai", {})["searchParameters"] = (
+                    search_params
+                )
+                request_params["provider_options"] = provider_options
 
             # Add optional parameters
             if "max_tokens" in kwargs:
@@ -243,7 +292,18 @@ class GrokAdapter(BaseAdapter):
                 await grok_session_cache.set_history(session_id, messages)
 
             final_message = messages[-1]
-            return final_message.get("content") or ""
+            content = final_message.get("content") or ""
+
+            # Check if response contains sources/citations
+            # When Live Search is used, sources might be in the response metadata
+            if hasattr(response, "sources") or hasattr(response, "citations"):
+                sources = getattr(response, "sources", None) or getattr(
+                    response, "citations", None
+                )
+                return {"text": content, "sources": sources}
+
+            # Return plain text for backward compatibility when no sources
+            return content
 
         except Exception as e:
             error_str = str(e).lower()
