@@ -118,6 +118,49 @@ class GrokAdapter(BaseAdapter):
 
         return params
 
+    def _snake_case_params(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Convert camelCase keys to snake_case names that xAI backend expects."""
+        mapping = {
+            "returnCitations": "return_citations",
+            "fromDate": "from_date",
+            "toDate": "to_date",
+            "maxSearchResults": "max_search_results",
+            "allowedWebsites": "allowed_websites",
+            "excludedWebsites": "excluded_websites",
+            "safeSearch": "safe_search",
+            "xHandles": "x_handles",
+        }
+        out = {}
+        for k, v in params.items():
+            nk = mapping.get(k, k)  # fall back to same key if already snake_case
+            if v is not None:
+                out[nk] = v
+        return out
+
+    def _normalize_source(self, src: Any) -> Dict[str, Any]:
+        """Normalize a source citation to a consistent dict format."""
+        if isinstance(src, dict):
+            return src
+        if isinstance(src, str):
+            return {"url": src}
+        # fallback – make debugging easier
+        return {"raw": str(src)}
+
+    def _extract_sources(self, response: Any) -> List[Dict[str, Any]]:
+        """Extract and normalize sources from xAI response."""
+        # Native xai-sdk exposes resp.sources directly
+        sources = getattr(response, "sources", None)
+
+        # OpenAI client: extras live in model_extra
+        if sources is None and hasattr(response, "model_extra"):
+            extra = response.model_extra
+            sources = extra.get("sources") or extra.get("citations")
+
+        if not sources:
+            return []
+
+        return [self._normalize_source(s) for s in sources]
+
     async def generate(
         self,
         prompt: str,
@@ -172,10 +215,10 @@ class GrokAdapter(BaseAdapter):
             temperature = kwargs.get("temperature", 1.0)
             stream = kwargs.get("stream", False)
 
-            # Extract search parameters
-            search_mode = kwargs.pop("search_mode", None)
-            search_parameters = kwargs.pop("search_parameters", None)
-            return_citations = kwargs.pop("return_citations", True)
+            # Extract search parameters (use get() to avoid modifying kwargs)
+            search_mode = kwargs.get("search_mode", None)
+            search_parameters = kwargs.get("search_parameters", None)
+            return_citations = kwargs.get("return_citations", True)
 
             # Build search parameters
             search_params = self._build_search_params(
@@ -192,44 +235,61 @@ class GrokAdapter(BaseAdapter):
                 "stream": stream,
             }
 
-            # Add search parameters to provider options if present
+            # Add search parameters via extra_body to bypass OpenAI SDK validation
             if search_params:
-                provider_options = kwargs.get("provider_options", {})
-                provider_options.setdefault("xai", {})["searchParameters"] = (
-                    search_params
-                )
-                request_params["provider_options"] = provider_options
+                search_params_snake = self._snake_case_params(search_params)
+                request_params["extra_body"] = {
+                    "search_parameters": search_params_snake
+                }
+                logger.info(f"Added Grok Live Search parameters: {search_params_snake}")
 
-            # Add optional parameters
+            # Add optional parameters (filter out our custom search parameters)
             if "max_tokens" in kwargs:
                 request_params["max_tokens"] = kwargs["max_tokens"]
+
+            # Filter out search parameters from kwargs to avoid passing them to OpenAI
+            filtered_kwargs = {
+                k: v
+                for k, v in kwargs.items()
+                if k not in {"search_mode", "search_parameters", "return_citations"}
+            }
 
             # Add reasoning_effort for models that support it
             model_capabilities = GROK_CAPABILITIES.get(model, {})
             if (
                 model_capabilities.get("supports_reasoning_effort")
-                and "reasoning_effort" in kwargs
+                and "reasoning_effort" in filtered_kwargs
             ):
-                request_params["reasoning_effort"] = kwargs["reasoning_effort"]
+                request_params["reasoning_effort"] = filtered_kwargs["reasoning_effort"]
 
             # Handle function calling if provided
-            if "functions" in kwargs:
+            if "functions" in filtered_kwargs:
                 request_params["tools"] = [
                     {"type": "function", "function": func}
-                    for func in kwargs["functions"]
+                    for func in filtered_kwargs["functions"]
                 ]
-                if "function_call" in kwargs:
-                    request_params["tool_choice"] = kwargs["function_call"]
+                if "function_call" in filtered_kwargs:
+                    request_params["tool_choice"] = filtered_kwargs["function_call"]
 
             # Handle structured output if provided
-            if "response_format" in kwargs:
-                request_params["response_format"] = kwargs["response_format"]
+            if "response_format" in filtered_kwargs:
+                request_params["response_format"] = filtered_kwargs["response_format"]
 
             logger.info(f"Calling Grok {model} with {len(messages)} messages")
+            logger.debug(f"Final request params: {request_params}")
 
             # --- TOOL EXECUTION LOOP ---
             while True:
-                response = await self.client.chat.completions.create(**request_params)
+                try:
+                    response = await self.client.chat.completions.create(
+                        **request_params
+                    )
+                    logger.debug(f"RAW xAI response: {response.model_dump()}")
+                except Exception:
+                    logger.exception(
+                        f"xAI API call failed with search_mode={search_mode}"
+                    )
+                    raise
                 message = response.choices[0].message
 
                 # Log token usage if available
@@ -294,15 +354,14 @@ class GrokAdapter(BaseAdapter):
             final_message = messages[-1]
             content = final_message.get("content") or ""
 
-            # Check if response contains sources/citations
-            # When Live Search is used, sources might be in the response metadata
-            if hasattr(response, "sources") or hasattr(response, "citations"):
-                sources = getattr(response, "sources", None) or getattr(
-                    response, "citations", None
-                )
-                return {"text": content, "sources": sources}
+            # Extract and normalize sources/citations from Live Search
+            sources = self._extract_sources(response)
 
-            # Return plain text for backward compatibility when no sources
+            # Only return dict format when we actually have sources
+            if sources:
+                return {"content": content, "sources": sources}
+
+            # Return plain text for backward compatibility
             return content
 
         except Exception as e:
