@@ -182,7 +182,7 @@ class TestVertexThreadSafety:
                     ]
 
                     # Call the handler
-                    result = await adapter._handle_function_calls(
+                    result, _ = await adapter._handle_function_calls(
                         initial_response, contents, types.GenerateContentConfig()
                     )
 
@@ -280,7 +280,7 @@ class TestVertexThreadSafety:
                     initial_response = create_mock_response(with_function_call=True)
 
                     # Call the handler
-                    result = await adapter._handle_function_calls(
+                    result, _ = await adapter._handle_function_calls(
                         initial_response, [], types.GenerateContentConfig()
                     )
 
