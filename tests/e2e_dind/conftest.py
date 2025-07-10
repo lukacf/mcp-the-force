@@ -274,10 +274,7 @@ def claude(stack, request) -> Callable[[str, int], str]:
             "LOG_LEVEL": "DEBUG",
             "CI_E2E": "1",  # This MUST be set for the MCP server to allow /tmp paths
             "PYTHONPATH": "/host-project",
-            # Feature flag - default to False (old path) if no parameter given
-            "MCP__FEATURES__ENABLE_STABLE_INLINE_LIST": "true"
-            if getattr(request, "param", False)
-            else "false",
+            # Stable list is now always enabled - no feature flag needed
         },
         "timeout": 60000,
         "description": "MCP Second-Brain server",
