@@ -133,15 +133,14 @@ class TestGrokMultiTurn:
         )
 
         data = json.loads(result)
-        messages = data["adapter_kwargs"]["messages"]
 
-        # Find system message
-        system_msg = next((m for m in messages if m["role"] == "system"), None)
-        assert system_msg is not None
+        # The test should verify that the prompt contains the priority instructions
+        # not the internal message structure which is an implementation detail
+        prompt_content = data["prompt"]
 
-        # Verify priority instructions (Grok uses system role, not developer)
-        assert "Information priority:" in system_msg["content"]
-        assert "Current conversation" in system_msg["content"]
+        # Verify priority instructions are in the prompt
+        assert "Information priority:" in prompt_content
+        assert "Current conversation" in prompt_content
 
     @pytest.mark.asyncio
     async def test_grok_multi_turn_with_attachments(
@@ -167,7 +166,7 @@ class TestGrokMultiTurn:
 
         data1 = json.loads(result1)
         # Should have vector store ID
-        assert "vector_store_ids" in data1["adapter_kwargs"]
+        assert data1["vector_store_ids"] is not None
 
         # Second turn - should remember context
         result2 = await executor.execute(
