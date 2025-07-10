@@ -61,6 +61,7 @@ markers = [
     "benchmark: Performance tests (warning only in CI)",
     "e2e: End-to-end tests that require Docker",
     "slow: Tests that take more than 10 seconds",
+    "timeout: Tests with custom timeout values",
 ]
 # Note: plugins loading moved to conftest.py for better compatibility
 
