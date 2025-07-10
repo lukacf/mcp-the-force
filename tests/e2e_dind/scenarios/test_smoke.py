@@ -3,6 +3,7 @@
 import json
 import sys
 import os
+import uuid
 
 # Add scenarios directory to path for imports
 sys.path.insert(0, os.path.dirname(__file__))
@@ -81,3 +82,33 @@ def test_smoke_health_and_simple_chat(claude):
     assert "python" in result["main_topic"].lower()
     assert len(result["key_points"]) >= 2
     assert result["word_count"] > 0
+
+    # Test 4: Grok simple reasoning with structured output
+    grok_schema = {
+        "type": "object",
+        "properties": {
+            "is_possible": {"type": "boolean"},
+            "reasoning": {"type": "string"},
+        },
+        "required": ["is_possible", "reasoning"],
+        "additionalProperties": False,
+    }
+
+    args = {
+        "instructions": "A man is on an island with a fox, a chicken, and a bag of grain. He has a boat that can only carry himself and one other item. The fox cannot be left with the chicken, and the chicken cannot be left with the grain. Can the man get everything to the other side? Explain your reasoning.",
+        "output_format": "JSON object matching the provided schema",
+        "context": [],
+        "session_id": f"smoke-grok-{uuid.uuid4()}",
+        "structured_output_schema": grok_schema,
+    }
+
+    response = claude(
+        f"Use second-brain chat_with_grok4 with {json.dumps(args)} and respond ONLY with the JSON."
+    )
+
+    # Parse and validate the structured response from Grok
+    result = safe_json(response)
+    assert result["is_possible"] is True
+    assert len(result["reasoning"]) > 20
+    assert "fox" in result["reasoning"].lower()
+    assert "chicken" in result["reasoning"].lower()
