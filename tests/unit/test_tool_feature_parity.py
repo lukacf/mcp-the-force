@@ -8,6 +8,8 @@ from mcp_second_brain.tools.definitions import (
     ChatWithO3,
     ChatWithO3Pro,
     ChatWithGPT4_1,
+    ChatWithGrok4,
+    ChatWithGrok3Reasoning,
 )
 from mcp_second_brain.tools.descriptors import RouteDescriptor, RouteType
 
@@ -16,7 +18,8 @@ from mcp_second_brain.tools.descriptors import RouteDescriptor, RouteType
 OPENAI_MODELS = [ChatWithO3, ChatWithO3Pro, ChatWithGPT4_1]
 REASONING_MODELS = [ChatWithO3, ChatWithO3Pro]  # Only o3 models support reasoning
 GEMINI_MODELS = [ChatWithGemini25Pro, ChatWithGemini25Flash]
-ALL_CHAT_MODELS = OPENAI_MODELS + GEMINI_MODELS
+GROK_MODELS = [ChatWithGrok4, ChatWithGrok3Reasoning]
+ALL_CHAT_MODELS = OPENAI_MODELS + GEMINI_MODELS + GROK_MODELS
 
 # Features that should be present in all chat models
 REQUIRED_FEATURES = {
@@ -156,6 +159,23 @@ class TestToolFeatureParity:
                 assert (
                     model_class.context_window == 1_000_000
                 ), f"{model_class.__name__} should have 1M context window"
+
+        # Check Grok models
+        for model_class in GROK_MODELS:
+            assert (
+                model_class.adapter_class == "xai"
+            ), f"{model_class.__name__} should use xai adapter"
+
+            # Grok 4 should have 256k context
+            if "Grok4" in model_class.__name__:
+                assert (
+                    model_class.context_window == 256_000
+                ), f"{model_class.__name__} should have 256k context window"
+            # Other Grok models should have 131k context
+            else:
+                assert (
+                    model_class.context_window == 131_000
+                ), f"{model_class.__name__} should have 131k context window"
 
     def test_no_duplicate_parameter_positions(self):
         """No model should have duplicate position numbers for parameters."""
