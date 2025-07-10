@@ -9,6 +9,7 @@ from ...config import get_settings
 from ..base import BaseAdapter
 from ..memory_search_declaration import create_search_memory_declaration_gemini
 from ..attachment_search_declaration import create_attachment_search_declaration_gemini
+from ...gemini_session_cache import gemini_session_cache
 
 # Removed validation imports - no longer validating structured output
 # from ...utils.validation import validate_json_schema
@@ -100,7 +101,15 @@ class VertexAdapter(BaseAdapter):
     ) -> Any:
         self._ensure(prompt)
 
-        if messages:
+        # --- NEW SESSION HANDLING ---
+        session_id = kwargs.get("session_id")
+        if session_id:
+            # Load full history, including tool calls
+            history = await gemini_session_cache.get_history(session_id)
+            contents = history + [
+                types.Content(role="user", parts=[types.Part.from_text(text=prompt)])
+            ]
+        elif messages:
             contents = [
                 types.Content(
                     role=m.get("role", "user"),
@@ -109,6 +118,7 @@ class VertexAdapter(BaseAdapter):
                 for m in messages
             ]
         else:
+            # No session, start new history
             contents = [
                 types.Content(role="user", parts=[types.Part.from_text(text=prompt)])
             ]
@@ -222,42 +232,65 @@ class VertexAdapter(BaseAdapter):
             config=generate_content_config,
         )
 
-        # Handle function calls if any
-        if response.candidates and function_declarations:
-            result = await self._handle_function_calls(
-                response, contents, generate_content_config, vector_store_ids
-            )
-            if return_debug:
-                return {"content": result, "_debug_tools": function_declarations}
-            return result
+        final_response_content = ""
 
-        # Extract text from response
-        response_text = ""
-        if response.candidates:
-            for candidate in response.candidates:
+        # Handle function calls if any
+        if (
+            response.candidates
+            and response.candidates[0].content.parts
+            and any(p.function_call for p in response.candidates[0].content.parts)
+        ):
+            # This is the full history *before* the final text answer
+            history_with_tool_calls = contents + [response.candidates[0].content]
+
+            # This recursive call will return the final text and the complete history
+            final_response_content, final_history = await self._handle_function_calls(
+                response,
+                history_with_tool_calls,
+                generate_content_config,
+                vector_store_ids,
+            )
+
+            # Save the final, complete history
+            if session_id:
+                await gemini_session_cache.set_history(session_id, final_history)
+        else:
+            # No function calls, handle simple text response
+            if response.candidates:
+                candidate = response.candidates[0]
                 if candidate.content and candidate.content.parts:
-                    response_text += self._extract_text_from_parts(
+                    final_response_content = self._extract_text_from_parts(
                         candidate.content.parts
                     )
+
+                    # Save the simple history
+                    if session_id:
+                        final_history = contents + [candidate.content]
+                        await gemini_session_cache.set_history(
+                            session_id, final_history
+                        )
 
         # Skip validation - let the model response through as-is
         # Structured output schema is a suggestion to the model, not a strict requirement
         if structured_output_schema:
             logger.debug(
-                f"Structured output schema provided - letting model response through as-is: '{response_text}'"
+                f"Structured output schema provided - letting model response through as-is: '{final_response_content}'"
             )
 
         if return_debug:
-            return {"content": response_text, "_debug_tools": function_declarations}
-        return response_text
+            return {
+                "content": final_response_content,
+                "_debug_tools": function_declarations,
+            }
+        return final_response_content
 
     async def _handle_function_calls(
         self,
         response: Any,
-        contents: List[types.Content],
+        contents: List[types.Content],  # Now receives the full history so far
         config: types.GenerateContentConfig,
         vector_store_ids: Optional[List[str]] = None,
-    ) -> str:
+    ) -> tuple[str, list[types.Content]]:  # Return final text AND final history
         """Handle function calls in the response."""
         client = get_client()
         settings = get_settings()
@@ -277,10 +310,12 @@ class VertexAdapter(BaseAdapter):
             if not function_calls:
                 # No more function calls, extract final text
                 response_text = self._extract_text_from_parts(candidate.content.parts)
-                return response_text
+                # The final history is what we built plus the final response
+                final_history = contents + [candidate.content]
+                return response_text, final_history
 
-            # Add model's response to conversation
-            contents.append(candidate.content)
+            # The model's response (function call) is already in contents from caller
+            # Skip adding it again: contents.append(candidate.content)
 
             # Execute function calls
             function_responses = []
@@ -370,6 +405,9 @@ class VertexAdapter(BaseAdapter):
 
         # Check if we hit the function call limit
         if function_call_rounds >= max_function_calls:
-            return f"TooManyFunctionCalls: Exceeded {max_function_calls} function call rounds"
+            return (
+                f"TooManyFunctionCalls: Exceeded {max_function_calls} function call rounds",
+                contents,
+            )
 
-        return "No response generated"
+        return "No response generated", contents

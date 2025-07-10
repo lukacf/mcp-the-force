@@ -7,6 +7,7 @@ import fastmcp.exceptions
 from mcp_second_brain import adapters
 from mcp_second_brain import session_cache as session_cache_module
 from mcp_second_brain import gemini_session_cache as gemini_session_cache_module
+from mcp_second_brain import grok_session_cache as grok_session_cache_module
 from .registry import ToolMetadata
 from .vector_store_manager import vector_store_manager
 from .prompt_engine import prompt_engine
@@ -263,6 +264,7 @@ class ToolExecutor:
             # 6. Handle session
             previous_response_id = None
             gemini_messages = None
+            grok_messages = None  # NEW
             session_params = routed_params["session"]
             assert isinstance(session_params, dict)  # Type hint for mypy
             session_id = session_params.get("session_id")
@@ -276,8 +278,18 @@ class ToolExecutor:
                     if previous_response_id:
                         logger.info(f"Continuing session {session_id}")
                 elif metadata.model_config["adapter_class"] == "vertex":
-                    gemini_messages = await gemini_session_cache_module.gemini_session_cache.get_messages(
+                    gemini_messages = await gemini_session_cache_module.gemini_session_cache.get_history(
                         session_id
+                    )
+                # --- NEW: Handle Grok sessions ---
+                elif metadata.model_config["adapter_class"] == "xai":
+                    grok_messages = (
+                        await grok_session_cache_module.grok_session_cache.get_history(
+                            session_id
+                        )
+                    )
+                    logger.info(
+                        f"Continuing Grok session {session_id} with {len(grok_messages)} messages"
                     )
 
             # 7. Execute model call
@@ -290,6 +302,10 @@ class ToolExecutor:
                 adapter_params["messages"] = gemini_messages + [
                     {"role": "user", "content": prompt}
                 ]
+
+            # --- NEW: Pass Grok history ---
+            if grok_messages:
+                adapter_params["messages"] = grok_messages
 
             # Merge structured_output parameters into adapter params
             structured_output_params = routed_params.get("structured_output", {})
@@ -322,13 +338,8 @@ class ToolExecutor:
                     await session_cache_module.session_cache.set_response_id(
                         session_id, result["response_id"]
                     )
-                if session_id and metadata.model_config["adapter_class"] == "vertex":
-                    try:
-                        await gemini_session_cache_module.gemini_session_cache.append_exchange(
-                            session_id, prompt, content
-                        )
-                    except Exception as e:
-                        logger.warning(f"Failed to update Gemini session: {e}")
+                # Session management is now handled inside the adapters themselves
+                # No need to save sessions here for Vertex/Grok models
 
                 # Redact secrets from content
                 redacted_content = redact_secrets(str(content))
@@ -375,13 +386,8 @@ class ToolExecutor:
                     except Exception as e:
                         logger.warning(f"Failed to store conversation memory: {e}")
 
-                if session_id and metadata.model_config["adapter_class"] == "vertex":
-                    try:
-                        await gemini_session_cache_module.gemini_session_cache.append_exchange(
-                            session_id, prompt, redacted_result
-                        )
-                    except Exception as e:
-                        logger.warning(f"Failed to update Gemini session: {e}")
+                # Session management is now handled inside the adapters themselves
+                # No need to save sessions here for Vertex/Grok models
 
                 return redacted_result
 
