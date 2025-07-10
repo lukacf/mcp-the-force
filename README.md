@@ -194,8 +194,7 @@ gcloud iam service-accounts add-iam-policy-binding \
 | `chat_with_o3` | OpenAI o3 | Step-by-step reasoning, algorithms | ~200k tokens | ✅ |
 | `chat_with_o3_pro` | OpenAI o3-pro | Formal analysis, complex debugging | ~200k tokens | ✅ |
 | `chat_with_gpt4_1` | GPT-4.1 | Large-scale refactoring, RAG workflows | ~1M tokens | ✅ |
-| `chat_with_grok3` | xAI Grok 3 | Coding, Q&A, real-time X data | ~131k tokens | ✅ |
-| `chat_with_grok3_reasoning` | xAI Grok 3 Reasoning | Complex problem solving, debugging | ~131k tokens | ✅ |
+| `chat_with_grok3_reasoning` | xAI Grok 3 Beta | Complex problem solving, debugging | ~131k tokens | ✅ |
 | `chat_with_grok4` | xAI Grok 4 | Advanced reasoning, large documents | ~256k tokens | ✅ |
 
 ### Research Tools
