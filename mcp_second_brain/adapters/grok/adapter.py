@@ -2,11 +2,13 @@
 
 from typing import Optional, AsyncIterator, Any, Dict, Union, List
 import logging
+import json
 from openai import AsyncOpenAI
 
 from ..base import BaseAdapter
 from .errors import AdapterException, ErrorCategory
 from ...config import get_settings
+from ...grok_session_cache import grok_session_cache
 
 logger = logging.getLogger(__name__)
 
@@ -93,12 +95,13 @@ class GrokAdapter(BaseAdapter):
         vector_store_ids: Optional[List[str]] = None,
         **kwargs: Any,
     ) -> Union[str, Dict[str, Any]]:
-        """Generate a response using Grok models.
+        """Generate a response using Grok models with session management and tool execution.
 
         Args:
             prompt: Input prompt text
-            vector_store_ids: IDs of vector stores to search (unused for Grok)
+            vector_store_ids: IDs of vector stores to search
             **kwargs: Additional parameters including:
+                - session_id: Session ID for conversation history
                 - messages: Pre-formatted messages (overrides prompt)
                 - model: Model name (defaults to instance model)
                 - temperature: Sampling temperature
@@ -107,7 +110,7 @@ class GrokAdapter(BaseAdapter):
                 - functions: List of available functions
 
         Returns:
-            Generated text or response dict
+            Generated text response
         """
 
         # Get model from kwargs or use instance model
@@ -125,16 +128,22 @@ class GrokAdapter(BaseAdapter):
             )
 
         try:
-            # Get messages from kwargs or create from prompt
-            messages = kwargs.get("messages")
-            if not messages:
-                messages = [{"role": "user", "content": prompt}]
+            session_id = kwargs.get("session_id")
+
+            # --- LOAD HISTORY FROM CACHE ---
+            if session_id:
+                messages = await grok_session_cache.get_history(session_id)
+                messages.append({"role": "user", "content": prompt})
+            else:
+                messages = kwargs.get("messages") or [
+                    {"role": "user", "content": prompt}
+                ]
 
             # Get other parameters
             temperature = kwargs.get("temperature", 1.0)
             stream = kwargs.get("stream", False)
 
-            # Build request parameters
+            # Build base request parameters
             request_params = {
                 "model": model,
                 "messages": messages,
@@ -169,15 +178,10 @@ class GrokAdapter(BaseAdapter):
 
             logger.info(f"Calling Grok {model} with {len(messages)} messages")
 
-            if stream:
-                # For streaming, we need to collect the response
-                # since BaseAdapter doesn't support streaming
-                full_response = ""
-                async for chunk in self._stream_response(request_params):
-                    full_response += chunk
-                return full_response
-            else:
+            # --- TOOL EXECUTION LOOP ---
+            while True:
                 response = await self.client.chat.completions.create(**request_params)
+                message = response.choices[0].message
 
                 # Log token usage if available
                 if hasattr(response, "usage") and response.usage:
@@ -187,20 +191,59 @@ class GrokAdapter(BaseAdapter):
                         f"total: {response.usage.total_tokens}"
                     )
 
-                # Handle function calls
-                message = response.choices[0].message
-                if hasattr(message, "tool_calls") and message.tool_calls:
-                    # Return a dict with function call information
-                    logger.info(
-                        f"Grok returned {len(message.tool_calls)} function calls"
-                    )
-                    return {
-                        "content": message.content or "",
-                        "tool_calls": message.tool_calls,
-                        "role": "assistant",
-                    }
+                messages.append(message.model_dump(exclude_none=True))
 
-                return message.content or ""
+                if not message.tool_calls:
+                    break  # Exit loop if no more tool calls
+
+                tool_results = []
+                for tool_call in message.tool_calls:
+                    tool_name = tool_call.function.name
+                    tool_args = json.loads(tool_call.function.arguments)
+
+                    try:
+                        if tool_name == "search_project_memory":
+                            from ...tools.search_memory import SearchMemoryAdapter
+
+                            memory_adapter = SearchMemoryAdapter()
+                            output = await memory_adapter.generate(
+                                prompt=tool_args.get("query", ""), **tool_args
+                            )
+                        elif tool_name == "search_session_attachments":
+                            from ...tools.search_attachments import (
+                                SearchAttachmentAdapter,
+                            )
+
+                            attachment_adapter = SearchAttachmentAdapter()
+                            output = await attachment_adapter.generate(
+                                prompt=tool_args.get("query", ""),
+                                vector_store_ids=vector_store_ids,
+                                **tool_args,
+                            )
+                        else:
+                            output = f"Error: Unknown tool '{tool_name}'"
+                    except Exception as e:
+                        output = f"Error executing tool '{tool_name}': {e}"
+                        logger.error(f"Tool execution error: {e}")
+
+                    tool_results.append(
+                        {
+                            "tool_call_id": tool_call.id,
+                            "role": "tool",
+                            "name": tool_name,
+                            "content": str(output),
+                        }
+                    )
+
+                messages.extend(tool_results)
+                request_params["messages"] = messages
+
+            # --- SAVE HISTORY AND RETURN ---
+            if session_id:
+                await grok_session_cache.set_history(session_id, messages)
+
+            final_message = messages[-1]
+            return final_message.get("content") or ""
 
         except Exception as e:
             error_str = str(e).lower()
