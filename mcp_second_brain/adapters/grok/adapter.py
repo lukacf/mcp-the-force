@@ -12,17 +12,17 @@ logger = logging.getLogger(__name__)
 
 # Model capabilities
 GROK_CAPABILITIES: Dict[str, Dict[str, Any]] = {
-    "grok-3": {
+    "grok-3-beta": {
         "context_window": 131_000,
         "supports_functions": True,
         "supports_streaming": True,
-        "description": "General purpose, fast, balanced",
+        "description": "General purpose Grok 3 model",
     },
-    "grok-3-reasoning": {
+    "grok-3-fast": {
         "context_window": 131_000,
         "supports_functions": True,
         "supports_streaming": True,
-        "description": "Complex reasoning, slower but more thorough",
+        "description": "Fast inference with Grok 3",
     },
     "grok-4": {
         "context_window": 256_000,
@@ -40,7 +40,22 @@ GROK_CAPABILITIES: Dict[str, Dict[str, Any]] = {
         "context_window": 32_000,
         "supports_functions": True,
         "supports_streaming": True,
-        "description": "Quick responses, lower quality",
+        "supports_reasoning_effort": True,
+        "description": "Quick responses, supports reasoning effort",
+    },
+    "grok-3-mini-beta": {
+        "context_window": 32_000,
+        "supports_functions": True,
+        "supports_streaming": True,
+        "supports_reasoning_effort": True,
+        "description": "Beta version of mini model with reasoning effort",
+    },
+    "grok-3-mini-fast": {
+        "context_window": 32_000,
+        "supports_functions": True,
+        "supports_streaming": True,
+        "supports_reasoning_effort": True,
+        "description": "Fast mini model with reasoning effort",
     },
 }
 
@@ -64,6 +79,13 @@ class GrokAdapter(BaseAdapter):
             base_url="https://api.x.ai/v1",
         )
         self._supported_models = set(GROK_CAPABILITIES.keys())
+
+        # Set context window if model is specified
+        if self.model_name and self.model_name in GROK_CAPABILITIES:
+            self.context_window = GROK_CAPABILITIES[self.model_name]["context_window"]
+        else:
+            # Default to the largest common context window
+            self.context_window = 131_000
 
     async def generate(
         self,
@@ -123,6 +145,14 @@ class GrokAdapter(BaseAdapter):
             # Add optional parameters
             if "max_tokens" in kwargs:
                 request_params["max_tokens"] = kwargs["max_tokens"]
+
+            # Add reasoning_effort for models that support it
+            model_capabilities = GROK_CAPABILITIES.get(model, {})
+            if (
+                model_capabilities.get("supports_reasoning_effort")
+                and "reasoning_effort" in kwargs
+            ):
+                request_params["reasoning_effort"] = kwargs["reasoning_effort"]
 
             # Handle function calling if provided
             if "functions" in kwargs:
@@ -211,6 +241,7 @@ class GrokAdapter(BaseAdapter):
             Chunks of generated text
         """
         try:
+            # When stream=True, create() returns an AsyncIterator after awaiting
             stream = await self.client.chat.completions.create(**request_params)
 
             async for chunk in stream:

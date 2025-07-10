@@ -341,7 +341,7 @@ class ResearchWithO4MiniDeepResearch(ToolSpec):
 
 @tool
 class ChatWithGrok3(ToolSpec):
-    """General-purpose assistant using xAI Grok 3 model (131k context).
+    """General-purpose assistant using xAI Grok 3 Fast model (131k context).
     Excels at: coding, Q&A, and real-time info via X data.
 
     Example usage:
@@ -352,7 +352,7 @@ class ChatWithGrok3(ToolSpec):
     - session_id: "grok-session-001" (for conversations)
     """
 
-    model_name = "grok-3"
+    model_name = "grok-3-fast"
     adapter_class = "xai"
     context_window = 131_000
     timeout = 300
@@ -422,9 +422,9 @@ class ChatWithGrok4(ToolSpec):
 
 @tool
 class ChatWithGrok3Reasoning(ToolSpec):
-    """Deep reasoning using xAI Grok 3 Reasoning model (131k context).
+    """Deep reasoning using xAI Grok 3 Beta model (131k context).
     Excels at: complex problem solving, mathematical reasoning, code debugging.
-    Note: Slower than regular Grok 3 but more thorough.
+    Note: General purpose Grok 3 model.
 
     Example usage:
     - instructions: "Find and fix the race condition in this concurrent code"
@@ -433,7 +433,7 @@ class ChatWithGrok3Reasoning(ToolSpec):
     - session_id: "debug-session-001"
     """
 
-    model_name = "grok-3-reasoning"
+    model_name = "grok-3-beta"
     adapter_class = "xai"
     context_window = 131_000
     timeout = 900  # Longer timeout for reasoning mode
@@ -453,4 +453,51 @@ class ChatWithGrok3Reasoning(ToolSpec):
     )
     temperature: Optional[float] = Route.adapter(
         default=0.3, description="Lower temp for consistent reasoning"
+    )
+
+
+@tool
+class ChatWithGrok3Mini(ToolSpec):
+    """Quick responses with xAI Grok 3 Mini model (32k context).
+    Excels at: rapid insights, cost-effective reasoning tasks.
+    Supports reasoning_effort parameter for adjustable processing depth.
+
+    Example usage:
+    - instructions: "Summarize this log file and identify critical errors"
+    - output_format: "Bullet points with error summaries"
+    - context: ["/var/log/app.log"]
+    - reasoning_effort: "low" (default, can be "medium" or "high")
+    - session_id: "log-analysis-001"
+    """
+
+    model_name = "grok-3-mini"
+    adapter_class = "xai"
+    context_window = 32_000
+    timeout = 120
+
+    # Required parameters
+    instructions: str = Route.prompt(pos=0, description="User instructions or question")
+    output_format: str = Route.prompt(
+        pos=1, description="Desired output format or response style"
+    )
+    context: List[str] = Route.prompt(
+        pos=2, description="File paths or content to provide as context"
+    )
+    session_id: str = Route.session(
+        description="Session ID to link multi-turn conversations"
+    )
+
+    # Optional parameters
+    attachments: Optional[List[str]] = Route.vector_store(
+        description="Additional files for RAG"
+    )
+    structured_output_schema: Optional[Dict[str, Any]] = Route.structured_output(
+        description="JSON Schema for structured output (optional)"
+    )
+    temperature: Optional[float] = Route.adapter(
+        default=1.0, description="Sampling temperature (0-2)"
+    )
+    reasoning_effort: Optional[str] = Route.adapter(
+        default="low",
+        description="Controls reasoning effort (low/medium/high) for mini models",
     )
