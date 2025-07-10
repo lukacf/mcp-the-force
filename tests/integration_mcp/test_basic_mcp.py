@@ -27,14 +27,8 @@ class TestBasicMCP:
             # Call the tool
             result = await client.call_tool("list_models")
 
-            # FastMCP 2.10+ returns CallToolResult objects
-            assert hasattr(
-                result, "content"
-            ), "Expected CallToolResult with content attribute"
-            assert not result.is_error, "Tool call returned an error"
-
-            # Access the content list
-            content = result.content
+            # The result is already the content list, not a CallToolResult
+            content = result
             assert isinstance(content, list)
             assert len(content) > 0
 
@@ -62,14 +56,8 @@ class TestBasicMCP:
                 },
             )
 
-            # FastMCP 2.10+ returns CallToolResult objects
-            assert hasattr(
-                result, "content"
-            ), "Expected CallToolResult with content attribute"
-            assert not result.is_error, "Tool call returned an error"
-
-            # Access the content list
-            content = result.content
+            # The result is already the content list, not a CallToolResult
+            content = result
             assert isinstance(content, list)
             assert len(content) == 1
             assert isinstance(content[0], TextContent)
@@ -122,14 +110,8 @@ class TestBasicMCP:
                 "count_project_tokens", {"items": ["pyproject.toml"]}
             )
 
-            # FastMCP 2.10+ returns CallToolResult objects
-            assert hasattr(
-                result, "content"
-            ), "Expected CallToolResult with content attribute"
-            assert not result.is_error, "Tool call returned an error"
-
-            # Access the content list
-            content = result.content
+            # The result is already the content list, not a CallToolResult
+            content = result
             assert isinstance(content, list)
             assert len(content) == 1
 
@@ -155,14 +137,8 @@ class TestBasicMCP:
         async with Client(transport) as client:
             result = await client.call_tool("search_project_memory", {"query": "test"})
 
-            # FastMCP 2.10+ returns CallToolResult objects
-            assert hasattr(
-                result, "content"
-            ), "Expected CallToolResult with content attribute"
-            assert not result.is_error, "Tool call returned an error"
-
-            # Access the content list
-            content = result.content
+            # The result is already the content list, not a CallToolResult
+            content = result
             assert isinstance(content, list)
             assert len(content) == 1
             assert isinstance(content[0], TextContent)
