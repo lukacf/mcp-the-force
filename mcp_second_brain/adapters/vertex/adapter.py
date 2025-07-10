@@ -103,25 +103,18 @@ class VertexAdapter(BaseAdapter):
 
         # --- NEW SESSION HANDLING ---
         session_id = kwargs.get("session_id")
+
+        # Always start with loading session history if available
+        history = []
         if session_id:
-            # Load full history, including tool calls
             history = await gemini_session_cache.get_history(session_id)
-            contents = history + [
-                types.Content(role="user", parts=[types.Part.from_text(text=prompt)])
-            ]
-        elif messages:
-            contents = [
-                types.Content(
-                    role=m.get("role", "user"),
-                    parts=[types.Part.from_text(text=m.get("content", ""))],
-                )
-                for m in messages
-            ]
-        else:
-            # No session, start new history
-            contents = [
-                types.Content(role="user", parts=[types.Part.from_text(text=prompt)])
-            ]
+            logger.info(f"Loaded {len(history)} messages from session {session_id}")
+
+        # Add the current user prompt to the history
+        # The prompt is now small on subsequent turns due to stable-list logic
+        contents = history + [
+            types.Content(role="user", parts=[types.Part.from_text(text=prompt)])
+        ]
 
         # Configure safety settings
         safety_settings = [
