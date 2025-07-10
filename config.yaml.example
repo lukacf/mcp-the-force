@@ -4,8 +4,14 @@
 mcp:
   host: 127.0.0.1
   port: 8000
-  context_percentage: 0.85  # Use 85% of model's context window
-  default_temperature: 0.2  # Low temperature for consistent responses
+  # Percentage of a model's total context window to fill with file content.
+  # Files that fit within this limit are inlined directly in the prompt.
+  # Files that exceed this limit are automatically uploaded to a vector store
+  # for RAG (Retrieval Augmented Generation) via semantic search.
+  # The remaining space (e.g., 15%) is reserved as a safety buffer for the prompt
+  # template, tool definitions, and the model's generated response.
+  context_percentage: 0.85
+  default_temperature: 1.0  # Neutral temperature (0=deterministic, 2=creative)
 
 logging:
   level: INFO  # DEBUG, INFO, WARNING, ERROR, CRITICAL
