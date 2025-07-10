@@ -179,13 +179,16 @@ class ToolExecutor:
                 # Gemini models - use system_instruction parameter
                 adapter_params = routed_params["adapter"]
                 assert isinstance(adapter_params, dict)  # Type hint for mypy
+
+                # ALWAYS send the developer prompt so the model maintains its role
+                # across the entire session. Gemini deduplicates identical system
+                # instructions, so this is safe and necessary.
                 adapter_params["system_instruction"] = developer_prompt
-                # Store messages for conversation memory
-                messages = [
-                    {"role": "system", "content": developer_prompt},
-                    {"role": "user", "content": prompt},
-                ]
-                prompt_params["messages"] = messages
+
+                # Since session_id is mandatory, we always have a session
+                # The adapter will handle loading history and adding the new message
+                session_id = session_params.get("session_id")
+                logger.info(f"Vertex adapter will handle session {session_id}")
             else:
                 # Unknown adapter - use safe default of prepending
                 final_prompt = f"{developer_prompt}\n\n{prompt}"
@@ -295,6 +298,11 @@ class ToolExecutor:
             # 7. Execute model call
             adapter_params = routed_params["adapter"]
             assert isinstance(adapter_params, dict)  # Type hint for mypy
+
+            # FIX: Merge session parameters into adapter parameters
+            session_params = routed_params.get("session", {})
+            adapter_params.update(session_params)
+
             if previous_response_id:
                 adapter_params["previous_response_id"] = previous_response_id
 
