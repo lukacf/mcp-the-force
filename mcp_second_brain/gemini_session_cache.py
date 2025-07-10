@@ -2,9 +2,10 @@ import time
 import json
 import logging
 import threading
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 import os
 import tempfile
+from google.genai import types
 
 from mcp_second_brain.config import get_settings
 from mcp_second_brain.sqlite_base_cache import BaseSQLiteCache
@@ -12,6 +13,51 @@ from mcp_second_brain.sqlite_base_cache import BaseSQLiteCache
 logger = logging.getLogger(__name__)
 
 # Configuration will be read lazily to support test isolation
+
+
+# --- Serialization Helpers ---
+def _content_to_dict(content: types.Content) -> Dict[str, Any]:
+    """Serialize a Gemini Content object to a JSON-compatible dictionary."""
+    parts_list = []
+    for part in content.parts:
+        part_dict = {}
+        # Use getattr to safely access optional attributes
+        if text := getattr(part, "text", None):
+            part_dict["text"] = text
+        if fc := getattr(part, "function_call", None):
+            part_dict["function_call"] = {"name": fc.name, "args": dict(fc.args)}
+        if fr := getattr(part, "function_response", None):
+            part_dict["function_response"] = {"name": fr.name, "response": fr.response}
+        if part_dict:
+            parts_list.append(part_dict)
+    return {"role": getattr(content, "role", "user"), "parts": parts_list}
+
+
+def _dict_to_content(data: Dict[str, Any]) -> types.Content:
+    """Deserialize a dictionary back into a Gemini Content object."""
+    parts = []
+    for part_data in data.get("parts", []):
+        if "text" in part_data:
+            parts.append(types.Part.from_text(text=part_data["text"]))
+        elif "function_call" in part_data:
+            fc_data = part_data["function_call"]
+            parts.append(
+                types.Part(
+                    function_call=types.FunctionCall(
+                        name=fc_data["name"], args=fc_data["args"]
+                    )
+                )
+            )
+        elif "function_response" in part_data:
+            fr_data = part_data["function_response"]
+            parts.append(
+                types.Part(
+                    function_response=types.FunctionResponse(
+                        name=fr_data["name"], response=fr_data["response"]
+                    )
+                )
+            )
+    return types.Content(role=data.get("role"), parts=parts)
 
 
 class _SQLiteGeminiSessionCache(BaseSQLiteCache):
@@ -36,20 +82,16 @@ class _SQLiteGeminiSessionCache(BaseSQLiteCache):
             purge_probability=get_settings().session_cleanup_probability,
         )
 
-    async def get_messages(self, session_id: str) -> List[Dict[str, str]]:
-        """Retrieve conversation messages for a session."""
+    async def get_history(self, session_id: str) -> List[types.Content]:
+        """Retrieve full conversation history for a session."""
         self._validate_session_id(session_id)
-
         now = int(time.time())
-
         rows = await self._execute_async(
             "SELECT messages, updated_at FROM gemini_sessions WHERE session_id = ?",
             (session_id,),
         )
-
         if not rows:
             return []
-
         messages_json, updated_at = rows[0]
         if now - updated_at >= self.ttl:
             await self._execute_async(
@@ -58,47 +100,60 @@ class _SQLiteGeminiSessionCache(BaseSQLiteCache):
                 fetch=False,
             )
             return []
-
         try:
-            messages: List[Dict[str, str]] = json.loads(messages_json)
-            return messages
+            history_data = json.loads(messages_json)
+            return [_dict_to_content(item) for item in history_data]
         except Exception:
-            logger.warning("Failed to decode messages for %s", session_id)
+            logger.warning("Failed to decode history for %s", session_id)
             return []
+
+    async def set_history(self, session_id: str, history: List[types.Content]):
+        """Save the entire conversation history for a session."""
+        self._validate_session_id(session_id)
+        now = int(time.time())
+
+        # Serialize the entire history
+        history_data = [_content_to_dict(content) for content in history]
+        history_json = json.dumps(history_data)
+
+        await self._execute_async(
+            "REPLACE INTO gemini_sessions(session_id, messages, updated_at) VALUES(?,?,?)",
+            (session_id, history_json, now),
+            fetch=False,
+        )
+        await self._probabilistic_cleanup()
+
+    # Deprecated methods for backward compatibility
+    async def get_messages(self, session_id: str) -> List[Dict[str, str]]:
+        """Deprecated: Use get_history instead."""
+        logger.warning("get_messages is deprecated, use get_history instead")
+        history = await self.get_history(session_id)
+        # Convert back to old format for compatibility
+        messages = []
+        for content in history:
+            for part in content.parts:
+                if hasattr(part, "text") and part.text:
+                    messages.append({"role": content.role, "content": part.text})
+        return messages
 
     async def append_exchange(
         self, session_id: str, user_msg: str, assistant_msg: str
     ) -> None:
-        """Append a user/assistant exchange to a session."""
-        self._validate_session_id(session_id)
-
-        now = int(time.time())
-
-        # Get existing messages
-        rows = await self._execute_async(
-            "SELECT messages FROM gemini_sessions WHERE session_id = ?",
-            (session_id,),
+        """Deprecated: Use set_history instead."""
+        logger.warning("append_exchange is deprecated, use set_history instead")
+        # Get existing history
+        history = await self.get_history(session_id)
+        # Add new messages
+        history.append(
+            types.Content(role="user", parts=[types.Part.from_text(text=user_msg)])
         )
-
-        if rows:
-            try:
-                messages = json.loads(rows[0][0])
-            except Exception:
-                messages = []
-        else:
-            messages = []
-
-        messages.append({"role": "user", "content": user_msg})
-        messages.append({"role": "assistant", "content": assistant_msg})
-
-        await self._execute_async(
-            "REPLACE INTO gemini_sessions(session_id, messages, updated_at) VALUES(?,?,?)",
-            (session_id, json.dumps(messages), now),
-            fetch=False,
+        history.append(
+            types.Content(
+                role="assistant", parts=[types.Part.from_text(text=assistant_msg)]
+            )
         )
-
-        # Probabilistic cleanup
-        await self._probabilistic_cleanup()
+        # Save updated history
+        await self.set_history(session_id, history)
 
 
 # Use lazy initialization to support test isolation
@@ -128,6 +183,15 @@ def _get_instance() -> _SQLiteGeminiSessionCache:
 class GeminiSessionCache:
     """Proxy class that maintains the async interface."""
 
+    @staticmethod
+    async def get_history(session_id: str) -> List[types.Content]:
+        return await _get_instance().get_history(session_id)
+
+    @staticmethod
+    async def set_history(session_id: str, history: List[types.Content]) -> None:
+        await _get_instance().set_history(session_id, history)
+
+    # Backward compatibility methods
     @staticmethod
     async def get_messages(session_id: str) -> List[Dict[str, str]]:
         result = await _get_instance().get_messages(session_id)

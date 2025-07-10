@@ -2,8 +2,13 @@ import os
 import tempfile
 import pytest
 import asyncio
+from google.genai import types
 
-from mcp_second_brain.gemini_session_cache import _SQLiteGeminiSessionCache
+from mcp_second_brain.gemini_session_cache import (
+    _SQLiteGeminiSessionCache,
+    _content_to_dict,
+    _dict_to_content,
+)
 
 
 @pytest.mark.asyncio
@@ -69,3 +74,112 @@ async def test_corrupted_json_handling():
         cache.close()
     finally:
         os.unlink(db_path)
+
+
+# === NEW SERIALIZATION TESTS ===
+
+
+class TestGeminiSerialization:
+    """Test serialization and deserialization of Gemini Content objects."""
+
+    def test_serialize_simple_text_content(self):
+        """Test serialization of simple text content."""
+        content = types.Content(
+            role="user", parts=[types.Part.from_text(text="Hello, how are you?")]
+        )
+
+        serialized = _content_to_dict(content)
+        expected = {"role": "user", "parts": [{"text": "Hello, how are you?"}]}
+
+        assert serialized == expected
+
+    def test_deserialize_simple_text_content(self):
+        """Test deserialization of simple text content."""
+        data = {"role": "assistant", "parts": [{"text": "I'm doing well, thank you!"}]}
+
+        content = _dict_to_content(data)
+
+        assert content.role == "assistant"
+        assert len(content.parts) == 1
+        assert content.parts[0].text == "I'm doing well, thank you!"
+
+    def test_serialize_function_call(self):
+        """Test serialization of function call content."""
+        function_call = types.FunctionCall(
+            name="search_project_memory",
+            args={"query": "Python programming", "max_results": 10},
+        )
+        content = types.Content(
+            role="assistant", parts=[types.Part(function_call=function_call)]
+        )
+
+        serialized = _content_to_dict(content)
+        expected = {
+            "role": "assistant",
+            "parts": [
+                {
+                    "function_call": {
+                        "name": "search_project_memory",
+                        "args": {"query": "Python programming", "max_results": 10},
+                    }
+                }
+            ],
+        }
+
+        assert serialized == expected
+
+    def test_deserialize_function_call(self):
+        """Test deserialization of function call content."""
+        data = {
+            "role": "assistant",
+            "parts": [
+                {
+                    "function_call": {
+                        "name": "search_session_attachments",
+                        "args": {"query": "test", "max_results": 20},
+                    }
+                }
+            ],
+        }
+
+        content = _dict_to_content(data)
+
+        assert content.role == "assistant"
+        assert len(content.parts) == 1
+        part = content.parts[0]
+        assert hasattr(part, "function_call")
+        assert part.function_call.name == "search_session_attachments"
+        assert part.function_call.args["query"] == "test"
+        assert part.function_call.args["max_results"] == 20
+
+    def test_roundtrip_serialization(self):
+        """Test that serialization and deserialization are inverses."""
+        original_content = types.Content(
+            role="assistant",
+            parts=[
+                types.Part.from_text(text="I'll help you with that."),
+                types.Part(
+                    function_call=types.FunctionCall(
+                        name="search_session_attachments",
+                        args={"query": "neural networks", "max_results": 15},
+                    )
+                ),
+            ],
+        )
+
+        # Serialize then deserialize
+        serialized = _content_to_dict(original_content)
+        deserialized = _dict_to_content(serialized)
+
+        # Check that we get back the same structure
+        assert deserialized.role == original_content.role
+        assert len(deserialized.parts) == len(original_content.parts)
+
+        # Check text part
+        assert deserialized.parts[0].text == original_content.parts[0].text
+
+        # Check function call part
+        orig_fc = original_content.parts[1].function_call
+        deser_fc = deserialized.parts[1].function_call
+        assert deser_fc.name == orig_fc.name
+        assert deser_fc.args == orig_fc.args
