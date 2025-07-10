@@ -11,8 +11,8 @@ class TestExecutorIntegration:
     """Test integration of stable list feature into ToolExecutor."""
 
     @pytest.mark.asyncio
-    async def test_feature_flag_off_uses_old_path(self):
-        """Test that with feature flag off, old prompt engine is used."""
+    async def test_no_session_id_uses_fallback(self):
+        """Test that without session_id, fallback prompt engine is used."""
         executor = ToolExecutor()
 
         # Create mock metadata
@@ -29,7 +29,7 @@ class TestExecutorIntegration:
 
         # Mock dependencies
         with patch("mcp_second_brain.tools.executor.get_settings") as mock_settings:
-            mock_settings.return_value.features.enable_stable_inline_list = False
+            # Stable list is always enabled - no feature flag needed
             mock_settings.return_value.mcp.context_percentage = 0.85
 
             with patch.object(executor.validator, "validate", return_value={}):
@@ -44,7 +44,7 @@ class TestExecutorIntegration:
                         },
                         "adapter": {},
                         "vector_store": [],
-                        "session": {"session_id": "test-session"},
+                        "session": {},  # No session_id
                         "structured_output": {},
                         "vector_store_ids": [],
                     },
@@ -66,13 +66,13 @@ class TestExecutorIntegration:
                                 metadata, instructions="test"
                             )
 
-                            # Verify old path was used
+                            # Verify fallback path was used (no session_id)
                             mock_build.assert_called_once()
                             assert result == "response"
 
     @pytest.mark.asyncio
-    async def test_feature_flag_on_uses_new_path(self):
-        """Test that with feature flag on and session_id, new stable list path is used."""
+    async def test_stable_list_with_session_id(self):
+        """Test that with session_id, stable list path is used."""
         executor = ToolExecutor()
 
         # Create mock metadata
@@ -89,7 +89,7 @@ class TestExecutorIntegration:
 
         # Mock dependencies
         with patch("mcp_second_brain.tools.executor.get_settings") as mock_settings:
-            mock_settings.return_value.features.enable_stable_inline_list = True
+            # Stable list is always enabled - no feature flag needed
             mock_settings.return_value.mcp.context_percentage = 0.85
 
             with patch.object(executor.validator, "validate", return_value={}):
@@ -152,8 +152,8 @@ class TestExecutorIntegration:
                                         assert result == "response"
 
     @pytest.mark.asyncio
-    async def test_feature_flag_on_no_session_uses_old_path(self):
-        """Test that with feature flag on but no session_id, old path is used."""
+    async def test_no_session_id_uses_fallback_even_with_context(self):
+        """Test that without session_id, fallback is used even with context files."""
         executor = ToolExecutor()
 
         # Create mock metadata
@@ -170,7 +170,7 @@ class TestExecutorIntegration:
 
         # Mock dependencies
         with patch("mcp_second_brain.tools.executor.get_settings") as mock_settings:
-            mock_settings.return_value.features.enable_stable_inline_list = True
+            # Stable list is always enabled - no feature flag needed
             mock_settings.return_value.mcp.context_percentage = 0.85
 
             with patch.object(executor.validator, "validate", return_value={}):
@@ -230,7 +230,7 @@ class TestExecutorIntegration:
 
         # Mock dependencies
         with patch("mcp_second_brain.tools.executor.get_settings") as mock_settings:
-            mock_settings.return_value.features.enable_stable_inline_list = True
+            # Stable list is always enabled - no feature flag needed
             mock_settings.return_value.mcp.context_percentage = 0.85
 
             with patch.object(executor.validator, "validate", return_value={}):

@@ -59,7 +59,7 @@ class MCPConfig(BaseModel):
         0.85, description="Percentage of model context to use", ge=0.1, le=0.95
     )
     default_temperature: float = Field(
-        0.2, description="Default temperature for AI models", ge=0.0, le=2.0
+        1.0, description="Default temperature for AI models", ge=0.0, le=2.0
     )
     thread_pool_workers: int = Field(
         10, description="Max workers for shared thread pool", ge=1, le=100
@@ -93,9 +93,8 @@ class MemoryConfig(BaseModel):
 class FeaturesConfig(BaseModel):
     """Feature flags configuration."""
 
-    enable_stable_inline_list: bool = Field(
-        False, description="Enable stable inline list for context overflow management"
-    )
+    # No feature flags currently - the stable inline list is now always enabled
+    pass
 
 
 class Settings(BaseSettings):
@@ -220,6 +219,11 @@ class Settings(BaseSettings):
             except Exception as e:
                 logger.warning(f"Failed to load {secrets_file}: {e}")
 
+        # Handle None values from YAML (e.g., "features:" with no content)
+        for key in list(config_data.keys()):
+            if config_data[key] is None:
+                config_data[key] = {}
+
         if "providers" in config_data:
             providers = config_data.pop("providers")
             if isinstance(providers, dict):
@@ -265,8 +269,6 @@ class Settings(BaseSettings):
             "MEMORY_SESSION_CUTOFF_HOURS": ("memory", "session_cutoff_hours"),
             "MEMORY_SUMMARY_CHAR_LIMIT": ("memory", "summary_char_limit"),
             "MEMORY_MAX_FILES_PER_COMMIT": ("memory", "max_files_per_commit"),
-            # Features
-            "ENABLE_STABLE_INLINE_LIST": ("features", "enable_stable_inline_list"),
             # Testing
             "MCP_ADAPTER_MOCK": ("adapter_mock",),
         }
