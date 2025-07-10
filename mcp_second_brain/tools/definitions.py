@@ -393,6 +393,12 @@ class ChatWithGrok4(ToolSpec):
     - output_format: "Detailed report with code examples"
     - context: ["/src"] (can handle massive contexts)
     - session_id: "grok4-analysis-001"
+
+    Live Search examples:
+    - search_mode: "on" + instructions: "What are the latest AI developments in 2025?"
+    - search_mode: "auto" (default, searches only when needed)
+    - search_mode: "off" (no web search, uses training data only)
+    - search_parameters: {"allowedWebsites": ["arxiv.org"], "maxSearchResults": 10}
     """
 
     model_name = "grok-4"
@@ -418,16 +424,18 @@ class ChatWithGrok4(ToolSpec):
         description="JSON Schema for structured output (optional)"
     )
     search_parameters: Optional[Dict[str, Any]] = Route.adapter(
-        description="Advanced Live Search overrides (allowedWebsites, maxSearchResults, etc.)"
+        description="Advanced Live Search settings: allowedWebsites, excludedWebsites, maxSearchResults (1-20), safeSearch, fromDate, toDate, xHandles"
     )
     temperature: Optional[float] = Route.adapter(
         default=0.7, description="Sampling temperature (0-2)"
     )
     search_mode: Optional[str] = Route.adapter(
-        default="auto", description="Grok Live Search: 'auto' (default), 'on', or 'off'"
+        default="auto",
+        description="Live Search mode: 'auto' (searches when needed), 'on' (always search), 'off' (no search)",
     )
     return_citations: Optional[bool] = Route.adapter(
-        default=True, description="Return source list when search is used (True/False)"
+        default=True,
+        description="Include source URLs and titles when Live Search is used",
     )
 
 
@@ -442,6 +450,12 @@ class ChatWithGrok3Reasoning(ToolSpec):
     - output_format: "Step-by-step analysis with fixed code"
     - context: ["/src/concurrency/"]
     - session_id: "debug-session-001"
+
+    Live Search examples:
+    - search_mode: "on" + instructions: "What's the latest research on quantum algorithms?"
+    - search_mode: "auto" (default, searches when current info needed)
+    - search_mode: "off" (pure reasoning without web search)
+    - search_parameters: {"excludedWebsites": ["reddit.com"], "safeSearch": "strict"}
     """
 
     model_name = "grok-3-beta"
@@ -463,16 +477,18 @@ class ChatWithGrok3Reasoning(ToolSpec):
         description="JSON Schema for structured output (optional)"
     )
     search_parameters: Optional[Dict[str, Any]] = Route.adapter(
-        description="Advanced Live Search overrides (allowedWebsites, maxSearchResults, etc.)"
+        description="Advanced Live Search settings: allowedWebsites, excludedWebsites, maxSearchResults (1-20), safeSearch, fromDate, toDate, xHandles"
     )
     temperature: Optional[float] = Route.adapter(
         default=0.3, description="Lower temp for consistent reasoning"
     )
     search_mode: Optional[str] = Route.adapter(
-        default="auto", description="Grok Live Search: 'auto' (default), 'on', or 'off'"
+        default="auto",
+        description="Live Search mode: 'auto' (searches when needed), 'on' (always search), 'off' (no search)",
     )
     return_citations: Optional[bool] = Route.adapter(
-        default=True, description="Return source list when search is used (True/False)"
+        default=True,
+        description="Include source URLs and titles when Live Search is used",
     )
 
 
