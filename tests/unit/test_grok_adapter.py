@@ -231,3 +231,158 @@ class TestGrokAdapter:
                 call_kwargs = mock_client.chat.completions.create.call_args[1]
                 assert "reasoning_effort" in call_kwargs
                 assert call_kwargs["reasoning_effort"] == "high"
+
+    @pytest.mark.asyncio
+    async def test_generate_with_function_calling(self):
+        """Test successful generation with function calling."""
+        with patch(
+            "mcp_second_brain.adapters.grok.adapter.get_settings"
+        ) as mock_settings:
+            mock_settings.return_value.xai.api_key = "test-key"
+
+            with patch(
+                "mcp_second_brain.adapters.grok.adapter.AsyncOpenAI"
+            ) as mock_client_class:
+                # Mock response with tool_calls
+                mock_tool_call = MagicMock()
+                mock_tool_call.id = "call_123"
+                mock_tool_call.function.name = "get_weather"
+                mock_tool_call.function.arguments = '{"location": "San Francisco"}'
+
+                mock_response = MagicMock()
+                mock_response.choices = [MagicMock()]
+                mock_response.choices[0].message.content = ""
+                mock_response.choices[0].message.tool_calls = [mock_tool_call]
+
+                mock_client = AsyncMock()
+                mock_client.chat.completions.create = AsyncMock(
+                    return_value=mock_response
+                )
+                mock_client_class.return_value = mock_client
+
+                adapter = GrokAdapter()
+                result = await adapter.generate(
+                    prompt="What is the weather?",
+                    model="grok-4",
+                    messages=[{"role": "user", "content": "What is the weather?"}],
+                    functions=[{"name": "get_weather", "parameters": {}}],
+                )
+
+                # The adapter should return a dict with tool_calls
+                assert isinstance(result, dict)
+                assert "tool_calls" in result
+                assert len(result["tool_calls"]) == 1
+                assert result["tool_calls"][0].function.name == "get_weather"
+
+    @pytest.mark.asyncio
+    async def test_generate_with_structured_output(self):
+        """Test that structured_output_schema is passed as response_format."""
+        with patch(
+            "mcp_second_brain.adapters.grok.adapter.get_settings"
+        ) as mock_settings:
+            mock_settings.return_value.xai.api_key = "test-key"
+            with patch(
+                "mcp_second_brain.adapters.grok.adapter.AsyncOpenAI"
+            ) as mock_client_class:
+                mock_response = MagicMock()
+                mock_response.choices = [MagicMock()]
+                mock_response.choices[0].message.content = '{"result": "test"}'
+                mock_response.choices[0].message.tool_calls = None
+
+                mock_client = AsyncMock()
+                mock_client.chat.completions.create = AsyncMock(
+                    return_value=mock_response
+                )
+                mock_client_class.return_value = mock_client
+
+                adapter = GrokAdapter()
+                schema = {"type": "json_object"}
+                result = await adapter.generate(
+                    prompt="Return JSON", model="grok-4", response_format=schema
+                )
+
+                # Verify we got the expected result
+                assert result == '{"result": "test"}'
+
+                # Verify response_format was passed correctly
+                call_kwargs = mock_client.chat.completions.create.call_args.kwargs
+                assert "response_format" in call_kwargs
+                assert call_kwargs["response_format"] == schema
+
+    @pytest.mark.asyncio
+    async def test_error_handling_authentication(self):
+        """Test authentication error handling."""
+        with patch(
+            "mcp_second_brain.adapters.grok.adapter.get_settings"
+        ) as mock_settings:
+            mock_settings.return_value.xai.api_key = "test-key"
+            with patch(
+                "mcp_second_brain.adapters.grok.adapter.AsyncOpenAI"
+            ) as mock_client_class:
+                mock_client = AsyncMock()
+                mock_client.chat.completions.create.side_effect = Exception(
+                    "Invalid API key"
+                )
+                mock_client_class.return_value = mock_client
+
+                adapter = GrokAdapter()
+                with pytest.raises(AdapterException) as exc_info:
+                    await adapter.generate(prompt="test", model="grok-4")
+
+                assert exc_info.value.error_category == ErrorCategory.AUTHENTICATION
+
+    @pytest.mark.asyncio
+    async def test_error_handling_invalid_request(self):
+        """Test invalid request error handling (e.g., model not found)."""
+        with patch(
+            "mcp_second_brain.adapters.grok.adapter.get_settings"
+        ) as mock_settings:
+            mock_settings.return_value.xai.api_key = "test-key"
+            with patch(
+                "mcp_second_brain.adapters.grok.adapter.AsyncOpenAI"
+            ) as mock_client_class:
+                mock_client = AsyncMock()
+                mock_client.chat.completions.create.side_effect = Exception(
+                    "Model not found"
+                )
+                mock_client_class.return_value = mock_client
+
+                adapter = GrokAdapter()
+                with pytest.raises(AdapterException) as exc_info:
+                    await adapter.generate(prompt="test", model="grok-4")
+
+                assert exc_info.value.error_category == ErrorCategory.INVALID_REQUEST
+
+    @pytest.mark.asyncio
+    async def test_parameter_passing(self):
+        """Test that optional parameters are passed to the API."""
+        with patch(
+            "mcp_second_brain.adapters.grok.adapter.get_settings"
+        ) as mock_settings:
+            mock_settings.return_value.xai.api_key = "test-key"
+            with patch(
+                "mcp_second_brain.adapters.grok.adapter.AsyncOpenAI"
+            ) as mock_client_class:
+                mock_response = MagicMock()
+                mock_response.choices = [MagicMock()]
+                mock_response.choices[0].message.content = "Test response"
+                mock_response.choices[0].message.tool_calls = None
+
+                mock_client = AsyncMock()
+                mock_client.chat.completions.create = AsyncMock(
+                    return_value=mock_response
+                )
+                mock_client_class.return_value = mock_client
+
+                adapter = GrokAdapter()
+                await adapter.generate(
+                    prompt="test",
+                    model="grok-4",
+                    max_tokens=100,
+                    temperature=0.5,
+                )
+
+                # Verify parameters were passed correctly
+                call_kwargs = mock_client.chat.completions.create.call_args.kwargs
+                assert call_kwargs["max_tokens"] == 100
+                assert call_kwargs["temperature"] == 0.5

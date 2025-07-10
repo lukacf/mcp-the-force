@@ -3,6 +3,7 @@
 import pytest
 from mcp.types import TextContent
 import json
+import uuid
 
 # Use anyio for better async handling - but only with asyncio backend
 # This prevents "ModuleNotFoundError: No module named 'trio'" errors
@@ -80,6 +81,34 @@ class TestBasicMCP:
             except json.JSONDecodeError:
                 # If not JSON, just verify we got a response
                 assert len(content[0].text) > 0
+
+    async def test_grok_tool_callable(self, mcp_server):
+        """Test that a Grok tool can be called via MCP."""
+        from fastmcp import Client
+        from fastmcp.client import FastMCPTransport
+
+        transport = FastMCPTransport(mcp_server)
+        async with Client(transport) as client:
+            result = await client.call_tool(
+                "chat_with_grok4",
+                {
+                    "instructions": "test",
+                    "output_format": "json",
+                    "context": [],
+                    "session_id": f"mcp-grok-{uuid.uuid4()}",
+                },
+            )
+
+            # The result is already the content list, not a CallToolResult
+            content = result
+            assert isinstance(content, list) and len(content) == 1
+            assert isinstance(content[0], TextContent)
+
+            # MockAdapter returns JSON metadata
+            data = json.loads(content[0].text)
+            assert data["mock"] is True
+            assert data["model"] == "grok-4"
+            assert data["prompt_length"] > 0
 
     async def test_count_project_tokens_callable(self, mcp_server):
         """Test count_project_tokens tool."""
