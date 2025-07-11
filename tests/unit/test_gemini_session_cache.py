@@ -1,7 +1,6 @@
 import os
 import tempfile
 import pytest
-import asyncio
 from google.genai import types
 
 from mcp_second_brain.gemini_session_cache import (
@@ -28,14 +27,27 @@ async def test_basic_store_and_retrieve():
 
 
 @pytest.mark.asyncio
-async def test_expiration():
+async def test_expiration(monkeypatch):
+    from tests.conftest import mock_clock
+
     with tempfile.NamedTemporaryFile(suffix=".sqlite3", delete=False) as f:
         db_path = f.name
     try:
         cache = _SQLiteGeminiSessionCache(db_path=db_path, ttl=1)
-        await cache.append_exchange("s", "u", "a")
-        await asyncio.sleep(1.1)
-        assert await cache.get_messages("s") == []
+
+        with mock_clock(monkeypatch) as tick:
+            await cache.append_exchange("s", "u", "a")
+
+            # Should exist immediately
+            messages = await cache.get_messages("s")
+            assert len(messages) == 2
+
+            # Advance virtual clock past TTL
+            tick(1.1)
+
+            # Should be expired
+            assert await cache.get_messages("s") == []
+
         cache.close()
     finally:
         os.unlink(db_path)
