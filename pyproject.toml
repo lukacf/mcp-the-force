@@ -62,6 +62,7 @@ markers = [
     "e2e: End-to-end tests that require Docker",
     "slow: Tests that take more than 10 seconds",
     "timeout: Tests with custom timeout values",
+    "no_virtual_clock: Disable virtual clock for tests that need real timing",
 ]
 # Note: plugins loading moved to conftest.py for better compatibility
 
