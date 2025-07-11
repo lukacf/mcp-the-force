@@ -14,6 +14,7 @@ import pytest_asyncio
 from unittest.mock import MagicMock, Mock, AsyncMock
 import asyncio
 import time
+import contextlib
 
 # Note: Adapter mocking is controlled by MCP_ADAPTER_MOCK environment variable
 
@@ -327,3 +328,14 @@ def auto_virtual_clock(request, monkeypatch, fast_tests_mode):
         monkeypatch.setattr(time, "monotonic", clock.monotonic)
         monkeypatch.setattr(asyncio, "sleep", clock.sleep)
         return clock
+
+
+@contextlib.contextmanager
+def mock_clock(monkeypatch, start: int = 1_000_000):
+    """
+    Freeze time.time(); yield a function that can be called
+    to advance the fake clock.
+    """
+    current = {"t": start}
+    monkeypatch.setattr(time, "time", lambda: current["t"])
+    yield lambda seconds: current.__setitem__("t", current["t"] + seconds)
