@@ -55,26 +55,29 @@ async def test_persistence():
 
 
 @pytest.mark.asyncio
-async def test_expiration():
+async def test_expiration(monkeypatch):
     """Test TTL expiration."""
+    from tests.conftest import mock_clock
+
     with tempfile.NamedTemporaryFile(suffix=".sqlite3", delete=False) as f:
         db_path = f.name
 
     try:
         cache = _SQLiteSessionCache(db_path=db_path, ttl=1)
 
-        await cache.set_response_id("expire_test", "expire_value")
+        with mock_clock(monkeypatch) as tick:
+            await cache.set_response_id("expire_test", "expire_value")
 
-        # Should exist immediately
-        result = await cache.get_response_id("expire_test")
-        assert result == "expire_value"
+            # Should exist immediately
+            result = await cache.get_response_id("expire_test")
+            assert result == "expire_value"
 
-        # Wait for expiration
-        await asyncio.sleep(1.1)
+            # Advance virtual clock past TTL
+            tick(1.1)
 
-        # Should be expired
-        result = await cache.get_response_id("expire_test")
-        assert result is None
+            # Should be expired
+            result = await cache.get_response_id("expire_test")
+            assert result is None
 
         cache.close()
     finally:

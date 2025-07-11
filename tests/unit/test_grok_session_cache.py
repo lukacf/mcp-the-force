@@ -121,8 +121,10 @@ class TestSQLiteGrokSessionCache:
         assert len(retrieved_history) == 4
 
     @pytest.mark.asyncio
-    async def test_session_ttl_expiration(self, temp_db):
+    async def test_session_ttl_expiration(self, temp_db, monkeypatch):
         """Test that sessions expire based on TTL."""
+        from tests.conftest import mock_clock
+
         # Create cache with very short TTL
         short_ttl_cache = _SQLiteGrokSessionCache(db_path=temp_db, ttl=1)
 
@@ -132,19 +134,20 @@ class TestSQLiteGrokSessionCache:
             {"role": "assistant", "content": "Test response"},
         ]
 
-        # Store history
-        await short_ttl_cache.set_history(session_id, test_history)
+        with mock_clock(monkeypatch) as tick:
+            # Store history
+            await short_ttl_cache.set_history(session_id, test_history)
 
-        # Retrieve immediately (should work)
-        retrieved_history = await short_ttl_cache.get_history(session_id)
-        assert retrieved_history == test_history
+            # Retrieve immediately (should work)
+            retrieved_history = await short_ttl_cache.get_history(session_id)
+            assert retrieved_history == test_history
 
-        # Wait for TTL to expire
-        await asyncio.sleep(2)
+            # Advance virtual clock past TTL
+            tick(2)
 
-        # Retrieve after TTL (should be empty)
-        expired_history = await short_ttl_cache.get_history(session_id)
-        assert expired_history == []
+            # Retrieve after TTL (should be empty)
+            expired_history = await short_ttl_cache.get_history(session_id)
+            assert expired_history == []
 
     @pytest.mark.asyncio
     async def test_multiple_sessions(self, grok_cache):
