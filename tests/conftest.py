@@ -32,16 +32,18 @@ sys.path.insert(0, str(PROJECT_ROOT))
 @pytest.fixture(scope="session", autouse=True)
 def verify_mock_adapter_for_integration():
     """Verify MockAdapter is properly activated for integration tests."""
-    # Only check if we're in internal or MCP integration tests
+    # Only check if we're in internal, MCP integration, or multi-turn tests
     if any(
         arg
         for arg in sys.argv
-        if "tests/internal" in arg or "tests/integration_mcp" in arg
+        if "tests/internal" in arg
+        or "tests/integration_mcp" in arg
+        or "tests/integration/multi_turn" in arg
     ):
         if os.getenv("MCP_ADAPTER_MOCK") != "1":
             pytest.fail(
-                "MCP_ADAPTER_MOCK=1 must be set before running integration tests.\n"
-                "Run: MCP_ADAPTER_MOCK=1 pytest tests/internal"
+                "MCP_ADAPTER_MOCK=1 must be set before running these integration tests.\n"
+                "For example: MCP_ADAPTER_MOCK=1 pytest tests/integration/multi_turn"
             )
 
         # Verify the adapter was actually injected

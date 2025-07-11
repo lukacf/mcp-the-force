@@ -1,18 +1,7 @@
 """Shared fixtures for multi-turn conversation tests."""
 
 import pytest
-import os
 from unittest.mock import patch, AsyncMock
-
-
-@pytest.fixture(autouse=True)
-def enable_mock_adapter():
-    """Automatically enable mock adapter for all multi-turn tests."""
-    os.environ["MCP_ADAPTER_MOCK"] = "1"
-    yield
-    # Cleanup
-    if "MCP_ADAPTER_MOCK" in os.environ:
-        del os.environ["MCP_ADAPTER_MOCK"]
 
 
 @pytest.fixture
@@ -26,7 +15,9 @@ def mock_memory_store():
 @pytest.fixture
 def mock_vector_store():
     """Mock vector store creation."""
-    with patch("mcp_second_brain.vector_store_manager.VectorStoreManager") as mock_vs:
+    with patch(
+        "mcp_second_brain.tools.vector_store_manager.VectorStoreManager"
+    ) as mock_vs:
         mock_manager = AsyncMock()
         mock_manager.create = AsyncMock(return_value="mock-vector-store-id")
         mock_vs.return_value = mock_manager
