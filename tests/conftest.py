@@ -12,6 +12,8 @@ from pathlib import Path
 import pytest
 import pytest_asyncio
 from unittest.mock import MagicMock, Mock, AsyncMock
+import asyncio
+import time
 
 # Note: Adapter mocking is controlled by MCP_ADAPTER_MOCK environment variable
 
@@ -241,3 +243,87 @@ async def run_tool():
         return await executor.execute(metadata, **kwargs)
 
     return _inner
+
+
+# Virtual clock fixture for speeding up time-based tests
+class VirtualClock:
+    """Virtual clock that advances time instantly without actual delays."""
+
+    def __init__(self):
+        self.current_time = time.time()
+        self.monotonic_time = time.monotonic()
+        self.sleep_history = []
+        # Store original sleep function to avoid recursion
+        self._original_sleep = asyncio.sleep
+
+    def advance_time(self, seconds):
+        """Advance virtual time by given seconds."""
+        self.current_time += seconds
+        self.monotonic_time += seconds
+
+    def time(self):
+        """Return current virtual time."""
+        return self.current_time
+
+    def monotonic(self):
+        """Return current virtual monotonic time."""
+        return self.monotonic_time
+
+    async def sleep(self, seconds):
+        """Virtual sleep that advances time without actual delay."""
+        self.sleep_history.append(seconds)
+        self.advance_time(seconds)
+        # Yield control using the real sleep with zero delay
+        # We need to use the original asyncio.sleep to avoid recursion
+        await self._original_sleep(0)
+
+    def get_total_sleep_time(self):
+        """Get total time that would have been slept."""
+        return sum(self.sleep_history)
+
+
+@pytest.fixture
+def virtual_clock(monkeypatch):
+    """Replace time functions with virtual clock for fast tests."""
+    # Store original before creating clock
+    original_sleep = asyncio.sleep
+
+    clock = VirtualClock()
+    clock._original_sleep = original_sleep
+
+    # Patch time functions
+    monkeypatch.setattr(time, "time", clock.time)
+    monkeypatch.setattr(time, "monotonic", clock.monotonic)
+    monkeypatch.setattr(asyncio, "sleep", clock.sleep)
+
+    return clock
+
+
+@pytest.fixture(scope="session")
+def fast_tests_mode():
+    """Check if we're running in fast tests mode."""
+    # Could be controlled by env var or pytest marker
+    return os.getenv("FAST_TESTS", "1") == "1"
+
+
+@pytest.fixture(autouse=True)
+def auto_virtual_clock(request, monkeypatch, fast_tests_mode):
+    """Automatically apply virtual clock to unit tests unless disabled."""
+    # Only apply to unit tests
+    if not hasattr(request.node, "get_closest_marker"):
+        return
+
+    unit_marker = request.node.get_closest_marker("unit")
+    no_virtual_clock = request.node.get_closest_marker("no_virtual_clock")
+
+    if unit_marker and fast_tests_mode and not no_virtual_clock:
+        # Store original before creating clock
+        original_sleep = asyncio.sleep
+
+        clock = VirtualClock()
+        clock._original_sleep = original_sleep
+
+        monkeypatch.setattr(time, "time", clock.time)
+        monkeypatch.setattr(time, "monotonic", clock.monotonic)
+        monkeypatch.setattr(asyncio, "sleep", clock.sleep)
+        return clock
