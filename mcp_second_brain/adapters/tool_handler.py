@@ -98,6 +98,7 @@ class ToolHandler:
         self,
         adapter_type: AdapterType,
         vector_store_ids: Optional[List[str]] = None,
+        disable_memory_search: bool = False,
     ) -> List[Dict[str, Any]]:
         """
         Prepare tool declarations in the correct format for the adapter type.
@@ -109,6 +110,7 @@ class ToolHandler:
             adapter_type: Type of adapter (openai, vertex, grok)
             vector_store_ids: Vector store IDs that determine if attachment
                             search tool should be included
+            disable_memory_search: If True, skip declaring search_project_memory tool
 
         Returns:
             List of tool declarations in the correct format for the adapter
@@ -121,11 +123,12 @@ class ToolHandler:
 
         declarations = []
 
-        # All adapters get the project memory search tool
-        if adapter_type in {"openai", "grok"}:
-            declarations.append(self._get_memory_declaration_openai())
-        elif adapter_type == "vertex":
-            declarations.append(self._get_memory_declaration_vertex())
+        # All adapters get the project memory search tool unless disabled
+        if not disable_memory_search:
+            if adapter_type in {"openai", "grok"}:
+                declarations.append(self._get_memory_declaration_openai())
+            elif adapter_type == "vertex":
+                declarations.append(self._get_memory_declaration_vertex())
 
         # Add attachment search tool when vector stores are provided
         if vector_store_ids:

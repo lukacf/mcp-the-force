@@ -437,6 +437,10 @@ class ChatWithGrok4(ToolSpec):
         default=True,
         description="Include source URLs and titles when Live Search is used",
     )
+    disable_memory_search: Optional[bool] = Route.adapter(
+        default=False,
+        description="Disable search_project_memory tool to force use of attachments",
+    )
 
 
 @tool
@@ -489,6 +493,10 @@ class ChatWithGrok3Reasoning(ToolSpec):
     return_citations: Optional[bool] = Route.adapter(
         default=True,
         description="Include source URLs and titles when Live Search is used",
+    )
+    disable_memory_search: Optional[bool] = Route.adapter(
+        default=False,
+        description="Disable search_project_memory tool to force use of attachments",
     )
 
 
