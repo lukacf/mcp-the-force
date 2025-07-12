@@ -91,7 +91,7 @@ class ToolExecutor:
                 model_name = metadata.model_config["model_name"]
                 model_limit = get_model_context_window(model_name)
                 context_percentage = settings.mcp.context_percentage
-                safety_margin = 2000  # Consistent with old builder
+                safety_margin = 30000  # Increased to account for prompt overhead (XML, system prompts, etc.)
                 token_budget = max(
                     int(model_limit * context_percentage) - safety_margin, 1000
                 )
@@ -178,12 +178,27 @@ class ToolExecutor:
                 # Gemini models - use system_instruction parameter
                 adapter_params = routed_params["adapter"]
                 assert isinstance(adapter_params, dict)  # Type hint for mypy
+
+                # ALWAYS send the developer prompt so the model maintains its role
+                # across the entire session. Gemini deduplicates identical system
+                # instructions, so this is safe and necessary.
                 adapter_params["system_instruction"] = developer_prompt
-                # Store messages for conversation memory
+
+                # Since session_id is mandatory, we always have a session
+                # The adapter will handle loading history and adding the new message
+                session_id = session_params.get("session_id")
+                logger.info(f"Vertex adapter will handle session {session_id}")
+            elif adapter_class == "xai":
+                # Grok models - use system message in messages array (OpenAI format)
+                # Note: For sessions, Grok adapter will manage history itself
                 messages = [
                     {"role": "system", "content": developer_prompt},
                     {"role": "user", "content": prompt},
                 ]
+                adapter_params = routed_params["adapter"]
+                assert isinstance(adapter_params, dict)  # Type hint for mypy
+                adapter_params["messages"] = messages
+                # Store messages for conversation memory
                 prompt_params["messages"] = messages
             else:
                 # Unknown adapter - use safe default of prepending
@@ -276,13 +291,19 @@ class ToolExecutor:
                     if previous_response_id:
                         logger.info(f"Continuing session {session_id}")
                 elif metadata.model_config["adapter_class"] == "vertex":
-                    gemini_messages = await gemini_session_cache_module.gemini_session_cache.get_messages(
+                    gemini_messages = await gemini_session_cache_module.gemini_session_cache.get_history(
                         session_id
                     )
+                # Note: Grok (xai) adapter handles its own session loading
 
             # 7. Execute model call
             adapter_params = routed_params["adapter"]
             assert isinstance(adapter_params, dict)  # Type hint for mypy
+
+            # FIX: Merge session parameters into adapter parameters
+            session_params = routed_params.get("session", {})
+            adapter_params.update(session_params)
+
             if previous_response_id:
                 adapter_params["previous_response_id"] = previous_response_id
 
@@ -322,13 +343,8 @@ class ToolExecutor:
                     await session_cache_module.session_cache.set_response_id(
                         session_id, result["response_id"]
                     )
-                if session_id and metadata.model_config["adapter_class"] == "vertex":
-                    try:
-                        await gemini_session_cache_module.gemini_session_cache.append_exchange(
-                            session_id, prompt, content
-                        )
-                    except Exception as e:
-                        logger.warning(f"Failed to update Gemini session: {e}")
+                # Session management is now handled inside the adapters themselves
+                # No need to save sessions here for Vertex/Grok models
 
                 # Redact secrets from content
                 redacted_content = redact_secrets(str(content))
@@ -375,13 +391,8 @@ class ToolExecutor:
                     except Exception as e:
                         logger.warning(f"Failed to store conversation memory: {e}")
 
-                if session_id and metadata.model_config["adapter_class"] == "vertex":
-                    try:
-                        await gemini_session_cache_module.gemini_session_cache.append_exchange(
-                            session_id, prompt, redacted_result
-                        )
-                    except Exception as e:
-                        logger.warning(f"Failed to update Gemini session: {e}")
+                # Session management is now handled inside the adapters themselves
+                # No need to save sessions here for Vertex/Grok models
 
                 return redacted_result
 

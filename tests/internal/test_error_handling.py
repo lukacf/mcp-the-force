@@ -180,7 +180,9 @@ class TestErrorHandlingIntegration:
         # Vector store creation is handled by the mock_openai_client fixture
         # The MockAdapter itself doesn't handle vector stores
         # Just verify the request went through successfully
-        assert "Analyze" in data["prompt_preview"]
+        # The prompt should contain the user instructions
+        # Check the full prompt since prompt_preview might be truncated
+        assert "Analyze" in data["prompt"]
 
     @pytest.mark.asyncio
     async def test_malformed_response_from_api(self, mock_adapter_error):

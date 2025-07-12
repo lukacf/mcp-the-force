@@ -107,6 +107,18 @@ mcp-config export-client          # Generate mcp-config.json for Claude
 
 ## 🔐 Authentication
 
+### xAI (Grok Models)
+
+**API Key Setup**:
+1. Get your API key from [x.ai](https://x.ai) (requires X Premium+ subscription)
+2. Add to `secrets.yaml`:
+   ```yaml
+   providers:
+     xai:
+       api_key: xai-...
+   ```
+3. Or set environment variable: `export XAI_API_KEY=xai-...`
+
 ### For Local Development (Recommended)
 
 **Google Cloud Application Default Credentials (ADC)**:
@@ -182,6 +194,8 @@ gcloud iam service-accounts add-iam-policy-binding \
 | `chat_with_o3` | OpenAI o3 | Step-by-step reasoning, algorithms | ~200k tokens | ✅ |
 | `chat_with_o3_pro` | OpenAI o3-pro | Formal analysis, complex debugging | ~200k tokens | ✅ |
 | `chat_with_gpt4_1` | GPT-4.1 | Large-scale refactoring, RAG workflows | ~1M tokens | ✅ |
+| `chat_with_grok3_reasoning` | xAI Grok 3 Beta | Complex problem solving, debugging | ~131k tokens | ✅ |
+| `chat_with_grok4` | xAI Grok 4 | Advanced reasoning, large documents | ~256k tokens | ✅ |
 
 ### Research Tools
 

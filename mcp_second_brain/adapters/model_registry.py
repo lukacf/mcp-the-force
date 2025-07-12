@@ -24,5 +24,11 @@ def get_model_context_window(model: str) -> int:
     if model in vertex_capabilities:
         return get_vertex_window(model)
 
+    # Try Grok models
+    from .grok import GROK_CAPABILITIES
+
+    if model in GROK_CAPABILITIES:
+        return int(GROK_CAPABILITIES[model]["context_window"])
+
     # Conservative fallback for unknown models
     return 32_000

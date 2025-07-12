@@ -171,8 +171,8 @@ SKIP_DIRS = {
     "DerivedData",
 }
 
-# Maximum file size (500KB)
-MAX_FILE_SIZE = 500 * 1024
+# Maximum file size (2MB) - increased to allow large source files to flow to vector store
+MAX_FILE_SIZE = 2 * 1024 * 1024
 # Maximum total size to gather (50MB)
 MAX_TOTAL_SIZE = 50 * 1024 * 1024
 
