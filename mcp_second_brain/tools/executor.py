@@ -189,6 +189,17 @@ class ToolExecutor:
                 # The adapter will handle loading history and adding the new message
                 session_id = session_params.get("session_id")
                 logger.info(f"Vertex adapter will handle session {session_id}")
+            elif adapter_class == "xai":
+                # Grok models - use system message in messages array (OpenAI format)
+                messages = [
+                    {"role": "system", "content": developer_prompt},
+                    {"role": "user", "content": prompt},
+                ]
+                adapter_params = routed_params["adapter"]
+                assert isinstance(adapter_params, dict)  # Type hint for mypy
+                adapter_params["messages"] = messages
+                # Store messages for conversation memory
+                prompt_params["messages"] = messages
             else:
                 # Unknown adapter - use safe default of prepending
                 final_prompt = f"{developer_prompt}\n\n{prompt}"

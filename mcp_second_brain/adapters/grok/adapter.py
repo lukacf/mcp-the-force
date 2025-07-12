@@ -207,7 +207,22 @@ class GrokAdapter(BaseAdapter):
             # --- LOAD HISTORY FROM CACHE ---
             if session_id:
                 messages = await grok_session_cache.get_history(session_id)
-                messages.append({"role": "user", "content": prompt})
+                # If we have new messages from kwargs (with system prompt), use them
+                # Otherwise just append the user message to history
+                if "messages" in kwargs:
+                    # New messages from executor with system prompt
+                    new_messages = kwargs["messages"]
+                    # Ensure system message is at the beginning
+                    if new_messages and new_messages[0]["role"] == "system":
+                        # Check if history already has system message
+                        if not messages or messages[0]["role"] != "system":
+                            # Prepend system message to history
+                            messages = [new_messages[0]] + messages
+                        # Append user message
+                        messages.append(new_messages[-1])
+                else:
+                    # Legacy path - just append user message
+                    messages.append({"role": "user", "content": prompt})
             else:
                 messages = kwargs.get("messages") or [
                     {"role": "user", "content": prompt}
