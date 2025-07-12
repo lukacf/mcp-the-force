@@ -326,11 +326,42 @@ Relative paths will be resolved relative to the MCP server's working directory, 
 
 ## Testing
 
-- **Basic functionality**: Use tools with small context arrays
-- **RAG capabilities**: Test with empty context and large attachments arrays
-- **File filtering**: Verify .gitignore patterns and binary file exclusion work correctly
-- **Parameter routing**: Verify prompt, adapter, vector_store, and session parameters route correctly
-- **Multi-turn conversations**: Test session_id continuity with OpenAI models
+### Standardized Developer Workflow
+
+The project uses Makefile as the **single source of truth** for all test commands, ensuring consistency across local development, pre-commit hooks, and CI/CD.
+
+| Command               | Purpose                      | When to Use                           |
+|-----------------------|------------------------------|---------------------------------------|
+| `make test`           | Fast unit tests              | Before every commit (pre-commit hook) |
+| `make test-unit`      | Full unit tests + coverage   | Before PR (pre-push hook)             |
+| `make test-integration` | Integration tests with mocks | After adapter changes                 |
+| `make e2e`            | End-to-end Docker tests      | Before major releases                 |
+| `make ci`             | All CI checks locally        | Before pushing to CI                  |
+| `make lint`           | Static analysis              | Part of all workflows                 |
+
+### Test Categories
+
+**Unit Tests** (`tests/unit/`):
+- Test individual components in isolation
+- All dependencies mocked
+- Fast execution (< 4 seconds total)
+- Run on every commit via pre-commit hooks
+
+**Integration Tests** (`tests/internal/`):
+- Test component interactions with MockAdapter
+- Verify end-to-end tool execution workflows
+- Mock external APIs but test real component plumbing
+- Environment: `MCP_ADAPTER_MOCK=1` (set automatically by Makefile)
+
+**MCP Integration Tests** (`tests/integration_mcp/`):
+- Test MCP protocol compliance
+- Validate tool registration and execution
+- Mock adapters for consistent results
+
+**E2E Tests** (`tests/e2e_dind/`):
+- Docker-in-Docker complete system validation
+- Real API calls in controlled environment
+- Full deployment testing
 
 ## Key Dependencies
 

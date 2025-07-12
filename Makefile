@@ -1,18 +1,26 @@
-.PHONY: help lint test test-all test-unit test-integration test-e2e e2e-setup e2e ci install-hooks clean
+# Use .DEFAULT_GOAL to show help by default if no target is specified.
+.DEFAULT_GOAL := help
+
+# Define variables to avoid repetition
+PYTEST := pytest
+FAST_UNIT_MARKER := "not slow and not e2e and not integration"
+
+# Phony targets ensure these are always run, regardless of file names.
+.PHONY: help install-hooks lint test test-unit test-integration e2e test-all ci clean
 
 help:
+	@echo "Usage: make <target>"
+	@echo ""
 	@echo "Available targets:"
-	@echo "  make install-hooks  - Install pre-commit hooks"
-	@echo "  make lint          - Run ruff and mypy"
-	@echo "  make test          - Run fast unit tests only"
-	@echo "  make test-all      - Run all tests (unit + integration + e2e)"
-	@echo "  make test-unit     - Run all unit tests"
-	@echo "  make test-integration - Run integration tests"
-	@echo "  make test-e2e      - Run e2e tests (legacy, deprecated)"
-	@echo "  make e2e-setup     - Test Docker-in-Docker Claude MCP setup in parallel"
-	@echo "  make e2e           - Run new Docker-in-Docker e2e tests"
-	@echo "  make ci            - Run full CI suite locally"
-	@echo "  make clean         - Clean up generated files"
+	@echo "  install-hooks    Install git pre-commit and pre-push hooks."
+	@echo "  lint             Run static analysis (ruff, mypy)."
+	@echo "  test             Run fast unit tests (for pre-commit)."
+	@echo "  test-unit        Run the full unit test suite with coverage."
+	@echo "  test-integration Run integration tests (uses mock adapters)."
+	@echo "  e2e              Run end-to-end tests using Docker-in-Docker."
+	@echo "  test-all         Run all tests (unit, integration, e2e)."
+	@echo "  ci               Run the main CI suite (lint, unit, integration)."
+	@echo "  clean            Remove temporary files and caches."
 
 install-hooks:
 	@echo "Installing pre-commit hooks..."
@@ -23,30 +31,26 @@ install-hooks:
 	@echo "  - Full unit tests will run on push (skip with --no-verify)"
 
 lint:
-	@echo "Running linting checks..."
+	@echo "Running linting and static analysis..."
 	ruff check .
+	ruff format . --check
 	mypy --install-types --non-interactive mcp_second_brain
 
 test:
 	@echo "Running fast unit tests..."
-	pytest tests/unit -q -m "not slow and not e2e and not integration" --tb=short
-
-test-all: test-unit test-integration test-e2e
-	@echo "✓ All tests passed!"
+	$(PYTEST) tests/unit -q -m $(FAST_UNIT_MARKER) --tb=short
 
 test-unit:
-	@echo "Running all unit tests..."
-	pytest tests/unit -v --cov=mcp_second_brain --cov-report=term
+	@echo "Running all unit tests with coverage..."
+	$(PYTEST) tests/unit -v --cov=mcp_second_brain --cov-report=xml --cov-report=term
 
 test-integration:
-	@echo "Running integration tests..."
-	pytest tests/internal -v --tb=short
-	pytest tests/integration_mcp -v -p no:asyncio --tb=short
+	@echo "Running integration tests with mock adapters..."
+	MCP_ADAPTER_MOCK=1 $(PYTEST) tests/internal -v --tb=short
+	MCP_ADAPTER_MOCK=1 $(PYTEST) tests/integration_mcp -v -p no:asyncio --tb=short
 
-test-e2e:
-	@echo "Running legacy e2e tests (deprecated)..."
-	@echo "Use 'make e2e' for new Docker-in-Docker tests"
-	cd tests/e2e && docker-compose up --build --abort-on-container-exit --exit-code-from test-runner
+test-all: test-unit test-integration e2e
+	@echo "✓ All tests passed!"
 
 e2e-setup:
 	@echo "Testing Docker-in-Docker Claude setup..."
@@ -163,8 +167,8 @@ e2e:
 	echo "✓ All e2e scenarios completed!"
 
 ci: lint test-unit test-integration
-	@echo "✓ CI checks passed locally!"
-	@echo "Note: Full CI also runs on multiple Python versions and e2e tests"
+	@echo "✓ Main CI checks passed!"
+	@echo "Note: E2E tests should run in a separate CI job."
 
 clean:
 	@echo "Cleaning up..."

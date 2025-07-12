@@ -112,6 +112,7 @@ class Settings(BaseSettings):
         default_factory=lambda: ProviderConfig(max_output_tokens=65536)
     )
     anthropic: ProviderConfig = Field(default_factory=ProviderConfig)
+    xai: ProviderConfig = Field(default_factory=ProviderConfig)
 
     # Feature configs
     session: SessionConfig = Field(default_factory=SessionConfig)
@@ -252,6 +253,7 @@ class Settings(BaseSettings):
             "GCLOUD_OAUTH_CLIENT_SECRET": ("vertex", "oauth_client_secret"),
             "GCLOUD_USER_REFRESH_TOKEN": ("vertex", "user_refresh_token"),
             "ANTHROPIC_API_KEY": ("anthropic", "api_key"),
+            "XAI_API_KEY": ("xai", "api_key"),
             # MCP settings
             "HOST": ("mcp", "host"),
             "PORT": ("mcp", "port"),

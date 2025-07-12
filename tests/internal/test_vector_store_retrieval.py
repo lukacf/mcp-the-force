@@ -88,7 +88,7 @@ Important: The ZEPHYR code is: QX-7742-ALPHA
         # Parse second response
         data2 = json.loads(result2)
         assert data2["mock"] is True
-        assert "ZEPHYR code" in data2["prompt_preview"]
+        assert "ZEPHYR code" in data2["prompt"]
         assert data2["vector_store_ids"] is not None
 
         # Verify both calls created vector stores
@@ -148,7 +148,7 @@ The OMEGA protocol activation sequence:
         # Parse second response
         data2 = json.loads(result2)
         assert data2["mock"] is True
-        assert "OMEGA code" in data2["prompt_preview"]
+        assert "OMEGA code" in data2["prompt"]
         assert data2["vector_store_ids"] is not None
 
     @pytest.mark.asyncio
@@ -185,4 +185,4 @@ The OMEGA protocol activation sequence:
         assert data["mock"] is True
         # Note: May include auto-attached memory stores
         assert "vs_irrelevant" in data["vector_store_ids"]
-        assert "quantum entanglement" in data["prompt_preview"]
+        assert "quantum entanglement" in data["prompt"]

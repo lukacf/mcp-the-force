@@ -1,18 +1,78 @@
-"""
-Configuration for internal integration tests.
-"""
+"""Shared fixtures for multi-turn conversation tests."""
 
-import os
+import pytest
+from unittest.mock import patch, AsyncMock
 
-# Set unique SESSION_DB_PATH per pytest-xdist worker to avoid SQLite locking
-# This must be done before any imports that might use SessionCache
-worker_id = os.environ.get("PYTEST_XDIST_WORKER", "gw0")
-os.environ["SESSION_DB_PATH"] = f"/tmp/e2e_sessions_{worker_id}.sqlite3"
 
-# For local development, ensure MCP_ADAPTER_MOCK is set
-# In CI, this is handled at the workflow level
-if "MCP_ADAPTER_MOCK" not in os.environ:
-    os.environ["MCP_ADAPTER_MOCK"] = "1"
+@pytest.fixture
+def mock_memory_store():
+    """Mock memory store to prevent real database writes."""
+    with patch("mcp_second_brain.memory_store.store_conversation") as mock_store:
+        mock_store.return_value = None
+        yield mock_store
 
-# Import tool definitions to ensure all tools are registered
-import mcp_second_brain.tools.definitions  # noqa: F401, E402
+
+@pytest.fixture
+def mock_vector_store():
+    """Mock vector store creation."""
+    with patch(
+        "mcp_second_brain.tools.vector_store_manager.VectorStoreManager"
+    ) as mock_vs:
+        mock_manager = AsyncMock()
+        mock_manager.create = AsyncMock(return_value="mock-vector-store-id")
+        mock_vs.return_value = mock_manager
+        yield mock_manager
+
+
+@pytest.fixture
+async def clean_session_caches():
+    """Clean all session caches before and after tests."""
+    # Import here to avoid circular imports
+    from mcp_second_brain.gemini_session_cache import gemini_session_cache
+    from mcp_second_brain.grok_session_cache import grok_session_cache
+    from mcp_second_brain.session_cache import session_cache
+
+    # Sessions are isolated by session_id, so we don't need to clear
+    # Just ensure clean state by using unique session IDs
+
+    yield
+
+    # Close connections after test, ensuring all are attempted.
+    # With the segfault fixed, we can handle potential errors gracefully.
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    try:
+        gemini_session_cache.close()
+    except Exception as e:
+        logger.error(f"Failed to close gemini_session_cache: {e}")
+
+    try:
+        grok_session_cache.close()
+    except Exception as e:
+        logger.error(f"Failed to close grok_session_cache: {e}")
+
+    try:
+        session_cache.close()
+    except Exception as e:
+        logger.error(f"Failed to close session_cache: {e}")
+
+
+# Note: Removed track_tool_calls fixture - it's meaningless with MockAdapter
+# MockAdapter doesn't make real decisions about tool usage.
+# In real e2e tests, we would check the session history to see if tools were called
+# since all tool calls are tracked as part of the conversation history.
+
+
+@pytest.fixture
+def session_id_generator():
+    """Generate unique session IDs for tests."""
+    counter = 0
+
+    def generate():
+        nonlocal counter
+        counter += 1
+        return f"test-session-{counter}"
+
+    return generate

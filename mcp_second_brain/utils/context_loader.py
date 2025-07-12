@@ -9,6 +9,42 @@ from .fs import gather_file_paths
 from .token_counter import count_tokens
 
 
+def load_specific_files(file_paths: List[str]) -> List[Tuple[str, str, int]]:
+    """
+    Load specific text files directly without additional gathering/filtering.
+
+    Args:
+        file_paths: List of exact file paths to load
+
+    Returns:
+        List of tuples containing (file_path, content, token_count)
+    """
+    import logging
+
+    logger = logging.getLogger(__name__)
+    result: List[Tuple[str, str, int]] = []
+
+    for path in file_paths:
+        try:
+            # Read file content with UTF-8 encoding, ignoring errors
+            content = Path(path).read_text(encoding="utf-8", errors="ignore")
+
+            # Remove null bytes which can cause issues
+            content = content.replace("\x00", "")
+
+            # Count tokens for this content
+            token_count = count_tokens([content])
+
+            result.append((path, content, token_count))
+
+        except Exception as e:
+            # Log the error before skipping
+            logger.warning(f"Failed to read file {path}: {type(e).__name__}: {e}")
+            continue
+
+    return result
+
+
 def load_text_files(items: List[str]) -> List[Tuple[str, str, int]]:
     """
     Load text files and return their paths, contents, and token counts.

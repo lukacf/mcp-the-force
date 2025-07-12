@@ -53,6 +53,7 @@ uv.lock
 .pytest_cache/
 .coverage
 htmlcov/
+coverage.xml
 
 # Credentials and secrets
 .env

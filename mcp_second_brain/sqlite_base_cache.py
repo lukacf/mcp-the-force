@@ -105,8 +105,15 @@ class BaseSQLiteCache:
             raise ValueError("session_id too long")
 
     def close(self) -> None:
-        """Close database connection."""
-        try:
-            self._conn.close()
-        except Exception:
-            pass
+        """Close the database connection safely."""
+        # Acquire the lock to ensure no other threads are using the connection.
+        with self._lock:
+            try:
+                # The connection object might already be None if close() is called multiple times
+                if hasattr(self, "_conn") and self._conn:
+                    self._conn.close()
+                    self._conn = None  # type: ignore[assignment] # Prevent reuse after closing
+                    logger.info(f"Closed SQLite connection to {self.db_path}")
+            except sqlite3.Error as e:
+                # Log the specific error instead of silently passing.
+                logger.error(f"Error closing SQLite connection for {self.db_path}: {e}")
