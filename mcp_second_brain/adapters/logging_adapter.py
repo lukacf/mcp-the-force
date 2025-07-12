@@ -66,6 +66,20 @@ class LoggingAdapter(BaseAdapter):
         if not os.path.exists(db_path):
             return f"No log database found at {db_path}. Ensure the MCP server is running with developer logging enabled."
 
+        # Input validation
+        valid_levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+        if level and level.upper() not in valid_levels:
+            return f"Invalid log level '{level}'. Must be one of: {', '.join(valid_levels)}"
+        
+        # Validate limit
+        if limit <= 0 or limit > 10000:  # Prevent excessive queries
+            limit = 100  # Use safe default
+            
+        # Validate query string (prevent wildcard-only queries unless filtered)
+        if query and query.strip() in ['%', '*', '']:
+            if not level and not instance_id:  # Only allow if other filters are present
+                return "Wildcard-only queries require additional filters (level or instance_id)"
+
         # Build SQL query
         conditions = ["timestamp > ?"]
         params: list[str | float] = [self._parse_since(since)]
@@ -143,17 +157,37 @@ class LoggingAdapter(BaseAdapter):
             return f"Error searching logs: {e}"
 
     def _parse_since(self, since_str: str) -> float:
-        """Parse time duration string to timestamp."""
+        """Parse time duration string to timestamp with validation."""
         now = datetime.now()
 
-        # Parse duration
-        if since_str.endswith("m"):
-            delta = timedelta(minutes=int(since_str[:-1]))
-        elif since_str.endswith("h"):
-            delta = timedelta(hours=int(since_str[:-1]))
-        elif since_str.endswith("d"):
-            delta = timedelta(days=int(since_str[:-1]))
-        else:
-            delta = timedelta(hours=1)  # Default 1 hour
-
-        return (now - delta).timestamp()
+        try:
+            # Parse duration with validation
+            if since_str.endswith("m"):
+                minutes = int(since_str[:-1])
+                if minutes < 0 or minutes > 525600:  # Max 1 year in minutes
+                    raise ValueError("Minutes out of valid range")
+                delta = timedelta(minutes=minutes)
+            elif since_str.endswith("h"):
+                hours = int(since_str[:-1])
+                if hours < 0 or hours > 8760:  # Max 1 year in hours
+                    raise ValueError("Hours out of valid range")
+                delta = timedelta(hours=hours)
+            elif since_str.endswith("d"):
+                days = int(since_str[:-1])
+                if days < 0 or days > 365:  # Max 1 year in days
+                    raise ValueError("Days out of valid range")
+                delta = timedelta(days=days)
+            else:
+                delta = timedelta(hours=1)  # Default 1 hour
+                
+            result_timestamp = (now - delta).timestamp()
+            
+            # Validate result is reasonable (not negative, not too far in past)
+            if result_timestamp < 0:
+                raise ValueError("Resulting timestamp is negative")
+                
+            return result_timestamp
+            
+        except (ValueError, OverflowError) as e:
+            # Return a reasonable default (1 hour ago) for invalid input
+            return (now - timedelta(hours=1)).timestamp()

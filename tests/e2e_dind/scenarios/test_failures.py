@@ -151,9 +151,9 @@ def test_graceful_failure_handling(claude):
         "no tool named",  # <-- new
         "available tools",  # <-- new
     ]
-    assert any(indicator in response.lower() for indicator in tool_error_indicators), (
-        f"Expected tool error for nonexistent tool, got: {response}"
-    )
+    assert any(
+        indicator in response.lower() for indicator in tool_error_indicators
+    ), f"Expected tool error for nonexistent tool, got: {response}"
 
     # Step 5: Test o3 model with reasoning_effort parameter
     args = {

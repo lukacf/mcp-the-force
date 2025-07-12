@@ -22,23 +22,23 @@ class SearchMCPDebugLogsToolSpec(ToolSpec):
     timeout = 30
 
     # Route everything to the adapter so kwargs reach LoggingAdapter.generate
-    query: str = Route.adapter("Search query (SQL LIKE pattern)")
+    query: str = Route.adapter(description="Search query (SQL LIKE pattern)")
 
     level: Optional[str] = Route.adapter(
-        "Filter by log level (DEBUG, INFO, WARNING, ERROR)", default=None
+        default=None, description="Filter by log level (DEBUG, INFO, WARNING, ERROR)"
     )
 
     since: str = Route.adapter(
-        "Time range (e.g., '1h', '30m', '1d')", default="1h"
+        default="1h", description="Time range (e.g., '1h', '30m', '1d')"
     )
 
     instance_id: Optional[str] = Route.adapter(
-        "Filter by specific instance ID", default=None
+        default=None, description="Filter by specific instance ID"
     )
 
     all_projects: bool = Route.adapter(
-        "Search logs from all projects (default: current project only)",
         default=False,
+        description="Search logs from all projects (default: current project only)",
     )
 
-    limit: int = Route.adapter("Maximum results to return", default=100)
+    limit: int = Route.adapter(default=100, description="Maximum results to return")
