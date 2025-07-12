@@ -144,13 +144,13 @@ class ToolHandler:
         """Get memory search tool declaration for OpenAI-compatible APIs."""
         from .memory_search_declaration import create_search_memory_declaration_openai
 
-        return create_search_memory_declaration_openai()  # type: ignore[no-any-return]
+        return create_search_memory_declaration_openai()
 
     def _get_memory_declaration_vertex(self) -> Dict[str, Any]:
         """Get memory search tool declaration for Vertex AI."""
         from .memory_search_declaration import create_search_memory_declaration_gemini
 
-        return create_search_memory_declaration_gemini()  # type: ignore[no-any-return]
+        return create_search_memory_declaration_gemini()
 
     def _get_attachment_declaration_openai(self) -> Dict[str, Any]:
         """Get attachment search tool declaration for OpenAI-compatible APIs."""
@@ -158,7 +158,7 @@ class ToolHandler:
             create_attachment_search_declaration_openai,
         )
 
-        return create_attachment_search_declaration_openai()  # type: ignore[no-any-return]
+        return create_attachment_search_declaration_openai()
 
     def _get_attachment_declaration_vertex(self) -> Dict[str, Any]:
         """Get attachment search tool declaration for Vertex AI."""
@@ -166,7 +166,7 @@ class ToolHandler:
             create_attachment_search_declaration_gemini,
         )
 
-        return create_attachment_search_declaration_gemini()  # type: ignore[no-any-return]
+        return create_attachment_search_declaration_gemini()
 
 
 # Future Strategy pattern interface (not implemented yet, but designed for migration)
