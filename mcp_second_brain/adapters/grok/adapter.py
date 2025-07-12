@@ -273,9 +273,18 @@ class GrokAdapter(BaseAdapter):
                 ]
 
             # Get built-in tools using ToolHandler (this fixes the attachment bug)
-            built_in_tools = self.tool_handler.prepare_tool_declarations(
-                adapter_type="grok", vector_store_ids=vector_store_ids
+            disable_memory_search = kwargs.get("disable_memory_search", False)
+            built_in_tool_declarations = self.tool_handler.prepare_tool_declarations(
+                adapter_type="grok",
+                vector_store_ids=vector_store_ids,
+                disable_memory_search=disable_memory_search,
             )
+
+            # Wrap built-in tools in the format Grok expects
+            built_in_tools = [
+                {"type": "function", "function": tool}
+                for tool in built_in_tool_declarations
+            ]
 
             # Combine all tools
             all_tools = custom_tools + built_in_tools
