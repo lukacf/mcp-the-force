@@ -6,6 +6,17 @@ from mcp_second_brain.adapters.grok import GrokAdapter, GROK_CAPABILITIES
 from mcp_second_brain.adapters.grok.errors import AdapterException, ErrorCategory
 
 
+@pytest.fixture
+def mock_grok_session_cache():
+    """Mock the Grok session cache."""
+    with patch(
+        "mcp_second_brain.adapters.grok.adapter.grok_session_cache"
+    ) as mock_cache:
+        mock_cache.get_history = AsyncMock(return_value=None)
+        mock_cache.set_history = AsyncMock()
+        yield mock_cache
+
+
 class TestGrokAdapter:
     """Test Grok adapter functionality."""
 
@@ -83,16 +94,17 @@ class TestGrokAdapter:
             assert exc_info.value.error_category == ErrorCategory.INVALID_REQUEST
             assert "Model grok-5 not supported" in str(exc_info.value)
 
-    @pytest.mark.skip(
-        reason="Test needs updating for new tool execution loop implementation"
-    )
     @pytest.mark.asyncio
     async def test_generate_success(self):
         """Test successful generation."""
         with patch(
             "mcp_second_brain.adapters.grok.adapter.get_settings"
-        ) as mock_settings:
+        ) as mock_settings, patch(
+            "mcp_second_brain.adapters.grok.adapter.grok_session_cache"
+        ) as mock_session_cache:
             mock_settings.return_value.xai.api_key = "xai-test-key"
+            mock_session_cache.get_history = AsyncMock(return_value=None)
+            mock_session_cache.set_history = AsyncMock()
 
             with patch(
                 "mcp_second_brain.adapters.grok.adapter.AsyncOpenAI"
@@ -102,6 +114,9 @@ class TestGrokAdapter:
                 mock_response.choices = [MagicMock()]
                 mock_response.choices[0].message.content = "Hello from Grok!"
                 mock_response.choices[0].message.tool_calls = None
+                mock_response.choices[0].message.model_dump = MagicMock(
+                    return_value={"role": "assistant", "content": "Hello from Grok!"}
+                )
                 mock_response.usage.prompt_tokens = 10
                 mock_response.usage.completion_tokens = 5
                 mock_response.usage.total_tokens = 15
@@ -125,7 +140,7 @@ class TestGrokAdapter:
                 mock_client.chat.completions.create.assert_called_once()
 
     @pytest.mark.skip(
-        reason="Test needs updating for new tool execution loop implementation"
+        reason="TODO: Fix streaming test mocks for new tool execution implementation"
     )
     @pytest.mark.asyncio
     async def test_generate_with_streaming(self):
@@ -197,7 +212,7 @@ class TestGrokAdapter:
                 assert "Rate limit exceeded" in str(exc_info.value)
 
     @pytest.mark.skip(
-        reason="Test needs updating for new tool execution loop implementation"
+        reason="TODO: Fix reasoning effort test mocks for new tool execution implementation"
     )
     @pytest.mark.asyncio
     async def test_generate_with_reasoning_effort(self):
@@ -242,7 +257,7 @@ class TestGrokAdapter:
                 assert call_kwargs["reasoning_effort"] == "high"
 
     @pytest.mark.skip(
-        reason="Test needs updating for new tool execution loop implementation"
+        reason="TODO: Fix function calling test mocks for new tool execution implementation"
     )
     @pytest.mark.asyncio
     async def test_generate_with_function_calling(self):
@@ -287,7 +302,7 @@ class TestGrokAdapter:
                 assert result["tool_calls"][0].function.name == "get_weather"
 
     @pytest.mark.skip(
-        reason="Test needs updating for new tool execution loop implementation"
+        reason="TODO: Fix structured output test mocks for new tool execution implementation"
     )
     @pytest.mark.asyncio
     async def test_generate_with_structured_output(self):
