@@ -138,13 +138,15 @@ class TestBuildContextWithStableList:
                 side_effect=mock_gather_files,
             ):
                 with patch(
-                    "mcp_second_brain.utils.context_builder.load_text_files",
+                    "mcp_second_brain.utils.context_builder.load_specific_files",
                     side_effect=mock_load_files,
                 ):
                     with patch("os.path.getsize", side_effect=mock_getsize):
                         # Mock estimate_tokens to return predictable values
                         def mock_estimate_tokens(size):
-                            return max(1, size // 2)  # Use estimation logic for tests
+                            return max(
+                                1, size // 4
+                            )  # Match the 4 bytes per token used in mock_getsize
 
                         with patch(
                             "mcp_second_brain.utils.context_builder.estimate_tokens",
@@ -292,7 +294,7 @@ class TestBuildContextWithStableList:
                     side_effect=mock_gather_files,
                 ):
                     with patch(
-                        "mcp_second_brain.utils.context_builder.load_text_files",
+                        "mcp_second_brain.utils.context_builder.load_specific_files",
                         side_effect=mock_load_files,
                     ):
                         (
@@ -348,13 +350,15 @@ class TestBuildContextWithStableList:
                 side_effect=mock_gather_files,
             ):
                 with patch(
-                    "mcp_second_brain.utils.context_builder.load_text_files",
+                    "mcp_second_brain.utils.context_builder.load_specific_files",
                     side_effect=mock_load_files,
                 ):
                     with patch("os.path.getsize", side_effect=mock_getsize):
                         # Mock estimate_tokens to return predictable values
                         def mock_estimate_tokens(size):
-                            return max(1, size // 2)  # Use estimation logic for tests
+                            return max(
+                                1, size // 4
+                            )  # Match the 4 bytes per token used in mock_getsize
 
                         with patch(
                             "mcp_second_brain.utils.context_builder.estimate_tokens",
