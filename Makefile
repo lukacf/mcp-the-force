@@ -42,7 +42,7 @@ test:
 
 test-unit:
 	@echo "Running all unit tests with coverage..."
-	$(PYTEST) tests/unit -v --cov=mcp_second_brain --cov-report=term
+	$(PYTEST) tests/unit -v --cov=mcp_second_brain --cov-report=xml --cov-report=term
 
 test-integration:
 	@echo "Running integration tests with mock adapters..."
