@@ -110,7 +110,7 @@ class TestGeminiMechanics:
         assert data2["adapter_kwargs"]["session_id"] == session_id
 
         # 2. Current message is in the prompt
-        assert "What is my identifier?" in data2["prompt_preview"]
+        assert "What is my identifier?" in data2["prompt"]
 
         # Note: We CANNOT verify the conversation history is included
         # because the Vertex adapter loads it internally when it sees

@@ -27,8 +27,11 @@ class TestBasicMCP:
             # Call the tool
             result = await client.call_tool("list_models")
 
-            # The result is already the content list, not a CallToolResult
-            content = result
+            # Check if the tool call was successful
+            assert not result.is_error, f"Tool call failed with error: {getattr(result, 'error_message', 'Unknown error')}"
+
+            # Access the actual response from the .content attribute
+            content = result.content
             assert isinstance(content, list)
             assert len(content) > 0
 
@@ -56,8 +59,11 @@ class TestBasicMCP:
                 },
             )
 
-            # The result is already the content list, not a CallToolResult
-            content = result
+            # Check if the tool call was successful
+            assert not result.is_error, f"Tool call failed with error: {getattr(result, 'error_message', 'Unknown error')}"
+
+            # Access the actual response from the .content attribute
+            content = result.content
             assert isinstance(content, list)
             assert len(content) == 1
             assert isinstance(content[0], TextContent)
@@ -87,8 +93,11 @@ class TestBasicMCP:
                 },
             )
 
-            # The result is already the content list, not a CallToolResult
-            content = result
+            # Check if the tool call was successful
+            assert not result.is_error, f"Tool call failed with error: {getattr(result, 'error_message', 'Unknown error')}"
+
+            # Access the actual response from the .content attribute
+            content = result.content
             assert isinstance(content, list) and len(content) == 1
             assert isinstance(content[0], TextContent)
 
@@ -110,8 +119,11 @@ class TestBasicMCP:
                 "count_project_tokens", {"items": ["pyproject.toml"]}
             )
 
-            # The result is already the content list, not a CallToolResult
-            content = result
+            # Check if the tool call was successful
+            assert not result.is_error, f"Tool call failed with error: {getattr(result, 'error_message', 'Unknown error')}"
+
+            # Access the actual response from the .content attribute
+            content = result.content
             assert isinstance(content, list)
             assert len(content) == 1
 
@@ -137,8 +149,11 @@ class TestBasicMCP:
         async with Client(transport) as client:
             result = await client.call_tool("search_project_memory", {"query": "test"})
 
-            # The result is already the content list, not a CallToolResult
-            content = result
+            # Check if the tool call was successful
+            assert not result.is_error, f"Tool call failed with error: {getattr(result, 'error_message', 'Unknown error')}"
+
+            # Access the actual response from the .content attribute
+            content = result.content
             assert isinstance(content, list)
             assert len(content) == 1
             assert isinstance(content[0], TextContent)
