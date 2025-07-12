@@ -39,9 +39,9 @@ test-unit:
 	pytest tests/unit -v --cov=mcp_second_brain --cov-report=term
 
 test-integration:
-	@echo "Running integration tests..."
-	pytest tests/internal -v --tb=short
-	pytest tests/integration_mcp -v -p no:asyncio --tb=short
+	@echo "Running integration tests with mock adapters..."
+	MCP_ADAPTER_MOCK=1 pytest tests/internal -v --tb=short
+	MCP_ADAPTER_MOCK=1 pytest tests/integration_mcp -v -p no:asyncio --tb=short
 
 test-e2e:
 	@echo "Running legacy e2e tests (deprecated)..."
