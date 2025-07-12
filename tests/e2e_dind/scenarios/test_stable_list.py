@@ -117,9 +117,9 @@ class TestStableInlineList:
 
         # Verify both tokens are found
         assert MARKER_SMALL_FILE in response, "Failed to find token from inline context"
-        assert (
-            MARKER_ATTACHMENT_1 in response
-        ), "Failed to find token from attachment in vector store"
+        assert MARKER_ATTACHMENT_1 in response, (
+            "Failed to find token from attachment in vector store"
+        )
         print(
             "✅ Initial split test passed - model accessed both inline and vector store content!"
         )
@@ -161,9 +161,9 @@ class TestStableInlineList:
             f"Use second-brain chat_with_gpt4_1 with {json.dumps(args1)}"
         )
         print(f"✅ First response: {response1}")
-        assert (
-            MARKER_SMALL_FILE in response1
-        ), f"Failed to find token in first call. Response: {response1}"
+        assert MARKER_SMALL_FILE in response1, (
+            f"Failed to find token in first call. Response: {response1}"
+        )
 
         # Second call - same context, new attachment
         # The context file should NOT be resent since it's unchanged
@@ -194,9 +194,9 @@ class TestStableInlineList:
         print(f"✅ Second response: {response2}")
 
         # Verify the model recalls the first token from memory (not re-reading)
-        assert (
-            MARKER_SMALL_FILE in response2
-        ), "Failed to recall token from previous turn"
+        assert MARKER_SMALL_FILE in response2, (
+            "Failed to recall token from previous turn"
+        )
         assert MARKER_ATTACHMENT_2 in response2, "Failed to find new attachment token"
         print(
             "✅ Deduplication test passed - model remembered context without resending!"
@@ -255,12 +255,12 @@ class TestStableInlineList:
         print(f"✅ Second response: {response2}")
 
         # Verify the new token is found (proving file was resent)
-        assert (
-            MARKER_MODIFIED_FILE in response2
-        ), "Failed to find modified token - file was not resent"
-        assert (
-            MARKER_SMALL_FILE not in response2
-        ), "Old token found - file change not detected"
+        assert MARKER_MODIFIED_FILE in response2, (
+            "Failed to find modified token - file was not resent"
+        )
+        assert MARKER_SMALL_FILE not in response2, (
+            "Old token found - file change not detected"
+        )
         print("✅ Change detection test passed - modified file was resent!")
 
         # Cleanup

@@ -22,12 +22,15 @@ class TestOpenAIMultiTurn:
         session_id = session_id_generator()
 
         # Mock response IDs
-        with patch(
-            "mcp_second_brain.session_cache.session_cache.set_response_id"
-        ) as mock_set_id, patch(
-            "mcp_second_brain.session_cache.session_cache.get_response_id",
-            return_value=None,
-        ) as mock_get_id:
+        with (
+            patch(
+                "mcp_second_brain.session_cache.session_cache.set_response_id"
+            ) as mock_set_id,
+            patch(
+                "mcp_second_brain.session_cache.session_cache.get_response_id",
+                return_value=None,
+            ) as mock_get_id,
+        ):
             # First turn
             result1 = await executor.execute(
                 metadata,

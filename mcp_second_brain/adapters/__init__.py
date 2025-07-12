@@ -59,6 +59,18 @@ def get_adapter(
                 None,
                 f"Adapter {adapter_key} could not be loaded due to an import error.",
             )
+    if adapter_key == "LoggingAdapter" and adapter_key not in ADAPTER_REGISTRY:
+        try:
+            from .logging_adapter import LoggingAdapter
+
+            register_adapter("LoggingAdapter", LoggingAdapter)
+            logger.info("Lazily registered LoggingAdapter")
+        except ImportError as e:
+            logger.error(f"Failed to lazy-load LoggingAdapter: {e}")
+            return (
+                None,
+                f"Adapter {adapter_key} could not be loaded due to an import error.",
+            )
 
     cache_key = (adapter_key, model_name)
 

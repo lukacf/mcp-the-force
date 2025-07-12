@@ -132,9 +132,12 @@ class TestMemoryConfig:
         store2.id = "vs_store_002"
         mock_client.vector_stores.create.side_effect = [store1, store2]
 
-        with patch(
-            "mcp_second_brain.memory.config.get_client", return_value=mock_client
-        ), patch("mcp_second_brain.memory.config.get_settings") as mock_settings:
+        with (
+            patch(
+                "mcp_second_brain.memory.config.get_client", return_value=mock_client
+            ),
+            patch("mcp_second_brain.memory.config.get_settings") as mock_settings,
+        ):
             # Set low rollover limit for testing
             settings = MagicMock()
             settings.memory_rollover_limit = 2
@@ -197,9 +200,12 @@ class TestMemoryConfig:
 
     def test_singleton_instance(self, temp_db, mock_client):
         """Test that get_memory_config returns singleton."""
-        with patch(
-            "mcp_second_brain.memory.config.get_client", return_value=mock_client
-        ), patch("mcp_second_brain.memory.config.get_settings") as mock_settings:
+        with (
+            patch(
+                "mcp_second_brain.memory.config.get_client", return_value=mock_client
+            ),
+            patch("mcp_second_brain.memory.config.get_settings") as mock_settings,
+        ):
             settings = MagicMock()
             settings.session_db_path = str(temp_db)
             settings.memory_rollover_limit = 9500
