@@ -16,10 +16,24 @@ CONFIG_FILE = Path("config.yaml")
 SECRETS_FILE = Path("secrets.yaml")
 
 
+class DeveloperLoggingConfig(BaseModel):
+    """Developer logging settings."""
+
+    enabled: bool = Field(False, description="Enable developer logging mode")
+    port: int = Field(4711, description="ZMQ logging port")
+    db_path: str = Field(".mcp_logs.sqlite3", description="SQLite database path")
+    batch_size: int = Field(100, description="Batch size for database writes")
+    batch_timeout: float = Field(1.0, description="Batch timeout in seconds")
+    max_db_size_mb: int = Field(1000, description="Max database size before rotation")
+
+
 class LoggingConfig(BaseModel):
     """Logging configuration."""
 
     level: str = Field("INFO", description="Logging level")
+    developer_mode: DeveloperLoggingConfig = Field(
+        default_factory=DeveloperLoggingConfig
+    )
 
     @field_validator("level")
     @classmethod

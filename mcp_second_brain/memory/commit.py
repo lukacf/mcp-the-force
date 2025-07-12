@@ -160,7 +160,7 @@ def create_commit_summary(commit_sha: str, message: str, files: List[str]) -> st
 
     summary = f"""## Git Commit: {commit_sha[:8]}
 
-**Date**: {datetime.now().strftime('%Y-%m-%d %H:%M UTC')}
+**Date**: {datetime.now().strftime("%Y-%m-%d %H:%M UTC")}
 
 ### Commit Message
 {message}

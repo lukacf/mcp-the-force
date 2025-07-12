@@ -86,12 +86,12 @@ class TestVertexThreadSafety:
 
                 # Verify asyncio.to_thread was called
                 assert to_thread_called, "asyncio.to_thread should be called"
-                assert (
-                    call_thread_id is not None
-                ), "generate_content should have been called"
-                assert (
-                    called_in_thread
-                ), "generate_content should be called in a different thread"
+                assert call_thread_id is not None, (
+                    "generate_content should have been called"
+                )
+                assert called_in_thread, (
+                    "generate_content should be called in a different thread"
+                )
 
     @pytest.mark.asyncio
     async def test_cancellation_propagates(self, monkeypatch):
