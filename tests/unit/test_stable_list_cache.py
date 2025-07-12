@@ -3,7 +3,6 @@
 import pytest
 import tempfile
 import os
-import time
 from unittest.mock import patch, MagicMock
 
 from mcp_second_brain.utils.stable_list_cache import StableListCache
@@ -298,25 +297,28 @@ async def test_reset_session():
 
 
 @pytest.mark.asyncio
-async def test_ttl_expiration():
+async def test_ttl_expiration(monkeypatch):
     """Test that entries expire after TTL."""
+    from tests.conftest import mock_clock
+
     with tempfile.NamedTemporaryFile(suffix=".sqlite3", delete=False) as f:
         db_path = f.name
 
     try:
         cache = StableListCache(db_path=db_path, ttl=1)  # 1 second TTL
 
-        # Save stable list
-        await cache.save_stable_list("test_session", ["/api/file1.py"])
+        with mock_clock(monkeypatch) as tick:
+            # Save stable list
+            await cache.save_stable_list("test_session", ["/api/file1.py"])
 
-        # Should be retrievable immediately
-        assert await cache.get_stable_list("test_session") is not None
+            # Should be retrievable immediately
+            assert await cache.get_stable_list("test_session") is not None
 
-        # Wait for expiration
-        time.sleep(1.5)
+            # Advance virtual clock past TTL
+            tick(2)
 
-        # Should be expired
-        assert await cache.get_stable_list("test_session") is None
+            # Should be expired
+            assert await cache.get_stable_list("test_session") is None
 
         cache.close()
     finally:

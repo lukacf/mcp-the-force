@@ -4,8 +4,10 @@ These declarations allow OpenAI and Gemini models to use the
 search_session_attachments function to search ephemeral vector stores.
 """
 
+from typing import Dict, Any
 
-def create_attachment_search_declaration_openai():
+
+def create_attachment_search_declaration_openai() -> Dict[str, Any]:
     """Create OpenAI-compatible function declaration for attachment search."""
     return {
         "type": "function",
@@ -29,7 +31,7 @@ def create_attachment_search_declaration_openai():
     }
 
 
-def create_attachment_search_declaration_gemini():
+def create_attachment_search_declaration_gemini() -> Dict[str, Any]:
     """Create Gemini-compatible function declaration for attachment search."""
     return {
         "name": "search_session_attachments",

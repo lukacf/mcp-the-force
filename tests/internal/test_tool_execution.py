@@ -53,7 +53,7 @@ class TestToolExecutionIntegration:
         data1 = parse_adapter_response(result1)
         assert data1["mock"] is True
         assert data1["model"] == "o3"
-        assert "Python async programming" in data1["prompt_preview"]
+        assert "Python async programming" in data1["prompt"]
 
         # Second call with same session
         result2 = await run_tool(
@@ -67,7 +67,7 @@ class TestToolExecutionIntegration:
         data2 = parse_adapter_response(result2)
         assert data2["mock"] is True
         assert data2["model"] == "o3"
-        assert "Show me an example" in data2["prompt_preview"]
+        assert "Show me an example" in data2["prompt"]
         # Note: Session continuity is handled by the adapter, we just verify the call went through
 
     @pytest.mark.asyncio
@@ -115,7 +115,7 @@ class TestToolExecutionIntegration:
         data = parse_adapter_response(result)
         assert data["mock"] is True
         assert data["model"] == "gpt-4.1"
-        assert "Analyze this large codebase" in data["prompt_preview"]
+        assert "Analyze this large codebase" in data["prompt"]
         # Vector store should have been created
         assert data["vector_store_ids"] is not None
         assert len(data["vector_store_ids"]) > 0

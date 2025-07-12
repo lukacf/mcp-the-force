@@ -12,6 +12,9 @@ from pathlib import Path
 import pytest
 import pytest_asyncio
 from unittest.mock import MagicMock, Mock, AsyncMock
+import asyncio
+import time
+import contextlib
 
 # Note: Adapter mocking is controlled by MCP_ADAPTER_MOCK environment variable
 
@@ -32,33 +35,52 @@ sys.path.insert(0, str(PROJECT_ROOT))
 @pytest.fixture(scope="session", autouse=True)
 def verify_mock_adapter_for_integration():
     """Verify MockAdapter is properly activated for integration tests."""
-    # Only check if we're in internal or MCP integration tests
+    # Only check if we're in internal, MCP integration, or multi-turn tests
     if any(
         arg
         for arg in sys.argv
-        if "tests/internal" in arg or "tests/integration_mcp" in arg
+        if "tests/internal" in arg
+        or "tests/integration_mcp" in arg
+        or "tests/integration/multi_turn" in arg
     ):
         if os.getenv("MCP_ADAPTER_MOCK") != "1":
             pytest.fail(
-                "MCP_ADAPTER_MOCK=1 must be set before running integration tests.\n"
-                "Run: MCP_ADAPTER_MOCK=1 pytest tests/internal"
+                "FATAL: MCP_ADAPTER_MOCK=1 must be set in the environment *before* running pytest.\n"
+                "For example: MCP_ADAPTER_MOCK=1 pytest tests/internal"
             )
 
-        # Verify the adapter was actually injected
+        # Apply mock adapter registry for integration tests
         try:
-            from mcp_second_brain.adapters import ADAPTER_REGISTRY
+            from mcp_second_brain.adapters import (
+                ADAPTER_REGISTRY,
+                _ADAPTER_CACHE,
+                get_adapter,
+            )
             from mcp_second_brain.adapters.mock_adapter import MockAdapter
 
+            # --- FIX: Proactively load and register search adapters ---
+            get_adapter("SearchMemoryAdapter", "dummy_model")
+            get_adapter("SearchAttachmentAdapter", "dummy_model")
+            # --- END FIX ---
+
+            # Clear instance cache to prevent state leakage
+            _ADAPTER_CACHE.clear()
+
+            # Replace all adapters with MockAdapter
+            for name in list(ADAPTER_REGISTRY):
+                ADAPTER_REGISTRY[name] = MockAdapter
+
+            # Verify the mocking worked
             for name, adapter_class in ADAPTER_REGISTRY.items():
                 if adapter_class is not MockAdapter:
                     pytest.fail(
-                        f"Adapter '{name}' is not using MockAdapter! "
-                        f"Got {adapter_class} instead. "
-                        "This suggests MCP_ADAPTER_MOCK was set too late."
+                        f"Failed to mock adapter '{name}'. "
+                        f"Got {adapter_class} instead of MockAdapter."
                     )
-        except ImportError:
-            # If we can't import, tests will fail anyway
-            pass
+
+        except ImportError as e:
+            # If we can't import, tests will fail for other reasons anyway
+            pytest.fail(f"Could not import adapter modules to apply mocks: {e}")
 
 
 @pytest.fixture
@@ -71,6 +93,7 @@ def mock_env(monkeypatch):
 
     test_env = {
         "OPENAI_API_KEY": "test-openai-key",
+        "XAI_API_KEY": "test-xai-key",
         "VERTEX_PROJECT": "test-project",
         "VERTEX_LOCATION": "us-central1",
         "CONTEXT_PERCENTAGE": "0.85",
@@ -223,9 +246,27 @@ def mock_adapter_error():
 @pytest.fixture(autouse=True)
 def mock_vector_store_client(monkeypatch, mock_openai_client):
     """Mock vector store client to prevent real API calls."""
-    import mcp_second_brain.utils.vector_store as vs
+    # This mock handles vector stores created for ad-hoc 'attachments'.
+    import mcp_second_brain.utils.vector_store as vs_utils
 
-    monkeypatch.setattr(vs, "get_client", Mock(return_value=mock_openai_client))
+    monkeypatch.setattr(vs_utils, "get_client", Mock(return_value=mock_openai_client))
+
+    # This is the most critical patch. It replaces the store_conversation_memory
+    # function inside the executor module with a harmless AsyncMock. This prevents
+    # the function from running at all, thus avoiding any real API calls for
+    # conversation memory.
+    monkeypatch.setattr(
+        "mcp_second_brain.tools.executor.store_conversation_memory",
+        AsyncMock(return_value=None),
+    )
+
+    # (Optional but good practice) You can also mock where the client is created
+    # for the memory system itself, though the patch above is sufficient.
+    import mcp_second_brain.memory.config as memory_config
+
+    monkeypatch.setattr(
+        memory_config, "get_client", Mock(return_value=mock_openai_client)
+    )
 
 
 @pytest_asyncio.fixture
@@ -239,3 +280,108 @@ async def run_tool():
         return await executor.execute(metadata, **kwargs)
 
     return _inner
+
+
+@pytest.fixture
+async def mcp_server():
+    """Create MCP server instance for testing."""
+    # Import here to ensure MCP_ADAPTER_MOCK is set first
+    from mcp_second_brain.server import mcp
+
+    # Return the server instance
+    return mcp
+
+
+# Virtual clock fixture for speeding up time-based tests
+class VirtualClock:
+    """Virtual clock that advances time instantly without actual delays."""
+
+    def __init__(self):
+        self.current_time = time.time()
+        self.monotonic_time = time.monotonic()
+        self.sleep_history = []
+        # Store original sleep function to avoid recursion
+        self._original_sleep = asyncio.sleep
+
+    def advance_time(self, seconds):
+        """Advance virtual time by given seconds."""
+        self.current_time += seconds
+        self.monotonic_time += seconds
+
+    def time(self):
+        """Return current virtual time."""
+        return self.current_time
+
+    def monotonic(self):
+        """Return current virtual monotonic time."""
+        return self.monotonic_time
+
+    async def sleep(self, seconds):
+        """Virtual sleep that advances time without actual delay."""
+        self.sleep_history.append(seconds)
+        self.advance_time(seconds)
+        # Yield control using the real sleep with zero delay
+        # We need to use the original asyncio.sleep to avoid recursion
+        await self._original_sleep(0)
+
+    def get_total_sleep_time(self):
+        """Get total time that would have been slept."""
+        return sum(self.sleep_history)
+
+
+@pytest.fixture
+def virtual_clock(monkeypatch):
+    """Replace time functions with virtual clock for fast tests."""
+    # Store original before creating clock
+    original_sleep = asyncio.sleep
+
+    clock = VirtualClock()
+    clock._original_sleep = original_sleep
+
+    # Patch time functions
+    monkeypatch.setattr(time, "time", clock.time)
+    monkeypatch.setattr(time, "monotonic", clock.monotonic)
+    monkeypatch.setattr(asyncio, "sleep", clock.sleep)
+
+    return clock
+
+
+@pytest.fixture(scope="session")
+def fast_tests_mode():
+    """Check if we're running in fast tests mode."""
+    # Could be controlled by env var or pytest marker
+    return os.getenv("FAST_TESTS", "1") == "1"
+
+
+@pytest.fixture(autouse=True)
+def auto_virtual_clock(request, monkeypatch, fast_tests_mode):
+    """Automatically apply virtual clock to unit tests unless disabled."""
+    # Only apply to unit tests
+    if not hasattr(request.node, "get_closest_marker"):
+        return
+
+    unit_marker = request.node.get_closest_marker("unit")
+    no_virtual_clock = request.node.get_closest_marker("no_virtual_clock")
+
+    if unit_marker and fast_tests_mode and not no_virtual_clock:
+        # Store original before creating clock
+        original_sleep = asyncio.sleep
+
+        clock = VirtualClock()
+        clock._original_sleep = original_sleep
+
+        monkeypatch.setattr(time, "time", clock.time)
+        monkeypatch.setattr(time, "monotonic", clock.monotonic)
+        monkeypatch.setattr(asyncio, "sleep", clock.sleep)
+        return clock
+
+
+@contextlib.contextmanager
+def mock_clock(monkeypatch, start: int = 1_000_000):
+    """
+    Freeze time.time(); yield a function that can be called
+    to advance the fake clock.
+    """
+    current = {"t": start}
+    monkeypatch.setattr(time, "time", lambda: current["t"])
+    yield lambda seconds: current.__setitem__("t", current["t"] + seconds)

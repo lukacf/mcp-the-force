@@ -34,7 +34,7 @@ make test
 We use pre-commit hooks to ensure code quality:
 
 **What runs automatically:**
-- **On every commit** (fast, <15 seconds):
+- **On every commit** (fast, <5 seconds):
   - Ruff linting and formatting
   - MyPy type checking
   - Fast unit tests (excluding slow/integration tests)
@@ -43,33 +43,61 @@ We use pre-commit hooks to ensure code quality:
 
 ### Development Commands
 
+**Makefile is the Single Source of Truth** - All test commands are standardized in the Makefile to ensure consistency across local development, pre-commit hooks, and CI/CD.
+
 ```bash
 make help              # Show all available commands
 make lint              # Run ruff and mypy
-make test              # Run fast unit tests only
-make test-all          # Run all tests (unit + integration + e2e)
-make test-unit         # Run all unit tests with coverage
-make test-integration  # Run integration tests
+make test              # Run fast unit tests only (pre-commit)
+make test-unit         # Run all unit tests with coverage (pre-push)
+make test-integration  # Run integration tests with MockAdapter
 make e2e               # Run Docker-in-Docker E2E tests
 make ci                # Run full CI suite locally
 make clean             # Clean up generated files
 ```
 
+### Standardized Testing Workflow
+
+| Command               | Purpose                      | When to Use                           |
+|-----------------------|------------------------------|---------------------------------------|
+| `make test`           | Fast unit tests              | Before every commit (pre-commit hook) |
+| `make test-unit`      | Full unit tests + coverage   | Before PR (pre-push hook)             |
+| `make test-integration` | Integration tests with mocks | After adapter changes                 |
+| `make e2e`            | End-to-end Docker tests      | Before major releases                 |
+| `make ci`             | All CI checks locally        | Before pushing to CI                  |
+
 ### Running Tests
 
+**Recommended Approach** (use Makefile commands):
 ```bash
 # Fast feedback loop (what pre-commit runs)
 make test
 
-# Full test suite
-make test-all
+# Before creating PR
+make test-unit
 
-# Specific test types
+# After adapter/integration changes  
+make test-integration
+
+# Full CI validation locally
+make ci
+```
+
+**Direct pytest commands** (for debugging specific tests):
+```bash
+# Unit tests only
 pytest tests/unit -v                    # All unit tests
 pytest tests/unit -m "not slow"         # Fast unit tests only
-pytest tests/integration_mcp -v         # MCP integration tests
+
+# Integration tests (requires MockAdapter)
+MCP_ADAPTER_MOCK=1 pytest tests/internal -v           # Internal integration tests  
+MCP_ADAPTER_MOCK=1 pytest tests/integration_mcp -v    # MCP protocol tests
+
+# E2E tests
 pytest tests/e2e_dind -v               # Docker-in-Docker E2E tests
 ```
+
+**Important**: Always use Makefile commands for standard workflows. Direct pytest is only for debugging specific test files.
 
 ## 🏗️ Architecture
 
@@ -315,20 +343,31 @@ logger.error("Operation failed: %s", e)  # Error conditions
 
 ### Testing Guidelines
 
-**Unit Tests:**
-- Test individual components in isolation
-- Mock external dependencies (OpenAI, Google APIs)
+**Unit Tests** (`tests/unit/`):
+- Test individual components in isolation  
+- Mock all external dependencies (OpenAI, Google APIs, file system)
 - Focus on business logic and edge cases
+- Fast execution (< 4 seconds total)
+- No network calls, no real API usage
 
-**Integration Tests:**
-- Test component interactions
-- Use test configuration and temporary databases
-- Verify end-to-end workflows
+**Integration Tests** (`tests/internal/`):
+- Test component interactions with MockAdapter
+- Verify end-to-end tool execution workflows
+- Mock external APIs but test real component plumbing
+- Environment: `MCP_ADAPTER_MOCK=1` (set automatically by Makefile)
+- Test parameter routing, session management, error handling
 
-**E2E Tests:**
-- Test complete user workflows
-- Use Docker-in-Docker for isolation
-- Validate against real API endpoints (when safe)
+**MCP Integration Tests** (`tests/integration_mcp/`):
+- Test MCP protocol compliance
+- Validate tool registration and execution via MCP
+- Mock adapters for consistent results
+- Verify MCP server/client communication
+
+**E2E Tests** (`tests/e2e_dind/`):
+- Test complete user workflows in Docker environment
+- Use Docker-in-Docker for full isolation
+- Real API calls in controlled environment
+- Full deployment and configuration testing
 
 Example test structure:
 ```python

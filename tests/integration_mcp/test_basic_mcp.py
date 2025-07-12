@@ -3,6 +3,7 @@
 import pytest
 from mcp.types import TextContent
 import json
+import uuid
 
 # Use anyio for better async handling - but only with asyncio backend
 # This prevents "ModuleNotFoundError: No module named 'trio'" errors
@@ -26,13 +27,10 @@ class TestBasicMCP:
             # Call the tool
             result = await client.call_tool("list_models")
 
-            # FastMCP 2.10+ returns CallToolResult objects
-            assert hasattr(
-                result, "content"
-            ), "Expected CallToolResult with content attribute"
-            assert not result.is_error, "Tool call returned an error"
+            # Check if the tool call was successful
+            assert not result.is_error, f"Tool call failed with error: {getattr(result, 'error_message', 'Unknown error')}"
 
-            # Access the content list
+            # Access the actual response from the .content attribute
             content = result.content
             assert isinstance(content, list)
             assert len(content) > 0
@@ -61,13 +59,10 @@ class TestBasicMCP:
                 },
             )
 
-            # FastMCP 2.10+ returns CallToolResult objects
-            assert hasattr(
-                result, "content"
-            ), "Expected CallToolResult with content attribute"
-            assert not result.is_error, "Tool call returned an error"
+            # Check if the tool call was successful
+            assert not result.is_error, f"Tool call failed with error: {getattr(result, 'error_message', 'Unknown error')}"
 
-            # Access the content list
+            # Access the actual response from the .content attribute
             content = result.content
             assert isinstance(content, list)
             assert len(content) == 1
@@ -81,6 +76,37 @@ class TestBasicMCP:
                 # If not JSON, just verify we got a response
                 assert len(content[0].text) > 0
 
+    async def test_grok_tool_callable(self, mcp_server):
+        """Test that a Grok tool can be called via MCP."""
+        from fastmcp import Client
+        from fastmcp.client import FastMCPTransport
+
+        transport = FastMCPTransport(mcp_server)
+        async with Client(transport) as client:
+            result = await client.call_tool(
+                "chat_with_grok4",
+                {
+                    "instructions": "test",
+                    "output_format": "json",
+                    "context": [],
+                    "session_id": f"mcp-grok-{uuid.uuid4()}",
+                },
+            )
+
+            # Check if the tool call was successful
+            assert not result.is_error, f"Tool call failed with error: {getattr(result, 'error_message', 'Unknown error')}"
+
+            # Access the actual response from the .content attribute
+            content = result.content
+            assert isinstance(content, list) and len(content) == 1
+            assert isinstance(content[0], TextContent)
+
+            # MockAdapter returns JSON metadata
+            data = json.loads(content[0].text)
+            assert data["mock"] is True
+            assert data["model"] == "grok-4"
+            assert data["prompt_length"] > 0
+
     async def test_count_project_tokens_callable(self, mcp_server):
         """Test count_project_tokens tool."""
         from fastmcp import Client
@@ -93,13 +119,10 @@ class TestBasicMCP:
                 "count_project_tokens", {"items": ["pyproject.toml"]}
             )
 
-            # FastMCP 2.10+ returns CallToolResult objects
-            assert hasattr(
-                result, "content"
-            ), "Expected CallToolResult with content attribute"
-            assert not result.is_error, "Tool call returned an error"
+            # Check if the tool call was successful
+            assert not result.is_error, f"Tool call failed with error: {getattr(result, 'error_message', 'Unknown error')}"
 
-            # Access the content list
+            # Access the actual response from the .content attribute
             content = result.content
             assert isinstance(content, list)
             assert len(content) == 1
@@ -126,13 +149,10 @@ class TestBasicMCP:
         async with Client(transport) as client:
             result = await client.call_tool("search_project_memory", {"query": "test"})
 
-            # FastMCP 2.10+ returns CallToolResult objects
-            assert hasattr(
-                result, "content"
-            ), "Expected CallToolResult with content attribute"
-            assert not result.is_error, "Tool call returned an error"
+            # Check if the tool call was successful
+            assert not result.is_error, f"Tool call failed with error: {getattr(result, 'error_message', 'Unknown error')}"
 
-            # Access the content list
+            # Access the actual response from the .content attribute
             content = result.content
             assert isinstance(content, list)
             assert len(content) == 1
