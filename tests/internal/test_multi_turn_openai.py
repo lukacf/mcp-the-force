@@ -15,7 +15,7 @@ class TestOpenAIMultiTurn:
 
     @pytest.mark.asyncio
     async def test_o3_multi_turn_with_response_ids(
-        self, clean_session_caches, track_tool_calls, session_id_generator
+        self, clean_session_caches, session_id_generator
     ):
         """Test that o3 maintains conversation with response IDs."""
         metadata = get_tool("chat_with_o3")
@@ -61,12 +61,10 @@ class TestOpenAIMultiTurn:
             assert data2["adapter_kwargs"].get("previous_response_id") == "resp_12345"
 
             # No search tools used
-            assert len(track_tool_calls) == 0
+            # Note: With MockAdapter, we verify plumbing instead of tool usage
 
     @pytest.mark.asyncio
-    async def test_o3_pro_multi_turn(
-        self, clean_session_caches, track_tool_calls, session_id_generator
-    ):
+    async def test_o3_pro_multi_turn(self, clean_session_caches, session_id_generator):
         """Test o3-pro multi-turn with deep reasoning."""
         metadata = get_tool("chat_with_o3_pro")
         session_id = session_id_generator()
@@ -96,12 +94,10 @@ class TestOpenAIMultiTurn:
         data2 = json.loads(result2)
         # Should have context about algorithm A
         assert "algorithm A" in data2["prompt"] or "O(n²)" in data2["prompt"]
-        assert len(track_tool_calls) == 0
+        # Note: With MockAdapter, we verify plumbing instead of tool usage
 
     @pytest.mark.asyncio
-    async def test_gpt4_multi_turn(
-        self, clean_session_caches, track_tool_calls, session_id_generator
-    ):
+    async def test_gpt4_multi_turn(self, clean_session_caches, session_id_generator):
         """Test GPT-4.1 multi-turn conversations."""
         metadata = get_tool("chat_with_gpt4_1")
         session_id = session_id_generator()
@@ -126,7 +122,7 @@ class TestOpenAIMultiTurn:
 
         data = json.loads(result)
         assert "Skynet" in data["prompt"]
-        assert len(track_tool_calls) == 0
+        # Note: With MockAdapter, we verify plumbing instead of tool usage
 
     @pytest.mark.asyncio
     async def test_openai_system_prompt_priority(
@@ -161,7 +157,7 @@ class TestOpenAIMultiTurn:
 
     @pytest.mark.asyncio
     async def test_research_models_multi_turn(
-        self, clean_session_caches, track_tool_calls, session_id_generator
+        self, clean_session_caches, session_id_generator
     ):
         """Test research models (o3-deep-research) maintain context."""
         metadata = get_tool("research_with_o3_deep_research")
@@ -191,4 +187,4 @@ class TestOpenAIMultiTurn:
         data2 = json.loads(result2)
         # Should have previous context
         assert "Quantum computing" in data2["prompt"]
-        assert len(track_tool_calls) == 0
+        # Note: With MockAdapter, we verify plumbing instead of tool usage

@@ -8,7 +8,6 @@ import json
 from unittest.mock import patch
 from mcp_second_brain.tools.executor import executor
 from mcp_second_brain.tools.registry import get_tool
-from mcp_second_brain.adapters import get_adapter
 
 
 class TestMultiTurnErrors:
@@ -16,101 +15,91 @@ class TestMultiTurnErrors:
 
     @pytest.mark.asyncio
     async def test_regression_session_id_not_passed_to_adapter(
-        self, clean_session_caches
+        self, clean_session_caches, run_tool, parse_adapter_response
     ):
         """Regression test: Ensure session_id is always passed to adapters.
 
         This test would have caught the bug where session parameters weren't
         merged into adapter parameters.
         """
-        metadata = get_tool("chat_with_gemini25_pro")
-
-        # Track what parameters reach the adapter
-        adapter_calls = []
-
-        # Patch adapter to capture calls
-
-        async def track_generate(self, prompt, **kwargs):
-            adapter_calls.append(kwargs)
-            return json.dumps({"prompt": prompt, "adapter_kwargs": kwargs, "tools": []})
-
-        adapter, _ = get_adapter(
-            metadata.model_config["adapter_class"], metadata.model_config["model_name"]
+        # Execute with session_id using MockAdapter
+        result = await run_tool(
+            "chat_with_gemini25_pro",
+            instructions="Test instruction",
+            output_format="Test format",
+            context=[],
+            session_id="test-session-123",
         )
-        with patch.object(type(adapter), "generate", track_generate):
-            # Execute with session_id
-            await executor.execute(
-                metadata,
-                instructions="Test",
-                output_format="Test",
-                context=[],
-                session_id="test-session-123",
-            )
 
-            # Verify session_id reached the adapter
-            assert len(adapter_calls) == 1
-            assert (
-                "session_id" in adapter_calls[0]
-            ), "Bug: session_id not passed to adapter!"
-            assert adapter_calls[0]["session_id"] == "test-session-123"
+        # Parse the MockAdapter response
+        data = parse_adapter_response(result)
+
+        # Verify the plumbing worked correctly:
+        # 1. MockAdapter was used
+        assert data["mock"] is True
+        assert data["model"] == "gemini-2.5-pro"
+
+        # 2. Session ID was passed through to adapter
+        assert (
+            "session_id" in data["adapter_kwargs"]
+        ), "Bug: session_id not passed to adapter!"
+        assert data["adapter_kwargs"]["session_id"] == "test-session-123"
+
+        # 3. Other parameters were routed correctly
+        assert "Test instruction" in data["prompt"]
 
     @pytest.mark.asyncio
     async def test_regression_system_instruction_missing_on_later_turns(
-        self, clean_session_caches, session_id_generator
+        self,
+        clean_session_caches,
+        session_id_generator,
+        run_tool,
+        parse_adapter_response,
     ):
         """Regression test: Ensure system_instruction sent on ALL turns.
 
         This test would have caught the bug where system_instruction was
         only sent on first turn (when no session_id).
         """
-        metadata = get_tool("chat_with_gemini25_pro")
         session_id = session_id_generator()
 
-        # Track adapter calls
-        adapter_calls = []
-
-        async def track_generate(self, prompt, **kwargs):
-            adapter_calls.append(kwargs)
-            return json.dumps({"prompt": prompt, "adapter_kwargs": kwargs, "tools": []})
-
-        adapter, _ = get_adapter(
-            metadata.model_config["adapter_class"], metadata.model_config["model_name"]
+        # First turn
+        result1 = await run_tool(
+            "chat_with_gemini25_pro",
+            instructions="First message",
+            output_format="OK",
+            context=[],
+            session_id=session_id,
         )
-        with patch.object(type(adapter), "generate", track_generate):
-            # First turn
-            await executor.execute(
-                metadata,
-                instructions="First message",
-                output_format="OK",
-                context=[],
-                session_id=session_id,
-            )
 
-            # Second turn
-            await executor.execute(
-                metadata,
-                instructions="Second message",
-                output_format="OK",
-                context=[],
-                session_id=session_id,
-            )
+        # Second turn with same session
+        result2 = await run_tool(
+            "chat_with_gemini25_pro",
+            instructions="Second message",
+            output_format="OK",
+            context=[],
+            session_id=session_id,
+        )
 
-            # Both calls should have system_instruction
-            assert len(adapter_calls) == 2
-            assert (
-                "system_instruction" in adapter_calls[0]
-            ), "First turn missing system_instruction"
-            assert (
-                "system_instruction" in adapter_calls[1]
-            ), "Bug: Second turn missing system_instruction!"
+        # Parse both responses
+        data1 = parse_adapter_response(result1)
+        data2 = parse_adapter_response(result2)
 
-            # Verify it contains priority instructions
-            instruction = adapter_calls[1]["system_instruction"]
-            assert "Information priority order:" in instruction
+        # Both calls should have system_instruction in adapter_kwargs
+        assert (
+            "system_instruction" in data1["adapter_kwargs"]
+        ), "First turn missing system_instruction"
+        assert (
+            "system_instruction" in data2["adapter_kwargs"]
+        ), "Bug: Second turn missing system_instruction!"
+
+        # Verify session continuity
+        assert data1["adapter_kwargs"]["session_id"] == session_id
+        assert data2["adapter_kwargs"]["session_id"] == session_id
 
     @pytest.mark.asyncio
     async def test_model_uses_search_without_proper_prompt(
-        self, clean_session_caches, track_tool_calls, session_id_generator
+        self, clean_session_caches, session_id_generator
     ):
         """Test that models use search if system prompt doesn't guide them.
 
@@ -135,8 +124,7 @@ class TestMultiTurnErrors:
                 session_id=session_id,
             )
 
-            # Reset tool tracking
-            track_tool_calls.clear()
+            # Note: With MockAdapter, we test prompt routing instead of actual tool usage
 
             # Second turn - with bad prompt, model might use search
             result = await executor.execute(

@@ -37,10 +37,26 @@ async def clean_session_caches():
 
     yield
 
-    # Close connections after test
-    gemini_session_cache.close()
-    grok_session_cache.close()
-    session_cache.close()
+    # Close connections after test, ensuring all are attempted.
+    # With the segfault fixed, we can handle potential errors gracefully.
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    try:
+        gemini_session_cache.close()
+    except Exception as e:
+        logger.error(f"Failed to close gemini_session_cache: {e}")
+
+    try:
+        grok_session_cache.close()
+    except Exception as e:
+        logger.error(f"Failed to close grok_session_cache: {e}")
+
+    try:
+        session_cache.close()
+    except Exception as e:
+        logger.error(f"Failed to close session_cache: {e}")
 
 
 # Note: Removed track_tool_calls fixture - it's meaningless with MockAdapter
