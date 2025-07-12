@@ -18,15 +18,14 @@ repos:
     hooks:
       - id: pytest-fast
         name: pytest (fast unit tests only)
-        entry: pytest tests/unit -q -m "not slow and not e2e and not integration" --tb=short
+        entry: make test
         language: system
         pass_filenames: false
         always_run: true
 
-      # Optional: Run full unit tests before push (can skip with --no-verify)
       - id: pytest-unit-full
         name: pytest (all unit tests)
-        entry: pytest tests/unit -v
+        entry: make test-unit
         language: system
         stages: [pre-push]
         pass_filenames: false
