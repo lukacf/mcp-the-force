@@ -11,18 +11,21 @@ import pytest
 
 
 @pytest.fixture(scope="session", autouse=True)
-def verify_mock_adapter():
-    """Verify that MockAdapter is enabled for MCP integration tests."""
-    # Verify the adapter was actually injected
+def apply_mock_adapters():
+    """Apply MockAdapter to all adapters for MCP integration tests."""
     from mcp_second_brain.adapters import ADAPTER_REGISTRY
     from mcp_second_brain.adapters.mock_adapter import MockAdapter
 
+    # Replace all adapters with MockAdapter
+    for name in list(ADAPTER_REGISTRY):
+        ADAPTER_REGISTRY[name] = MockAdapter
+
+    # Verify the mocking worked
     for name, adapter_class in ADAPTER_REGISTRY.items():
         if adapter_class is not MockAdapter:
             pytest.fail(
-                f"Adapter '{name}' is not using MockAdapter! "
-                f"Got {adapter_class} instead. "
-                "This suggests MCP_ADAPTER_MOCK was set too late."
+                f"Failed to mock adapter '{name}'. "
+                f"Got {adapter_class} instead of MockAdapter."
             )
 
 

@@ -49,20 +49,25 @@ def verify_mock_adapter_for_integration():
                 "For example: MCP_ADAPTER_MOCK=1 pytest tests/integration/multi_turn"
             )
 
-        # Verify the adapter was actually injected
+        # Apply mock adapter registry for integration tests
         try:
             from mcp_second_brain.adapters import ADAPTER_REGISTRY
             from mcp_second_brain.adapters.mock_adapter import MockAdapter
 
+            # Replace all adapters with MockAdapter
+            for name in list(ADAPTER_REGISTRY):
+                ADAPTER_REGISTRY[name] = MockAdapter
+
+            # Verify the mocking worked
             for name, adapter_class in ADAPTER_REGISTRY.items():
                 if adapter_class is not MockAdapter:
                     pytest.fail(
-                        f"Adapter '{name}' is not using MockAdapter! "
-                        f"Got {adapter_class} instead. "
-                        "This suggests MCP_ADAPTER_MOCK was set too late."
+                        f"Failed to mock adapter '{name}'. "
+                        f"Got {adapter_class} instead of MockAdapter."
                     )
+
         except ImportError:
-            # If we can't import, tests will fail anyway
+            # If we can't import, tests will fail for other reasons anyway
             pass
 
 

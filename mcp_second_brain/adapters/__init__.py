@@ -7,7 +7,6 @@ from .vertex import VertexAdapter
 from .grok import GrokAdapter
 import logging
 
-from mcp_second_brain.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -18,15 +17,6 @@ ADAPTER_REGISTRY: Dict[str, Type[BaseAdapter]] = {
     "xai": GrokAdapter,
 }
 
-# Mock adapter injection for testing
-_settings = get_settings()
-if _settings.adapter_mock:
-    from .mock_adapter import MockAdapter
-
-    # Replace all adapters with mock
-    for name in list(ADAPTER_REGISTRY):
-        ADAPTER_REGISTRY[name] = MockAdapter
-    logger.info("Mock adapter enabled for all models")
 
 # Adapter instance cache
 _ADAPTER_CACHE: Dict[Tuple[str, str], BaseAdapter] = {}
