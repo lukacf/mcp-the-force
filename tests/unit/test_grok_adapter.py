@@ -97,11 +97,14 @@ class TestGrokAdapter:
     @pytest.mark.asyncio
     async def test_generate_success(self):
         """Test successful generation."""
-        with patch(
-            "mcp_second_brain.adapters.grok.adapter.get_settings"
-        ) as mock_settings, patch(
-            "mcp_second_brain.adapters.grok.adapter.grok_session_cache"
-        ) as mock_session_cache:
+        with (
+            patch(
+                "mcp_second_brain.adapters.grok.adapter.get_settings"
+            ) as mock_settings,
+            patch(
+                "mcp_second_brain.adapters.grok.adapter.grok_session_cache"
+            ) as mock_session_cache,
+        ):
             mock_settings.return_value.xai.api_key = "xai-test-key"
             mock_session_cache.get_history = AsyncMock(return_value=None)
             mock_session_cache.set_history = AsyncMock()

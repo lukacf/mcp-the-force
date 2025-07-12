@@ -74,9 +74,9 @@ def test_attachment_search_workflow(claude, stack):
             f"Use second-brain chat_with_gpt4_1 with {json.dumps(args1)}"
         )
         print(f"✅ First response (positive match): {response1}")
-        assert (
-            UNIQUE_TOKEN in response1
-        ), "Model failed to find the unique token when it was present."
+        assert UNIQUE_TOKEN in response1, (
+            "Model failed to find the unique token when it was present."
+        )
         # The model should include the token in its response, but may paraphrase
         print("✅ Positive match test passed!")
 
@@ -120,7 +120,9 @@ def test_attachment_search_workflow(claude, stack):
                 "no results",
                 "was not found",
             ]
-        ), f"Response should have clearly stated the token was not found, but it didn't. Response: {response2}"
+        ), (
+            f"Response should have clearly stated the token was not found, but it didn't. Response: {response2}"
+        )
 
         print("✅ Deduplication cache test passed!")
 

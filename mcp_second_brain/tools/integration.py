@@ -91,6 +91,30 @@ def register_all_tools(mcp: FastMCP) -> None:
         except Exception as e:
             logger.error(f"Failed to register tool {tool_id}: {e}")
 
+    # Conditionally register developer tools
+    _register_developer_tools(mcp)
+
+
+def _register_developer_tools(mcp: FastMCP) -> None:
+    """Register developer-mode tools if enabled."""
+    from ..config import get_settings
+
+    settings = get_settings()
+    if settings.logging.developer_mode.enabled:
+        try:
+            from .registry import get_tool
+
+            # Register the logging tool
+            metadata = get_tool("search_mcp_debug_logs")
+            if metadata:
+                tool_func = create_tool_function(metadata)
+                mcp.tool(name="search_mcp_debug_logs")(tool_func)
+                logger.info("Registered developer tool: search_mcp_debug_logs")
+        except ImportError as e:
+            logger.warning(f"Could not import logging tools: {e}")
+        except Exception as e:
+            logger.error(f"Failed to register developer tools: {e}")
+
 
 def create_list_models_tool(mcp: FastMCP) -> None:
     """Create the list_models utility tool."""

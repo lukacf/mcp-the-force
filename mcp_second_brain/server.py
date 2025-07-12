@@ -3,10 +3,7 @@
 
 from mcp.server.fastmcp import FastMCP
 import logging
-import os
-from logging.handlers import QueueHandler, QueueListener
-import queue
-from .utils.logging_filter import RedactionFilter
+from .logging.setup import setup_logging
 
 # Import all tool definitions to register them
 from .tools import definitions  # noqa: F401 # This import triggers the @tool decorators
@@ -17,36 +14,8 @@ from .tools.integration import (
     create_count_project_tokens_tool,
 )
 
-# Set up logging
-log_file = os.path.expanduser("~/mcp-second-brain-debug.log")
-log_queue: queue.Queue[logging.LogRecord] = queue.Queue()
-
-# Create handlers
-file_handler = logging.FileHandler(log_file, delay=True)
-file_handler.setFormatter(
-    logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-)
-console_handler = logging.StreamHandler()
-console_handler.setFormatter(
-    logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-)
-
-# Add redaction filter to all handlers
-redaction_filter = RedactionFilter()
-file_handler.addFilter(redaction_filter)
-console_handler.addFilter(redaction_filter)
-
-# Set up queue handler and listener
-queue_handler = QueueHandler(log_queue)
-queue_listener = QueueListener(log_queue, file_handler, console_handler)
-queue_listener.start()
-
-logging.basicConfig(level=logging.INFO, handlers=[queue_handler])
-
-# Also add redaction filter to the root logger
-root_logger = logging.getLogger()
-for handler in root_logger.handlers:
-    handler.addFilter(redaction_filter)
+# Initialize the new logging system
+setup_logging()
 
 logger = logging.getLogger(__name__)
 
@@ -95,10 +64,7 @@ def main():
     if sys.platform == "win32":
         asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
-    try:
-        mcp.run()
-    finally:
-        queue_listener.stop()
+    mcp.run()
 
 
 if __name__ == "__main__":
