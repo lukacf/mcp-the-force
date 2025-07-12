@@ -39,15 +39,13 @@ def count_tokens(texts: Sequence[str]) -> int:
     """Count tokens in texts, with fallback for when tiktoken is unavailable or content is problematic."""
     if _enc is None:
         # Fallback: estimate ~4 chars per token
-        return sum(safe_estimate_tokens(t) for t in texts)
+        return sum(max(1, len(t) // 4) for t in texts)
 
     total_tokens = 0
     for text in texts:
-        # Guard against content that can cause tiktoken to hang
-        if len(text) > TOKEN_ENCODE_CHAR_CAP or looks_pathological(text):
-            logger.debug(
-                f"Using estimation for large/repetitive content: {len(text)} chars, entropy check: {looks_pathological(text)}"
-            )
+        # Only apply safeguards for very large texts that could cause tiktoken hangs
+        if len(text) > TOKEN_ENCODE_CHAR_CAP:
+            logger.debug(f"Using estimation for large content: {len(text)} chars")
             total_tokens += safe_estimate_tokens(text)
         else:
             try:

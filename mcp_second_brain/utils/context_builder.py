@@ -5,7 +5,7 @@ import logging
 from typing import List, Tuple, Optional
 
 from ..utils.fs import gather_file_paths
-from ..utils.context_loader import load_text_files
+from ..utils.context_loader import load_specific_files
 from .stable_list_cache import StableListCache
 
 logger = logging.getLogger(__name__)
@@ -116,26 +116,45 @@ async def build_context_with_stable_list(
         # Sort files deterministically
         sorted_files = sort_files_for_stable_list(all_files)
 
-        # Load file contents and determine split
+        # Use size-based estimation to determine split (fast)
         inline_paths = []
         overflow_paths = []
         remaining_budget = token_budget
 
-        # Load files and check tokens
-        file_data = load_text_files(sorted_files)
-
-        for file_path, content, tokens in file_data:
-            if tokens <= remaining_budget:
-                inline_paths.append(file_path)
-                remaining_budget -= tokens
-            else:
+        # First pass: decide which files to inline using fast size estimation
+        for file_path in sorted_files:
+            try:
+                size = os.path.getsize(file_path)
+                est_tokens = estimate_tokens(size)
+                if est_tokens <= remaining_budget:
+                    inline_paths.append(file_path)
+                    remaining_budget -= est_tokens
+                else:
+                    overflow_paths.append(file_path)
+            except (OSError, IOError):
+                # If we can't stat the file, put it in overflow
                 overflow_paths.append(file_path)
 
-        # Also add files that couldn't be loaded to overflow
-        loaded_paths = {item[0] for item in file_data}
-        for f in sorted_files:
-            if f not in loaded_paths and f not in overflow_paths:
-                overflow_paths.append(f)
+        # Second pass: load and tokenize only files that will be sent inline
+        logger.info(
+            f"Loading {len(inline_paths)} inline files (estimated), {len(overflow_paths)} overflow files"
+        )
+        file_data = load_specific_files(inline_paths)
+
+        # Safety check: trim if our size estimates were too optimistic
+        file_data.sort(key=lambda t: t[2])  # Sort by actual token count
+        used_tokens = 0
+        trimmed_data = []
+        for file_path, content, tokens in file_data:
+            if used_tokens + tokens <= token_budget:
+                trimmed_data.append((file_path, content, tokens))
+                used_tokens += tokens
+            else:
+                # Move over-budget files to overflow
+                overflow_paths.append(file_path)
+                inline_paths.remove(file_path)
+
+        file_data = trimmed_data
 
         # Check if we actually have overflow
         if overflow_paths:
@@ -183,7 +202,7 @@ async def build_context_with_stable_list(
                 # This file should go inline
                 if await cache.file_changed_since_last_send(session_id, file_path):
                     # File has changed, need to resend it
-                    file_data = load_text_files([file_path])
+                    file_data = load_specific_files([file_path])
                     if file_data:
                         files_to_send.append(file_data[0])
                         # Update sent info

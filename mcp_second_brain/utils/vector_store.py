@@ -108,11 +108,9 @@ def create_vector_store(paths: List[str]) -> str:
         for path in supported_paths:
             try:
                 logger.info(f"Opening file for vector store: {path}")
-                with open(path, "rb") as f:
-                    # Read to verify we can access it
-                    f.read(1)
-                    f.seek(0)
-                file_streams.append(open(path, "rb"))
+                # Directly open without the verification read
+                file_stream = open(path, "rb")
+                file_streams.append(file_stream)
                 logger.info(f"Successfully opened {path}")
             except Exception as e:
                 logger.error(f"Failed to open {path}: {type(e).__name__}: {e}")
