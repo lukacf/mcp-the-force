@@ -9,6 +9,7 @@ from ..base import BaseAdapter
 from .errors import AdapterException, ErrorCategory
 from ...config import get_settings
 from ...grok_session_cache import grok_session_cache
+from ..tool_handler import ToolHandler
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +69,7 @@ class GrokAdapter(BaseAdapter):
     def __init__(self, model_name: Optional[str] = None):
         super().__init__()
         self.model_name = model_name or ""
+        self.tool_handler = ToolHandler()
         settings = get_settings()
 
         if not settings.xai.api_key:
@@ -262,12 +264,23 @@ class GrokAdapter(BaseAdapter):
             ):
                 request_params["reasoning_effort"] = filtered_kwargs["reasoning_effort"]
 
-            # Handle function calling if provided
+            # Handle function calling - combine custom tools with built-in tools
+            custom_tools = []
             if "functions" in filtered_kwargs:
-                request_params["tools"] = [
+                custom_tools = [
                     {"type": "function", "function": func}
                     for func in filtered_kwargs["functions"]
                 ]
+
+            # Get built-in tools using ToolHandler (this fixes the attachment bug)
+            built_in_tools = self.tool_handler.prepare_tool_declarations(
+                adapter_type="grok", vector_store_ids=vector_store_ids
+            )
+
+            # Combine all tools
+            all_tools = custom_tools + built_in_tools
+            if all_tools:
+                request_params["tools"] = all_tools
                 if "function_call" in filtered_kwargs:
                     request_params["tool_choice"] = filtered_kwargs["function_call"]
 
@@ -311,26 +324,12 @@ class GrokAdapter(BaseAdapter):
                     tool_args = json.loads(tool_call.function.arguments)
 
                     try:
-                        if tool_name == "search_project_memory":
-                            from ...tools.search_memory import SearchMemoryAdapter
-
-                            memory_adapter = SearchMemoryAdapter()
-                            output = await memory_adapter.generate(
-                                prompt=tool_args.get("query", ""), **tool_args
-                            )
-                        elif tool_name == "search_session_attachments":
-                            from ...tools.search_attachments import (
-                                SearchAttachmentAdapter,
-                            )
-
-                            attachment_adapter = SearchAttachmentAdapter()
-                            output = await attachment_adapter.generate(
-                                prompt=tool_args.get("query", ""),
-                                vector_store_ids=vector_store_ids,
-                                **tool_args,
-                            )
-                        else:
-                            output = f"Error: Unknown tool '{tool_name}'"
+                        # Use ToolHandler for centralized tool execution
+                        output = await self.tool_handler.execute_tool_call(
+                            tool_name=tool_name,
+                            tool_args=tool_args,
+                            vector_store_ids=vector_store_ids,
+                        )
                     except Exception as e:
                         output = f"Error executing tool '{tool_name}': {e}"
                         logger.error(f"Tool execution error: {e}")
