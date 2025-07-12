@@ -66,6 +66,9 @@ class MockAdapter(BaseAdapter):
             "prompt_length": len(pretty_history),
             "vector_store_ids": vector_store_ids,
             "adapter_kwargs": kwargs or {},
+            "messages": kwargs.get(
+                "messages", []
+            ),  # Include messages for test inspection
         }
 
         # For OpenAI models, the executor expects a dictionary with 'content' and 'response_id'.

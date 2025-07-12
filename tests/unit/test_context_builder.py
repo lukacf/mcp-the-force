@@ -33,7 +33,7 @@ class TestDeterministicSorting:
             for path, (s, t) in file_info.items():
                 if s == size:
                     return t
-            return size // 4  # fallback
+            return size // 2  # fallback
 
         with patch("os.path.getsize", side_effect=mock_getsize):
             with patch(
@@ -142,15 +142,23 @@ class TestBuildContextWithStableList:
                     side_effect=mock_load_files,
                 ):
                     with patch("os.path.getsize", side_effect=mock_getsize):
-                        (
-                            inline_files,
-                            overflow_files,
-                        ) = await build_context_with_stable_list(
-                            context_paths=["/api"],
-                            session_id="test_session",
-                            cache=cache,
-                            token_budget=500,  # Only 3 files fit
-                        )
+                        # Mock estimate_tokens to return predictable values
+                        def mock_estimate_tokens(size):
+                            return max(1, size // 2)  # Use estimation logic for tests
+
+                        with patch(
+                            "mcp_second_brain.utils.context_builder.estimate_tokens",
+                            side_effect=mock_estimate_tokens,
+                        ):
+                            (
+                                inline_files,
+                                overflow_files,
+                            ) = await build_context_with_stable_list(
+                                context_paths=["/api"],
+                                session_id="test_session",
+                                cache=cache,
+                                token_budget=500,  # Only 3 files fit
+                            )
 
             # Check results
             assert len(inline_files) == 3
@@ -344,15 +352,23 @@ class TestBuildContextWithStableList:
                     side_effect=mock_load_files,
                 ):
                     with patch("os.path.getsize", side_effect=mock_getsize):
-                        (
-                            inline_files,
-                            overflow_files,
-                        ) = await build_context_with_stable_list(
-                            context_paths=["/api"],
-                            session_id="test_session",
-                            cache=cache,
-                            token_budget=500,  # Everything fits
-                        )
+                        # Mock estimate_tokens to return predictable values
+                        def mock_estimate_tokens(size):
+                            return max(1, size // 2)  # Use estimation logic for tests
+
+                        with patch(
+                            "mcp_second_brain.utils.context_builder.estimate_tokens",
+                            side_effect=mock_estimate_tokens,
+                        ):
+                            (
+                                inline_files,
+                                overflow_files,
+                            ) = await build_context_with_stable_list(
+                                context_paths=["/api"],
+                                session_id="test_session",
+                                cache=cache,
+                                token_budget=500,  # Everything fits
+                            )
 
             # All files should be inline
             assert len(inline_files) == 2

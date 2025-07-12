@@ -7,7 +7,6 @@ import fastmcp.exceptions
 from mcp_second_brain import adapters
 from mcp_second_brain import session_cache as session_cache_module
 from mcp_second_brain import gemini_session_cache as gemini_session_cache_module
-from mcp_second_brain import grok_session_cache as grok_session_cache_module
 from .registry import ToolMetadata
 from .vector_store_manager import vector_store_manager
 from .prompt_engine import prompt_engine
@@ -92,7 +91,7 @@ class ToolExecutor:
                 model_name = metadata.model_config["model_name"]
                 model_limit = get_model_context_window(model_name)
                 context_percentage = settings.mcp.context_percentage
-                safety_margin = 2000  # Consistent with old builder
+                safety_margin = 30000  # Increased to account for prompt overhead (XML, system prompts, etc.)
                 token_budget = max(
                     int(model_limit * context_percentage) - safety_margin, 1000
                 )
@@ -191,6 +190,7 @@ class ToolExecutor:
                 logger.info(f"Vertex adapter will handle session {session_id}")
             elif adapter_class == "xai":
                 # Grok models - use system message in messages array (OpenAI format)
+                # Note: For sessions, Grok adapter will manage history itself
                 messages = [
                     {"role": "system", "content": developer_prompt},
                     {"role": "user", "content": prompt},
@@ -278,7 +278,6 @@ class ToolExecutor:
             # 6. Handle session
             previous_response_id = None
             gemini_messages = None
-            grok_messages = None  # NEW
             session_params = routed_params["session"]
             assert isinstance(session_params, dict)  # Type hint for mypy
             session_id = session_params.get("session_id")
@@ -295,16 +294,7 @@ class ToolExecutor:
                     gemini_messages = await gemini_session_cache_module.gemini_session_cache.get_history(
                         session_id
                     )
-                # --- NEW: Handle Grok sessions ---
-                elif metadata.model_config["adapter_class"] == "xai":
-                    grok_messages = (
-                        await grok_session_cache_module.grok_session_cache.get_history(
-                            session_id
-                        )
-                    )
-                    logger.info(
-                        f"Continuing Grok session {session_id} with {len(grok_messages)} messages"
-                    )
+                # Note: Grok (xai) adapter handles its own session loading
 
             # 7. Execute model call
             adapter_params = routed_params["adapter"]
@@ -321,10 +311,6 @@ class ToolExecutor:
                 adapter_params["messages"] = gemini_messages + [
                     {"role": "user", "content": prompt}
                 ]
-
-            # --- NEW: Pass Grok history ---
-            if grok_messages:
-                adapter_params["messages"] = grok_messages
 
             # Merge structured_output parameters into adapter params
             structured_output_params = routed_params.get("structured_output", {})

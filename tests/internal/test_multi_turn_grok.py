@@ -134,13 +134,21 @@ class TestGrokMultiTurn:
 
         data = json.loads(result)
 
-        # The test should verify that the prompt contains the priority instructions
-        # not the internal message structure which is an implementation detail
-        prompt_content = data["prompt"]
+        # The test should verify that the system prompt with priority instructions
+        # is being sent to the API (not saved in conversation history)
+        messages = data["messages"]
 
-        # Verify priority instructions are in the prompt
-        assert "Information priority:" in prompt_content
-        assert "Current conversation" in prompt_content
+        # Find the system message in the request
+        system_message = None
+        for msg in messages:
+            if msg.get("role") == "system":
+                system_message = msg.get("content", "")
+                break
+
+        # Verify priority instructions are in the system prompt
+        assert system_message is not None, "System message should be present"
+        assert "Information priority:" in system_message
+        assert "Current conversation" in system_message
 
     @pytest.mark.asyncio
     async def test_grok_multi_turn_with_attachments(
