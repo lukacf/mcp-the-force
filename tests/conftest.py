@@ -45,14 +45,26 @@ def verify_mock_adapter_for_integration():
     ):
         if os.getenv("MCP_ADAPTER_MOCK") != "1":
             pytest.fail(
-                "MCP_ADAPTER_MOCK=1 must be set before running these integration tests.\n"
-                "For example: MCP_ADAPTER_MOCK=1 pytest tests/integration/multi_turn"
+                "FATAL: MCP_ADAPTER_MOCK=1 must be set in the environment *before* running pytest.\n"
+                "For example: MCP_ADAPTER_MOCK=1 pytest tests/internal"
             )
 
         # Apply mock adapter registry for integration tests
         try:
-            from mcp_second_brain.adapters import ADAPTER_REGISTRY
+            from mcp_second_brain.adapters import (
+                ADAPTER_REGISTRY,
+                _ADAPTER_CACHE,
+                get_adapter,
+            )
             from mcp_second_brain.adapters.mock_adapter import MockAdapter
+
+            # --- FIX: Proactively load and register search adapters ---
+            get_adapter("SearchMemoryAdapter", "dummy_model")
+            get_adapter("SearchAttachmentAdapter", "dummy_model")
+            # --- END FIX ---
+
+            # Clear instance cache to prevent state leakage
+            _ADAPTER_CACHE.clear()
 
             # Replace all adapters with MockAdapter
             for name in list(ADAPTER_REGISTRY):
@@ -66,9 +78,9 @@ def verify_mock_adapter_for_integration():
                         f"Got {adapter_class} instead of MockAdapter."
                     )
 
-        except ImportError:
+        except ImportError as e:
             # If we can't import, tests will fail for other reasons anyway
-            pass
+            pytest.fail(f"Could not import adapter modules to apply mocks: {e}")
 
 
 @pytest.fixture
@@ -81,6 +93,7 @@ def mock_env(monkeypatch):
 
     test_env = {
         "OPENAI_API_KEY": "test-openai-key",
+        "XAI_API_KEY": "test-xai-key",
         "VERTEX_PROJECT": "test-project",
         "VERTEX_LOCATION": "us-central1",
         "CONTEXT_PERCENTAGE": "0.85",
@@ -233,9 +246,27 @@ def mock_adapter_error():
 @pytest.fixture(autouse=True)
 def mock_vector_store_client(monkeypatch, mock_openai_client):
     """Mock vector store client to prevent real API calls."""
-    import mcp_second_brain.utils.vector_store as vs
+    # This mock handles vector stores created for ad-hoc 'attachments'.
+    import mcp_second_brain.utils.vector_store as vs_utils
 
-    monkeypatch.setattr(vs, "get_client", Mock(return_value=mock_openai_client))
+    monkeypatch.setattr(vs_utils, "get_client", Mock(return_value=mock_openai_client))
+
+    # This is the most critical patch. It replaces the store_conversation_memory
+    # function inside the executor module with a harmless AsyncMock. This prevents
+    # the function from running at all, thus avoiding any real API calls for
+    # conversation memory.
+    monkeypatch.setattr(
+        "mcp_second_brain.tools.executor.store_conversation_memory",
+        AsyncMock(return_value=None),
+    )
+
+    # (Optional but good practice) You can also mock where the client is created
+    # for the memory system itself, though the patch above is sufficient.
+    import mcp_second_brain.memory.config as memory_config
+
+    monkeypatch.setattr(
+        memory_config, "get_client", Mock(return_value=mock_openai_client)
+    )
 
 
 @pytest_asyncio.fixture
@@ -249,6 +280,16 @@ async def run_tool():
         return await executor.execute(metadata, **kwargs)
 
     return _inner
+
+
+@pytest.fixture
+async def mcp_server():
+    """Create MCP server instance for testing."""
+    # Import here to ensure MCP_ADAPTER_MOCK is set first
+    from mcp_second_brain.server import mcp
+
+    # Return the server instance
+    return mcp
 
 
 # Virtual clock fixture for speeding up time-based tests

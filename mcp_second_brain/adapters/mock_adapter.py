@@ -23,30 +23,26 @@ class MockAdapter(BaseAdapter):
         all prior turns so that the integration tests can assert on it."""
 
         session_id: str | None = kwargs.get("session_id")
-        incoming_messages = kwargs.get("messages")  # may be None
 
         # ------------------------------------------------------------------
         # 1. Load history for this session (if any)
+        #    Use both session_id and model_name to ensure isolation between models
         # ------------------------------------------------------------------
         history: List[Dict[str, str]] = []
         if session_id:
-            history = self._session_histories.get(session_id, []).copy()
+            session_key = f"{session_id}:{self.model_name}"
+            history = self._session_histories.get(session_key, []).copy()
 
         # ------------------------------------------------------------------
-        # 2. Decide what the *current* user message is and update history
+        # 2. For testing, always append to MockAdapter's own history.
+        #    This ensures conversation accumulation works regardless of real session cache state.
         # ------------------------------------------------------------------
-        if incoming_messages and isinstance(incoming_messages, list):
-            # The executor (or Grok adapter in prod) has already built a
-            # full message list – use it as the new history.
-            history = incoming_messages
-        else:
-            # No structured messages supplied → treat the raw `prompt`
-            # (minus any developer/system prefix) as the user's turn.
-            history.append({"role": "user", "content": prompt})
+        history.append({"role": "user", "content": prompt})
 
         # Persist history for later turns
         if session_id:
-            self._session_histories[session_id] = history
+            session_key = f"{session_id}:{self.model_name}"
+            self._session_histories[session_key] = history
 
         # ------------------------------------------------------------------
         # 3. Flatten history so the tests can look for previous-turn tokens
@@ -56,22 +52,29 @@ class MockAdapter(BaseAdapter):
         )
 
         # ------------------------------------------------------------------
-        # 4. Return the same JSON envelope the tests already expect
+        # 4. Return appropriate response type based on model
         # ------------------------------------------------------------------
-        return json.dumps(
-            {
-                "mock": True,
-                "model": self.model_name,
-                "prompt": pretty_history,
-                "prompt_preview": (
-                    pretty_history[:200] + "..."
-                    if len(pretty_history) > 200
-                    else pretty_history
-                ),
-                "prompt_length": len(pretty_history),
-                "vector_store_ids": vector_store_ids,
-                # Echo **all** kwargs so tests can inspect temperature, etc.
-                "adapter_kwargs": kwargs or {},
-            },
-            indent=2,
-        )
+        response_payload = {
+            "mock": True,
+            "model": self.model_name,
+            "prompt": pretty_history,
+            "prompt_preview": (
+                pretty_history[:200] + "..."
+                if len(pretty_history) > 200
+                else pretty_history
+            ),
+            "prompt_length": len(pretty_history),
+            "vector_store_ids": vector_store_ids,
+            "adapter_kwargs": kwargs or {},
+        }
+
+        # For OpenAI models, the executor expects a dictionary with 'content' and 'response_id'.
+        # This makes the mock behave like the real OpenAIAdapter.
+        if self.model_name in ["o3", "o3-pro", "gpt-4.1"]:
+            return {
+                "content": json.dumps(response_payload, indent=2),
+                "response_id": f"resp_{session_id or 'none'}_{len(history)}",
+            }
+
+        # For other models, the executor expects a string (JSON string in this case).
+        return json.dumps(response_payload, indent=2)

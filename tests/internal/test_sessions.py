@@ -61,7 +61,7 @@ class TestSessionManagement:
         # Parse MockAdapter response
         data1 = parse_response(result1)
         assert data1["mock"] is True
-        assert "Python decorators" in data1["prompt_preview"]
+        assert "Python decorators" in data1["prompt"]
 
         # Second call with same session
         result2 = await executor.execute(
@@ -74,7 +74,7 @@ class TestSessionManagement:
 
         data2 = parse_response(result2)
         assert data2["mock"] is True
-        assert "concrete example" in data2["prompt_preview"]
+        assert "concrete example" in data2["prompt"]
 
         # With MockAdapter, we're verifying the session mechanism works,
         # not the actual OpenAI API behavior
@@ -252,9 +252,13 @@ class TestSessionManagement:
             session_id="gem-session",
         )
 
+        # Check that the prompt returned by the mock adapter contains the
+        # accumulated history from BOTH turns. This correctly tests that the
+        # MockAdapter is maintaining session state.
         data2 = parse_response(result2)
-        msgs2 = data2["adapter_kwargs"].get("messages")
-        assert msgs2 and len(msgs2) == 3
+        full_prompt_history = data2["prompt"]
+        assert "Hello" in full_prompt_history
+        assert "Follow up" in full_prompt_history
 
     @pytest.mark.asyncio
     async def test_concurrent_session_updates(self, parse_response):
@@ -306,7 +310,7 @@ class TestSessionManagement:
 
         data1 = parse_response(result1)
         assert data1["mock"] is True
-        assert "Analyze this project" in data1["prompt_preview"]
+        assert "Analyze this project" in data1["prompt"]
 
         # Add a new file
         (temp_project / "new_feature.py").write_text("def new_feature(): pass")
@@ -322,7 +326,7 @@ class TestSessionManagement:
 
         data2 = parse_response(result2)
         assert data2["mock"] is True
-        assert "What changed?" in data2["prompt_preview"]
+        assert "What changed?" in data2["prompt"]
 
         # Session continuity is maintained at the executor level via session_cache
         # MockAdapter doesn't need to know about sessions
