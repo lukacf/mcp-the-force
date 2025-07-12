@@ -12,6 +12,13 @@ from mcp_second_brain import session_cache as session_cache_module
 from mcp_second_brain import gemini_session_cache as gemini_session_cache_module
 from mcp_second_brain import grok_session_cache as grok_session_cache_module
 
+# Use anyio for better async handling - but only with asyncio backend
+# This prevents "ModuleNotFoundError: No module named 'trio'" errors
+pytestmark = [
+    pytest.mark.anyio,
+    pytest.mark.parametrize("anyio_backend", ["asyncio"], indirect=True),
+]
+
 
 @pytest.fixture
 def temp_db():
@@ -261,10 +268,10 @@ class TestToolExecutorSessionHandling:
 
         mock_gemini_history = [
             types.Content(
-                role="user", parts=[types.Part.from_text("Previous question")]
+                role="user", parts=[types.Part.from_text(text="Previous question")]
             ),
             types.Content(
-                role="assistant", parts=[types.Part.from_text("Previous answer")]
+                role="assistant", parts=[types.Part.from_text(text="Previous answer")]
             ),
         ]
 
@@ -341,12 +348,19 @@ class TestToolExecutorSessionHandling:
 
             # Should be converted to dict format for the adapter
             assert len(messages) >= 3  # history + new user message
-            assert messages[-1]["content"] == "Test instructions"  # New user message
+            # The content is the full XML prompt, check that our instructions are inside it
+            assert "Test instructions" in messages[-1]["content"]  # New user message
 
             assert result == "Gemini response with history"
 
     @pytest.mark.asyncio
-    async def test_session_isolation_between_adapters(self, tool_executor):
+    async def test_session_isolation_between_adapters(
+        self,
+        tool_executor,
+        mock_tool_metadata,
+        mock_openai_tool_metadata,
+        mock_vertex_tool_metadata,
+    ):
         """Test that different adapter types maintain separate session states."""
         session_id = "shared-session-id"
 
@@ -358,7 +372,7 @@ class TestToolExecutorSessionHandling:
 
         mock_gemini_history = [
             types.Content(
-                role="user", parts=[types.Part.from_text("Gemini conversation")]
+                role="user", parts=[types.Part.from_text(text="Gemini conversation")]
             )
         ]
 
