@@ -60,9 +60,9 @@ class TestGeminiMultiTurn:
         assert data2["adapter_kwargs"]["session_id"] == session_id
 
         # Bug 3: Verify conversation history is in prompt (not using search)
-        assert "9876" in data2["prompt"], (
-            "Previous message should be in conversation history"
-        )
+        assert (
+            "9876" in data2["prompt"]
+        ), "Previous message should be in conversation history"
         assert "What number did I ask you to remember" in data2["prompt"]
 
         # Verify NO search tools were called
