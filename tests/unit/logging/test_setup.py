@@ -94,6 +94,7 @@ class TestLoggingSetup:
                         db_path="test.sqlite3",
                         batch_size=100,
                         batch_timeout=1.0,
+                        max_db_size_mb=mock_settings.logging.developer_mode.max_db_size_mb,
                     )
 
                     # Verify thread was started
@@ -116,6 +117,7 @@ class TestLoggingSetup:
             ):
                 with patch("logging.getLogger") as mock_get_logger:
                     mock_logger = Mock()
+                    mock_logger.handlers = []  # Add handlers attribute
                     mock_get_logger.return_value = mock_logger
 
                     setup_logging()

@@ -301,9 +301,9 @@ async def test_flow_web_search_tool_attachment():
                 tools = create_call.kwargs.get("tools", [])
 
                 has_web_search = any(t.get("type") == "web_search" for t in tools)
-                assert has_web_search == should_have_web_search, (
-                    f"Failed for model {model}"
-                )
+                assert (
+                    has_web_search == should_have_web_search
+                ), f"Failed for model {model}"
 
 
 @pytest.mark.unit

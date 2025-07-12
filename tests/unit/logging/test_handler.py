@@ -237,7 +237,7 @@ class TestZMQLogHandler:
         with patch.object(handler.sender_thread, "join") as mock_join:
             mock_join.return_value = None
             handler.close()
-            mock_join.assert_called_once_with(timeout=2.0)
+            mock_join.assert_called_once_with(timeout=5.0)
 
     def test_sender_loop_handles_queue_timeout(
         self, mock_zmq_context, mock_redaction_filter
