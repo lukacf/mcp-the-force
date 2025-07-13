@@ -7,11 +7,11 @@ from datetime import datetime, timedelta
 from unittest.mock import Mock, patch
 from pathlib import Path
 
-from mcp_second_brain.tools.logging_tools import SearchMCPDebugLogsToolSpec
+from mcp_second_brain.tools.logging_tools import SearchMCPDebugLogs
 from mcp_second_brain.adapters.logging_adapter import LoggingAdapter
 
 
-class TestSearchMCPDebugLogsToolSpec:
+class TestSearchMCPDebugLogs:
     """Test the MCP debug logs search tool."""
 
     @pytest.fixture
@@ -113,7 +113,7 @@ class TestSearchMCPDebugLogsToolSpec:
 
     def test_tool_creation(self):
         """Test that the tool can be instantiated."""
-        tool = SearchMCPDebugLogsToolSpec()
+        tool = SearchMCPDebugLogs()
         assert tool is not None
         assert hasattr(tool, "query")
         assert hasattr(tool, "level")
@@ -168,7 +168,7 @@ class TestSearchMCPDebugLogsToolSpec:
     @pytest.mark.asyncio
     async def test_execute_developer_mode_disabled(self, mock_settings_disabled):
         """Test execution when developer mode is disabled."""
-        tool = SearchMCPDebugLogsToolSpec()
+        tool = SearchMCPDebugLogs()
 
         with patch(
             "mcp_second_brain.adapters.logging_adapter.get_settings",
@@ -182,7 +182,7 @@ class TestSearchMCPDebugLogsToolSpec:
     @pytest.mark.asyncio
     async def test_execute_database_not_found(self, mock_settings_enabled):
         """Test execution when database file doesn't exist."""
-        tool = SearchMCPDebugLogsToolSpec()
+        tool = SearchMCPDebugLogs()
 
         # Override with non-existent path
         mock_settings_enabled.logging.developer_mode.db_path = (
@@ -201,7 +201,7 @@ class TestSearchMCPDebugLogsToolSpec:
     @pytest.mark.asyncio
     async def test_execute_basic_query(self, mock_settings_enabled):
         """Test basic query execution."""
-        tool = SearchMCPDebugLogsToolSpec()
+        tool = SearchMCPDebugLogs()
 
         with patch(
             "mcp_second_brain.adapters.logging_adapter.get_settings",
@@ -218,7 +218,7 @@ class TestSearchMCPDebugLogsToolSpec:
     @pytest.mark.asyncio
     async def test_execute_level_filter(self, mock_settings_enabled):
         """Test execution with level filter."""
-        tool = SearchMCPDebugLogsToolSpec()
+        tool = SearchMCPDebugLogs()
 
         with patch(
             "mcp_second_brain.adapters.logging_adapter.get_settings",
@@ -235,7 +235,7 @@ class TestSearchMCPDebugLogsToolSpec:
     @pytest.mark.asyncio
     async def test_execute_instance_filter(self, mock_settings_enabled):
         """Test execution with instance ID filter."""
-        tool = SearchMCPDebugLogsToolSpec()
+        tool = SearchMCPDebugLogs()
 
         with patch(
             "mcp_second_brain.adapters.logging_adapter.get_settings",
@@ -253,7 +253,7 @@ class TestSearchMCPDebugLogsToolSpec:
     @pytest.mark.asyncio
     async def test_execute_all_projects(self, mock_settings_enabled):
         """Test execution with all_projects=True."""
-        tool = SearchMCPDebugLogsToolSpec()
+        tool = SearchMCPDebugLogs()
 
         with patch(
             "mcp_second_brain.adapters.logging_adapter.get_settings",
@@ -269,7 +269,7 @@ class TestSearchMCPDebugLogsToolSpec:
     @pytest.mark.asyncio
     async def test_execute_limit(self, mock_settings_enabled):
         """Test execution with result limit."""
-        tool = SearchMCPDebugLogsToolSpec()
+        tool = SearchMCPDebugLogs()
 
         with patch(
             "mcp_second_brain.adapters.logging_adapter.get_settings",
@@ -285,7 +285,7 @@ class TestSearchMCPDebugLogsToolSpec:
     @pytest.mark.asyncio
     async def test_execute_no_results(self, mock_settings_enabled):
         """Test execution when no logs match criteria."""
-        tool = SearchMCPDebugLogsToolSpec()
+        tool = SearchMCPDebugLogs()
 
         with patch(
             "mcp_second_brain.adapters.logging_adapter.get_settings",
@@ -299,7 +299,7 @@ class TestSearchMCPDebugLogsToolSpec:
     @pytest.mark.asyncio
     async def test_execute_extra_field_parsing(self, mock_settings_enabled):
         """Test that extra field is properly parsed from JSON."""
-        tool = SearchMCPDebugLogsToolSpec()
+        tool = SearchMCPDebugLogs()
 
         with patch(
             "mcp_second_brain.adapters.logging_adapter.get_settings",
@@ -315,7 +315,7 @@ class TestSearchMCPDebugLogsToolSpec:
     @pytest.mark.asyncio
     async def test_execute_project_filtering(self, mock_settings_enabled):
         """Test that project filtering works correctly."""
-        tool = SearchMCPDebugLogsToolSpec()
+        tool = SearchMCPDebugLogs()
 
         # Test with project1
         with patch(
@@ -332,7 +332,7 @@ class TestSearchMCPDebugLogsToolSpec:
     @pytest.mark.asyncio
     async def test_execute_database_error(self, mock_settings_enabled):
         """Test handling of database errors."""
-        tool = SearchMCPDebugLogsToolSpec()
+        tool = SearchMCPDebugLogs()
 
         with patch(
             "mcp_second_brain.adapters.logging_adapter.get_settings",
@@ -367,7 +367,7 @@ class TestSearchMCPDebugLogsToolSpec:
         conn.commit()
         conn.close()
 
-        tool = SearchMCPDebugLogsToolSpec()
+        tool = SearchMCPDebugLogs()
 
         with patch(
             "mcp_second_brain.adapters.logging_adapter.get_settings",

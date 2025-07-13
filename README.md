@@ -24,9 +24,58 @@ mcp-config validate
 uv run -- mcp-second-brain
 ```
 
-## 🤖 Claude Code Integration
+## 🤖 Claude Desktop Integration
 
-This MCP server is designed to work seamlessly with Claude Code. Once running, Claude Code automatically discovers and connects to the server, giving you access to advanced AI model orchestration with multiple specialized models (OpenAI o3/o3-pro/gpt-4.1, Google Gemini 2.5) and intelligent context management for large codebases.
+### Basic Configuration
+
+Add the following to your Claude Desktop configuration file (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
+
+```json
+{
+  "mcpServers": {
+    "second-brain": {
+      "command": "uv",
+      "args": ["--directory", "/path/to/mcp-second-brain", "run", "mcp-second-brain"]
+    }
+  }
+}
+```
+
+### Advanced Configuration with Logging
+
+To enable the developer logging system for debugging MCP operations:
+
+```json
+{
+  "mcpServers": {
+    "second-brain": {
+      "command": "uv",
+      "args": ["--directory", "/path/to/mcp-second-brain", "run", "mcp-second-brain"],
+      "env": {
+        "LOGGING__DEVELOPER_MODE__ENABLED": "true",
+        "LOGGING__DEVELOPER_MODE__PORT": "4711",
+        "LOGGING__DEVELOPER_MODE__DB_PATH": ".mcp_logs.sqlite3",
+        "LOGGING__DEVELOPER_MODE__BATCH_SIZE": "100",
+        "LOGGING__DEVELOPER_MODE__BATCH_TIMEOUT": "1.0",
+        "LOGGING__DEVELOPER_MODE__MAX_DB_SIZE_MB": "1000"
+      }
+    }
+  }
+}
+```
+
+When developer logging is enabled, you can search logs using the `search_mcp_debug_logs` tool within Claude Desktop.
+
+### Environment Variables in Claude Desktop
+
+Any configuration setting can be overridden via environment variables in the MCP server configuration. The pattern is:
+
+- Use double underscores (`__`) to separate nested configuration levels
+- Examples:
+  - `OPENAI_API_KEY` - Set OpenAI API key
+  - `LOGGING__LEVEL` - Set logging level (DEBUG, INFO, WARNING, ERROR)
+  - `MCP__CONTEXT_PERCENTAGE` - Set context window usage (0.0-1.0)
+  - `PROVIDERS__VERTEX__PROJECT` - Set Google Cloud project
 
 ## 🔧 Configuration
 
@@ -36,9 +85,11 @@ MCP Second-Brain uses a unified YAML-based configuration system with environment
 
 The system loads configuration from multiple sources with clear precedence (highest to lowest):
 
-1. **Environment Variables** - Override any setting for CI/CD and production
-2. **YAML Files** - Primary configuration method (`config.yaml` + `secrets.yaml`)
+1. **Environment Variables** - Override any setting for CI/CD and production (recommended for Claude Desktop)
+2. **YAML Files** - Alternative configuration method (`config.yaml` + `secrets.yaml`)
 3. **Defaults** - Sensible defaults built into the application
+
+**Note**: For Claude Desktop integration, we recommend using environment variables in the MCP server configuration rather than YAML files.
 
 ### Setup Configuration Files
 
@@ -209,6 +260,7 @@ gcloud iam service-accounts add-iam-policy-binding \
 - `list_models` - List all available models and their capabilities
 - `search_project_memory` - Search past conversations and git commits
 - `search_session_attachments` - Search files attached to current session
+- `search_mcp_debug_logs` - Search debug logs (requires developer mode enabled)
 
 ### Tool Naming Convention
 
@@ -347,6 +399,52 @@ Search across project memory:
 # Search past decisions and commit history
 Use second-brain search_project_memory with {"query": "authentication implementation decisions", "max_results": 10}
 ```
+
+## 🔍 Developer Logging System
+
+When enabled, the MCP server runs a comprehensive logging system for debugging and monitoring:
+
+### Features
+- **ZeroMQ-based transport**: High-performance, low-overhead logging via PUSH/PULL pattern
+- **SQLite storage**: Persistent log storage with WAL mode for concurrent access
+- **Project isolation**: Logs are automatically filtered by MCP_PROJECT_PATH
+- **Rich metadata**: Captures file paths, line numbers, instance IDs, and structured data
+- **Batched writes**: Configurable batching for efficient database operations
+
+### Configuration
+Enable via environment variables in Claude Desktop config:
+```json
+{
+  "env": {
+    "LOGGING__DEVELOPER_MODE__ENABLED": "true",
+    "LOGGING__DEVELOPER_MODE__PORT": "4711",         // ZMQ port
+    "LOGGING__DEVELOPER_MODE__DB_PATH": ".mcp_logs.sqlite3", // Project-local DB
+    "LOGGING__DEVELOPER_MODE__BATCH_SIZE": "100",    // Logs per batch
+    "LOGGING__DEVELOPER_MODE__BATCH_TIMEOUT": "1.0", // Seconds
+    "LOGGING__DEVELOPER_MODE__MAX_DB_SIZE_MB": "1000" // Rotation limit
+  }
+}
+```
+
+### Searching Logs
+Once enabled, use the `search_mcp_debug_logs` tool:
+```
+# Search recent errors
+Use second-brain search_mcp_debug_logs with {"query": "error", "level": "ERROR", "since": "1h", "limit": 50}
+
+# Search specific instance
+Use second-brain search_mcp_debug_logs with {"query": "%", "instance_id": "12345-abcd", "since": "30m"}
+
+# Search across all projects
+Use second-brain search_mcp_debug_logs with {"query": "timeout", "all_projects": true, "since": "1d"}
+```
+
+### Log Levels
+- `DEBUG`: Detailed debugging information
+- `INFO`: General informational messages
+- `WARNING`: Warning messages
+- `ERROR`: Error messages
+- `CRITICAL`: Critical failures
 
 ## 📚 Documentation
 

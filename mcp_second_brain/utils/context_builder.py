@@ -229,4 +229,7 @@ async def build_context_with_stable_list(
         overflow_paths.extend(attachment_files)
         logger.info(f"Added {len(attachment_files)} attachment files to vector store")
 
+    logger.info(
+        f"[CONTEXT_BUILDER] Completed: returning {len(files_to_send)} inline files, {len(overflow_paths)} overflow files"
+    )
     return files_to_send, overflow_paths
