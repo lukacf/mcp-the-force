@@ -421,12 +421,15 @@ class ToolExecutor:
             if vs_id:
                 await vector_store_manager.delete(vs_id)
 
-            # Let memory tasks run in background (fire-and-forget)
+            # Wait for memory tasks to complete (with timeout to prevent hangs)
             if memory_tasks:
-                logger.info(
-                    f"Started {len(memory_tasks)} background memory storage tasks"
-                )
-                # Don't await - let them run in background
+                try:
+                    await asyncio.wait_for(
+                        asyncio.gather(*memory_tasks, return_exceptions=True),
+                        timeout=30.0,  # Shorter timeout - if memory takes > 30s, something is wrong
+                    )
+                except asyncio.TimeoutError:
+                    logger.warning("Memory storage tasks timed out")
 
             elapsed = asyncio.get_event_loop().time() - start_time
             logger.info(f"{tool_id} completed in {elapsed:.2f}s")
