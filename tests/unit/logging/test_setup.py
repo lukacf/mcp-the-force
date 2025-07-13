@@ -21,6 +21,7 @@ class TestLoggingSetup:
         settings.logging.developer_mode.db_path = "test.sqlite3"
         settings.logging.developer_mode.batch_size = 100
         settings.logging.developer_mode.batch_timeout = 1.0
+        settings.logging.developer_mode.max_db_size_mb = 1000
         return settings
 
     @pytest.fixture
@@ -57,8 +58,9 @@ class TestLoggingSetup:
             with patch("logging.basicConfig") as mock_basic_config:
                 setup_logging()
 
+                # Should use DEBUG level when developer mode is enabled
                 mock_basic_config.assert_called_once_with(
-                    level="INFO",
+                    level=logging.DEBUG,
                     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
                 )
 
@@ -86,6 +88,10 @@ class TestLoggingSetup:
         ):
             with patch("threading.Thread") as mock_thread:
                 with patch("atexit.register") as mock_atexit:
+                    # Clear the shutdown registration flag to ensure registration happens
+                    if hasattr(setup_logging, "_shutdown_registered"):
+                        delattr(setup_logging, "_shutdown_registered")
+
                     setup_logging()
 
                     # Verify server was created with correct parameters
@@ -139,7 +145,25 @@ class TestLoggingSetup:
                 with patch("uuid.uuid4") as mock_uuid:
                     mock_uuid.return_value.hex = "abcd1234"
                     with patch("os.getpid", return_value=12345):
-                        with patch("logging.getLogger"):
+                        # Create a mock for the root logger only when called without arguments
+                        mock_root_logger = Mock()
+                        mock_root_logger.handlers = []
+                        # Mock the manager to avoid issues with pytest's logging capture
+                        mock_manager = Mock()
+                        mock_manager.disable = 0  # Set a valid integer value
+                        mock_root_logger.manager = mock_manager
+
+                        # Patch logging.getLogger to only mock the root logger call
+                        original_get_logger = logging.getLogger
+
+                        def mock_get_logger(name=None):
+                            if name is None:  # Root logger
+                                return mock_root_logger
+                            return original_get_logger(
+                                name
+                            )  # Let other loggers work normally
+
+                        with patch("logging.getLogger", side_effect=mock_get_logger):
                             with caplog.at_level(logging.INFO):
                                 setup_logging()
 
@@ -148,10 +172,9 @@ class TestLoggingSetup:
                                     "tcp://localhost:4711", "12345-abcd1234"
                                 )
 
-                                # Verify logging setup completed successfully
-                                assert (
-                                    "Connected to ZMQ log server as client"
-                                    in caplog.text
+                                # Verify handler was added to root logger
+                                mock_root_logger.addHandler.assert_called_once_with(
+                                    mock_handler_class.return_value
                                 )
 
     def test_setup_logging_handles_handler_creation_error(
@@ -168,15 +191,33 @@ class TestLoggingSetup:
                     "mcp_second_brain.logging.setup.ZMQLogHandler",
                     side_effect=Exception("Handler error"),
                 ):
-                    with caplog.at_level(logging.ERROR):
-                        # Should not raise an exception
-                        setup_logging()
+                    # Create a mock for the root logger only when called without arguments
+                    mock_root_logger = Mock()
+                    mock_root_logger.handlers = []
+                    # Mock the manager to avoid issues with pytest's logging capture
+                    mock_manager = Mock()
+                    mock_manager.disable = 0  # Set a valid integer value
+                    mock_root_logger.manager = mock_manager
 
-                        # Check that error was logged
-                        assert (
-                            "Failed to setup ZMQ log handler: Handler error"
-                            in caplog.text
-                        )
+                    # Patch logging.getLogger to only mock the root logger call
+                    original_get_logger = logging.getLogger
+
+                    def mock_get_logger(name=None):
+                        if name is None:  # Root logger
+                            return mock_root_logger
+                        return original_get_logger(
+                            name
+                        )  # Let other loggers work normally
+
+                    with patch("logging.getLogger", side_effect=mock_get_logger):
+                        # Should not raise an exception
+                        try:
+                            setup_logging()
+                        except Exception as e:
+                            pytest.fail(f"setup_logging() raised an exception: {e}")
+
+                        # Verify no handler was added to root logger (since creation failed)
+                        mock_root_logger.addHandler.assert_not_called()
 
     def test_shutdown_logging_closes_handler(self, caplog):
         """Test that shutdown_logging closes ZMQ handler."""

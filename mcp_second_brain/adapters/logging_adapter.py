@@ -70,13 +70,18 @@ class LoggingAdapter(BaseAdapter):
         valid_levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
         if level and level.upper() not in valid_levels:
             return f"Invalid log level '{level}'. Must be one of: {', '.join(valid_levels)}"
-        
-        # Validate limit
+
+        # Validate limit - ensure it's an integer
+        try:
+            limit = int(limit) if isinstance(limit, str) else limit
+        except (ValueError, TypeError):
+            limit = 100  # Use safe default for invalid input
+
         if limit <= 0 or limit > 10000:  # Prevent excessive queries
             limit = 100  # Use safe default
-            
+
         # Validate query string (prevent wildcard-only queries unless filtered)
-        if query and query.strip() in ['%', '*', '']:
+        if query and query.strip() in ["%", "*", ""]:
             if not level and not instance_id:  # Only allow if other filters are present
                 return "Wildcard-only queries require additional filters (level or instance_id)"
 
@@ -87,7 +92,8 @@ class LoggingAdapter(BaseAdapter):
         # Filter by current project unless all_projects=True
         if not all_projects:
             conditions.append("project_cwd = ?")
-            params.append(os.environ.get("MCP_PROJECT_PATH", os.getcwd()))
+            # Use current working directory since MCP_PROJECT_PATH isn't reliably set
+            params.append(os.getcwd())
 
         if query:
             conditions.append("message LIKE ?")
@@ -97,7 +103,7 @@ class LoggingAdapter(BaseAdapter):
             conditions.append("level = ?")
             params.append(level.upper())
 
-        if instance_id:
+        if instance_id and instance_id.lower() != "any":
             conditions.append("instance_id = ?")
             params.append(instance_id)
 
@@ -179,15 +185,15 @@ class LoggingAdapter(BaseAdapter):
                 delta = timedelta(days=days)
             else:
                 delta = timedelta(hours=1)  # Default 1 hour
-                
+
             result_timestamp = (now - delta).timestamp()
-            
+
             # Validate result is reasonable (not negative, not too far in past)
             if result_timestamp < 0:
                 raise ValueError("Resulting timestamp is negative")
-                
+
             return result_timestamp
-            
-        except (ValueError, OverflowError) as e:
+
+        except (ValueError, OverflowError):
             # Return a reasonable default (1 hour ago) for invalid input
             return (now - timedelta(hours=1)).timestamp()

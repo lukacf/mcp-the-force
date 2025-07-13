@@ -15,7 +15,12 @@ class ZMQLogServer:
     """ZeroMQ-based log server that aggregates logs to SQLite."""
 
     def __init__(
-        self, port: int, db_path: str, batch_size: int = 100, batch_timeout: float = 1.0, max_db_size_mb: int = 1000
+        self,
+        port: int,
+        db_path: str,
+        batch_size: int = 100,
+        batch_timeout: float = 1.0,
+        max_db_size_mb: int = 1000,
     ):
         self.port = port
         self.db_path = db_path
@@ -76,12 +81,14 @@ class ZMQLogServer:
                 try:
                     raw_msg = self.socket.recv(flags=zmq.NOBLOCK)
                     try:
-                        msg = json.loads(raw_msg.decode('utf-8'))
+                        msg = json.loads(raw_msg.decode("utf-8"))
                         batch.append(msg)
                     except (json.JSONDecodeError, UnicodeDecodeError) as e:
                         logger.error(f"Failed to parse log message, dropping: {e}")
                         # Log the raw message for debugging
-                        logger.error(f"Raw message: {raw_msg[:200]}...")  # Truncate for safety
+                        logger.error(
+                            f"Raw message: {raw_msg[:200]}..."
+                        )  # Truncate for safety
                         continue
                 except zmq.Again:
                     # No message available
@@ -119,7 +126,7 @@ class ZMQLogServer:
                     break  # No more messages
         except Exception:
             pass  # Ignore errors during final message collection
-            
+
         if batch:
             self._flush_batch(batch)
 
@@ -157,7 +164,7 @@ class ZMQLogServer:
                     records,
                 )
                 self.db.commit()
-                
+
                 # Check database size and rotate if needed
                 self._check_and_rotate_db()
 
@@ -168,52 +175,54 @@ class ZMQLogServer:
         """Check database size and rotate if exceeding limit."""
         try:
             import os
-            
+
             # Check main DB file size
             db_size_mb = os.path.getsize(self.db_path) / (1024 * 1024)
-            
+
             # Also check for WAL file
             wal_path = self.db_path + "-wal"
             if os.path.exists(wal_path):
                 db_size_mb += os.path.getsize(wal_path) / (1024 * 1024)
-            
+
             if db_size_mb > self.max_db_size_mb:
-                logger.info(f"Database size ({db_size_mb:.1f} MB) exceeds limit ({self.max_db_size_mb} MB), rotating")
+                logger.info(
+                    f"Database size ({db_size_mb:.1f} MB) exceeds limit ({self.max_db_size_mb} MB), rotating"
+                )
                 self._rotate_database()
-                
+
         except Exception as e:
             logger.error(f"Error checking database size: {e}")
-    
+
     def _rotate_database(self):
         """Rotate the database by backing up old logs and recreating."""
         try:
             import os
             import shutil
             from datetime import datetime
-            
+
             # Create backup filename with timestamp
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             backup_path = f"{self.db_path}.{timestamp}.backup"
-            
+
             # Close current connection
             self.db.close()
-            
+
             # Move current database to backup
             shutil.move(self.db_path, backup_path)
             logger.info(f"Backed up database to {backup_path}")
-            
+
             # Remove WAL and SHM files if they exist
             for suffix in ["-wal", "-shm"]:
                 old_file = self.db_path + suffix
                 if os.path.exists(old_file):
                     os.remove(old_file)
-            
+
             # Recreate database connection and schema
             self.db = sqlite3.connect(self.db_path, check_same_thread=False)
             self._init_db()
-            
+
             logger.info("Database rotated successfully")
-            
+
         except Exception as e:
             logger.error(f"Error rotating database: {e}")
             # Try to restore connection even if rotation failed

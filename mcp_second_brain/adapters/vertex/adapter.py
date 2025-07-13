@@ -218,12 +218,25 @@ class VertexAdapter(BaseAdapter):
 
         # Generate response
         client = get_client()
-        response = await self._generate_async(
-            client,
-            model=self.model_name,
-            contents=contents,
-            config=generate_content_config,
-        )
+        try:
+            response = await self._generate_async(
+                client,
+                model=self.model_name,
+                contents=contents,
+                config=generate_content_config,
+            )
+        except Exception as e:
+            logger.error(
+                f"Vertex AI API call failed for model {self.model_name}: {type(e).__name__}: {str(e)}",
+                exc_info=True,
+                extra={
+                    "model": self.model_name,
+                    "error_type": type(e).__name__,
+                    "error_message": str(e),
+                    "project": getattr(client, "_project_id", "unknown"),
+                },
+            )
+            raise
 
         final_response_content = ""
 

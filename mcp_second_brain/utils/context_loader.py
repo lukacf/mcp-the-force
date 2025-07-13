@@ -122,14 +122,16 @@ def load_text_files(items: List[str]) -> List[Tuple[str, str, int]]:
             # Read file content with UTF-8 encoding, ignoring errors
             content = Path(path).read_text(encoding="utf-8", errors="ignore")
             logger.info(
-                f"DEBUG load_text_files: Successfully read {len(content)} chars from {path}"
+                f"[CONTEXT_LOADER] Successfully read {len(content)} chars from {path}"
             )
 
             # Remove null bytes which can cause issues
             content = content.replace("\x00", "")
 
             # Count tokens for this content
+            logger.info(f"[CONTEXT_LOADER] Counting tokens for {path}")
             token_count = count_tokens([content])
+            logger.info(f"[CONTEXT_LOADER] File {path} has {token_count} tokens")
 
             result.append((path, content, token_count))
 

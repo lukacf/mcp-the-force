@@ -27,9 +27,9 @@ class ZMQLogHandler(logging.Handler):
         # Queue for async sending
         self.queue: queue.Queue = queue.Queue(maxsize=10000)
         self.sender_thread = threading.Thread(
-            target=self._sender_loop, 
+            target=self._sender_loop,
             daemon=False,  # Fix: Don't use daemon to ensure proper shutdown
-            name=f"LogSender-{os.getpid()}"  # Fix: Name thread for debugging
+            name=f"LogSender-{os.getpid()}",  # Fix: Name thread for debugging
         )
         self.sender_thread.start()
 
@@ -40,7 +40,7 @@ class ZMQLogHandler(logging.Handler):
         socket.connect(self.address)
         socket.setsockopt(zmq.LINGER, 0)  # Don't block on close
         socket.setsockopt(zmq.SNDHWM, 1000)  # High water mark
-        
+
         failed_sends = 0
         max_retries = 3
 
@@ -78,10 +78,13 @@ class ZMQLogHandler(logging.Handler):
                         # Socket buffer full, retry with exponential backoff
                         retry_count += 1
                         if retry_count < max_retries:
-                            time.sleep(0.1 * (2 ** retry_count))  # Exponential backoff
+                            time.sleep(0.1 * (2**retry_count))  # Exponential backoff
                         else:
                             # Final retry failed, fallback to stderr
-                            print(f"Dropped log after {max_retries} retries: {record.getMessage()}", file=sys.stderr)
+                            print(
+                                f"Dropped log after {max_retries} retries: {record.getMessage()}",
+                                file=sys.stderr,
+                            )
                             break
                 else:
                     # All retries failed
@@ -93,7 +96,7 @@ class ZMQLogHandler(logging.Handler):
                 # Don't use logger here to avoid infinite recursion
                 print(f"ZMQ handler error: {e}", file=sys.stderr)
                 failed_sends += 1
-                
+
                 # If too many failures, add delay to avoid tight error loop
                 if failed_sends > 10:
                     time.sleep(1.0)
@@ -124,21 +127,24 @@ class ZMQLogHandler(logging.Handler):
                 except (queue.Empty, queue.Full):
                     # Force shutdown if queue manipulation fails
                     pass
-            
+
             # Wait for thread to finish
             if self.sender_thread.is_alive():
                 self.sender_thread.join(timeout=5.0)  # Increased timeout
-                
+
                 if self.sender_thread.is_alive():
-                    print(f"Warning: LogSender thread did not shutdown cleanly", file=sys.stderr)
-            
+                    print(
+                        "Warning: LogSender thread did not shutdown cleanly",
+                        file=sys.stderr,
+                    )
+
             # Drain any remaining messages to prevent memory leaks
             try:
                 while not self.queue.empty():
                     self.queue.get_nowait()
             except queue.Empty:
                 pass
-                
+
         except Exception as e:
             print(f"Error during ZMQ handler shutdown: {e}", file=sys.stderr)
         finally:
