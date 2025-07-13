@@ -62,6 +62,7 @@ class ToolExecutor:
 
         try:
             # 1. Create tool instance and validate inputs
+            logger.info(f"[STEP 1] Creating tool instance for {tool_id}")
             tool_instance = metadata.spec_class()
             validated_params = self.validator.validate(tool_instance, metadata, kwargs)
 
@@ -97,6 +98,7 @@ class ToolExecutor:
                 )
 
                 # Get context and attachment paths
+                logger.info("[STEP 7] Getting context and attachment paths")
                 context_paths = prompt_params.get("context", [])
                 attachment_paths_raw = routed_params.get("vector_store", [])
                 # Ensure it's a list
@@ -105,8 +107,12 @@ class ToolExecutor:
                     if isinstance(attachment_paths_raw, list)
                     else []
                 )
+                logger.info(
+                    f"[STEP 7.1] Context paths: {len(context_paths)}, Attachment paths: {len(attachment_paths)}"
+                )
 
                 # Call the new context builder
+                logger.info("[STEP 8] Calling context builder with stable list")
                 inline_files, overflow_files = await build_context_with_stable_list(
                     context_paths=context_paths,
                     session_id=session_id,
@@ -114,8 +120,12 @@ class ToolExecutor:
                     token_budget=token_budget,
                     attachments=attachment_paths,
                 )
+                logger.info(
+                    f"[STEP 8.1] Context builder returned: {len(inline_files)} inline files, {len(overflow_files)} overflow files"
+                )
 
                 # Format the prompt with inline files
+                logger.info("[STEP 9] Formatting prompt with inline files")
                 task = ET.Element("Task")
                 ET.SubElement(task, "Instructions").text = prompt_params.get(
                     "instructions", ""
@@ -138,6 +148,7 @@ class ToolExecutor:
                     CTX.append(_create_file_element(path, content))
 
                 prompt = ET.tostring(task, encoding="unicode")
+                logger.info(f"[STEP 9.1] Prompt built: {len(prompt)} chars")
                 if overflow_files:
                     prompt += "\n\nYou have additional information accessible through the file search tool."
 
@@ -297,6 +308,7 @@ class ToolExecutor:
                 # Note: Grok (xai) adapter handles its own session loading
 
             # 7. Execute model call
+            logger.info("[STEP 14] Preparing to execute model call")
             adapter_params = routed_params["adapter"]
             assert isinstance(adapter_params, dict)  # Type hint for mypy
 
@@ -322,6 +334,10 @@ class ToolExecutor:
             if explicit_vs_ids:
                 vector_store_ids = (vector_store_ids or []) + list(explicit_vs_ids)
 
+            logger.info(
+                f"[STEP 15] Calling adapter.generate with prompt {len(final_prompt)} chars, vector_store_ids={vector_store_ids}"
+            )
+
             result = await asyncio.wait_for(
                 adapter.generate(
                     prompt=final_prompt,
@@ -331,8 +347,12 @@ class ToolExecutor:
                 ),
                 timeout=metadata.model_config["timeout"],
             )
+            logger.info(
+                f"[STEP 16] adapter.generate completed, result type: {type(result)}"
+            )
 
             # 8. Handle response
+            logger.info("[STEP 17] Handling response")
             if isinstance(result, dict):
                 content = result.get("content", "")
                 if (
@@ -401,15 +421,12 @@ class ToolExecutor:
             if vs_id:
                 await vector_store_manager.delete(vs_id)
 
-            # Wait for memory tasks to complete
+            # Let memory tasks run in background (fire-and-forget)
             if memory_tasks:
-                try:
-                    await asyncio.wait_for(
-                        asyncio.gather(*memory_tasks, return_exceptions=True),
-                        timeout=120.0,  # 120 second timeout for memory storage (vector indexing can take 10-30s)
-                    )
-                except asyncio.TimeoutError:
-                    logger.warning("Memory storage tasks timed out")
+                logger.info(
+                    f"Started {len(memory_tasks)} background memory storage tasks"
+                )
+                # Don't await - let them run in background
 
             elapsed = asyncio.get_event_loop().time() - start_time
             logger.info(f"{tool_id} completed in {elapsed:.2f}s")

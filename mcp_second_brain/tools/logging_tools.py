@@ -1,6 +1,6 @@
 """MCP tools for searching debug logs."""
 
-from typing import Optional
+from typing import Any
 
 from .base import ToolSpec
 from .registry import tool
@@ -8,7 +8,7 @@ from .descriptors import Route
 
 
 @tool
-class SearchMCPDebugLogsToolSpec(ToolSpec):
+class SearchMCPDebugLogs(ToolSpec):
     """Search MCP server debug logs for troubleshooting (developer mode only).
 
     By default, only shows logs from the current project directory.
@@ -22,23 +22,23 @@ class SearchMCPDebugLogsToolSpec(ToolSpec):
     timeout = 30
 
     # Route everything to the adapter so kwargs reach LoggingAdapter.generate
-    query: str = Route.adapter(description="Search query (SQL LIKE pattern)")
+    query: Any = Route.adapter(description="Search query (SQL LIKE pattern)")
 
-    level: Optional[str] = Route.adapter(
+    level: Any = Route.adapter(
         default=None, description="Filter by log level (DEBUG, INFO, WARNING, ERROR)"
     )
 
-    since: str = Route.adapter(
+    since: Any = Route.adapter(
         default="1h", description="Time range (e.g., '1h', '30m', '1d')"
     )
 
-    instance_id: Optional[str] = Route.adapter(
+    instance_id: Any = Route.adapter(
         default=None, description="Filter by specific instance ID"
     )
 
-    all_projects: bool = Route.adapter(
+    all_projects: Any = Route.adapter(
         default=False,
         description="Search logs from all projects (default: current project only)",
     )
 
-    limit: int = Route.adapter(default=100, description="Maximum results to return")
+    limit: Any = Route.adapter(default=100, description="Maximum results to return")

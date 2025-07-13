@@ -102,14 +102,18 @@ def _register_developer_tools(mcp: FastMCP) -> None:
     settings = get_settings()
     if settings.logging.developer_mode.enabled:
         try:
+            # Import logging tools to trigger @tool registration
+            from . import logging_tools  # noqa: F401
             from .registry import get_tool
 
-            # Register the logging tool
+            # Register the logging tool with FastMCP
             metadata = get_tool("search_mcp_debug_logs")
             if metadata:
                 tool_func = create_tool_function(metadata)
                 mcp.tool(name="search_mcp_debug_logs")(tool_func)
                 logger.info("Registered developer tool: search_mcp_debug_logs")
+            else:
+                logger.error("Could not find search_mcp_debug_logs tool in registry")
         except ImportError as e:
             logger.warning(f"Could not import logging tools: {e}")
         except Exception as e:

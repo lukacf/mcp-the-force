@@ -23,8 +23,14 @@ def setup_logging():
     settings = get_settings()
 
     # Always setup basic logging
+    # For developer mode, we want to capture ALL log levels
+    log_level = (
+        logging.DEBUG
+        if settings.logging.developer_mode.enabled
+        else settings.logging.level
+    )
     logging.basicConfig(
-        level=settings.logging.level,
+        level=log_level,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
 
@@ -61,17 +67,19 @@ def setup_logging():
 
     # Setup client handler (check for duplicates first)
     root_logger = logging.getLogger()
-    
+
     # Check if ZMQ handler is already installed
     try:
-        zmq_handler_exists = any(isinstance(h, ZMQLogHandler) for h in root_logger.handlers)
+        zmq_handler_exists = any(
+            isinstance(h, ZMQLogHandler) for h in root_logger.handlers
+        )
     except TypeError:
         # Handle case where ZMQLogHandler might be mocked in tests
         zmq_handler_exists = any(
-            getattr(h, '__class__', None).__name__ == 'ZMQLogHandler' 
+            getattr(h, "__class__", None).__name__ == "ZMQLogHandler"
             for h in root_logger.handlers
         )
-    
+
     if not zmq_handler_exists:
         try:
             instance_id = f"{os.getpid()}-{uuid.uuid4().hex[:8]}"
@@ -85,9 +93,9 @@ def setup_logging():
 
     # Register shutdown hook (only once)
     import atexit
-    
+
     # Use a simple flag to track registration
-    if not hasattr(setup_logging, '_shutdown_registered'):
+    if not hasattr(setup_logging, "_shutdown_registered"):
         atexit.register(shutdown_logging)
         setup_logging._shutdown_registered = True
 
@@ -107,6 +115,7 @@ def shutdown_logging():
 
     # Give a moment for any in-flight messages to be processed
     import time
+
     time.sleep(0.1)
 
     # Then shutdown server if we're running one
@@ -119,9 +128,9 @@ def shutdown_logging():
                     logger.warning("ZMQ log server thread did not shutdown cleanly")
                     # Try to force resource cleanup even if thread is stuck
                     try:
-                        if hasattr(_log_server, 'db') and _log_server.db:
+                        if hasattr(_log_server, "db") and _log_server.db:
                             _log_server.db.close()
-                        if hasattr(_log_server, 'context') and _log_server.context:
+                        if hasattr(_log_server, "context") and _log_server.context:
                             _log_server.context.term()
                     except Exception as cleanup_error:
                         logger.error(f"Error during forced cleanup: {cleanup_error}")
