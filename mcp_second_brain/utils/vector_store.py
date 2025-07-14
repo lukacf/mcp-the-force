@@ -103,20 +103,44 @@ def create_vector_store(paths: List[str]) -> str:
         vs = get_client().vector_stores.create(name="mcp-second-brain-vs")
         logger.info(f"Created vector store {vs.id}")
 
-        # Open all files
-        file_streams = []
+        # Pre-verify all files exist and are readable
+        verified_files = []
         for path in supported_paths:
             try:
-                logger.info(f"Opening file for vector store: {path}")
-                # Directly open without the verification read
+                # Check if file exists and is readable
+                path_obj = Path(path)
+                if path_obj.exists() and path_obj.is_file():
+                    # Quick size check (skip empty files)
+                    if path_obj.stat().st_size > 0:
+                        # Test that we can actually read the file
+                        with open(path, "rb") as test_file:
+                            test_file.read(1)  # Read one byte to verify access
+                        verified_files.append(path)
+                        logger.info(f"Verified file: {path}")
+                    else:
+                        logger.warning(f"Skipping empty file: {path}")
+                else:
+                    logger.warning(f"File not found or not accessible: {path}")
+            except Exception as e:
+                logger.warning(f"Skipping inaccessible file {path}: {e}")
+
+        if not verified_files:
+            # No files could be verified
+            logger.warning("No accessible files to upload")
+            get_client().vector_stores.delete(vs.id)
+            return ""
+
+        # Open verified files for upload
+        file_streams = []
+        for path in verified_files:
+            try:
                 file_stream = open(path, "rb")
                 file_streams.append(file_stream)
-                logger.info(f"Successfully opened {path}")
             except Exception as e:
-                logger.error(f"Failed to open {path}: {type(e).__name__}: {e}")
+                logger.error(f"Failed to open verified file {path}: {e}")
 
         if not file_streams:
-            # No files could be opened
+            # No files could be opened (shouldn't happen after verification)
             logger.warning("No files could be opened for vector store")
             get_client().vector_stores.delete(vs.id)
             return ""
