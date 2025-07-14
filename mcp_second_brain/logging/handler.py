@@ -5,44 +5,37 @@ import logging
 import threading
 import queue
 import os
-import time
-import sys
 
 from ..utils.logging_filter import RedactionFilter
 
-logger = logging.getLogger(__name__)
-
 
 class ZMQLogHandler(logging.Handler):
-    """Async log handler that sends records to ZMQ log server."""
-
-    def __init__(self, address: str, instance_id: str):
+    def __init__(self, address: str, instance_id: str, handover_timeout: float = 5.0):
         super().__init__()
         self.address = address
         self.instance_id = instance_id
+        self.handover_timeout = handover_timeout
 
         # Add redaction filter
         self.addFilter(RedactionFilter())
 
         # Queue for async sending
         self.queue: queue.Queue = queue.Queue(maxsize=10000)
-        self.sender_thread = threading.Thread(
-            target=self._sender_loop,
-            daemon=False,  # Fix: Don't use daemon to ensure proper shutdown
-            name=f"LogSender-{os.getpid()}",  # Fix: Name thread for debugging
-        )
+        self.sender_thread = threading.Thread(target=self._sender_loop, daemon=True)
         self.sender_thread.start()
 
     def _sender_loop(self):
-        """Background thread for sending logs with retry logic."""
+        """Background thread for sending logs with server handover logic."""
+        import time
+
         context = zmq.Context()
         socket = context.socket(zmq.PUSH)
         socket.connect(self.address)
         socket.setsockopt(zmq.LINGER, 0)  # Don't block on close
         socket.setsockopt(zmq.SNDHWM, 1000)  # High water mark
 
-        failed_sends = 0
-        max_retries = 3
+        consecutive_failures = 0
+        last_failure_time = 0
 
         while True:
             try:
@@ -67,85 +60,60 @@ class ZMQLogHandler(logging.Handler):
                     },
                 }
 
-                # Try to send with retry logic
-                retry_count = 0
-                while retry_count < max_retries:
-                    try:
-                        socket.send_json(msg, flags=zmq.NOBLOCK)
-                        failed_sends = 0  # Reset failure counter on success
-                        break
-                    except zmq.Again:
-                        # Socket buffer full, retry with exponential backoff
-                        retry_count += 1
-                        if retry_count < max_retries:
-                            time.sleep(0.1 * (2**retry_count))  # Exponential backoff
-                        else:
-                            # Final retry failed, fallback to stderr
-                            print(
-                                f"Dropped log after {max_retries} retries: {record.getMessage()}",
-                                file=sys.stderr,
-                            )
-                            break
-                else:
-                    # All retries failed
-                    failed_sends += 1
+                try:
+                    socket.send_json(msg, flags=zmq.NOBLOCK)
+                    consecutive_failures = 0  # Reset failure counter on success
+                except zmq.Again:
+                    # Socket buffer full, drop message but don't count as server failure
+                    pass
 
             except queue.Empty:
                 continue
-            except Exception as e:
-                # Don't use logger here to avoid infinite recursion
-                print(f"ZMQ handler error: {e}", file=sys.stderr)
-                failed_sends += 1
+            except zmq.ZMQError:
+                # Server connection issue - potential handover scenario
+                consecutive_failures += 1
+                current_time = time.time()
 
-                # If too many failures, add delay to avoid tight error loop
-                if failed_sends > 10:
-                    time.sleep(1.0)
+                if (
+                    consecutive_failures >= 3
+                    and (current_time - last_failure_time) > self.handover_timeout
+                ):
+                    # Attempt server takeover
+                    print(
+                        f"Attempting server takeover after {consecutive_failures} failures..."
+                    )
+                    if self._attempt_server_takeover():
+                        consecutive_failures = 0
+                    last_failure_time = current_time
+
+            except Exception as e:
+                print(f"ZMQ handler error: {e}")
 
         socket.close()
         context.term()
 
+    def _attempt_server_takeover(self) -> bool:
+        """Attempt to become the log server if current server is unresponsive."""
+        try:
+            # Import here to avoid circular imports
+            from .setup import _start_log_server
+
+            return _start_log_server()
+        except Exception as e:
+            print(f"Server takeover failed: {e}")
+            return False
+
     def emit(self, record: logging.LogRecord):
-        """Queue log record for sending with fallback."""
+        """Queue log record for sending."""
         try:
             self.queue.put_nowait(record)
         except queue.Full:
-            # Fallback: Log to stderr when queue is full
-            print(f"Log queue full, dropping: {record.getMessage()}", file=sys.stderr)
+            # Drop message if queue is full
+            pass
 
     def close(self):
-        """Shutdown handler with proper resource cleanup."""
-        try:
-            # Signal shutdown - use put() with timeout to handle full queue
-            try:
-                self.queue.put(None, timeout=1.0)
-            except queue.Full:
-                # Queue is full, try to drain some messages first
-                try:
-                    for _ in range(min(100, self.queue.qsize())):
-                        self.queue.get_nowait()
-                    self.queue.put(None, timeout=0.5)
-                except (queue.Empty, queue.Full):
-                    # Force shutdown if queue manipulation fails
-                    pass
-
-            # Wait for thread to finish
-            if self.sender_thread.is_alive():
-                self.sender_thread.join(timeout=5.0)  # Increased timeout
-
-                if self.sender_thread.is_alive():
-                    print(
-                        "Warning: LogSender thread did not shutdown cleanly",
-                        file=sys.stderr,
-                    )
-
-            # Drain any remaining messages to prevent memory leaks
-            try:
-                while not self.queue.empty():
-                    self.queue.get_nowait()
-            except queue.Empty:
-                pass
-
-        except Exception as e:
-            print(f"Error during ZMQ handler shutdown: {e}", file=sys.stderr)
-        finally:
-            super().close()
+        """Shutdown handler."""
+        self.queue.put(None)  # Signal shutdown
+        if self.sender_thread.is_alive():
+            self.sender_thread.join(timeout=5.0)
+        super().close()

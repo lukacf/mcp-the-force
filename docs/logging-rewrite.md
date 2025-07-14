@@ -2,7 +2,15 @@
 
 ## Overview
 
-This document specifies a comprehensive logging system for the MCP Second Brain project that addresses the unique challenges of debugging distributed MCP servers in Docker-in-Docker (DinD) environments.
+This document specifies a **CENTRALIZED LOGGING SYSTEM** for the MCP Second Brain project that **aggregates logs from ALL MCP instances across ALL projects on a single machine**.
+
+🎯 **CRITICAL DESIGN PRINCIPLE**: ONE ZMQ server per machine, ONE database per machine, ALL projects log to the same centralized location.
+
+**ENFORCED CENTRALIZATION**: 
+- Database path: `~/.mcp_logs/centralized.sqlite3` (default, configurable with `db_path`)
+- ZMQ server: `localhost:4711` (first MCP instance becomes server, others connect as clients)
+- Server handover: If server dies, clients automatically attempt takeover after timeout
+- Cross-project debugging: Search logs from ANY project on the machine from ANY other project
 
 ## Requirements
 
@@ -19,11 +27,12 @@ This document specifies a comprehensive logging system for the MCP Second Brain 
 
 ### Functional Requirements
 
-1. **Aggregated Logging**: All MCP instances write to a single, queryable log store
-2. **High Performance**: Minimal impact on MCP server performance
-3. **Programmatic Access**: Claude must be able to query logs via MCP tools
-4. **Network-Based**: Use network communication (not shared files) for Docker compatibility
-5. **Graceful Degradation**: If logging fails, MCP server must continue operating
+1. **🎯 CENTRALIZED AGGREGATION**: **ALL MCP instances from ALL projects write to ONE SINGLE database on the machine**
+2. **Cross-Project Debugging**: See logs from all your MCP sessions across different project directories
+3. **High Performance**: Minimal impact on MCP server performance
+4. **Programmatic Access**: Claude must be able to query logs via MCP tools
+5. **Network-Based**: Use network communication (not shared files) for Docker compatibility
+6. **Graceful Degradation**: If logging fails, MCP server must continue operating
 
 ### Technical Constraints
 
@@ -38,16 +47,18 @@ This document specifies a comprehensive logging system for the MCP Second Brain 
 
 ```
 ┌─────────────────┐     ZMQ PUSH      ┌──────────────────┐
-│   MCP Server 1  │ ─────────────────> │                  │
+│ Project A (MCP) │ ─────────────────> │                  │
 └─────────────────┘                    │                  │
                                        │   ZMQ Log Server │     SQLite
-┌─────────────────┐     ZMQ PUSH      │   (First MCP)    │ ──────────>  .mcp_logs.sqlite3
-│   MCP Server 2  │ ─────────────────> │                  │
+┌─────────────────┐     ZMQ PUSH      │   (First MCP)    │ ──────────>  ~/.mcp_logs/
+│ Project B (MCP) │ ─────────────────> │                  │              centralized.sqlite3
 └─────────────────┘                    │  localhost:4711  │
                                        │                  │
-┌─────────────────┐     ZMQ PUSH      │                  │
-│ Docker Container│ ─────────────────> │                  │
+┌─────────────────┐     ZMQ PUSH      │  CENTRALIZED     │
+│ Docker Container│ ─────────────────> │  ONE PER MACHINE │
 └─────────────────┘                    └──────────────────┘
+
+ALL projects → ONE database → Cross-project debugging
 ```
 
 ### Port Forwarding Strategy
@@ -84,16 +95,19 @@ logging:
   developer_mode:
     enabled: false  # Disabled by default
     port: 4711
-    db_path: .mcp_logs.sqlite3
+    db_path: ~/.mcp_logs/centralized.sqlite3  # Centralized database path (absolute paths recommended)
     batch_size: 100  # Batch commits for performance
     batch_timeout: 1.0  # Seconds
     max_db_size_mb: 1000  # Rotate when exceeded
+    handover_timeout: 5.0  # Seconds to wait before attempting server takeover
 ```
+
+**CENTRALIZATION**: If `db_path` is relative, it will be resolved relative to `~/.mcp_logs/`. Absolute paths override this behavior for advanced use cases.
 
 ### 2. Database Schema
 
 ```sql
--- .mcp_logs.sqlite3
+-- ~/.mcp_logs/centralized.sqlite3
 CREATE TABLE IF NOT EXISTS logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp REAL NOT NULL,
@@ -251,10 +265,11 @@ import queue
 from typing import Optional
 
 class ZMQLogHandler(logging.Handler):
-    def __init__(self, address: str, instance_id: str):
+    def __init__(self, address: str, instance_id: str, handover_timeout: float = 5.0):
         super().__init__()
         self.address = address
         self.instance_id = instance_id
+        self.handover_timeout = handover_timeout
         
         # Queue for async sending
         self.queue: queue.Queue = queue.Queue(maxsize=10000)
@@ -262,12 +277,15 @@ class ZMQLogHandler(logging.Handler):
         self.sender_thread.start()
         
     def _sender_loop(self):
-        """Background thread for sending logs"""
+        """Background thread for sending logs with server handover logic"""
         context = zmq.Context()
         socket = context.socket(zmq.PUSH)
         socket.connect(self.address)
         socket.setsockopt(zmq.LINGER, 0)  # Don't block on close
         socket.setsockopt(zmq.SNDHWM, 1000)  # High water mark
+        
+        consecutive_failures = 0
+        last_failure_time = 0
         
         while True:
             try:
@@ -290,18 +308,42 @@ class ZMQLogHandler(logging.Handler):
                     }
                 }
                 
-                socket.send_json(msg, flags=zmq.NOBLOCK)
+                try:
+                    socket.send_json(msg, flags=zmq.NOBLOCK)
+                    consecutive_failures = 0  # Reset failure counter on success
+                except zmq.Again:
+                    # Socket buffer full, drop message but don't count as server failure
+                    pass
                 
             except queue.Empty:
                 continue
-            except zmq.Again:
-                # Socket buffer full, drop message
-                pass
+            except zmq.ZMQError as e:
+                # Server connection issue - potential handover scenario
+                consecutive_failures += 1
+                current_time = time.time()
+                
+                if consecutive_failures >= 3 and (current_time - last_failure_time) > self.handover_timeout:
+                    # Attempt server takeover
+                    print(f"Attempting server takeover after {consecutive_failures} failures...")
+                    if self._attempt_server_takeover():
+                        consecutive_failures = 0
+                    last_failure_time = current_time
+                
             except Exception as e:
                 print(f"ZMQ handler error: {e}")
         
         socket.close()
         context.term()
+    
+    def _attempt_server_takeover(self) -> bool:
+        """Attempt to become the log server if current server is unresponsive"""
+        try:
+            # Import here to avoid circular imports
+            from .setup import _start_log_server
+            return _start_log_server()
+        except Exception as e:
+            print(f"Server takeover failed: {e}")
+            return False
     
     def emit(self, record: logging.LogRecord):
         """Queue log record for sending"""
@@ -336,14 +378,14 @@ _log_server: Optional[ZMQLogServer] = None
 _server_thread: Optional[threading.Thread] = None
 
 def setup_logging():
-    """Initialize logging system"""
+    """Initialize centralized logging system"""
     settings = get_settings()
     
-    # Always setup basic logging
-    logging.basicConfig(
-        level=settings.logging.level,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
+    # Configure ONLY our application logger, not the root logger
+    # This prevents third-party libraries (like httpx) from writing to stderr
+    app_logger = logging.getLogger("mcp_second_brain")
+    app_logger.setLevel(settings.logging.level)
+    app_logger.propagate = False  # Critical: prevent propagation to root logger
     
     # Developer mode logging
     if not settings.logging.developer_mode.enabled:
@@ -352,7 +394,20 @@ def setup_logging():
     global _log_server, _server_thread
     
     port = settings.logging.developer_mode.port
-    db_path = settings.logging.developer_mode.db_path
+    
+    # CENTRALIZED: Resolve database path with centralization logic
+    from pathlib import Path
+    configured_path = Path(settings.logging.developer_mode.db_path).expanduser()
+    
+    if configured_path.is_absolute():
+        # Absolute path: use as-is (for advanced use cases)
+        db_path = str(configured_path)
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+    else:
+        # Relative path: resolve relative to ~/.mcp_logs/ (centralization)
+        global_log_dir = Path.home() / ".mcp_logs"
+        global_log_dir.mkdir(exist_ok=True)
+        db_path = str(global_log_dir / configured_path)
     
     # Try to start log server
     try:
@@ -374,12 +429,53 @@ def setup_logging():
     
     # Always setup client handler
     instance_id = f"{os.getpid()}-{uuid.uuid4().hex[:8]}"
-    handler = ZMQLogHandler(f"tcp://localhost:{port}", instance_id)
-    logging.getLogger().addHandler(handler)
+    handover_timeout = settings.logging.developer_mode.handover_timeout
+    handler = ZMQLogHandler(f"tcp://localhost:{port}", instance_id, handover_timeout)
+    app_logger.addHandler(handler)
     
     # Register shutdown hook
     import atexit
     atexit.register(shutdown_logging)
+
+def _start_log_server() -> bool:
+    """Internal helper to start log server (used for handover)"""
+    global _log_server, _server_thread
+    
+    if _log_server is not None:
+        return True  # Already running
+    
+    try:
+        settings = get_settings()
+        port = settings.logging.developer_mode.port
+        
+        # Use same database path resolution logic
+        from pathlib import Path
+        configured_path = Path(settings.logging.developer_mode.db_path).expanduser()
+        
+        if configured_path.is_absolute():
+            db_path = str(configured_path)
+            db_path.parent.mkdir(parents=True, exist_ok=True)
+        else:
+            global_log_dir = Path.home() / ".mcp_logs"
+            global_log_dir.mkdir(exist_ok=True)
+            db_path = str(global_log_dir / configured_path)
+        
+        _log_server = ZMQLogServer(
+            port=port,
+            db_path=db_path,
+            batch_size=settings.logging.developer_mode.batch_size,
+            batch_timeout=settings.logging.developer_mode.batch_timeout,
+        )
+        
+        _server_thread = threading.Thread(target=_log_server.run)
+        _server_thread.start()
+        
+        print(f"Successfully took over as ZMQ log server on port {port}")
+        return True
+        
+    except Exception as e:
+        print(f"Failed to start log server during handover: {e}")
+        return False
 
 def shutdown_logging():
     """Graceful shutdown of logging system"""
@@ -461,8 +557,9 @@ class SearchMCPDebugLogsToolSpec(ToolSpec):
         return (now - delta).timestamp()
     
     async def execute(self, **kwargs) -> str:
-        settings = get_settings()
-        db_path = settings.logging.developer_mode.db_path
+        # CENTRALIZED: Always use global database path
+        from pathlib import Path
+        db_path = str(Path.home() / ".mcp_logs" / "centralized.sqlite3")
         
         # Build SQL query
         conditions = ["timestamp > ?"]
@@ -634,7 +731,35 @@ def get_all_tools():
     return tools
 ```
 
-### 7. Operational Considerations
+### 7. Server Handover Logic
+
+When the current log server becomes unresponsive or crashes, clients automatically attempt to take over the server role:
+
+**Detection:**
+- Client handlers track consecutive ZMQ send failures
+- After 3 consecutive failures, client waits for `handover_timeout` seconds
+- If timeout passes without recovery, client attempts server takeover
+
+**Takeover Process:**
+1. Client tries to bind to the same port (4711)
+2. If successful, creates new ZMQLogServer instance
+3. Starts server thread and begins accepting logs from all clients
+4. Original database is preserved - no data loss
+
+**Race Condition Handling:**
+- Multiple clients may attempt takeover simultaneously
+- Only first client to successfully bind becomes the new server
+- Other clients continue as normal clients, connecting to new server
+- ZMQ handles the binding race condition automatically
+
+**Configuration:**
+```yaml
+logging:
+  developer_mode:
+    handover_timeout: 5.0  # Seconds to wait before attempting takeover
+```
+
+### 8. Operational Considerations
 
 #### Database Maintenance
 

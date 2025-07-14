@@ -83,7 +83,7 @@ def build_prompt(
     for i, (file_path, content, token_count) in enumerate(file_data):
         if i % 50 == 0:  # Log progress every 50 files
             logger.info(
-                f"[PROMPT_BUILDER] Processing file {i+1}/{len(file_data)}: {file_path} ({token_count} tokens)"
+                f"[PROMPT_BUILDER] Processing file {i + 1}/{len(file_data)}: {file_path} ({token_count} tokens)"
             )
         if used + token_count <= max_tokens:
             inline_elements.append(_create_file_element(file_path, content))
