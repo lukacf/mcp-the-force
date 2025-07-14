@@ -5,6 +5,7 @@ import logging
 import threading
 import queue
 import os
+import orjson
 
 from ..utils.logging_filter import RedactionFilter
 
@@ -61,7 +62,9 @@ class ZMQLogHandler(logging.Handler):
                 }
 
                 try:
-                    socket.send_json(msg, flags=zmq.NOBLOCK)
+                    # Use orjson for GIL-friendly JSON serialization
+                    serialized = orjson.dumps(msg)
+                    socket.send(serialized, flags=zmq.NOBLOCK)
                     consecutive_failures = 0  # Reset failure counter on success
                 except zmq.Again:
                     # Socket buffer full, drop message but don't count as server failure
@@ -106,6 +109,12 @@ class ZMQLogHandler(logging.Handler):
     def emit(self, record: logging.LogRecord):
         """Queue log record for sending."""
         try:
+            # Truncate large messages to prevent GIL starvation during JSON serialization
+            msg = record.getMessage()
+            if len(msg) > 8192:  # 8KB limit
+                record.msg = msg[:8192] + " ...[truncated]..."
+                record.args = ()  # Clear args to prevent re-formatting
+
             self.queue.put_nowait(record)
         except queue.Full:
             # Drop message if queue is full
