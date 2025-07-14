@@ -452,6 +452,10 @@ class ToolExecutor:
 
                 return redacted_result
 
+        except asyncio.CancelledError:
+            # Re-raise CancelledError to let FastMCP handle it properly
+            # This MUST propagate unchanged per MCP spec
+            raise
         except Exception as e:
             logger.error(f"[CRITICAL] Tool execution failed for {tool_id}: {e}")
             import traceback
