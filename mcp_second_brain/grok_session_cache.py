@@ -1,5 +1,5 @@
 import time
-import json
+import orjson
 import logging
 import threading
 from typing import List, Dict, Optional, Any
@@ -44,14 +44,14 @@ class _SQLiteGrokSessionCache(BaseSQLiteCache):
                 fetch=False,
             )
             return []
-        return json.loads(history_json)  # type: ignore[no-any-return]
+        return orjson.loads(history_json)  # type: ignore[no-any-return]
 
     async def set_history(self, session_id: str, history: List[Dict[str, Any]]):
         self._validate_session_id(session_id)
         now = int(time.time())
         await self._execute_async(
             "REPLACE INTO grok_sessions(session_id, history, updated_at) VALUES(?,?,?)",
-            (session_id, json.dumps(history), now),
+            (session_id, orjson.dumps(history).decode("utf-8"), now),
             fetch=False,
         )
         await self._probabilistic_cleanup()
