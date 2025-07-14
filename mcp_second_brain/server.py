@@ -4,6 +4,7 @@
 from mcp.server.fastmcp import FastMCP
 import logging
 from .logging.setup import setup_logging
+from .cancellation_patch import monkeypatch_all
 
 # Import all tool definitions to register them
 from .tools import definitions  # noqa: F401 # This import triggers the @tool decorators
@@ -14,8 +15,11 @@ from .tools.integration import (
     create_count_project_tokens_tool,
 )
 
-# Initialize the new logging system
+# Initialize the new logging system first
 setup_logging()
+
+# Apply cancellation patches
+monkeypatch_all()
 
 logger = logging.getLogger(__name__)
 
