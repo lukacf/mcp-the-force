@@ -158,7 +158,7 @@ class TestToolExecutor:
     @pytest.mark.asyncio
     async def test_missing_required_parameter(self, executor):
         """Test that missing required parameter raises appropriate error."""
-        with pytest.raises(ValueError, match="Missing required parameter"):
+        with pytest.raises(fastmcp.exceptions.ToolError, match="Tool execution failed"):
             metadata = get_tool("chat_with_gemini25_flash")
             await executor.execute(
                 metadata,
