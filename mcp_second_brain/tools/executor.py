@@ -370,10 +370,8 @@ class ToolExecutor:
                 logger.info(
                     f"[GRACEFUL] Tool execution cancelled by user for {tool_id} after {partial_duration:.2f}s"
                 )
-                # Don't re-raise - convert to proper MCP error response
-                raise fastmcp.exceptions.ToolError(
-                    f"Tool execution was cancelled by user after {partial_duration:.2f} seconds"
-                )
+                # Re-raise to let FastMCP handle cancellation properly
+                raise
             except asyncio.TimeoutError:
                 timeout_time = time.time()
                 partial_duration = timeout_time - start_time
