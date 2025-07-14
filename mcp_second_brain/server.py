@@ -64,7 +64,18 @@ def main():
     if sys.platform == "win32":
         asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
-    mcp.run()
+    try:
+        logger.info("Starting MCP server...")
+        mcp.run()
+        logger.info("MCP server exited normally")
+    except KeyboardInterrupt:
+        logger.info("MCP server interrupted by user")
+    except Exception as e:
+        logger.error(f"MCP server crashed with exception: {e}")
+        import traceback
+
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        raise
 
 
 if __name__ == "__main__":

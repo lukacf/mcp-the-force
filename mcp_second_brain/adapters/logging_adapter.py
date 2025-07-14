@@ -1,6 +1,5 @@
 """Adapter for logging tools using VictoriaLogs."""
 
-import os
 import json
 import httpx
 from typing import List, Any, Dict
@@ -75,50 +74,53 @@ class LoggingAdapter(BaseAdapter):
             elif "last hour" in query.lower():
                 since = "1h"
 
-            # Build LogsQL query with VictoriaLogs label syntax
+            # Build LogsQL query with VictoriaLogs label syntax (space-separated, no AND)
             filters = ["app:mcp-second-brain"]  # Always filter to our app
 
             if level:
-                filters.append(f'severity:"{level.upper()}"')
+                filters.append(f"severity:{level.lower()}")  # Use lowercase
             if instance_id:
                 # Support wildcards for semantic instance IDs
                 if "*" in instance_id:
-                    filters.append(f'instance_id~"{instance_id}"')
+                    # VictoriaLogs regex syntax
+                    regex_pattern = instance_id.replace("*", ".*")
+                    filters.append(f'instance_id~"{regex_pattern}"')
                 else:
                     filters.append(f'instance_id:"{instance_id}"')
-            if not all_projects:
-                current_project = os.getenv("MCP_PROJECT_PATH", os.getcwd())
-                filters.append(f'project:"{current_project}"')
+            # Temporarily disable project filtering to debug LogsQL syntax
+            # if not all_projects:
+            #     current_project = os.getenv("MCP_PROJECT_PATH", os.getcwd())
+            #     filters.append(f'project:"{current_project}"')
 
-            # Build base query
-            logsql = " AND ".join(filters)
+            # Build base query (space-separated, no AND operators)
+            logsql = " ".join(filters)
 
             # Add text search
             if query:
-                logsql += f' AND "{query}"'
+                logsql += f' "{query}"'
 
-            # Add time filter and limit
-            logsql = f"({logsql}) AND _time:{since}"
-            logsql += f" | sort _time desc | limit {limit}"
+            # Add time filter and limit (VictoriaLogs returns newest first by default)
+            logsql = f"{logsql} _time:{since}"
+            logsql += f" | limit {limit}"
 
-            # Query VictoriaLogs with streaming ND-JSON parsing
+            # Query VictoriaLogs (VictoriaLogs returns ND-JSON but we can get it all at once)
             async with httpx.AsyncClient() as client:
-                async with client.stream(
-                    "POST",
+                response = await client.post(
                     f"{self.base_url}/select/logsql/query",
                     data={"query": logsql},
                     timeout=30.0,
-                ) as response:
-                    response.raise_for_status()
+                )
+                response.raise_for_status()
 
-                    results = []
-                    async for line in response.aiter_lines():
-                        if line.strip():  # Skip empty lines
-                            try:
-                                log_entry = json.loads(line)
-                                results.append(log_entry)
-                            except json.JSONDecodeError as e:
-                                return f"JSON parse error on line: {e}"
+                results = []
+                # Parse ND-JSON response (one JSON object per line)
+                for line in response.text.strip().split("\n"):
+                    if line.strip():  # Skip empty lines
+                        try:
+                            log_entry = json.loads(line)
+                            results.append(log_entry)
+                        except json.JSONDecodeError as e:
+                            return f"JSON parse error on line: {e}"
 
             if not results:
                 suggestions = []
