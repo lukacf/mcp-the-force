@@ -20,6 +20,7 @@ dependencies = [
     "pytest-asyncio>=0.21",
     "jsonschema>=4.0.0",
     "pyzmq>=25.0.0",
+    "orjson>=3.9.0",
 ]
 
 [project.scripts]

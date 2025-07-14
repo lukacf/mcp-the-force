@@ -176,8 +176,11 @@ class TestZMQLogServer:
             {"message": "test2", "level": "ERROR"},
         ]
 
-        # Mock recv_json to return messages then raise zmq.Again
-        mock_socket.recv_json.side_effect = test_messages + [zmq.Again()]
+        # Mock recv to return orjson-encoded messages then raise zmq.Again
+        import orjson
+
+        encoded_messages = [orjson.dumps(msg) for msg in test_messages]
+        mock_socket.recv.side_effect = encoded_messages + [zmq.Again()]
 
         # Mock poller to simulate message availability
         mock_poller = Mock()

@@ -61,7 +61,17 @@ class LoggingAdapter(BaseAdapter):
         if not settings.logging.developer_mode.enabled:
             return "Developer logging mode is not enabled. Set logging.developer_mode.enabled=true in config.yaml"
 
-        db_path = settings.logging.developer_mode.db_path
+        # Use the same centralization logic as setup.py
+        from pathlib import Path
+
+        configured_path = Path(settings.logging.developer_mode.db_path).expanduser()
+
+        if configured_path.is_absolute():
+            db_path = str(configured_path)
+        else:
+            # Relative path: resolve relative to ~/.mcp_logs/ (centralization)
+            global_log_dir = Path.home() / ".mcp_logs"
+            db_path = str(global_log_dir / configured_path)
 
         if not os.path.exists(db_path):
             return f"No log database found at {db_path}. Ensure the MCP server is running with developer logging enabled."
@@ -90,13 +100,17 @@ class LoggingAdapter(BaseAdapter):
         params: list[str | float] = [self._parse_since(since)]
 
         # Filter by current project unless all_projects=True
-        if not all_projects:
+        # Exception: if query is provided and might be searching for a project name,
+        # don't filter by current project to make cross-project search more intuitive
+        if not all_projects and not (query and "/" not in query):
             conditions.append("project_cwd = ?")
             # Use current working directory since MCP_PROJECT_PATH isn't reliably set
             params.append(os.getcwd())
 
         if query:
-            conditions.append("message LIKE ?")
+            # Search in both message and project_cwd for better cross-project discovery
+            conditions.append("(message LIKE ? OR project_cwd LIKE ?)")
+            params.append(f"%{query}%")
             params.append(f"%{query}%")
 
         if level:
