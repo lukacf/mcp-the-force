@@ -62,7 +62,7 @@ class TestZMQLogServer:
 
         # Verify socket configuration
         mock_socket.bind.assert_called_once_with("tcp://127.0.0.1:4711")
-        mock_socket.setsockopt.assert_called_with(zmq.RCVTIMEO, 100)  # RCVTIMEO, 100ms
+        # No RCVTIMEO set - we use Poller with timeout instead
 
     def test_flush_batch_writes_to_database(self, temp_db, mock_zmq_context):
         """Test that flush_batch correctly writes log records to database."""
@@ -163,7 +163,10 @@ class TestZMQLogServer:
         assert server.shutdown_event.is_set()
 
     @pytest.mark.timeout(5)
-    def test_run_loop_with_mock_messages(self, temp_db, mock_zmq_context):
+    @patch("zmq.Poller")
+    def test_run_loop_with_mock_messages(
+        self, mock_poller_class, temp_db, mock_zmq_context
+    ):
         """Test the main run loop with mocked ZMQ messages."""
         mock_context, mock_socket = mock_zmq_context
 
@@ -174,9 +177,18 @@ class TestZMQLogServer:
         ]
 
         # Mock recv_json to return messages then raise zmq.Again
-        import zmq
-
         mock_socket.recv_json.side_effect = test_messages + [zmq.Again()]
+
+        # Mock poller to simulate message availability
+        mock_poller = Mock()
+        mock_poller_class.return_value = mock_poller
+
+        # First two polls return socket ready, third returns nothing (timeout)
+        mock_poller.poll.side_effect = [
+            {mock_socket: zmq.POLLIN},  # Message 1 ready
+            {mock_socket: zmq.POLLIN},  # Message 2 ready
+            {},  # Timeout - no messages (triggers shutdown check)
+        ] * 10  # Repeat pattern to avoid IndexError
 
         server = ZMQLogServer(port=4711, db_path=temp_db, batch_timeout=0.1)
 
