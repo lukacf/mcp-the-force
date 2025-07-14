@@ -23,9 +23,8 @@ from .constants import (
 )
 from ..memory_search_declaration import create_search_memory_declaration_openai
 from ..attachment_search_declaration import create_attachment_search_declaration_openai
-# Removed validation imports - no longer validating structured output
-# from ...utils.validation import validate_json_schema
-# from jsonschema import ValidationError
+import json
+import jsonschema
 
 logger = logging.getLogger(__name__)
 
@@ -164,17 +163,22 @@ class BaseFlowStrategy(ABC):
         return list(response.output)
 
     def _validate_structured_output(self, content: str) -> None:
-        """Skip validation - let the model response through as-is.
-
-        Structured output schema is a suggestion to the model, not a strict requirement.
-        Validation was causing MCP server crashes on invalid JSON/schema mismatches.
-        """
+        """Validate structured output against schema."""
         if not self.context.request.structured_output_schema:
             return
 
-        logger.debug(
-            f"Structured output schema provided - letting model response through as-is: '{content}'"
-        )
+        try:
+            parsed = json.loads(content)
+            jsonschema.validate(parsed, self.context.request.structured_output_schema)
+        except jsonschema.ValidationError as e:
+            raise AdapterException(
+                ErrorCategory.PARSING,
+                f"Response does not match requested schema: {str(e)}",
+            )
+        except json.JSONDecodeError as e:
+            raise AdapterException(
+                ErrorCategory.PARSING, f"Response is not valid JSON: {str(e)}"
+            )
 
     async def _handle_function_calls(
         self,

@@ -169,8 +169,8 @@ class TestGeminiStructuredOutput:
             assert parsed["count"] == 42
 
     @pytest.mark.asyncio
-    async def test_response_validation_skipped(self):
-        """Test that validation is skipped and responses are returned as-is."""
+    async def test_response_validation_enforced(self):
+        """Test that validation is enforced and raises errors for invalid responses."""
         adapter = VertexAdapter("gemini-2.5-flash")
 
         schema = {
@@ -183,7 +183,7 @@ class TestGeminiStructuredOutput:
         mock_response = MagicMock()
         mock_response.candidates = [MagicMock()]
         mock_response.candidates[0].content.parts = [MagicMock()]
-        # Invalid JSON - but should not raise error
+        # Invalid JSON - should raise validation error
         mock_response.candidates[0].content.parts[0].text = '{"age": "not_a_number"}'
         mock_response.candidates[0].content.parts[0].function_call = None
 
@@ -193,15 +193,14 @@ class TestGeminiStructuredOutput:
             "mcp_second_brain.adapters.vertex.adapter.get_client",
             return_value=mock_client,
         ):
-            # Should return response as-is without validation
-            result = await adapter.generate(
-                prompt="My age", structured_output_schema=schema
-            )
-            assert result == '{"age": "not_a_number"}'
+            # Should raise validation error
+            with pytest.raises(Exception) as exc_info:
+                await adapter.generate(prompt="My age", structured_output_schema=schema)
+            assert "Response does not match requested schema" in str(exc_info.value)
 
     @pytest.mark.asyncio
-    async def test_non_json_response_returned_as_is(self):
-        """Test that non-JSON responses are returned as-is without validation."""
+    async def test_non_json_response_validation_fails(self):
+        """Test that non-JSON responses fail validation when schema is provided."""
         adapter = VertexAdapter("gemini-2.5-pro")
 
         schema = {"type": "object"}
@@ -210,7 +209,7 @@ class TestGeminiStructuredOutput:
         mock_response = MagicMock()
         mock_response.candidates = [MagicMock()]
         mock_response.candidates[0].content.parts = [MagicMock()]
-        # Plain text response - should not raise error
+        # Plain text response - should raise JSON decode error
         mock_response.candidates[0].content.parts[
             0
         ].text = "This is plain text, not JSON"
@@ -222,8 +221,9 @@ class TestGeminiStructuredOutput:
             "mcp_second_brain.adapters.vertex.adapter.get_client",
             return_value=mock_client,
         ):
-            # Should return response as-is without validation
-            result = await adapter.generate(
-                prompt="Return plain text", structured_output_schema=schema
-            )
-            assert result == "This is plain text, not JSON"
+            # Should raise JSON decode error
+            with pytest.raises(Exception) as exc_info:
+                await adapter.generate(
+                    prompt="Return plain text", structured_output_schema=schema
+                )
+            assert "Response is not valid JSON" in str(exc_info.value)
