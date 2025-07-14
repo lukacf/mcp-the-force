@@ -74,11 +74,15 @@ def main():
         try:
             logger.info("Starting MCP server...")
             mcp.run()
-            logger.info("MCP server exited normally")
-            break  # Normal exit
+            logger.warning("mcp.run() returned – restarting loop")
+            continue  # Keep server running
         except KeyboardInterrupt:
             logger.info("MCP server interrupted by user")
-            break  # User requested exit
+            continue  # Keep server running
+        except asyncio.CancelledError:
+            # Legitimate request-level cancellation – keep the server alive
+            logger.info("Top-level CancelledError → ready for next request")
+            continue  # Keep server running
         except (BrokenPipeError, OSError) as e:
             if isinstance(e, OSError) and e.errno == errno.EPIPE:  # Broken pipe errno
                 logger.info("Detected broken pipe - client likely disconnected")
