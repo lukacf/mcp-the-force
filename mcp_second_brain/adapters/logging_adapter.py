@@ -32,7 +32,7 @@ class LoggingAdapter(BaseAdapter):
         # Extract the parameters that were routed here
         query = kwargs.get("query", "")
         level = kwargs.get("level")
-        since = kwargs.get("since", "1h")
+        since = kwargs.get("since", "24h")
         instance_id = kwargs.get("instance_id")
         all_projects = kwargs.get("all_projects", False)
         limit = kwargs.get("limit", 100)
@@ -99,8 +99,22 @@ class LoggingAdapter(BaseAdapter):
         conditions = ["timestamp > ?"]
         params: list[str | float] = [self._parse_since(since)]
 
-        # Filter by current project unless all_projects=True
-        if not all_projects:
+        # Decide whether to constrain by project automatically
+        # If the user is searching for another project path/name, relax the equality filter
+        restrict_to_cwd = not all_projects
+        if query:
+            # If query contains path separators or doesn't appear in current project path,
+            # it's likely a cross-project search
+            current_cwd = os.getcwd()
+            looks_like_path = "/" in query or "\\" in query
+            not_in_current_project = query.lower() not in current_cwd.lower()
+
+            if looks_like_path or not_in_current_project:
+                # The user is likely searching for another project; don't pin to current cwd
+                restrict_to_cwd = False
+
+        # Filter by current project unless all_projects=True or query looks like a path
+        if restrict_to_cwd:
             conditions.append("project_cwd = ?")
             # Use current working directory since MCP_PROJECT_PATH isn't reliably set
             params.append(os.getcwd())
