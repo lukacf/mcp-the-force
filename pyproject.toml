@@ -21,6 +21,7 @@ dependencies = [
     "jsonschema>=4.0.0",
     "pyzmq>=25.0.0",
     "orjson>=3.9.0",
+    "python-logging-loki>=0.3.1",
 ]
 
 [project.scripts]

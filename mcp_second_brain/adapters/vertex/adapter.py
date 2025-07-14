@@ -226,17 +226,41 @@ class VertexAdapter(BaseAdapter):
                 config=generate_content_config,
             )
         except Exception as e:
-            logger.error(
-                f"Vertex AI API call failed for model {self.model_name}: {type(e).__name__}: {str(e)}",
-                exc_info=True,
-                extra={
-                    "model": self.model_name,
-                    "error_type": type(e).__name__,
-                    "error_message": str(e),
-                    "project": getattr(client, "_project_id", "unknown"),
-                },
-            )
-            raise
+            import google.api_core.exceptions
+            from .errors import AdapterException, ErrorCategory
+
+            # Handle specific Google API errors
+            if isinstance(e, google.api_core.exceptions.ResourceExhausted):
+                raise AdapterException(
+                    "Rate limit exceeded. Please try again later.",
+                    error_category=ErrorCategory.RATE_LIMIT,
+                    original_error=e,
+                )
+            elif isinstance(e, google.api_core.exceptions.InvalidArgument):
+                raise AdapterException(
+                    f"Invalid request: {str(e)}",
+                    error_category=ErrorCategory.INVALID_REQUEST,
+                    original_error=e,
+                )
+            elif isinstance(e, google.api_core.exceptions.ServiceUnavailable):
+                raise AdapterException(
+                    "Service temporarily unavailable. Please retry.",
+                    error_category=ErrorCategory.TRANSIENT_ERROR,
+                    original_error=e,
+                )
+            else:
+                # Generic error handling as last resort
+                logger.error(
+                    f"Vertex AI API call failed for model {self.model_name}: {type(e).__name__}: {str(e)}",
+                    exc_info=True,
+                    extra={
+                        "model": self.model_name,
+                        "error_type": type(e).__name__,
+                        "error_message": str(e),
+                        "project": getattr(client, "_project_id", "unknown"),
+                    },
+                )
+                raise
 
         final_response_content = ""
 
@@ -276,12 +300,28 @@ class VertexAdapter(BaseAdapter):
                             session_id, final_history
                         )
 
-        # Skip validation - let the model response through as-is
-        # Structured output schema is a suggestion to the model, not a strict requirement
+        # Validate structured output
         if structured_output_schema:
-            logger.debug(
-                f"Structured output schema provided - letting model response through as-is: '{final_response_content}'"
-            )
+            try:
+                import json
+                import jsonschema
+
+                parsed = json.loads(final_response_content)
+                jsonschema.validate(parsed, structured_output_schema)
+            except jsonschema.ValidationError as e:
+                from .errors import AdapterException, ErrorCategory
+
+                raise AdapterException(
+                    f"Response does not match requested schema: {str(e)}",
+                    error_category=ErrorCategory.PARSING,
+                )
+            except json.JSONDecodeError as e:
+                from .errors import AdapterException, ErrorCategory
+
+                raise AdapterException(
+                    f"Response is not valid JSON: {str(e)}",
+                    error_category=ErrorCategory.PARSING,
+                )
 
         if return_debug:
             return {

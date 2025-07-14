@@ -378,34 +378,16 @@ class ToolExecutor:
                         conv_messages = prompt_params.get("messages", [])
                         if not isinstance(conv_messages, list):
                             conv_messages = []
-                        # In test environment, avoid creating real asyncio tasks to prevent hanging
-                        import os
-
-                        is_test_env = (
-                            "pytest" in os.environ.get("_", "")
-                            or "PYTEST_CURRENT_TEST" in os.environ
-                        )
-
-                        if is_test_env:
-                            # In tests, just call the mocked function directly without creating a task
-                            memory_coro = store_conversation_memory(
+                        # Always create proper asyncio.Task for both test and production
+                        memory_task = asyncio.create_task(
+                            store_conversation_memory(
                                 session_id=session_id,
                                 tool_name=tool_id,
                                 messages=conv_messages,
                                 response=redacted_content,
                             )
-                            memory_tasks.append(memory_coro)
-                        else:
-                            # In production, create real background tasks
-                            memory_task = asyncio.create_task(
-                                store_conversation_memory(
-                                    session_id=session_id,
-                                    tool_name=tool_id,
-                                    messages=conv_messages,
-                                    response=redacted_content,
-                                )
-                            )
-                            memory_tasks.append(memory_task)
+                        )
+                        memory_tasks.append(memory_task)
                     except Exception as e:
                         logger.warning(f"Failed to store conversation memory: {e}")
 
@@ -420,34 +402,16 @@ class ToolExecutor:
                         conv_messages = prompt_params.get("messages", [])
                         if not isinstance(conv_messages, list):
                             conv_messages = []
-                        # In test environment, avoid creating real asyncio tasks to prevent hanging
-                        import os
-
-                        is_test_env = (
-                            "pytest" in os.environ.get("_", "")
-                            or "PYTEST_CURRENT_TEST" in os.environ
-                        )
-
-                        if is_test_env:
-                            # In tests, just call the mocked function directly without creating a task
-                            memory_coro = store_conversation_memory(
+                        # Always create proper asyncio.Task for both test and production
+                        memory_task = asyncio.create_task(
+                            store_conversation_memory(
                                 session_id=session_id,
                                 tool_name=tool_id,
                                 messages=conv_messages,
                                 response=redacted_result,
                             )
-                            memory_tasks.append(memory_coro)
-                        else:
-                            # In production, create real background tasks
-                            memory_task = asyncio.create_task(
-                                store_conversation_memory(
-                                    session_id=session_id,
-                                    tool_name=tool_id,
-                                    messages=conv_messages,
-                                    response=redacted_result,
-                                )
-                            )
-                            memory_tasks.append(memory_task)
+                        )
+                        memory_tasks.append(memory_task)
                     except Exception as e:
                         logger.warning(f"Failed to store conversation memory: {e}")
 
@@ -464,33 +428,11 @@ class ToolExecutor:
             # Wait for memory tasks to complete (with timeout to prevent hangs)
             if memory_tasks:
                 try:
-                    # Handle both coroutines (from tests) and tasks (from production)
-                    import os
-
-                    is_test_env = (
-                        "pytest" in os.environ.get("_", "")
-                        or "PYTEST_CURRENT_TEST" in os.environ
+                    # Always contains asyncio tasks (both test and production)
+                    await asyncio.wait_for(
+                        asyncio.gather(*memory_tasks, return_exceptions=True),
+                        timeout=120.0,
                     )
-
-                    if is_test_env:
-                        # In tests, memory_tasks contains coroutines, not tasks
-                        results: List[Any] = []
-                        for memory_item in memory_tasks:
-                            if asyncio.iscoroutine(memory_item):
-                                result = await memory_item
-                                results.append(result)
-                            elif isinstance(memory_item, asyncio.Task):
-                                result = await memory_item
-                                results.append(result)
-                            else:
-                                # It's a mock or completed value
-                                results.append(memory_item)
-                    else:
-                        # In production, memory_tasks contains actual asyncio tasks
-                        await asyncio.wait_for(
-                            asyncio.gather(*memory_tasks, return_exceptions=True),
-                            timeout=30.0,
-                        )
                 except asyncio.TimeoutError:
                     logger.warning("Memory storage tasks timed out")
                 except Exception as e:
