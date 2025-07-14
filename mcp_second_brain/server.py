@@ -40,6 +40,21 @@ def main():
     import sys
     import signal
     import errno
+    import selectors
+
+    # macOS-specific workaround for KqueueSelector stdio hang bug
+    # See: https://github.com/python/cpython/issues/104344
+    if sys.platform == "darwin":
+
+        class SelectSelectorPolicy(asyncio.DefaultEventLoopPolicy):
+            def new_event_loop(self):
+                selector = selectors.SelectSelector()
+                return asyncio.SelectorEventLoop(selector)
+
+        asyncio.set_event_loop_policy(SelectSelectorPolicy())
+        logger.info(
+            "Forced SelectSelector on macOS to avoid KqueueSelector stdio hangs"
+        )
 
     # Ignore SIGPIPE to prevent crashes on broken pipes (Unix only)
     if sys.platform != "win32":
