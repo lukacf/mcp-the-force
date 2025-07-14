@@ -70,62 +70,42 @@ def main():
     if sys.platform == "win32":
         asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
-    while True:
-        try:
-            logger.info("Starting MCP server...")
-            mcp.run()
-            logger.warning("mcp.run() returned – restarting loop")
-            continue  # Keep server running
-        except KeyboardInterrupt:
-            logger.info("MCP server interrupted by user")
-            continue  # Keep server running
-        except asyncio.CancelledError:
-            # Legitimate request-level cancellation – keep the server alive
-            logger.info("Top-level CancelledError → ready for next request")
-            continue  # Keep server running
-        except (BrokenPipeError, OSError) as e:
-            if isinstance(e, OSError) and e.errno == errno.EPIPE:  # Broken pipe errno
-                logger.info("Detected broken pipe - client likely disconnected")
-            else:
-                logger.info(
-                    f"MCP server client disconnected (pipe error: {e}) - restarting"
-                )
-            continue  # Restart server
-        except Exception as e:
-            # Handle FastMCP client disconnection errors
-            import anyio
+    # No loop for stdio transport - run once and exit on disconnection
+    # Claude spawns a new server process for each session
+    try:
+        logger.info("Starting MCP server (stdio transport)...")
+        mcp.run()  # Will use stdio transport by default
+        logger.info("MCP server exited normally")
+    except KeyboardInterrupt:
+        logger.info("MCP server interrupted by user")
+        sys.exit(0)
+    except (EOFError, BrokenPipeError, OSError) as e:
+        # These are normal disconnection scenarios for stdio
+        if isinstance(e, OSError) and e.errno == errno.EPIPE:
+            logger.info("Detected broken pipe - client disconnected")
+        else:
+            logger.info(f"Client disconnected: {type(e).__name__}")
+        sys.exit(0)  # Clean exit - Claude will spawn new process if needed
+    except Exception as e:
+        # Handle anyio disconnection errors
+        import anyio
 
-            # Check for anyio disconnection exceptions
-            anyio_disconnect_errors = (
-                anyio.ClosedResourceError,
-                anyio.BrokenResourceError,
-                anyio.EndOfStream,
-            )
+        anyio_disconnect_errors = (
+            anyio.ClosedResourceError,
+            anyio.BrokenResourceError,
+            anyio.EndOfStream,
+        )
 
-            # Also check for ExceptionGroup containing disconnection errors
-            if isinstance(e, anyio_disconnect_errors):
-                logger.info(
-                    f"MCP server client disconnected ({type(e).__name__}) - restarting server"
-                )
-                continue  # Restart server
-            elif hasattr(anyio, "ExceptionGroup") and isinstance(
-                e, anyio.ExceptionGroup
-            ):
-                # Check if any sub-exception is a disconnection error
-                if any(
-                    isinstance(sub_e, anyio_disconnect_errors) for sub_e in e.exceptions
-                ):
-                    logger.info(
-                        f"MCP server client disconnected (ExceptionGroup with {type(e).__name__}) - restarting server"
-                    )
-                    continue  # Restart server
+        if isinstance(e, anyio_disconnect_errors):
+            logger.info(f"Client disconnected ({type(e).__name__})")
+            sys.exit(0)  # Normal disconnection
 
-            # Not a disconnection error - this is a real crash
-            logger.error(f"MCP server crashed with exception: {e}")
-            import traceback
+        # Real error - log and re-raise
+        logger.error(f"MCP server crashed: {e}")
+        import traceback
 
-            logger.error(f"Traceback: {traceback.format_exc()}")
-            raise
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        raise
 
 
 if __name__ == "__main__":
