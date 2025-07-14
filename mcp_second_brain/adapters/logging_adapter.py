@@ -100,9 +100,7 @@ class LoggingAdapter(BaseAdapter):
         params: list[str | float] = [self._parse_since(since)]
 
         # Filter by current project unless all_projects=True
-        # Exception: if query is provided and might be searching for a project name,
-        # don't filter by current project to make cross-project search more intuitive
-        if not all_projects and not (query and "/" not in query):
+        if not all_projects:
             conditions.append("project_cwd = ?")
             # Use current working directory since MCP_PROJECT_PATH isn't reliably set
             params.append(os.getcwd())

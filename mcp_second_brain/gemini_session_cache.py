@@ -1,5 +1,5 @@
 import time
-import json
+import orjson
 import logging
 import threading
 from typing import List, Dict, Optional, Any
@@ -101,7 +101,7 @@ class _SQLiteGeminiSessionCache(BaseSQLiteCache):
             )
             return []
         try:
-            history_data = json.loads(messages_json)
+            history_data = orjson.loads(messages_json)
             return [_dict_to_content(item) for item in history_data]
         except Exception:
             logger.warning("Failed to decode history for %s", session_id)
@@ -114,7 +114,7 @@ class _SQLiteGeminiSessionCache(BaseSQLiteCache):
 
         # Serialize the entire history
         history_data = [_content_to_dict(content) for content in history]
-        history_json = json.dumps(history_data)
+        history_json = orjson.dumps(history_data).decode("utf-8")
 
         await self._execute_async(
             "REPLACE INTO gemini_sessions(session_id, messages, updated_at) VALUES(?,?,?)",
