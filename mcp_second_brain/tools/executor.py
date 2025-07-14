@@ -336,22 +336,34 @@ class ToolExecutor:
             if explicit_vs_ids:
                 vector_store_ids = (vector_store_ids or []) + list(explicit_vs_ids)
 
+            timeout_seconds = metadata.model_config["timeout"]
             logger.info(
-                f"[STEP 15] Calling adapter.generate with prompt {len(final_prompt)} chars, vector_store_ids={vector_store_ids}"
+                f"[STEP 15] Calling adapter.generate with prompt {len(final_prompt)} chars, vector_store_ids={vector_store_ids}, timeout={timeout_seconds}s"
             )
 
-            result = await asyncio.wait_for(
-                adapter.generate(
-                    prompt=final_prompt,
-                    vector_store_ids=vector_store_ids,
-                    timeout=metadata.model_config["timeout"],
-                    **adapter_params,
-                ),
-                timeout=metadata.model_config["timeout"],
-            )
-            logger.info(
-                f"[STEP 16] adapter.generate completed, result type: {type(result)}"
-            )
+            try:
+                result = await asyncio.wait_for(
+                    adapter.generate(
+                        prompt=final_prompt,
+                        vector_store_ids=vector_store_ids,
+                        timeout=timeout_seconds,
+                        **adapter_params,
+                    ),
+                    timeout=timeout_seconds,
+                )
+                logger.info(
+                    f"[STEP 16] adapter.generate completed, result type: {type(result)}, length: {len(str(result)) if result else 0}"
+                )
+            except asyncio.TimeoutError:
+                logger.error(
+                    f"[CRITICAL] Adapter timeout after {timeout_seconds}s for {tool_id}"
+                )
+                raise fastmcp.exceptions.ToolError(
+                    f"Tool execution timed out after {timeout_seconds} seconds"
+                )
+            except Exception as e:
+                logger.error(f"[CRITICAL] Adapter generate failed for {tool_id}: {e}")
+                raise
 
             # 8. Handle response
             logger.info("[STEP 17] Handling response")
@@ -419,6 +431,14 @@ class ToolExecutor:
                 # No need to save sessions here for Vertex/Grok models
 
                 return redacted_result
+
+        except Exception as e:
+            logger.error(f"[CRITICAL] Tool execution failed for {tool_id}: {e}")
+            import traceback
+
+            logger.error(f"[CRITICAL] Traceback: {traceback.format_exc()}")
+            # Re-raise as ToolError for proper MCP error handling
+            raise fastmcp.exceptions.ToolError(f"Tool execution failed: {str(e)}")
 
         finally:
             # Cleanup
