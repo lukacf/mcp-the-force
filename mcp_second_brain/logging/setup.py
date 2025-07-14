@@ -2,6 +2,7 @@
 
 import logging
 import os
+import sys
 import uuid
 from pathlib import Path
 from logging_loki import LokiHandler
@@ -33,22 +34,23 @@ def setup_logging():
         app_logger.addHandler(logging.NullHandler())
         return
 
-    # Use standard logging-loki handler
-    loki_handler = LokiHandler(
-        url="http://localhost:9428/insert/loki/api/v1/push?_stream_fields=app,instance_id",
-        tags={
-            "app": "mcp-second-brain",
-            "instance_id": generate_instance_id(),  # Semantic instance ID
-            "project": os.getenv("MCP_PROJECT_PATH", os.getcwd()),
-        },
-        version="1",
-    )
-
-    app_logger.addHandler(loki_handler)
+    # Try to set up VictoriaLogs handler, but don't block startup if it fails
+    try:
+        loki_handler = LokiHandler(
+            url="http://localhost:9428/insert/loki/api/v1/push?_stream_fields=app,instance_id",
+            tags={
+                "app": "mcp-second-brain",
+                "instance_id": generate_instance_id(),  # Semantic instance ID
+                "project": os.getenv("MCP_PROJECT_PATH", os.getcwd()),
+            },
+            version="1",
+        )
+        app_logger.addHandler(loki_handler)
+    except Exception as e:
+        # Don't block server startup if VictoriaLogs is unavailable
+        print(f"Warning: Could not connect to VictoriaLogs: {e}", file=sys.stderr)
 
     # CRITICAL: Also add stderr handler for MCP servers (stdout must stay clean for JSON-RPC)
-    import sys
-
     stderr_handler = logging.StreamHandler(sys.stderr)
     stderr_handler.setFormatter(
         logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
