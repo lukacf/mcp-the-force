@@ -70,6 +70,11 @@ def main():
         logger.info("MCP server exited normally")
     except KeyboardInterrupt:
         logger.info("MCP server interrupted by user")
+    except BrokenPipeError:
+        logger.info(
+            "MCP server client disconnected (broken pipe) - continuing operations"
+        )
+        # Don't exit - continue running to handle client reconnection
     except Exception as e:
         logger.error(f"MCP server crashed with exception: {e}")
         import traceback
