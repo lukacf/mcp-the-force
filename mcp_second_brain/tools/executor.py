@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import time
 from typing import Optional, List, Dict, Any, Union, Coroutine
 import fastmcp.exceptions
 from mcp_second_brain import adapters
@@ -337,8 +338,12 @@ class ToolExecutor:
                 vector_store_ids = (vector_store_ids or []) + list(explicit_vs_ids)
 
             timeout_seconds = metadata.model_config["timeout"]
+            start_time = time.time()
             logger.info(
                 f"[STEP 15] Calling adapter.generate with prompt {len(final_prompt)} chars, vector_store_ids={vector_store_ids}, timeout={timeout_seconds}s"
+            )
+            logger.info(
+                f"[TIMING] Starting adapter.generate at {time.strftime('%H:%M:%S')}"
             )
 
             try:
@@ -351,12 +356,29 @@ class ToolExecutor:
                     ),
                     timeout=timeout_seconds,
                 )
+                end_time = time.time()
+                duration = end_time - start_time
                 logger.info(
-                    f"[STEP 16] adapter.generate completed, result type: {type(result)}, length: {len(str(result)) if result else 0}"
+                    f"[STEP 16] adapter.generate completed in {duration:.2f}s, result type: {type(result)}, length: {len(str(result)) if result else 0}"
+                )
+                logger.info(
+                    f"[TIMING] Completed adapter.generate at {time.strftime('%H:%M:%S')}"
+                )
+            except asyncio.CancelledError:
+                cancel_time = time.time()
+                partial_duration = cancel_time - start_time
+                logger.info(
+                    f"[GRACEFUL] Tool execution cancelled by user for {tool_id} after {partial_duration:.2f}s"
+                )
+                # Don't re-raise - convert to proper MCP error response
+                raise fastmcp.exceptions.ToolError(
+                    f"Tool execution was cancelled by user after {partial_duration:.2f} seconds"
                 )
             except asyncio.TimeoutError:
+                timeout_time = time.time()
+                partial_duration = timeout_time - start_time
                 logger.error(
-                    f"[CRITICAL] Adapter timeout after {timeout_seconds}s for {tool_id}"
+                    f"[CRITICAL] Adapter timeout after {timeout_seconds}s for {tool_id} (actual duration: {partial_duration:.2f}s)"
                 )
                 raise fastmcp.exceptions.ToolError(
                     f"Tool execution timed out after {timeout_seconds} seconds"

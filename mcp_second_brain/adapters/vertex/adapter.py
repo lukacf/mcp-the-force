@@ -2,6 +2,7 @@ from typing import Any, List, Optional, Dict
 import asyncio
 import logging
 import threading
+import time
 from google import genai
 from google.genai import types
 from google.genai.types import HarmCategory, HarmBlockThreshold
@@ -82,7 +83,16 @@ class VertexAdapter(BaseAdapter):
     async def _generate_async(self, client, **kwargs):
         """Async wrapper for synchronous generate_content calls."""
         try:
-            return await asyncio.to_thread(client.models.generate_content, **kwargs)
+            logger.info(
+                f"[ADAPTER] Starting Vertex generate_content at {time.strftime('%H:%M:%S')}"
+            )
+            api_start_time = time.time()
+            result = await asyncio.to_thread(client.models.generate_content, **kwargs)
+            api_end_time = time.time()
+            logger.info(
+                f"[ADAPTER] Vertex generate_content completed in {api_end_time - api_start_time:.2f}s"
+            )
+            return result
         except asyncio.CancelledError:
             raise
 

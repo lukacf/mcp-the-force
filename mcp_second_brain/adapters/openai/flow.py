@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import random
+import time
 from abc import ABC, abstractmethod
 from typing import Dict, Any, List, Set
 from dataclasses import dataclass
@@ -272,7 +273,15 @@ class BackgroundFlowStrategy(BaseFlowStrategy):
             api_params.pop("reasoning_effort", None)
 
         # Create initial response
+        logger.info(
+            f"[ADAPTER] Starting OpenAI responses.create at {time.strftime('%H:%M:%S')}"
+        )
+        api_start_time = time.time()
         initial_response = await self.context.client.responses.create(**api_params)
+        api_end_time = time.time()
+        logger.info(
+            f"[ADAPTER] OpenAI responses.create completed in {api_end_time - api_start_time:.2f}s"
+        )
         response_id = initial_response.id
 
         # Check if the initial response is already completed (for tests/immediate responses)
@@ -321,7 +330,13 @@ class BackgroundFlowStrategy(BaseFlowStrategy):
                 break
 
             # Check status
+            logger.debug(
+                f"[ADAPTER] Polling OpenAI response status for {response_id} at {time.strftime('%H:%M:%S')} (elapsed: {elapsed:.1f}s)"
+            )
             job = await self.context.client.responses.retrieve(response_id)
+            logger.debug(
+                f"[ADAPTER] OpenAI response {response_id} status: {job.status}"
+            )
 
             if job.status == "completed":
                 # Extract content
