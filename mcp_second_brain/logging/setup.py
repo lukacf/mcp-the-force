@@ -45,7 +45,17 @@ def setup_logging():
     )
 
     app_logger.addHandler(loki_handler)
-    app_logger.info("Logging initialized with VictoriaLogs")
+
+    # CRITICAL: Also add stderr handler for MCP servers (stdout must stay clean for JSON-RPC)
+    import sys
+
+    stderr_handler = logging.StreamHandler(sys.stderr)
+    stderr_handler.setFormatter(
+        logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    )
+    app_logger.addHandler(stderr_handler)
+
+    app_logger.info("Logging initialized with VictoriaLogs and stderr")
 
 
 def shutdown_logging():
