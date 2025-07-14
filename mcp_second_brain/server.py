@@ -64,23 +64,35 @@ def main():
     if sys.platform == "win32":
         asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
-    try:
-        logger.info("Starting MCP server...")
-        mcp.run()
-        logger.info("MCP server exited normally")
-    except KeyboardInterrupt:
-        logger.info("MCP server interrupted by user")
-    except BrokenPipeError:
-        logger.info(
-            "MCP server client disconnected (broken pipe) - continuing operations"
-        )
-        # Don't exit - continue running to handle client reconnection
-    except Exception as e:
-        logger.error(f"MCP server crashed with exception: {e}")
-        import traceback
+    while True:
+        try:
+            logger.info("Starting MCP server...")
+            mcp.run()
+            logger.info("MCP server exited normally")
+            break  # Normal exit
+        except KeyboardInterrupt:
+            logger.info("MCP server interrupted by user")
+            break  # User requested exit
+        except BrokenPipeError:
+            logger.info(
+                "MCP server client disconnected (broken pipe) - restarting server"
+            )
+            continue  # Restart server
+        except Exception as e:
+            # Handle FastMCP client disconnection errors
+            import anyio
 
-        logger.error(f"Traceback: {traceback.format_exc()}")
-        raise
+            if isinstance(e, (anyio.ClosedResourceError, anyio.BrokenResourceError)):
+                logger.info(
+                    f"MCP server client disconnected ({type(e).__name__}) - restarting server"
+                )
+                continue  # Restart server
+            else:
+                logger.error(f"MCP server crashed with exception: {e}")
+                import traceback
+
+                logger.error(f"Traceback: {traceback.format_exc()}")
+                raise
 
 
 if __name__ == "__main__":

@@ -94,6 +94,7 @@ class VertexAdapter(BaseAdapter):
             )
             return result
         except asyncio.CancelledError:
+            logger.info("[ADAPTER] Vertex generate_content cancelled by user")
             raise
 
     async def generate(
