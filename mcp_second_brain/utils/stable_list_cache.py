@@ -152,7 +152,8 @@ class StableListCache(BaseSQLiteCache):
             (session_id, file_path, size, mtime),
             fetch=False,
         )
-        logger.debug(f"Updated sent info for {file_path} in session {session_id}")
+        # Don't log per-file updates - this gets called hundreds of times and can cause hangs
+        # logger.debug(f"Updated sent info for {file_path} in session {session_id}")
 
     async def batch_update_sent_files(
         self, session_id: str, files_info: List[Tuple[str, int, int]]
@@ -172,7 +173,11 @@ class StableListCache(BaseSQLiteCache):
                 )
 
         await asyncio.to_thread(_sync_batch_update)
-        logger.debug(f"Batch updated {len(files_info)} files for session {session_id}")
+        # Only log if batch is reasonably sized to avoid log spam
+        if len(files_info) <= 20:
+            logger.debug(
+                f"Batch updated {len(files_info)} files for session {session_id}"
+            )
 
     async def file_changed_since_last_send(
         self, session_id: str, file_path: str

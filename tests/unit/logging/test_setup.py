@@ -22,6 +22,7 @@ class TestLoggingSetup:
         settings.logging.developer_mode.batch_size = 100
         settings.logging.developer_mode.batch_timeout = 1.0
         settings.logging.developer_mode.max_db_size_mb = 1000
+        settings.logging.developer_mode.handover_timeout = 5.0
         return settings
 
     @pytest.fixture
@@ -51,18 +52,23 @@ class TestLoggingSetup:
             yield mock_handler_class, mock_handler
 
     def test_setup_logging_configures_basic_logging(self, mock_settings):
-        """Test that setup_logging configures basic logging."""
+        """Test that setup_logging configures application logger."""
         with patch(
             "mcp_second_brain.logging.setup.get_settings", return_value=mock_settings
         ):
-            with patch("logging.basicConfig") as mock_basic_config:
+            with patch("logging.getLogger") as mock_get_logger:
+                mock_app_logger = Mock()
+                mock_get_logger.return_value = mock_app_logger
+
                 setup_logging()
 
-                # Should use DEBUG level when developer mode is enabled
-                mock_basic_config.assert_called_once_with(
-                    level=logging.DEBUG,
-                    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-                )
+                # Should configure our app logger with level from settings
+                mock_get_logger.assert_called_with("mcp_second_brain")
+                mock_app_logger.setLevel.assert_called_with(
+                    "INFO"
+                )  # From mock_settings
+                # propagate should be False to prevent stderr pollution
+                assert mock_app_logger.propagate is False
 
     def test_setup_logging_with_developer_mode_disabled(self, mock_settings_disabled):
         """Test that setup_logging skips ZMQ setup when developer mode is disabled."""
@@ -95,12 +101,15 @@ class TestLoggingSetup:
                     setup_logging()
 
                     # Verify server was created with correct parameters
+                    # Path is resolved by centralization logic
+                    import os
+
+                    expected_path = os.path.expanduser("~/.mcp_logs/test.sqlite3")
                     mock_server_class.assert_called_once_with(
                         port=4711,
-                        db_path="test.sqlite3",
+                        db_path=expected_path,
                         batch_size=100,
                         batch_timeout=1.0,
-                        max_db_size_mb=mock_settings.logging.developer_mode.max_db_size_mb,
                     )
 
                     # Verify thread was started
@@ -146,19 +155,19 @@ class TestLoggingSetup:
                     mock_uuid.return_value.hex = "abcd1234"
                     with patch("os.getpid", return_value=12345):
                         # Create a mock for the root logger only when called without arguments
-                        mock_root_logger = Mock()
-                        mock_root_logger.handlers = []
+                        mock_app_logger = Mock()
+                        mock_app_logger.handlers = []
                         # Mock the manager to avoid issues with pytest's logging capture
                         mock_manager = Mock()
                         mock_manager.disable = 0  # Set a valid integer value
-                        mock_root_logger.manager = mock_manager
+                        mock_app_logger.manager = mock_manager
 
-                        # Patch logging.getLogger to only mock the root logger call
+                        # Patch logging.getLogger to mock our app logger call
                         original_get_logger = logging.getLogger
 
                         def mock_get_logger(name=None):
-                            if name is None:  # Root logger
-                                return mock_root_logger
+                            if name == "mcp_second_brain":  # Our app logger
+                                return mock_app_logger
                             return original_get_logger(
                                 name
                             )  # Let other loggers work normally
@@ -169,11 +178,11 @@ class TestLoggingSetup:
 
                                 # Verify handler was created with correct parameters
                                 mock_handler_class.assert_called_once_with(
-                                    "tcp://localhost:4711", "12345-abcd1234"
+                                    "tcp://localhost:4711", "12345-abcd1234", 5.0
                                 )
 
-                                # Verify handler was added to root logger
-                                mock_root_logger.addHandler.assert_called_once_with(
+                                # Verify handler was added to app logger
+                                mock_app_logger.addHandler.assert_called_once_with(
                                     mock_handler_class.return_value
                                 )
 
