@@ -130,8 +130,12 @@ class TestZMQLogHandler:
         handler.sender_thread.join(timeout=1.0)
 
         # Verify message was sent with correct format
-        mock_socket.send_json.assert_called_once()
-        call_args = mock_socket.send_json.call_args[0][0]
+        mock_socket.send.assert_called_once()
+        # Decode the orjson bytes
+        import orjson
+
+        sent_data = mock_socket.send.call_args[0][0]
+        call_args = orjson.loads(sent_data)
 
         assert call_args["timestamp"] == 1234567890.0
         assert call_args["level"] == "INFO"
@@ -149,7 +153,7 @@ class TestZMQLogHandler:
         mock_context, mock_socket = mock_zmq_context
 
         # Configure socket to raise zmq.Again (buffer full)
-        mock_socket.send_json.side_effect = zmq.Again()
+        mock_socket.send.side_effect = zmq.Again()
 
         handler = ZMQLogHandler("tcp://localhost:4711", "test-instance")
 
@@ -200,7 +204,10 @@ class TestZMQLogHandler:
             handler.sender_thread.join(timeout=1.0)
 
             # Verify project_cwd was set from environment
-            call_args = mock_socket.send_json.call_args[0][0]
+            import orjson
+
+            sent_data = mock_socket.send.call_args[0][0]
+            call_args = orjson.loads(sent_data)
             assert call_args["project_cwd"] == "/custom/project/path"
 
     def test_close_sends_shutdown_signal(self, mock_zmq_context, mock_redaction_filter):
@@ -287,5 +294,8 @@ class TestZMQLogHandler:
         handler.sender_thread.join(timeout=1.0)
 
         # Verify trace_id was included
-        call_args = mock_socket.send_json.call_args[0][0]
+        import orjson
+
+        sent_data = mock_socket.send.call_args[0][0]
+        call_args = orjson.loads(sent_data)
         assert call_args["trace_id"] == "test-trace-123"

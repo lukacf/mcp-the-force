@@ -5,6 +5,7 @@ import sqlite3
 import threading
 import time
 import json
+import orjson
 from typing import List, Dict, Any
 
 
@@ -78,7 +79,9 @@ class ZMQLogServer:
                 if self.socket in events:
                     # Message available - receive it
                     try:
-                        msg = self.socket.recv_json(flags=zmq.NOBLOCK)
+                        # Receive orjson bytes and decode
+                        data = self.socket.recv(flags=zmq.NOBLOCK)
+                        msg = orjson.loads(data)
                         batch.append(msg)
                     except zmq.Again:
                         # Should not happen since poll indicated data ready
