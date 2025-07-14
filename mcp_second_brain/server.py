@@ -38,6 +38,12 @@ def main():
     """Main entry point."""
     import asyncio
     import sys
+    import signal
+    import errno
+
+    # Ignore SIGPIPE to prevent crashes on broken pipes (Unix only)
+    if sys.platform != "win32":
+        signal.signal(signal.SIGPIPE, signal.SIG_IGN)
 
     # Handle --help and --version
     if "--help" in sys.argv or "-h" in sys.argv:
@@ -73,26 +79,49 @@ def main():
         except KeyboardInterrupt:
             logger.info("MCP server interrupted by user")
             break  # User requested exit
-        except BrokenPipeError:
-            logger.info(
-                "MCP server client disconnected (broken pipe) - restarting server"
-            )
+        except (BrokenPipeError, OSError) as e:
+            if isinstance(e, OSError) and e.errno == errno.EPIPE:  # Broken pipe errno
+                logger.info("Detected broken pipe - client likely disconnected")
+            else:
+                logger.info(
+                    f"MCP server client disconnected (pipe error: {e}) - restarting"
+                )
             continue  # Restart server
         except Exception as e:
             # Handle FastMCP client disconnection errors
             import anyio
 
-            if isinstance(e, (anyio.ClosedResourceError, anyio.BrokenResourceError)):
+            # Check for anyio disconnection exceptions
+            anyio_disconnect_errors = (
+                anyio.ClosedResourceError,
+                anyio.BrokenResourceError,
+                anyio.EndOfStream,
+            )
+
+            # Also check for ExceptionGroup containing disconnection errors
+            if isinstance(e, anyio_disconnect_errors):
                 logger.info(
                     f"MCP server client disconnected ({type(e).__name__}) - restarting server"
                 )
                 continue  # Restart server
-            else:
-                logger.error(f"MCP server crashed with exception: {e}")
-                import traceback
+            elif hasattr(anyio, "ExceptionGroup") and isinstance(
+                e, anyio.ExceptionGroup
+            ):
+                # Check if any sub-exception is a disconnection error
+                if any(
+                    isinstance(sub_e, anyio_disconnect_errors) for sub_e in e.exceptions
+                ):
+                    logger.info(
+                        f"MCP server client disconnected (ExceptionGroup with {type(e).__name__}) - restarting server"
+                    )
+                    continue  # Restart server
 
-                logger.error(f"Traceback: {traceback.format_exc()}")
-                raise
+            # Not a disconnection error - this is a real crash
+            logger.error(f"MCP server crashed with exception: {e}")
+            import traceback
+
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            raise
 
 
 if __name__ == "__main__":
