@@ -2,8 +2,20 @@
 
 import logging
 import os
+import uuid
+from pathlib import Path
 from logging_loki import LokiHandler
 from ..config import get_settings
+
+
+def generate_instance_id() -> str:
+    """Generate semantic instance ID based on runtime context."""
+    project = Path.cwd().name  # Project name from current directory
+    is_container = Path("/.dockerenv").exists()  # Docker container detection
+    context = "test" if is_container else "dev"  # Simple context distinction
+    session = str(uuid.uuid4())[:8]  # Unique session identifier
+
+    return f"{project}_{context}_{session}"
 
 
 def setup_logging():
@@ -26,7 +38,7 @@ def setup_logging():
         url="http://localhost:9428/insert/loki/api/v1/push?_stream_fields=app,instance_id",
         tags={
             "app": "mcp-second-brain",
-            "instance_id": settings.instance_id,
+            "instance_id": generate_instance_id(),  # Semantic instance ID
             "project": os.getenv("MCP_PROJECT_PATH", os.getcwd()),
         },
         version="1",
