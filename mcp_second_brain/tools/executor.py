@@ -1,6 +1,7 @@
 """Executor for dataclass-based tools."""
 
 import asyncio
+import contextlib
 import logging
 import time
 from typing import Optional, List, Dict, Any
@@ -60,6 +61,7 @@ class ToolExecutor:
         tool_id = metadata.id
         vs_id: Optional[str] = None  # Initialize to avoid UnboundLocalError
         memory_tasks: List[asyncio.Task] = []  # Track memory storage tasks
+        was_cancelled = False  # Track if the operation was cancelled
 
         try:
             # 1. Create tool instance and validate inputs
@@ -368,6 +370,7 @@ class ToolExecutor:
                 logger.info(
                     f"[GRACEFUL] Tool execution cancelled by user for {tool_id} after {partial_duration:.2f}s"
                 )
+                was_cancelled = True  # Mark as cancelled
                 # Re-raise to let FastMCP handle cancellation properly
                 raise
             except asyncio.TimeoutError:
@@ -451,6 +454,7 @@ class ToolExecutor:
                 return redacted_result
 
         except asyncio.CancelledError:
+            was_cancelled = True  # Mark as cancelled
             # Re-raise CancelledError to let FastMCP handle it properly
             # This MUST propagate unchanged per MCP spec
             raise
@@ -463,33 +467,32 @@ class ToolExecutor:
             raise fastmcp.exceptions.ToolError(f"Tool execution failed: {str(e)}")
 
         finally:
-            # If this coroutine is being cancelled, do NOT block on more awaits
-            current_task = asyncio.current_task()
-            if current_task and current_task.cancelled():
-                # Schedule best-effort background cleanup and return immediately
+            # If operation was cancelled, do NOT block on more awaits
+            if was_cancelled:
+                # Fast exit - schedule best-effort background cleanup
                 if vs_id:
                     asyncio.create_task(vector_store_manager.delete(vs_id))
                 # Cancel memory tasks to free resources
                 for task in memory_tasks:  # type: ignore[assignment]
                     task.cancel()  # type: ignore[attr-defined]
                 logger.info(f"{tool_id} cancelled - cleanup scheduled in background")
-            else:
-                # Normal path (no cancellation) - safe to await
-                if vs_id:
-                    await vector_store_manager.delete(vs_id)
+                return ""  # CRITICAL: Exit immediately without any more awaits
 
-                # Wait for memory tasks to complete (with timeout to prevent hangs)
-                if memory_tasks:
-                    try:
-                        # Always contains asyncio tasks (both test and production)
-                        await asyncio.wait_for(
-                            asyncio.gather(*memory_tasks, return_exceptions=True),
-                            timeout=120.0,
-                        )
-                    except asyncio.TimeoutError:
-                        logger.warning("Memory storage tasks timed out")
-                    except Exception as e:
-                        logger.warning(f"Error waiting for memory tasks: {e}")
+            # Normal path (no cancellation) - safe to await with timeouts
+            if vs_id:
+                # Add timeout to avoid hanging on cleanup
+                with contextlib.suppress(asyncio.TimeoutError):
+                    await asyncio.wait_for(
+                        vector_store_manager.delete(vs_id), timeout=5.0
+                    )
+
+            # Wait for memory tasks to complete (with shorter timeout)
+            if memory_tasks:
+                with contextlib.suppress(asyncio.TimeoutError):
+                    await asyncio.wait_for(
+                        asyncio.gather(*memory_tasks, return_exceptions=True),
+                        timeout=5.0,  # Reduced from 120s to 5s
+                    )
 
             elapsed = asyncio.get_event_loop().time() - start_time
             logger.info(f"{tool_id} completed in {elapsed:.2f}s")
