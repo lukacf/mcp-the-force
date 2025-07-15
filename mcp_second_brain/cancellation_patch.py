@@ -215,16 +215,16 @@ def patch_tool_execution() -> None:
     _debug_log("patch_tool_execution() called")
     try:
         # Patch FastMCP's call_tool for tracking
-        from mcp.server.fastmcp import FastMCP
+        from fastmcp import FastMCP
 
         _debug_log("Imported FastMCP successfully")
 
-        original_call_tool = FastMCP.call_tool
-        _debug_log(f"Original call_tool method: {original_call_tool}")
+        original_call_tool = FastMCP._mcp_call_tool
+        _debug_log(f"Original _mcp_call_tool method: {original_call_tool}")
 
         @functools.wraps(original_call_tool)
         async def tracked_call_tool(self: FastMCP, name: str, arguments: dict) -> Any:
-            """Wrapped call_tool that tracks operations."""
+            """Wrapped _mcp_call_tool that tracks operations."""
             # Create task for tracking
             current_task = asyncio.current_task()
             if current_task:
@@ -248,9 +248,9 @@ def patch_tool_execution() -> None:
                 if current_task:
                     _active_operations.discard(current_task)
 
-        setattr(FastMCP, "call_tool", tracked_call_tool)
-        _debug_log("SUCCESSFULLY PATCHED FastMCP.call_tool")
-        logger.info("Patched FastMCP.call_tool for operation tracking")
+        setattr(FastMCP, "_mcp_call_tool", tracked_call_tool)
+        _debug_log("SUCCESSFULLY PATCHED FastMCP._mcp_call_tool")
+        logger.info("Patched FastMCP._mcp_call_tool for operation tracking")
 
     except ImportError as e:
         _debug_log(f"Failed to import FastMCP: {e}")
