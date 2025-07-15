@@ -9,9 +9,8 @@ setup_logging()
 
 # Apply patches BEFORE importing any MCP modules
 # This is critical - patches must be in place before MCP loads
-import mcp_second_brain.patch_mcp_cancel_response  # noqa: F401, E402
-import mcp_second_brain.patch_fastmcp_send_safe  # noqa: F401, E402
-import mcp_second_brain.patch_fastmcp_cancel  # noqa: F401, E402
+from mcp_second_brain.cancellation_patch import monkeypatch_all  # noqa: E402
+monkeypatch_all()  # Apply comprehensive cancellation handling
 
 # Also ensure operation_manager is available for Claude Code abort handling
 from .operation_manager import operation_manager  # noqa: F401, E402
