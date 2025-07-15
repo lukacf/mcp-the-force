@@ -377,8 +377,8 @@ class ToolExecutor:
                     f"[GRACEFUL] Tool execution cancelled by user for {tool_id} after {partial_duration:.2f}s"
                 )
                 was_cancelled = True  # Mark as cancelled
-                # Per FastMCP bug workaround - return result instead of re-raising
-                result = {"content": "Operation cancelled by user"}
+                # Re-raise to let patch_fastmcp_cancel handle it
+                raise
             except asyncio.TimeoutError:
                 timeout_time = time.time()
                 partial_duration = timeout_time - start_time
@@ -461,8 +461,9 @@ class ToolExecutor:
 
         except asyncio.CancelledError:
             was_cancelled = True  # Mark as cancelled
-            # Per FastMCP bug workaround - return "cancelled" instead of re-raising
-            return "Operation cancelled by user"
+            logger.info(f"{tool_id} cancelled by user")
+            # Re-raise to let patch_fastmcp_cancel handle it
+            raise
         except Exception as e:
             logger.error(f"[CRITICAL] Tool execution failed for {tool_id}: {e}")
             import traceback
@@ -483,10 +484,14 @@ class ToolExecutor:
                         except Exception as e:
                             logger.debug(f"Background cleanup failed (expected): {e}")
 
-                    asyncio.create_task(safe_cleanup())
+                    bg_task = asyncio.create_task(safe_cleanup())
+                    # Mark exception as retrieved to prevent ExceptionGroup
+                    bg_task.add_done_callback(lambda t: t.exception())
                 # Cancel memory tasks to free resources
                 for task in memory_tasks:  # type: ignore[assignment]
                     task.cancel()  # type: ignore[attr-defined]
+                    # Mark exception as retrieved to prevent ExceptionGroup
+                    task.add_done_callback(lambda t: t.exception())
                 logger.info(f"{tool_id} cancelled - cleanup scheduled in background")
                 # DON'T return empty string - this prevents proper error handling!
 

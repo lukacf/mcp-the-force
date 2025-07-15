@@ -39,6 +39,7 @@ if hasattr(_session.BaseSession, "_send_response"):
         except (
             anyio.ClosedResourceError,  # client went away
             anyio.BrokenResourceError,
+            anyio.EndOfStream,  # consumer closed stream during late flushes
         ) as e:
             _debug_log(f"Caught disconnect error: {type(e).__name__}: {e}")
             logger.debug("Client disconnected before response")

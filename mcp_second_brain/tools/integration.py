@@ -1,9 +1,8 @@
 """Integration layer between dataclass tools and FastMCP."""
 
-import asyncio
 from typing import Any, Dict, List, Optional
 from inspect import Parameter, Signature
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 import fastmcp.exceptions
 import logging
 from .registry import list_tools, ToolMetadata
@@ -54,9 +53,6 @@ def create_tool_function(metadata: ToolMetadata):
             bound = signature.bind(*args, **kwargs)
             bound.apply_defaults()
             return await executor.execute(metadata, **bound.arguments)
-        except asyncio.CancelledError:
-            # Per FastMCP bug workaround - return "cancelled" instead of re-raising
-            return "Operation cancelled by user"
         except TypeError as e:
             # Provide helpful error message via MCP error mechanism
             raise fastmcp.exceptions.ToolError(f"Invalid arguments: {e}")
@@ -66,6 +62,13 @@ def create_tool_function(metadata: ToolMetadata):
     tool_function.__doc__ = metadata.model_config["description"]
     # Set signature using setattr to avoid mypy complaints
     setattr(tool_function, "__signature__", signature)
+
+    # CRITICAL: Set annotations for FastMCP 2.x compatibility
+    # FastMCP uses pydantic which expects __annotations__ to be set
+    annotations = {"return": str}
+    for param in sig_params:
+        annotations[param.name] = param.annotation
+    tool_function.__annotations__ = annotations
 
     return tool_function
 
