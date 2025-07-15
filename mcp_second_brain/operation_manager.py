@@ -57,18 +57,14 @@ class OperationManager:
             _debug_log(f"Operation timed out: {operation_id}")
             raise
         except asyncio.CancelledError:
-            logger.info(
-                f"Operation {operation_id} was cancelled - returning empty success"
-            )
-            _debug_log(
-                f"Operation was cancelled - returning empty success: {operation_id}"
-            )
+            logger.info(f"Operation {operation_id} was cancelled by MCP.")
+            _debug_log(f"Operation cancelled by MCP, re-raising: {operation_id}")
             # Explicitly cancel the inner task to ensure clean shutdown
             if not task.done():
                 task.cancel()
                 _debug_log(f"Explicitly cancelled inner task: {operation_id}")
-            # Return empty string instead of raising - pretend success!
-            return ""
+            # Re-raise to let the cancellation propagate properly
+            raise
         except Exception as e:
             logger.error(f"Operation {operation_id} failed: {e}")
             _debug_log(
