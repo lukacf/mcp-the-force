@@ -1,5 +1,6 @@
 """Integration layer between dataclass tools and FastMCP."""
 
+import asyncio
 from typing import Any, Dict, List, Optional
 from inspect import Parameter, Signature
 from mcp.server.fastmcp import FastMCP
@@ -53,6 +54,9 @@ def create_tool_function(metadata: ToolMetadata):
             bound = signature.bind(*args, **kwargs)
             bound.apply_defaults()
             return await executor.execute(metadata, **bound.arguments)
+        except asyncio.CancelledError:
+            # Per FastMCP bug workaround - return "cancelled" instead of re-raising
+            return "Operation cancelled by user"
         except TypeError as e:
             # Provide helpful error message via MCP error mechanism
             raise fastmcp.exceptions.ToolError(f"Invalid arguments: {e}")

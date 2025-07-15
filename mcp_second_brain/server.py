@@ -1,25 +1,30 @@
 #!/usr/bin/env python3
 """MCP Second-Brain Server with dataclass-based tools."""
 
-from mcp.server.fastmcp import FastMCP
 import logging
 from .logging.setup import setup_logging
-from .cancellation_patch import monkeypatch_all
-
-# Import all tool definitions to register them
-from .tools import definitions  # noqa: F401 # This import triggers the @tool decorators
-from .tools import search_memory  # noqa: F401 # Import search_project_memory tool
-from .tools.integration import (
-    register_all_tools,
-    create_list_models_tool,
-    create_count_project_tokens_tool,
-)
 
 # Initialize the new logging system first
 setup_logging()
 
-# Apply cancellation patches
-monkeypatch_all()
+# Apply simplified FastMCP patch BEFORE importing FastMCP
+# This is critical - the patch must be in place before FastMCP loads
+import mcp_second_brain.patch_fastmcp_send_safe  # noqa: F401, E402
+
+# Also ensure operation_manager is available for Claude Code abort handling
+from .operation_manager import operation_manager  # noqa: F401, E402
+
+# NOW import FastMCP after patches are applied
+from mcp.server.fastmcp import FastMCP  # noqa: E402
+
+# Import all tool definitions to register them
+from .tools import definitions  # noqa: F401, E402 # This import triggers the @tool decorators
+from .tools import search_memory  # noqa: F401, E402 # Import search_project_memory tool
+from .tools.integration import (  # noqa: E402
+    register_all_tools,
+    create_list_models_tool,
+    create_count_project_tokens_tool,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +111,75 @@ def main():
             logger.info(f"Client disconnected: {type(e).__name__}")
         sys.exit(0)  # Clean exit - Claude will spawn new process if needed
     except Exception as e:
+        # Special handling for Python 3.11+ ExceptionGroup
+        if sys.version_info >= (3, 11) and type(e).__name__ == "ExceptionGroup":
+            # Debug log
+            import os
+            from datetime import datetime
+
+            try:
+                debug_file = os.path.join(os.getcwd(), "mcp_cancellation_debug.log")
+                with open(debug_file, "a") as f:
+                    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+                    f.write(f"[{timestamp}] SERVER MAIN: Caught ExceptionGroup\n")
+                    f.flush()
+            except Exception:
+                pass
+
+            # Define what constitutes a benign disconnect error
+            import anyio
+
+            anyio_disconnect_errors = (
+                anyio.ClosedResourceError,
+                anyio.BrokenResourceError,
+                anyio.EndOfStream,
+            )
+
+            def is_benign_disconnect(exc):
+                """Check if exception is a benign disconnect that should be ignored."""
+                return isinstance(
+                    exc,
+                    (
+                        asyncio.CancelledError,
+                        BrokenPipeError,
+                        ConnectionError,
+                        EOFError,
+                        *anyio_disconnect_errors,
+                    ),
+                ) or (isinstance(exc, OSError) and exc.errno == errno.EPIPE)
+
+            # Filter out all benign disconnect errors
+            non_benign_group = e.subgroup(lambda exc: not is_benign_disconnect(exc))
+
+            if non_benign_group is None:
+                # All exceptions were benign disconnects - normal exit
+                logger.info(
+                    "Suppressed ExceptionGroup with only benign disconnect errors"
+                )
+                sys.exit(0)  # Exit cleanly for stdio transport
+            else:
+                # There are real errors
+                logger.error(
+                    "Server crashed with ExceptionGroup containing real errors"
+                )
+                raise non_benign_group
+
+        # Not an ExceptionGroup - continue with original handler
+        # Debug log to file
+        import os
+        from datetime import datetime
+
+        try:
+            debug_file = os.path.join(os.getcwd(), "mcp_cancellation_debug.log")
+            with open(debug_file, "a") as f:
+                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+                f.write(
+                    f"[{timestamp}] SERVER MAIN: Caught exception: {type(e).__name__}: {e}\n"
+                )
+                f.flush()
+        except Exception:
+            pass
+
         # Handle anyio disconnection errors
         import anyio
 

@@ -4,6 +4,7 @@ import asyncio
 import contextlib
 import logging
 import time
+import uuid
 from typing import Optional, List, Dict, Any
 import fastmcp.exceptions
 from mcp_second_brain import adapters
@@ -19,6 +20,7 @@ from .parameter_router import ParameterRouter
 from ..memory import store_conversation_memory
 from ..config import get_settings
 from ..utils.redaction import redact_secrets
+from ..operation_manager import operation_manager
 
 # Stable list imports
 from ..utils.context_builder import build_context_with_stable_list
@@ -346,8 +348,12 @@ class ToolExecutor:
                 f"[TIMING] Starting adapter.generate at {time.strftime('%H:%M:%S')}"
             )
 
+            # Create unique operation ID
+            operation_id = f"{tool_id}_{uuid.uuid4().hex[:8]}"
+
             try:
-                result = await asyncio.wait_for(
+                result = await operation_manager.run_with_timeout(
+                    operation_id,
                     adapter.generate(
                         prompt=final_prompt,
                         vector_store_ids=vector_store_ids,
@@ -371,8 +377,8 @@ class ToolExecutor:
                     f"[GRACEFUL] Tool execution cancelled by user for {tool_id} after {partial_duration:.2f}s"
                 )
                 was_cancelled = True  # Mark as cancelled
-                # Re-raise to let FastMCP handle cancellation properly
-                raise
+                # Per FastMCP bug workaround - return result instead of re-raising
+                result = {"content": "Operation cancelled by user"}
             except asyncio.TimeoutError:
                 timeout_time = time.time()
                 partial_duration = timeout_time - start_time
@@ -455,9 +461,8 @@ class ToolExecutor:
 
         except asyncio.CancelledError:
             was_cancelled = True  # Mark as cancelled
-            # Re-raise CancelledError to let FastMCP handle it properly
-            # This MUST propagate unchanged per MCP spec
-            raise
+            # Per FastMCP bug workaround - return "cancelled" instead of re-raising
+            return "Operation cancelled by user"
         except Exception as e:
             logger.error(f"[CRITICAL] Tool execution failed for {tool_id}: {e}")
             import traceback
@@ -471,12 +476,19 @@ class ToolExecutor:
             if was_cancelled:
                 # Fast exit - schedule best-effort background cleanup
                 if vs_id:
-                    asyncio.create_task(vector_store_manager.delete(vs_id))
+
+                    async def safe_cleanup():
+                        try:
+                            await vector_store_manager.delete(vs_id)
+                        except Exception as e:
+                            logger.debug(f"Background cleanup failed (expected): {e}")
+
+                    asyncio.create_task(safe_cleanup())
                 # Cancel memory tasks to free resources
                 for task in memory_tasks:  # type: ignore[assignment]
                     task.cancel()  # type: ignore[attr-defined]
                 logger.info(f"{tool_id} cancelled - cleanup scheduled in background")
-                return ""  # CRITICAL: Exit immediately without any more awaits
+                # DON'T return empty string - this prevents proper error handling!
 
             # Normal path (no cancellation) - safe to await with timeouts
             if vs_id:
