@@ -194,7 +194,7 @@ def main():
                         isinstance(exc, ValueError)
                         and "closed file" in str(exc).lower()
                     )
-                    or (isinstance(exc, RuntimeError) and "stdout" in str(exc).lower())
+                    or (isinstance(exc, RuntimeError) and ("stdout" in str(exc).lower() or "stdin" in str(exc).lower()))
                     or (
                         hasattr(fastmcp, "exceptions")
                         and hasattr(fastmcp.exceptions, "ToolError")
