@@ -97,3 +97,11 @@ async def patched_stdio_server(
 # Replace the function
 stdio.stdio_server = patched_stdio_server
 _dbg("Patched stdio.stdio_server - THE one place that writes to stdout")
+
+# ALSO patch FastMCP's imported reference if it exists
+try:
+    from fastmcp.server import server as fastmcp_server
+    fastmcp_server.stdio_server = patched_stdio_server
+    _dbg("Also patched FastMCP's imported stdio_server reference")
+except ImportError:
+    _dbg("FastMCP not yet imported, will use patched version when imported")
