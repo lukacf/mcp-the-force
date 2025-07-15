@@ -7,15 +7,17 @@ from .logging.setup import setup_logging
 # Initialize the new logging system first
 setup_logging()
 
-# Apply simplified FastMCP patch BEFORE importing FastMCP
-# This is critical - the patch must be in place before FastMCP loads
+# Apply patches BEFORE importing any MCP modules
+# This is critical - patches must be in place before MCP loads
+import mcp_second_brain.patch_mcp_cancel_response  # noqa: F401, E402
 import mcp_second_brain.patch_fastmcp_send_safe  # noqa: F401, E402
+import mcp_second_brain.patch_fastmcp_cancel  # noqa: F401, E402
 
 # Also ensure operation_manager is available for Claude Code abort handling
 from .operation_manager import operation_manager  # noqa: F401, E402
 
 # NOW import FastMCP after patches are applied
-from mcp.server.fastmcp import FastMCP  # noqa: E402
+from fastmcp import FastMCP  # noqa: E402
 
 # Import all tool definitions to register them
 from .tools import definitions  # noqa: F401, E402 # This import triggers the @tool decorators
@@ -50,6 +52,15 @@ def main():
     import signal
     import errno
     import selectors
+    from typing import Iterator
+
+    def _iter_leaves(exc: BaseException) -> Iterator[BaseException]:
+        """Depth-first walk that yields every non-group exception."""
+        if sys.version_info >= (3, 11) and type(exc).__name__ == "ExceptionGroup":
+            for child in exc.exceptions:
+                yield from _iter_leaves(child)
+        else:
+            yield exc
 
     # macOS-specific workaround for KqueueSelector stdio hang bug
     # See: https://github.com/python/cpython/issues/104344
@@ -94,6 +105,31 @@ def main():
     if sys.platform == "win32":
         asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
+    # Install custom exception handler to suppress benign disconnect errors
+    def ignore_broken_pipe(loop, context):
+        """Suppress benign disconnect errors from AnyIO TaskGroup diagnostics."""
+        import anyio
+
+        exc = context.get("exception")
+        if isinstance(
+            exc,
+            (
+                anyio.ClosedResourceError,
+                anyio.BrokenResourceError,
+                anyio.EndOfStream,
+                BrokenPipeError,
+                ConnectionResetError,
+            ),
+        ):
+            logger.debug("Suppressed benign disconnect error: %s", exc)
+            return  # swallow
+        # Fallback to default handler
+        loop.default_exception_handler(context)
+
+    loop = asyncio.get_event_loop()
+    loop.set_exception_handler(ignore_broken_pipe)
+    logger.info("Installed custom event loop exception handler")
+
     # No loop for stdio transport - run once and exit on disconnection
     # Claude spawns a new server process for each session
     try:
@@ -112,8 +148,8 @@ def main():
         sys.exit(0)  # Clean exit - Claude will spawn new process if needed
     except Exception as e:
         # Special handling for Python 3.11+ ExceptionGroup
-        if sys.version_info >= (3, 11) and type(e).__name__ == "ExceptionGroup":
-            # Debug log
+        if sys.version_info >= (3, 11) and isinstance(e, BaseExceptionGroup):
+            # Debug log all leaves for analysis
             import os
             from datetime import datetime
 
@@ -122,47 +158,64 @@ def main():
                 with open(debug_file, "a") as f:
                     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
                     f.write(f"[{timestamp}] SERVER MAIN: Caught ExceptionGroup\n")
+                    # Log all leaf exceptions
+                    for i, leaf in enumerate(_iter_leaves(e)):
+                        f.write(
+                            f"[{timestamp}] EXG-leaf-{i}: {type(leaf).__name__}: {leaf}\n"
+                        )
                     f.flush()
             except Exception:
                 pass
 
             # Define what constitutes a benign disconnect error
             import anyio
+            import fastmcp
 
-            anyio_disconnect_errors = (
+            anyio_disconnect = (
                 anyio.ClosedResourceError,
                 anyio.BrokenResourceError,
                 anyio.EndOfStream,
             )
 
-            def is_benign_disconnect(exc):
-                """Check if exception is a benign disconnect that should be ignored."""
-                return isinstance(
-                    exc,
-                    (
-                        asyncio.CancelledError,
-                        BrokenPipeError,
-                        ConnectionError,
-                        EOFError,
-                        *anyio_disconnect_errors,
-                    ),
-                ) or (isinstance(exc, OSError) and exc.errno == errno.EPIPE)
-
-            # Filter out all benign disconnect errors
-            non_benign_group = e.subgroup(lambda exc: not is_benign_disconnect(exc))
-
-            if non_benign_group is None:
-                # All exceptions were benign disconnects - normal exit
-                logger.info(
-                    "Suppressed ExceptionGroup with only benign disconnect errors"
+            def is_benign(exc: BaseException) -> bool:
+                """Check if exception is benign and should be suppressed."""
+                return (
+                    isinstance(
+                        exc,
+                        (
+                            asyncio.CancelledError,
+                            BrokenPipeError,
+                            ConnectionError,
+                            EOFError,
+                            *anyio_disconnect,
+                        ),
+                    )
+                    or (isinstance(exc, OSError) and exc.errno == errno.EPIPE)
+                    or (
+                        isinstance(exc, ValueError)
+                        and "closed file" in str(exc).lower()
+                    )
+                    or (isinstance(exc, RuntimeError) and "stdout" in str(exc).lower())
+                    or (
+                        hasattr(fastmcp, "exceptions")
+                        and hasattr(fastmcp.exceptions, "ToolError")
+                        and isinstance(exc, fastmcp.exceptions.ToolError)
+                        and "cancelled" in str(exc).lower()
+                    )
                 )
-                sys.exit(0)  # Exit cleanly for stdio transport
+
+            # Check if ALL leaves are benign
+            if all(is_benign(leaf) for leaf in _iter_leaves(e)):
+                logger.info(
+                    "Suppressed ExceptionGroup containing only benign disconnect errors"
+                )
+                sys.exit(0)
             else:
-                # There are real errors
+                # Some real error remains – re-raise so we crash loudly
                 logger.error(
                     "Server crashed with ExceptionGroup containing real errors"
                 )
-                raise non_benign_group
+                raise
 
         # Not an ExceptionGroup - continue with original handler
         # Debug log to file
