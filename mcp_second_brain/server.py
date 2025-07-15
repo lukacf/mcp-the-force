@@ -8,16 +8,16 @@ from .logging.setup import setup_logging
 setup_logging()
 
 # Apply THE ONE PATCH for stdio writes before any MCP imports
-import mcp_second_brain.patch_stdio_writer  # noqa: F401, E402
+# import mcp_second_brain.patch_stdio_writer  # noqa: F401, E402
 
 # Apply patches BEFORE importing any MCP modules
 # This is critical - patches must be in place before MCP loads
-from mcp_second_brain.cancellation_patch import monkeypatch_all  # noqa: E402
+# from mcp_second_brain.cancellation_patch import monkeypatch_all  # noqa: E402
 
-monkeypatch_all()  # Apply comprehensive cancellation handling
+# monkeypatch_all()  # Apply comprehensive cancellation handling
 
 # Also ensure operation_manager is available for Claude Code abort handling
-from .operation_manager import operation_manager  # noqa: F401, E402
+# from .operation_manager import operation_manager  # noqa: F401, E402
 
 # NOW import FastMCP after patches are applied
 from fastmcp import FastMCP  # noqa: E402
@@ -129,7 +129,8 @@ def main():
         # Fallback to default handler
         loop.default_exception_handler(context)
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     loop.set_exception_handler(ignore_broken_pipe)
     logger.info("Installed custom event loop exception handler")
 
@@ -236,7 +237,7 @@ def main():
                             f.write(
                                 f"[{timestamp}] isinstance check: {isinstance(leaf, anyio.BrokenResourceError)}\n"
                             )
-            except:
+            except Exception:
                 pass
 
             # Debug log the all() result
@@ -245,14 +246,14 @@ def main():
                 with open(debug_file, "a") as f:
                     f.write(f"[{timestamp}] All benign result: {all_benign}\n")
                     f.write(f"[{timestamp}] Benign checks list: {benign_checks}\n")
-            except:
+            except Exception:
                 pass
 
             if all_benign:
                 try:
                     with open(debug_file, "a") as f:
                         f.write(f"[{timestamp}] About to suppress and return\n")
-                except:
+                except Exception:
                     pass
                 logger.info(
                     "Suppressed ExceptionGroup containing only benign disconnect errors"

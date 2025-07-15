@@ -417,18 +417,16 @@ class ToolExecutor:
                         conv_messages = prompt_params.get("messages", [])
                         if not isinstance(conv_messages, list):
                             conv_messages = []
-                        # DISABLED: Background memory tasks might be causing crashes
-                        # TODO: Re-enable after fixing disconnect handling
-                        logger.debug("Skipping background memory storage task (OpenAI)")
-                        # memory_task = asyncio.create_task(
-                        #     store_conversation_memory(
-                        #         session_id=session_id,
-                        #         tool_name=tool_id,
-                        #         messages=conv_messages,
-                        #         response=redacted_content,
-                        #     )
-                        # )
-                        # memory_tasks.append(memory_task)
+                        # Re-enabled: Memory storage is important for context
+                        memory_task = asyncio.create_task(
+                            store_conversation_memory(
+                                session_id=session_id,
+                                tool_name=tool_id,
+                                messages=conv_messages,
+                                response=redacted_content,
+                            )
+                        )
+                        memory_tasks.append(memory_task)
                     except Exception as e:
                         logger.warning(f"Failed to store conversation memory: {e}")
 
@@ -443,18 +441,16 @@ class ToolExecutor:
                         conv_messages = prompt_params.get("messages", [])
                         if not isinstance(conv_messages, list):
                             conv_messages = []
-                        # DISABLED: Background memory tasks might be causing crashes
-                        # TODO: Re-enable after fixing disconnect handling
-                        logger.debug("Skipping background memory storage task (Vertex)")
-                        # memory_task = asyncio.create_task(
-                        #     store_conversation_memory(
-                        #         session_id=session_id,
-                        #         tool_name=tool_id,
-                        #         messages=conv_messages,
-                        #         response=redacted_result,
-                        #     )
-                        # )
-                        # memory_tasks.append(memory_task)
+                        # Re-enabled: Memory storage is important for context
+                        memory_task = asyncio.create_task(
+                            store_conversation_memory(
+                                session_id=session_id,
+                                tool_name=tool_id,
+                                messages=conv_messages,
+                                response=redacted_result,
+                            )
+                        )
+                        memory_tasks.append(memory_task)
                     except Exception as e:
                         logger.warning(f"Failed to store conversation memory: {e}")
 
@@ -488,16 +484,15 @@ class ToolExecutor:
                         except Exception as e:
                             logger.debug(f"Background cleanup failed (expected): {e}")
 
-                    # DISABLED: Background cleanup might be causing crashes
-                    logger.debug("Skipping background vector store cleanup")
-                    # bg_task = asyncio.create_task(safe_cleanup())
-                    # # Mark exception as retrieved to prevent ExceptionGroup
-                    # bg_task.add_done_callback(lambda t: t.exception())
+                    # Re-enabled: Background cleanup for vector stores
+                    bg_task = asyncio.create_task(safe_cleanup())
+                    # Mark exception as retrieved to prevent ExceptionGroup
+                    bg_task.add_done_callback(lambda t: t.exception())
                 # Cancel memory tasks to free resources
                 for task in memory_tasks:  # type: ignore[assignment]
                     task.cancel()  # type: ignore[attr-defined]
                     # Mark exception as retrieved to prevent ExceptionGroup
-                    task.add_done_callback(lambda t: t.exception())
+                    task.add_done_callback(lambda t: t.exception())  # type: ignore[attr-defined]
                 logger.info(f"{tool_id} cancelled - cleanup scheduled in background")
                 # DON'T return empty string - this prevents proper error handling!
 

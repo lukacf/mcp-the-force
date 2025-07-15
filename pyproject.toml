@@ -4,7 +4,7 @@ version = "0.3.2"
 description = "Local MCP \"Second-Brain\" server with prompt-safe file inlining and vector-store attachments."
 authors = [{name = "Your Name"}]
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.13"
 
 dependencies = [
     "fastmcp>=2.10.5",
