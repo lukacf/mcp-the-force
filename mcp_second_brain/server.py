@@ -16,6 +16,9 @@ monkeypatch_all()  # Apply comprehensive cancellation handling
 # Also ensure operation_manager is available for Claude Code abort handling
 from .operation_manager import operation_manager  # noqa: F401, E402
 
+# Patch FastMCP's RequestWriter to handle write-after-disconnect errors
+import mcp_second_brain.patch_fastmcp_writer_safe  # noqa: F401, E402
+
 # NOW import FastMCP after patches are applied
 from fastmcp import FastMCP  # noqa: E402
 
