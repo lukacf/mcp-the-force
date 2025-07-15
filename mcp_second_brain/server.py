@@ -10,6 +10,7 @@ setup_logging()
 # Apply patches BEFORE importing any MCP modules
 # This is critical - patches must be in place before MCP loads
 from mcp_second_brain.cancellation_patch import monkeypatch_all  # noqa: E402
+
 monkeypatch_all()  # Apply comprehensive cancellation handling
 
 # Also ensure operation_manager is available for Claude Code abort handling
@@ -137,14 +138,14 @@ def main():
         logger.info("MCP server exited normally")
     except KeyboardInterrupt:
         logger.info("MCP server interrupted by user")
-        sys.exit(0)
+        return  # Let the server shutdown gracefully
     except (EOFError, BrokenPipeError, OSError) as e:
         # These are normal disconnection scenarios for stdio
         if isinstance(e, OSError) and e.errno == errno.EPIPE:
             logger.info("Detected broken pipe - client disconnected")
         else:
             logger.info(f"Client disconnected: {type(e).__name__}")
-        sys.exit(0)  # Clean exit - Claude will spawn new process if needed
+        return  # Let the server shutdown gracefully
     except Exception as e:
         # Special handling for Python 3.11+ ExceptionGroup
         if sys.version_info >= (3, 11) and isinstance(e, BaseExceptionGroup):
@@ -162,12 +163,8 @@ def main():
                         f.write(
                             f"[{timestamp}] EXG-leaf-{i}: {type(leaf).__name__}: {leaf}\n"
                         )
-                        f.write(
-                            f"[{timestamp}] EXG-leaf-{i}-repr: {repr(leaf)}\n"
-                        )
-                        f.write(
-                            f"[{timestamp}] EXG-leaf-{i}-str: {str(leaf)}\n"
-                        )
+                        f.write(f"[{timestamp}] EXG-leaf-{i}-repr: {repr(leaf)}\n")
+                        f.write(f"[{timestamp}] EXG-leaf-{i}-str: {str(leaf)}\n")
                     f.flush()
             except Exception:
                 pass
@@ -200,7 +197,12 @@ def main():
                         isinstance(exc, ValueError)
                         and "closed file" in str(exc).lower()
                     )
-                    or (isinstance(exc, RuntimeError) and ("stdout" in str(exc).lower() or "stdin" in str(exc).lower()))
+                    or (
+                        isinstance(exc, RuntimeError)
+                        and (
+                            "stdout" in str(exc).lower() or "stdin" in str(exc).lower()
+                        )
+                    )
                     or (
                         hasattr(fastmcp, "exceptions")
                         and hasattr(fastmcp.exceptions, "ToolError")
@@ -212,25 +214,47 @@ def main():
             # Check if ALL leaves are benign
             leaves = list(_iter_leaves(e))
             benign_checks = [(leaf, is_benign(leaf)) for leaf in leaves]
-            
+
             # Debug log the benign check results
             try:
                 with open(debug_file, "a") as f:
                     for leaf, is_b in benign_checks:
-                        f.write(f"[{timestamp}] Benign check: {type(leaf).__name__} -> {is_b}\n")
+                        f.write(
+                            f"[{timestamp}] Benign check: {type(leaf).__name__} -> {is_b}\n"
+                        )
                         if not is_b:
-                            f.write(f"[{timestamp}] Not benign because: isinstance checks failed\n")
-                            f.write(f"[{timestamp}] anyio.BrokenResourceError type: {anyio.BrokenResourceError}\n")
+                            f.write(
+                                f"[{timestamp}] Not benign because: isinstance checks failed\n"
+                            )
+                            f.write(
+                                f"[{timestamp}] anyio.BrokenResourceError type: {anyio.BrokenResourceError}\n"
+                            )
                             f.write(f"[{timestamp}] leaf type: {type(leaf)}\n")
-                            f.write(f"[{timestamp}] isinstance check: {isinstance(leaf, anyio.BrokenResourceError)}\n")
+                            f.write(
+                                f"[{timestamp}] isinstance check: {isinstance(leaf, anyio.BrokenResourceError)}\n"
+                            )
             except:
                 pass
-            
-            if all(is_b for _, is_b in benign_checks):
+
+            # Debug log the all() result
+            all_benign = all(is_b for _, is_b in benign_checks)
+            try:
+                with open(debug_file, "a") as f:
+                    f.write(f"[{timestamp}] All benign result: {all_benign}\n")
+                    f.write(f"[{timestamp}] Benign checks list: {benign_checks}\n")
+            except:
+                pass
+
+            if all_benign:
+                try:
+                    with open(debug_file, "a") as f:
+                        f.write(f"[{timestamp}] About to suppress and return\n")
+                except:
+                    pass
                 logger.info(
                     "Suppressed ExceptionGroup containing only benign disconnect errors"
                 )
-                sys.exit(0)
+                return  # Let the server continue running
             else:
                 # Some real error remains – re-raise so we crash loudly
                 logger.error(
@@ -265,7 +289,7 @@ def main():
 
         if isinstance(e, anyio_disconnect_errors):
             logger.info(f"Client disconnected ({type(e).__name__})")
-            sys.exit(0)  # Normal disconnection
+            return  # Normal disconnection
 
         # Real error - log and re-raise
         logger.error(f"MCP server crashed: {e}")
