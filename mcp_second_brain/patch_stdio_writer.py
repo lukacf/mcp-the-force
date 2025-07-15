@@ -80,8 +80,10 @@ async def patched_stdio_server(
             # Simply exit the task cleanly
         finally:
             # Ensure the stream is closed to signal other parts of the system
-            if not read_stream_writer.is_closed():
+            try:
                 await read_stream_writer.aclose()
+            except Exception:
+                pass  # Already closed or error closing
 
     async def stdout_writer():
         """THE ONE PLACE that writes to stdout - now handles ALL disconnect errors."""
