@@ -17,7 +17,7 @@ from .parameter_validator import ParameterValidator
 from .parameter_router import ParameterRouter
 
 # Project memory imports
-from ..memory import store_conversation_memory
+from .safe_memory import safe_store_conversation_memory
 from ..config import get_settings
 from ..utils.redaction import redact_secrets
 from ..operation_manager import operation_manager
@@ -362,6 +362,7 @@ class ToolExecutor:
                     ),
                     timeout=timeout_seconds,
                 )
+                
                 end_time = time.time()
                 duration = end_time - start_time
                 logger.info(
@@ -370,15 +371,6 @@ class ToolExecutor:
                 logger.info(
                     f"[TIMING] Completed adapter.generate at {time.strftime('%H:%M:%S')}"
                 )
-            except asyncio.CancelledError:
-                cancel_time = time.time()
-                partial_duration = cancel_time - start_time
-                logger.info(
-                    f"[GRACEFUL] Tool execution cancelled by user for {tool_id} after {partial_duration:.2f}s"
-                )
-                was_cancelled = True  # Mark as cancelled
-                # Re-raise to let patch_fastmcp_cancel handle it
-                raise
             except asyncio.TimeoutError:
                 timeout_time = time.time()
                 partial_duration = timeout_time - start_time
@@ -388,6 +380,10 @@ class ToolExecutor:
                 raise fastmcp.exceptions.ToolError(
                     f"Tool execution timed out after {timeout_seconds} seconds"
                 )
+            except asyncio.CancelledError:
+                was_cancelled = True
+                logger.info(f"{tool_id} aborted - letting cancellation bubble up")
+                raise  # Important: do NOT convert or return
             except Exception as e:
                 logger.error(f"[CRITICAL] Adapter generate failed for {tool_id}: {e}")
                 raise
@@ -418,8 +414,9 @@ class ToolExecutor:
                         if not isinstance(conv_messages, list):
                             conv_messages = []
                         # Re-enabled: Memory storage is important for context
+                        logger.info(f"[MEMORY] Creating background memory storage task for {tool_id}")
                         memory_task = asyncio.create_task(
-                            store_conversation_memory(
+                            safe_store_conversation_memory(
                                 session_id=session_id,
                                 tool_name=tool_id,
                                 messages=conv_messages,
@@ -443,7 +440,7 @@ class ToolExecutor:
                             conv_messages = []
                         # Re-enabled: Memory storage is important for context
                         memory_task = asyncio.create_task(
-                            store_conversation_memory(
+                            safe_store_conversation_memory(
                                 session_id=session_id,
                                 tool_name=tool_id,
                                 messages=conv_messages,
@@ -459,12 +456,13 @@ class ToolExecutor:
 
                 return redacted_result
 
-        except asyncio.CancelledError:
-            was_cancelled = True  # Mark as cancelled
-            logger.info(f"{tool_id} cancelled by user")
-            # Re-raise to let patch_fastmcp_cancel handle it
-            raise
         except Exception as e:
+            # If cancellation already happened, don't let a subsequent error in the
+            # cleanup logic cause a crash.
+            if was_cancelled:
+                logger.debug(f"Ignoring error after cancellation for {tool_id}: {e}")
+                return ""
+                
             logger.error(f"[CRITICAL] Tool execution failed for {tool_id}: {e}")
             import traceback
 
@@ -489,6 +487,7 @@ class ToolExecutor:
                     # Mark exception as retrieved to prevent ExceptionGroup
                     bg_task.add_done_callback(lambda t: t.exception())
                 # Cancel memory tasks to free resources
+                logger.info(f"[MEMORY] Cancelling {len(memory_tasks)} memory storage tasks due to operation cancellation")
                 for task in memory_tasks:  # type: ignore[assignment]
                     task.cancel()  # type: ignore[attr-defined]
                     # Mark exception as retrieved to prevent ExceptionGroup

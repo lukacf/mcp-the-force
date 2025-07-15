@@ -1,6 +1,15 @@
 #!/usr/bin/env python3
 """MCP Second-Brain Server with dataclass-based tools."""
 
+# TEMPORARY: Debug hooks for investigating cancellation - DISABLED
+# import sys
+# import os
+# sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# try:
+#     import debug_hooks  # noqa: E402
+# except ImportError:
+#     pass  # Debug hooks are optional
+
 import logging
 from .logging.setup import setup_logging
 
@@ -16,8 +25,17 @@ setup_logging()
 
 # monkeypatch_all()  # Apply comprehensive cancellation handling
 
+# Apply write safety patch before any MCP imports
+from . import patch_write_safety  # noqa: F401, E402
+
+# Patch MCP responder to handle disconnections gracefully
+from . import patch_mcp_responder  # noqa: F401, E402
+
+# Patch FastMCP so cancelled requests don't get a 2nd response
+from . import patch_fastmcp_cancel  # noqa: F401, E402
+
 # Also ensure operation_manager is available for Claude Code abort handling
-# from .operation_manager import operation_manager  # noqa: F401, E402
+from .operation_manager import operation_manager  # noqa: F401, E402
 
 # NOW import FastMCP after patches are applied
 from fastmcp import FastMCP  # noqa: E402
@@ -138,8 +156,10 @@ def main():
     # Claude spawns a new server process for each session
     try:
         logger.info("Starting MCP server (stdio transport)...")
+        
         mcp.run()  # Will use stdio transport by default
         logger.info("MCP server exited normally")
+                
     except KeyboardInterrupt:
         logger.info("MCP server interrupted by user")
         return  # Let the server shutdown gracefully
@@ -185,6 +205,10 @@ def main():
 
             def is_benign(exc: BaseException) -> bool:
                 """Check if exception is benign and should be suppressed."""
+                # Check type name as string to handle import/namespace issues
+                exc_type_name = type(exc).__name__
+                exc_module = type(exc).__module__ or ""
+                
                 return (
                     isinstance(
                         exc,
@@ -193,9 +217,10 @@ def main():
                             BrokenPipeError,
                             ConnectionError,
                             EOFError,
-                            *anyio_disconnect,
                         ),
                     )
+                    or exc_type_name in ["BrokenResourceError", "ClosedResourceError", "EndOfStream"]
+                    or "anyio" in exc_module and exc_type_name in ["BrokenResourceError", "ClosedResourceError", "EndOfStream"]
                     or (isinstance(exc, OSError) and exc.errno == errno.EPIPE)
                     or (
                         isinstance(exc, ValueError)
@@ -212,6 +237,10 @@ def main():
                         and hasattr(fastmcp.exceptions, "ToolError")
                         and isinstance(exc, fastmcp.exceptions.ToolError)
                         and "cancelled" in str(exc).lower()
+                    )
+                    or (
+                        isinstance(exc, AssertionError)
+                        and "request already responded to" in str(exc).lower()
                     )
                 )
 
@@ -258,7 +287,8 @@ def main():
                 logger.info(
                     "Suppressed ExceptionGroup containing only benign disconnect errors"
                 )
-                return  # Let the server continue running
+                # For stdio transport, this is expected behavior
+                return  # Exit gracefully
             else:
                 # Some real error remains – re-raise so we crash loudly
                 logger.error(

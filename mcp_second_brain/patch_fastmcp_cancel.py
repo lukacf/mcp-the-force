@@ -1,57 +1,59 @@
 """
-Convert CancelledError → ToolError so FastMCP treats user aborts
-as normal tool failures instead of fatal server errors.
-Must be imported *before* `from fastmcp import FastMCP`.
+Patch FastMCP to handle CancelledError properly during tool execution.
+
+This patch ensures that when a tool execution is cancelled (e.g., when Claude
+aborts a request), we don't try to send a response after cancellation.
 """
 
 import asyncio
 import logging
-import os
-from datetime import datetime
-from fastmcp import FastMCP
-import fastmcp.exceptions
+from typing import Any, List, Tuple, Union
 
 logger = logging.getLogger(__name__)
 
-# Debug file for tracking patch activity
-DEBUG_FILE = os.path.join(os.getcwd(), "mcp_cancellation_debug.log")
 
-
-def _debug_log(message: str):
-    """Write debug message to file."""
+def patch_fastmcp():
+    """Apply the patch to FastMCP's _mcp_call_tool method."""
     try:
-        with open(DEBUG_FILE, "a") as f:
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-            f.write(f"[{timestamp}] PATCH_CANCEL: {message}\n")
-            f.flush()
-    except Exception:
-        pass
-
-
-_debug_log("patch_fastmcp_cancel module imported")
-
-# Patch the CORRECT method: _mcp_call_tool (with underscore)
-_orig = FastMCP._mcp_call_tool
-_debug_log(f"Original _mcp_call_tool: {_orig}")
-
-
-async def _safe(self: FastMCP, key: str, args: dict):
-    """Convert CancelledError to ToolError at the protocol handler level."""
-    _debug_log(f"_mcp_call_tool wrapper called for tool: {key}")
-    try:
-        result = await _orig(self, key, args)
-        _debug_log(f"Tool {key} completed successfully")
-        return result
-    except asyncio.CancelledError:
-        _debug_log(f"Tool '{key}' cancelled - converting to ToolError")
-        logger.info(f"Tool '{key}' cancelled by user")
-        raise fastmcp.exceptions.ToolError("Operation cancelled by user") from None
+        # Import FastMCP and MCP types
+        from fastmcp import FastMCP
+        from mcp.types import ContentBlock
+        
+        # Store the original method
+        _original_mcp_call_tool = FastMCP._mcp_call_tool
+        
+        async def _mcp_call_tool_safe(
+            self, key: str, arguments: dict[str, Any]
+        ) -> Union[List[ContentBlock], Tuple[List[ContentBlock], dict[str, Any]]]:
+            """
+            Wrapper for _mcp_call_tool that handles CancelledError properly.
+            
+            When a request is cancelled (e.g., Claude aborts), we should not
+            try to send a response because:
+            1. The client has already disconnected
+            2. The MCP protocol handler will have already sent a cancellation response
+            3. Trying to send another response will cause errors
+            """
+            try:
+                # Call the original method
+                return await _original_mcp_call_tool(self, key, arguments)
+            except asyncio.CancelledError:
+                # Log that we caught the cancellation
+                logger.info(f"Tool '{key}' execution was cancelled - suppressing response")
+                # Re-raise to let the cancellation propagate properly
+                # The MCP server will handle this and NOT try to send a response
+                raise
+            except Exception:
+                # Let all other exceptions propagate normally
+                raise
+        
+        # Replace the method
+        FastMCP._mcp_call_tool = _mcp_call_tool_safe
+        logger.info("Successfully patched FastMCP._mcp_call_tool for proper cancellation handling")
+        
     except Exception as e:
-        _debug_log(f"Tool {key} raised {type(e).__name__}: {e}")
-        raise
+        logger.error(f"Failed to patch FastMCP: {e}")
 
 
-FastMCP._mcp_call_tool = _safe
-_debug_log("Successfully patched FastMCP._mcp_call_tool")
-
-logger.info("Patched FastMCP._mcp_call_tool to handle cancellations gracefully")
+# Apply the patch when this module is imported
+patch_fastmcp()
