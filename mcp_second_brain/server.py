@@ -162,6 +162,12 @@ def main():
                         f.write(
                             f"[{timestamp}] EXG-leaf-{i}: {type(leaf).__name__}: {leaf}\n"
                         )
+                        f.write(
+                            f"[{timestamp}] EXG-leaf-{i}-repr: {repr(leaf)}\n"
+                        )
+                        f.write(
+                            f"[{timestamp}] EXG-leaf-{i}-str: {str(leaf)}\n"
+                        )
                     f.flush()
             except Exception:
                 pass
@@ -204,7 +210,23 @@ def main():
                 )
 
             # Check if ALL leaves are benign
-            if all(is_benign(leaf) for leaf in _iter_leaves(e)):
+            leaves = list(_iter_leaves(e))
+            benign_checks = [(leaf, is_benign(leaf)) for leaf in leaves]
+            
+            # Debug log the benign check results
+            try:
+                with open(debug_file, "a") as f:
+                    for leaf, is_b in benign_checks:
+                        f.write(f"[{timestamp}] Benign check: {type(leaf).__name__} -> {is_b}\n")
+                        if not is_b:
+                            f.write(f"[{timestamp}] Not benign because: isinstance checks failed\n")
+                            f.write(f"[{timestamp}] anyio.BrokenResourceError type: {anyio.BrokenResourceError}\n")
+                            f.write(f"[{timestamp}] leaf type: {type(leaf)}\n")
+                            f.write(f"[{timestamp}] isinstance check: {isinstance(leaf, anyio.BrokenResourceError)}\n")
+            except:
+                pass
+            
+            if all(is_b for _, is_b in benign_checks):
                 logger.info(
                     "Suppressed ExceptionGroup containing only benign disconnect errors"
                 )
