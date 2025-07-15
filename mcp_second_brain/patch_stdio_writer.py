@@ -10,12 +10,16 @@ from mcp.server import stdio
 
 _LOG = logging.getLogger(__name__)
 
+
 def _dbg(msg: str):
     try:
         with open(os.path.join(os.getcwd(), "mcp_cancellation_debug.log"), "a") as f:
-            f.write(f"[{datetime.datetime.now():%Y-%m-%d %H:%M:%S.%f}] STDIO_PATCH: {msg}\n")
+            f.write(
+                f"[{datetime.datetime.now():%Y-%m-%d %H:%M:%S.%f}] STDIO_PATCH: {msg}\n"
+            )
     except Exception:
         pass
+
 
 # Store original function
 _original_stdio_server = stdio.stdio_server
@@ -29,6 +33,7 @@ import mcp.types as types
 from mcp.shared.message import SessionMessage
 import sys
 from io import TextIOWrapper
+
 
 @asynccontextmanager
 async def patched_stdio_server(
@@ -51,18 +56,32 @@ async def patched_stdio_server(
     write_stream, write_stream_reader = anyio.create_memory_object_stream(0)
 
     async def stdin_reader():
+        """Hardened stdin reader that handles all disconnect errors."""
         try:
             async with read_stream_writer:
                 async for line in stdin:
                     try:
                         message = types.JSONRPCMessage.model_validate_json(line)
+                        session_message = SessionMessage(message)
+                        await read_stream_writer.send(session_message)
                     except Exception as exc:
                         await read_stream_writer.send(exc)
-                        continue
-                    session_message = SessionMessage(message)
-                    await read_stream_writer.send(session_message)
-        except anyio.ClosedResourceError:
-            await anyio.lowlevel.checkpoint()
+        # FIX: Catch all possible disconnection errors on stdin
+        except (
+            anyio.BrokenResourceError,
+            anyio.ClosedResourceError,
+            anyio.EndOfStream,
+            BrokenPipeError,
+            ConnectionResetError,
+            OSError,
+        ) as e:
+            _LOG.debug("Client disconnected during stdin read: %s", e)
+            _dbg(f"Swallowed {type(e).__name__} in stdin_reader: {e}")
+            # Simply exit the task cleanly
+        finally:
+            # Ensure the stream is closed to signal other parts of the system
+            if not read_stream_writer.is_closed():
+                await read_stream_writer.aclose()
 
     async def stdout_writer():
         """THE ONE PLACE that writes to stdout - now handles ALL disconnect errors."""
@@ -70,12 +89,14 @@ async def patched_stdio_server(
             async with write_stream_reader:
                 async for session_message in write_stream_reader:
                     try:
-                        json = session_message.message.model_dump_json(by_alias=True, exclude_none=True)
+                        json = session_message.message.model_dump_json(
+                            by_alias=True, exclude_none=True
+                        )
                         await stdout.write(json + "\n")
                         await stdout.flush()
                     except (
                         anyio.BrokenResourceError,
-                        anyio.ClosedResourceError, 
+                        anyio.ClosedResourceError,
                         anyio.EndOfStream,
                         BrokenPipeError,
                         ConnectionResetError,
@@ -86,13 +107,14 @@ async def patched_stdio_server(
                         # Stop trying to write once client is gone
                         break
         except (anyio.ClosedResourceError, anyio.BrokenResourceError) as e:
-            _dbg(f"stdout_writer task ending: {type(e).__name__}")
+            _dbg(f"stdout_writer task ending due to closed stream: {type(e).__name__}")
             await anyio.lowlevel.checkpoint()
 
     async with anyio.create_task_group() as tg:
         tg.start_soon(stdin_reader)
         tg.start_soon(stdout_writer)
         yield read_stream, write_stream
+
 
 # Replace the function
 stdio.stdio_server = patched_stdio_server
@@ -101,7 +123,9 @@ _dbg("Patched stdio.stdio_server - THE one place that writes to stdout")
 # ALSO patch FastMCP's imported reference if it exists
 try:
     from fastmcp.server import server as fastmcp_server
-    fastmcp_server.stdio_server = patched_stdio_server
-    _dbg("Also patched FastMCP's imported stdio_server reference")
+
+    if hasattr(fastmcp_server, "stdio_server"):
+        fastmcp_server.stdio_server = patched_stdio_server
+        _dbg("Also patched FastMCP's imported stdio_server reference")
 except ImportError:
     _dbg("FastMCP not yet imported, will use patched version when imported")
