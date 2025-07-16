@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  victorialogs:
+    image: victoriametrics/victoria-logs:latest
+    container_name: victorialogs
+    ports:
+      - "9428:9428"
+    volumes:
+      - mcp-logs-data:/var/lib/victorialogs
+    command:
+      - "-retentionPeriod=7d"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9428/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  mcp-logs-data:
+    driver: local
