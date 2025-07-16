@@ -325,7 +325,7 @@ class BackgroundFlowStrategy(BaseFlowStrategy):
                 logger.info(f"Polling cancelled for {response_id}")
                 # Re-raise to propagate cancellation properly
                 raise
-            
+
             elapsed = asyncio.get_event_loop().time() - start_poll_time
 
             # Check if we've exceeded timeout

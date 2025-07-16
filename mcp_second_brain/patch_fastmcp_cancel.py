@@ -18,16 +18,16 @@ def patch_fastmcp():
         # Import FastMCP and MCP types
         from fastmcp import FastMCP
         from mcp.types import ContentBlock
-        
+
         # Store the original method
         _original_mcp_call_tool = FastMCP._mcp_call_tool
-        
+
         async def _mcp_call_tool_safe(
             self, key: str, arguments: dict[str, Any]
         ) -> Union[List[ContentBlock], Tuple[List[ContentBlock], dict[str, Any]]]:
             """
             Wrapper for _mcp_call_tool that handles CancelledError properly.
-            
+
             When a request is cancelled (e.g., Claude aborts), we should not
             try to send a response because:
             1. The client has already disconnected
@@ -39,18 +39,22 @@ def patch_fastmcp():
                 return await _original_mcp_call_tool(self, key, arguments)
             except asyncio.CancelledError:
                 # Log that we caught the cancellation
-                logger.info(f"Tool '{key}' execution was cancelled - suppressing response")
+                logger.info(
+                    f"Tool '{key}' execution was cancelled - suppressing response"
+                )
                 # Re-raise to let the cancellation propagate properly
                 # The MCP server will handle this and NOT try to send a response
                 raise
             except Exception:
                 # Let all other exceptions propagate normally
                 raise
-        
+
         # Replace the method
         FastMCP._mcp_call_tool = _mcp_call_tool_safe
-        logger.info("Successfully patched FastMCP._mcp_call_tool for proper cancellation handling")
-        
+        logger.info(
+            "Successfully patched FastMCP._mcp_call_tool for proper cancellation handling"
+        )
+
     except Exception as e:
         logger.error(f"Failed to patch FastMCP: {e}")
 

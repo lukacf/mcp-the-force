@@ -37,6 +37,9 @@ from . import patch_fastmcp_cancel  # noqa: F401, E402
 # Also ensure operation_manager is available for Claude Code abort handling
 from .operation_manager import operation_manager  # noqa: F401, E402
 
+# Patch cancellation handler to prevent double responses
+from . import patch_cancellation_handler  # noqa: F401, E402
+
 # NOW import FastMCP after patches are applied
 from fastmcp import FastMCP  # noqa: E402
 
@@ -156,10 +159,10 @@ def main():
     # Claude spawns a new server process for each session
     try:
         logger.info("Starting MCP server (stdio transport)...")
-        
+
         mcp.run()  # Will use stdio transport by default
         logger.info("MCP server exited normally")
-                
+
     except KeyboardInterrupt:
         logger.info("MCP server interrupted by user")
         return  # Let the server shutdown gracefully
@@ -208,7 +211,7 @@ def main():
                 # Check type name as string to handle import/namespace issues
                 exc_type_name = type(exc).__name__
                 exc_module = type(exc).__module__ or ""
-                
+
                 return (
                     isinstance(
                         exc,
@@ -219,8 +222,11 @@ def main():
                             EOFError,
                         ),
                     )
-                    or exc_type_name in ["BrokenResourceError", "ClosedResourceError", "EndOfStream"]
-                    or "anyio" in exc_module and exc_type_name in ["BrokenResourceError", "ClosedResourceError", "EndOfStream"]
+                    or exc_type_name
+                    in ["BrokenResourceError", "ClosedResourceError", "EndOfStream"]
+                    or "anyio" in exc_module
+                    and exc_type_name
+                    in ["BrokenResourceError", "ClosedResourceError", "EndOfStream"]
                     or (isinstance(exc, OSError) and exc.errno == errno.EPIPE)
                     or (
                         isinstance(exc, ValueError)

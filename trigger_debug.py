@@ -4,11 +4,12 @@
 import socket
 import sys
 
+
 def send_break():
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.connect(('localhost', 9999))
-        sock.send(b'BREAK\n')
+        sock.connect(("localhost", 9999))
+        sock.send(b"BREAK\n")
         response = sock.recv(1024).decode()
         print(f"Server response: {response.strip()}")
         sock.close()
@@ -20,6 +21,7 @@ def send_break():
     except Exception as e:
         print(f"Error: {e}")
         sys.exit(1)
+
 
 if __name__ == "__main__":
     send_break()
