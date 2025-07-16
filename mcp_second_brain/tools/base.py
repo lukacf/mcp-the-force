@@ -2,7 +2,7 @@
 
 from typing import Dict, Any, Type, get_type_hints, get_origin, get_args
 from typing_extensions import dataclass_transform
-from .descriptors import RouteDescriptor, Route
+from .descriptors import RouteDescriptor, Route, _NO_DEFAULT
 
 
 @dataclass_transform(
@@ -59,7 +59,7 @@ class ToolSpec:
                     "name": name,
                     "route": value.route,
                     "position": value.position,
-                    "default": value.default,
+                    "default": None if value.default is _NO_DEFAULT else value.default,
                     "description": value.description,
                     "type": hints.get(name, Any),
                 }
@@ -68,9 +68,7 @@ class ToolSpec:
                 type_hint = hints.get(name, Any)
                 param_info["type_str"] = _type_to_string(type_hint)
                 param_info["required"] = (
-                    not _is_optional(type_hint)
-                    and value.default is None
-                    and value.default_factory is None
+                    not _is_optional(type_hint) and not value.has_default
                 )
 
                 parameters[name] = param_info
