@@ -15,7 +15,7 @@ def create_tool_function(metadata: ToolMetadata):
     """Create a function with proper signature for FastMCP registration."""
 
     # Build parameter list for signature
-    sig_params = []
+    sig_params: List[Parameter] = []
 
     # Get parameters sorted by position (positional first, then keyword-only)
     params_list = list(metadata.parameters.values())
@@ -65,7 +65,9 @@ def create_tool_function(metadata: ToolMetadata):
 
     # CRITICAL: Set annotations for FastMCP 2.x compatibility
     # FastMCP uses pydantic which expects __annotations__ to be set
-    annotations = {"return": str}
+    annotations: Dict[str, Any] = {"return": str}
+    # Explicitly type the iteration to help mypy
+    param: Parameter
     for param in sig_params:
         annotations[param.name] = param.annotation
     tool_function.__annotations__ = annotations
