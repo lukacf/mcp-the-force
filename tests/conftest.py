@@ -256,7 +256,7 @@ def mock_vector_store_client(monkeypatch, mock_openai_client):
     # the function from running at all, thus avoiding any real API calls for
     # conversation memory.
     monkeypatch.setattr(
-        "mcp_second_brain.tools.executor.store_conversation_memory",
+        "mcp_second_brain.memory.conversation.store_conversation_memory",
         AsyncMock(return_value=None),
     )
 

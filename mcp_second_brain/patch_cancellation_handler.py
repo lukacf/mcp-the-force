@@ -6,7 +6,7 @@ This prevents double responses when tools are cancelled via notifications/cancel
 import asyncio
 import logging
 import mcp.server.lowlevel.server
-from typing import Any, Generic, TypeVar
+from typing import Any, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -32,11 +32,15 @@ async def patched_handle_request(
     has already sent an error response. We must not send another one.
     """
     logger.info("Processing request of type %s", type(req).__name__)
-    
+
     # Import here to avoid circular imports
     import mcp.types as types
-    from mcp.server.lowlevel.server import request_ctx, RequestContext, ServerMessageMetadata
-    
+    from mcp.server.lowlevel.server import (
+        request_ctx,
+        RequestContext,
+        ServerMessageMetadata,
+    )
+
     if handler := self.request_handlers.get(type(req)):  # type: ignore
         logger.debug("Dispatching request of type %s", type(req).__name__)
 
@@ -44,7 +48,9 @@ async def patched_handle_request(
         try:
             # Extract request context from message metadata
             request_data = None
-            if message.message_metadata is not None and isinstance(message.message_metadata, ServerMessageMetadata):
+            if message.message_metadata is not None and isinstance(
+                message.message_metadata, ServerMessageMetadata
+            ):
                 request_data = message.message_metadata.request_context
 
             # Set our global state that can be retrieved via
@@ -63,7 +69,9 @@ async def patched_handle_request(
             # This occurs when a tool call is cancelled via notifications/cancelled.
             # The RequestResponder has already sent an error response.
             # We must not send another one. We just log and return.
-            logger.info(f"Request {message.request_id} was cancelled. No further response will be sent.")
+            logger.info(
+                f"Request {message.request_id} was cancelled. No further response will be sent."
+            )
             return
         except types.McpError as err:
             response = err.error
@@ -91,16 +99,16 @@ async def patched_handle_request(
 def apply_patch():
     """Apply the patch to MCP's Server._handle_request method."""
     global _original_handle_request
-    
+
     # Import the Server class
     Server = mcp.server.lowlevel.server.Server
-    
+
     # Save the original method
     _original_handle_request = Server._handle_request
-    
+
     # Replace with our patched version
     Server._handle_request = patched_handle_request
-    
+
     logger.info("Applied cancellation handler patch to prevent double responses")
 
 

@@ -4,26 +4,32 @@ Wrapper to make tool execution completely safe from cancellation issues.
 
 import asyncio
 import logging
-from .executor import Executor
+from typing import Any
+from .executor import ToolExecutor
+from .registry import ToolMetadata
 
 logger = logging.getLogger(__name__)
 
 
-class SafeExecutor(Executor):
+class SafeExecutor(ToolExecutor):
     """Executor that never lets CancelledError escape."""
 
-    async def execute_tool(self, tool_id: str, arguments: dict) -> str:
+    async def execute(self, metadata: ToolMetadata, **kwargs: Any) -> str:
         """Execute tool with complete cancellation safety."""
         try:
-            # Call parent's execute_tool
-            return await super().execute_tool(tool_id, arguments)
+            # Call parent's execute method
+            return await super().execute(metadata, **kwargs)
         except asyncio.CancelledError:
-            logger.info(f"[SAFE] Tool {tool_id} cancelled - returning empty success")
+            logger.info(
+                f"[SAFE] Tool {metadata.id} cancelled - returning empty success"
+            )
             # Never let CancelledError escape - always return success
             return ""
         except Exception as e:
             # Let other exceptions through
-            logger.error(f"[SAFE] Tool {tool_id} failed with {type(e).__name__}: {e}")
+            logger.error(
+                f"[SAFE] Tool {metadata.id} failed with {type(e).__name__}: {e}"
+            )
             raise
 
 
