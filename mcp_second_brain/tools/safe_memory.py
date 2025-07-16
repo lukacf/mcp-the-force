@@ -23,5 +23,5 @@ async def safe_store_conversation_memory(
     except Exception as e:
         logger.warning(
             f"Failed to store conversation memory in background task: {e}",
-            exc_info=True
+            exc_info=True,
         )

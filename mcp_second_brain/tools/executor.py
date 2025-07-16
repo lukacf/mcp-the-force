@@ -362,7 +362,7 @@ class ToolExecutor:
                     ),
                     timeout=timeout_seconds,
                 )
-                
+
                 end_time = time.time()
                 duration = end_time - start_time
                 logger.info(
@@ -414,7 +414,9 @@ class ToolExecutor:
                         if not isinstance(conv_messages, list):
                             conv_messages = []
                         # Re-enabled: Memory storage is important for context
-                        logger.info(f"[MEMORY] Creating background memory storage task for {tool_id}")
+                        logger.info(
+                            f"[MEMORY] Creating background memory storage task for {tool_id}"
+                        )
                         memory_task = asyncio.create_task(
                             safe_store_conversation_memory(
                                 session_id=session_id,
@@ -462,7 +464,7 @@ class ToolExecutor:
             if was_cancelled:
                 logger.debug(f"Ignoring error after cancellation for {tool_id}: {e}")
                 return ""
-                
+
             logger.error(f"[CRITICAL] Tool execution failed for {tool_id}: {e}")
             import traceback
 
@@ -487,7 +489,9 @@ class ToolExecutor:
                     # Mark exception as retrieved to prevent ExceptionGroup
                     bg_task.add_done_callback(lambda t: t.exception())
                 # Cancel memory tasks to free resources
-                logger.info(f"[MEMORY] Cancelling {len(memory_tasks)} memory storage tasks due to operation cancellation")
+                logger.info(
+                    f"[MEMORY] Cancelling {len(memory_tasks)} memory storage tasks due to operation cancellation"
+                )
                 for task in memory_tasks:  # type: ignore[assignment]
                     task.cancel()  # type: ignore[attr-defined]
                     # Mark exception as retrieved to prevent ExceptionGroup
