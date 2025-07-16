@@ -1,7 +1,6 @@
 from typing import Any, List, Optional, Dict
 import asyncio
 import logging
-import threading
 import time
 from google import genai
 from google.genai import types
@@ -19,27 +18,22 @@ from .models import model_capabilities
 
 logger = logging.getLogger(__name__)
 
-# Thread-safe singleton implementation
+# Singleton client instance - safe for async use
 _client: Optional[genai.Client] = None
-_client_lock = threading.Lock()
 
 
 def get_client():
-    """Get the shared Vertex AI client instance (thread-safe singleton)."""
+    """Get the shared Vertex AI client instance."""
     global _client
     if _client is None:
-        with _client_lock:
-            if _client is None:
-                settings = get_settings()
-                if not settings.vertex_project or not settings.vertex_location:
-                    raise ValueError(
-                        "VERTEX_PROJECT and VERTEX_LOCATION must be configured"
-                    )
-                _client = genai.Client(
-                    vertexai=True,
-                    project=settings.vertex_project,
-                    location=settings.vertex_location,
-                )
+        settings = get_settings()
+        if not settings.vertex_project or not settings.vertex_location:
+            raise ValueError("VERTEX_PROJECT and VERTEX_LOCATION must be configured")
+        _client = genai.Client(
+            vertexai=True,
+            project=settings.vertex_project,
+            location=settings.vertex_location,
+        )
     return _client
 
 
@@ -81,20 +75,25 @@ class VertexAdapter(BaseAdapter):
         return response_text
 
     async def _generate_async(self, client, **kwargs):
-        """Async wrapper for synchronous generate_content calls."""
+        """Use native async API for generate_content calls."""
         try:
             logger.info(
-                f"[ADAPTER] Starting Vertex generate_content at {time.strftime('%H:%M:%S')}"
+                f"[ADAPTER] Starting Vertex async generate_content at {time.strftime('%H:%M:%S')}"
             )
             api_start_time = time.time()
-            result = await asyncio.to_thread(client.models.generate_content, **kwargs)
+            # Use the async client API directly
+            result = await client.aio.models.generate_content(**kwargs)
             api_end_time = time.time()
             logger.info(
-                f"[ADAPTER] Vertex generate_content completed in {api_end_time - api_start_time:.2f}s"
+                f"[ADAPTER] Vertex async generate_content completed in {api_end_time - api_start_time:.2f}s"
             )
             return result
         except asyncio.CancelledError:
-            logger.info("[ADAPTER] Vertex generate_content cancelled by user")
+            logger.warning("[CANCEL] Vertex generate_content cancelled")
+            logger.info(
+                f"[CANCEL] Active tasks in Vertex cancel: {len(asyncio.all_tasks())}"
+            )
+            logger.info("[CANCEL] Re-raising from Vertex adapter")
             raise
 
     async def generate(

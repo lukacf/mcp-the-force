@@ -25,15 +25,19 @@ class VectorStoreManager:
 
         try:
             logger.info(
-                f"VectorStoreManager.create: About to call asyncio.to_thread with {len(files)} files"
+                f"VectorStoreManager.create: About to create vector store with {len(files)} files"
             )
-            vs_id = await asyncio.to_thread(create_vector_store, files)
+            vs_id = await create_vector_store(files)
             logger.info(
-                f"VectorStoreManager.create: asyncio.to_thread returned vs_id={vs_id}"
+                f"VectorStoreManager.create: vector store created, vs_id={vs_id}"
             )
             if vs_id:
                 logger.info(f"Created vector store: {vs_id}")
             return vs_id
+        except asyncio.CancelledError:
+            # Don't swallow CancelledError - let it propagate
+            logger.warning("VectorStoreManager.create cancelled")
+            raise
         except Exception as e:
             logger.error(f"Error creating vector store: {e}", exc_info=True)
             return None
@@ -48,7 +52,7 @@ class VectorStoreManager:
             return
 
         try:
-            await asyncio.to_thread(delete_vector_store, vs_id)
+            await delete_vector_store(vs_id)
             logger.info(f"Deleted vector store: {vs_id}")
         except Exception as e:
             logger.error(f"Error deleting vector store: {e}")

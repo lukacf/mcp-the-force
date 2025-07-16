@@ -4,9 +4,9 @@ import sqlite3
 import time
 import random
 import threading
-import asyncio
 import logging
 from typing import Optional, Any, List
+from .utils.thread_pool import run_in_thread_pool
 
 logger = logging.getLogger(__name__)
 
@@ -85,8 +85,9 @@ class BaseSQLiteCache:
                     return cursor.fetchall()
                 return None
 
-        # Run in thread pool to avoid blocking event loop
-        return await asyncio.to_thread(_sync_execute)
+        # Run in shared thread pool to avoid blocking event loop
+        result = await run_in_thread_pool(_sync_execute)
+        return result  # type: ignore[no-any-return]
 
     async def _probabilistic_cleanup(self):
         """Run cleanup with configured probability."""
