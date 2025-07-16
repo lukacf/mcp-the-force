@@ -3,7 +3,7 @@
 import asyncio
 import logging
 import time
-from typing import Dict, Optional, Any
+from typing import Dict, Optional, Any, Coroutine
 from datetime import datetime
 import os
 
@@ -32,7 +32,9 @@ class OperationManager:
         self.operation_start_times: Dict[str, float] = {}
         self._monitor_task: Optional[asyncio.Task] = None
 
-    async def run_with_timeout(self, operation_id: str, coro, timeout: float):
+    async def run_with_timeout(
+        self, operation_id: str, coro: Coroutine[Any, Any, Any], timeout: float
+    ) -> Any:
         """Run an operation with timeout and cancellation support."""
         _debug_log(
             f"run_with_timeout called: operation_id={operation_id}, timeout={timeout}"
