@@ -23,13 +23,17 @@ class TestGeminiStructuredOutput:
 
         # Mock the Gemini client
         mock_client = MagicMock()
+        # Set up aio structure
+        mock_client.aio = MagicMock()
+        mock_client.aio.models = MagicMock()
         mock_response = MagicMock()
         mock_response.candidates = [MagicMock()]
         mock_response.candidates[0].content.parts = [MagicMock()]
         mock_response.candidates[0].content.parts[0].text = '{"result": true}'
         mock_response.candidates[0].content.parts[0].function_call = None
 
-        mock_client.models.generate_content.return_value = mock_response
+        # Create async mock for aio client
+        mock_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
 
         with patch(
             "mcp_second_brain.adapters.vertex.adapter.get_client",
@@ -61,6 +65,9 @@ class TestGeminiStructuredOutput:
         }
 
         mock_client = MagicMock()
+        # Set up aio structure
+        mock_client.aio = MagicMock()
+        mock_client.aio.models = MagicMock()
         mock_response = MagicMock()
         mock_response.candidates = [MagicMock()]
         mock_response.candidates[0].content.parts = [MagicMock()]
@@ -69,7 +76,8 @@ class TestGeminiStructuredOutput:
         ].text = '{"city": "London", "temperature": 18.5}'
         mock_response.candidates[0].content.parts[0].function_call = None
 
-        mock_client.models.generate_content.return_value = mock_response
+        # Create async mock for aio client
+        mock_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
 
         with patch(
             "mcp_second_brain.adapters.vertex.adapter.get_client",
@@ -80,7 +88,7 @@ class TestGeminiStructuredOutput:
             )
 
             # Check that generate_content was called with response_schema
-            call_args = mock_client.models.generate_content.call_args
+            call_args = mock_client.aio.models.generate_content.call_args
             assert call_args is not None
 
             # Extract config from call
@@ -105,13 +113,17 @@ class TestGeminiStructuredOutput:
         schema = {"type": "object"}
 
         mock_client = MagicMock()
+        # Set up aio structure
+        mock_client.aio = MagicMock()
+        mock_client.aio.models = MagicMock()
         mock_response = MagicMock()
         mock_response.candidates = [MagicMock()]
         mock_response.candidates[0].content.parts = [MagicMock()]
         mock_response.candidates[0].content.parts[0].text = "{}"
         mock_response.candidates[0].content.parts[0].function_call = None
 
-        mock_client.models.generate_content.return_value = mock_response
+        # Create async mock for aio client
+        mock_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
 
         with patch(
             "mcp_second_brain.adapters.vertex.adapter.get_client",
@@ -122,7 +134,7 @@ class TestGeminiStructuredOutput:
             )
 
             # Check that system instruction mentions JSON
-            call_args = mock_client.models.generate_content.call_args
+            call_args = mock_client.aio.models.generate_content.call_args
             config = call_args[1]["config"]
 
             assert (
@@ -146,13 +158,17 @@ class TestGeminiStructuredOutput:
         }
 
         mock_client = MagicMock()
+        # Set up aio structure
+        mock_client.aio = MagicMock()
+        mock_client.aio.models = MagicMock()
         mock_response = MagicMock()
         mock_response.candidates = [MagicMock()]
         mock_response.candidates[0].content.parts = [MagicMock()]
         mock_response.candidates[0].content.parts[0].text = '{"count": 42}'
         mock_response.candidates[0].content.parts[0].function_call = None
 
-        mock_client.models.generate_content.return_value = mock_response
+        # Create async mock for aio client
+        mock_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
 
         with patch(
             "mcp_second_brain.adapters.vertex.adapter.get_client",
@@ -180,6 +196,9 @@ class TestGeminiStructuredOutput:
         }
 
         mock_client = MagicMock()
+        # Set up aio structure
+        mock_client.aio = MagicMock()
+        mock_client.aio.models = MagicMock()
         mock_response = MagicMock()
         mock_response.candidates = [MagicMock()]
         mock_response.candidates[0].content.parts = [MagicMock()]
@@ -187,7 +206,8 @@ class TestGeminiStructuredOutput:
         mock_response.candidates[0].content.parts[0].text = '{"age": "not_a_number"}'
         mock_response.candidates[0].content.parts[0].function_call = None
 
-        mock_client.models.generate_content.return_value = mock_response
+        # Create async mock for aio client
+        mock_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
 
         with patch(
             "mcp_second_brain.adapters.vertex.adapter.get_client",
@@ -206,6 +226,9 @@ class TestGeminiStructuredOutput:
         schema = {"type": "object"}
 
         mock_client = MagicMock()
+        # Set up aio structure
+        mock_client.aio = MagicMock()
+        mock_client.aio.models = MagicMock()
         mock_response = MagicMock()
         mock_response.candidates = [MagicMock()]
         mock_response.candidates[0].content.parts = [MagicMock()]
@@ -215,7 +238,8 @@ class TestGeminiStructuredOutput:
         ].text = "This is plain text, not JSON"
         mock_response.candidates[0].content.parts[0].function_call = None
 
-        mock_client.models.generate_content.return_value = mock_response
+        # Create async mock for aio client
+        mock_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
 
         with patch(
             "mcp_second_brain.adapters.vertex.adapter.get_client",

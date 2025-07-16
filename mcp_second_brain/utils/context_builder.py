@@ -228,14 +228,22 @@ async def build_context_with_stable_list(
     # Add attachments to overflow (they always go to vector store)
     if attachments:
         attachment_files = gather_file_paths(attachments, skip_safety_check=True)
-        overflow_paths.extend(attachment_files)
-        logger.info(f"Added {len(attachment_files)} attachment files to vector store")
+        # Deduplicate: convert to set to remove any files already in overflow_paths
+        overflow_paths_set = set(overflow_paths)
+        new_attachments = [f for f in attachment_files if f not in overflow_paths_set]
+        overflow_paths.extend(new_attachments)
+        logger.info(
+            f"Added {len(new_attachments)} unique attachment files to vector store (skipped {len(attachment_files) - len(new_attachments)} duplicates)"
+        )
 
     # Generate file tree from ALL files (context + attachments)
-    # Combine all files that were requested
+    # Combine all files that were requested (deduplicated)
     all_requested_files = list(all_files)  # Files from context paths
     if overflow_paths:
-        all_requested_files.extend(overflow_paths)  # Add attachment files
+        # Only add overflow files that aren't already in all_files
+        all_files_set = set(all_files)
+        unique_overflow = [f for f in overflow_paths if f not in all_files_set]
+        all_requested_files.extend(unique_overflow)
 
     # Determine which files are inline
     inline_file_paths = []

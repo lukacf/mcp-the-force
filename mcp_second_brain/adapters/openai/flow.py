@@ -322,7 +322,11 @@ class BackgroundFlowStrategy(BaseFlowStrategy):
             try:
                 await asyncio.sleep(delay)
             except asyncio.CancelledError:
-                logger.info(f"Polling cancelled for {response_id}")
+                logger.warning(f"[CANCEL] Polling cancelled for {response_id}")
+                logger.info(
+                    f"[CANCEL] Active tasks during OpenAI poll cancel: {len(asyncio.all_tasks())}"
+                )
+                logger.info("[CANCEL] Re-raising from OpenAI polling loop")
                 # Re-raise to propagate cancellation properly
                 raise
 

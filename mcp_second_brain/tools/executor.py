@@ -394,7 +394,16 @@ class ToolExecutor:
                 )
             except asyncio.CancelledError:
                 was_cancelled = True
-                logger.info(f"{tool_id} aborted - letting cancellation bubble up")
+                logger.warning(
+                    f"[CANCEL] {tool_id} received CancelledError in executor"
+                )
+                logger.info(
+                    f"[CANCEL] Active tasks in executor: {len(asyncio.all_tasks())}"
+                )
+                logger.info(f"[CANCEL] Vector store IDs were: {vector_store_ids}")
+                logger.info(f"[CANCEL] Session ID was: {session_id}")
+                logger.info(f"[CANCEL] Adapter was: {adapter_class}")
+                logger.info("[CANCEL] Re-raising CancelledError from executor")
                 raise  # Important: do NOT convert or return
             except Exception as e:
                 logger.error(f"[CRITICAL] Adapter generate failed for {tool_id}: {e}")
@@ -485,8 +494,12 @@ class ToolExecutor:
             raise fastmcp.exceptions.ToolError(f"Tool execution failed: {str(e)}")
 
         finally:
+            logger.info(f"[CANCEL] In finally block, was_cancelled={was_cancelled}")
+            logger.info(f"[CANCEL] Active tasks in finally: {len(asyncio.all_tasks())}")
+
             # If operation was cancelled, do NOT block on more awaits
             if was_cancelled:
+                logger.info(f"[CANCEL] Handling cancelled cleanup for {tool_id}")
                 # Fast exit - schedule best-effort background cleanup
                 if vs_id:
 
