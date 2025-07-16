@@ -34,6 +34,22 @@ def get_adapter(
     Returns:
         Tuple of (adapter instance, error message)
     """
+    # Check if we should use mock adapter
+    from ..config import get_settings
+
+    if get_settings().adapter_mock:
+        # Use MockAdapter for all adapters when in mock mode
+        from .mock_adapter import MockAdapter
+
+        cache_key = (adapter_key, model_name)
+        if cache_key in _ADAPTER_CACHE:
+            return _ADAPTER_CACHE[cache_key], None
+
+        adapter = MockAdapter(model_name)
+        _ADAPTER_CACHE[cache_key] = adapter  # type: ignore[assignment]
+        logger.info(f"Created MockAdapter for {model_name} (adapter_mock=True)")
+        return adapter, None
+
     # Lazy load search adapters to break circular imports
     if adapter_key == "SearchMemoryAdapter" and adapter_key not in ADAPTER_REGISTRY:
         try:
@@ -85,8 +101,8 @@ def get_adapter(
 
     try:
         # Create adapter instance
-        adapter = adapter_class(model_name)  # type: ignore[call-arg]
-        _ADAPTER_CACHE[cache_key] = adapter
+        adapter = adapter_class(model_name)  # type: ignore
+        _ADAPTER_CACHE[cache_key] = adapter  # type: ignore
         logger.info(f"Created {adapter_key} adapter for {model_name}")
         return adapter, None
     except Exception as e:

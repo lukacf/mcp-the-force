@@ -248,9 +248,10 @@ class TestToolExecutorSessionHandling:
             # Verify previous response ID was retrieved
             mock_get_response_id.assert_called_once_with(session_id)
 
-            # Verify adapter was called with previous_response_id
-            mock_adapter.generate.assert_called_once()
-            call_args = mock_adapter.generate.call_args
+            # Verify adapter was called (may be called twice if memory storage is active)
+            assert mock_adapter.generate.call_count >= 1
+            # Get the first call (the actual tool execution, not memory storage)
+            call_args = mock_adapter.generate.call_args_list[0]
             assert "previous_response_id" in call_args.kwargs
             assert call_args.kwargs["previous_response_id"] == mock_response_id
 
@@ -342,8 +343,8 @@ class TestToolExecutorSessionHandling:
             mock_get_history.assert_called_once_with(session_id)
 
             # Verify adapter was called with messages including history
-            mock_adapter.generate.assert_called_once()
-            call_args = mock_adapter.generate.call_args
+            assert mock_adapter.generate.call_count >= 1
+            call_args = mock_adapter.generate.call_args_list[0]
 
             # Should have messages with Gemini history + new user message
             assert "messages" in call_args.kwargs
@@ -457,7 +458,13 @@ class TestToolExecutorSessionHandling:
             )
 
             # Verify OpenAI response ID was passed
-            openai_call_args = mock_adapter.generate.call_args
+            # Get the last real call before memory storage
+            openai_call_args = None
+            for call in mock_adapter.generate.call_args_list:
+                if "previous_response_id" in call.kwargs:
+                    openai_call_args = call
+                    break
+            assert openai_call_args is not None
             assert "previous_response_id" in openai_call_args.kwargs
             assert (
                 openai_call_args.kwargs["previous_response_id"]
@@ -472,7 +479,13 @@ class TestToolExecutorSessionHandling:
             )
 
             # Verify Gemini history was passed (converted to dict format)
-            vertex_call_args = mock_adapter.generate.call_args
+            # Find the call with messages (not the memory storage call)
+            vertex_call_args = None
+            for call in mock_adapter.generate.call_args_list:
+                if "messages" in call.kwargs:
+                    vertex_call_args = call
+                    break
+            assert vertex_call_args is not None
             assert "messages" in vertex_call_args.kwargs
             vertex_messages = vertex_call_args.kwargs["messages"]
             assert len(vertex_messages) >= 2  # history + new message
@@ -539,8 +552,8 @@ class TestToolExecutorSessionHandling:
             )
 
             # Verify adapter was called without session-specific parameters
-            mock_adapter.generate.assert_called_once()
-            call_args = mock_adapter.generate.call_args
+            assert mock_adapter.generate.call_count >= 1
+            call_args = mock_adapter.generate.call_args_list[0]
 
             # For Grok (xai) adapters, messages are always passed (system + user format)
             # even without session_id

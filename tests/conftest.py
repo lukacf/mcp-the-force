@@ -49,38 +49,15 @@ def verify_mock_adapter_for_integration():
                 "For example: MCP_ADAPTER_MOCK=1 pytest tests/internal"
             )
 
-        # Apply mock adapter registry for integration tests
+        # Clear instance cache to prevent state leakage between tests
         try:
-            from mcp_second_brain.adapters import (
-                ADAPTER_REGISTRY,
-                _ADAPTER_CACHE,
-                get_adapter,
-            )
-            from mcp_second_brain.adapters.mock_adapter import MockAdapter
+            from mcp_second_brain.adapters import _ADAPTER_CACHE
 
-            # --- FIX: Proactively load and register search adapters ---
-            get_adapter("SearchMemoryAdapter", "dummy_model")
-            get_adapter("SearchAttachmentAdapter", "dummy_model")
-            # --- END FIX ---
-
-            # Clear instance cache to prevent state leakage
             _ADAPTER_CACHE.clear()
-
-            # Replace all adapters with MockAdapter
-            for name in list(ADAPTER_REGISTRY):
-                ADAPTER_REGISTRY[name] = MockAdapter
-
-            # Verify the mocking worked
-            for name, adapter_class in ADAPTER_REGISTRY.items():
-                if adapter_class is not MockAdapter:
-                    pytest.fail(
-                        f"Failed to mock adapter '{name}'. "
-                        f"Got {adapter_class} instead of MockAdapter."
-                    )
-
-        except ImportError as e:
-            # If we can't import, tests will fail for other reasons anyway
-            pytest.fail(f"Could not import adapter modules to apply mocks: {e}")
+            # Use print since logger might not be configured yet in test setup
+            print("INFO: Cleared adapter cache for integration tests")
+        except ImportError:
+            pass  # If we can't import, tests will fail for other reasons
 
 
 @pytest.fixture
