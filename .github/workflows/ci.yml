@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 env:
-  PYTHON_VERSION: "3.12"
+  PYTHON_VERSION: "3.13"
   MCP_ADAPTER_MOCK: "1"  # Set globally to ensure all Python processes see it
 
 jobs:
@@ -44,9 +44,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/uv
-          key: ${{ runner.os }}-uv-py312-${{ hashFiles('pyproject.toml') }}
+          key: ${{ runner.os }}-uv-py313-${{ hashFiles('pyproject.toml') }}
           restore-keys: |
-            ${{ runner.os }}-uv-py312-
+            ${{ runner.os }}-uv-py313-
       
       - name: Install dependencies
         run: |
@@ -60,8 +60,8 @@ jobs:
         uses: codecov/codecov-action@v4
         with:
           file: ./coverage.xml
-          flags: unit,py312
-          name: coverage-py312
+          flags: unit,py313
+          name: coverage-py313
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
 
