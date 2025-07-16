@@ -155,6 +155,7 @@ class TestBuildContextWithStableList:
                             (
                                 inline_files,
                                 overflow_files,
+                                file_tree,
                             ) = await build_context_with_stable_list(
                                 context_paths=["/api"],
                                 session_id="test_session",
@@ -222,6 +223,7 @@ class TestBuildContextWithStableList:
                         (
                             inline_files,
                             overflow_files,
+                            file_tree,
                         ) = await build_context_with_stable_list(
                             context_paths=["/api"],
                             session_id="test_session",
@@ -300,6 +302,7 @@ class TestBuildContextWithStableList:
                         (
                             inline_files,
                             overflow_files,
+                            file_tree,
                         ) = await build_context_with_stable_list(
                             context_paths=["/api"],
                             session_id="test_session",
@@ -367,6 +370,7 @@ class TestBuildContextWithStableList:
                             (
                                 inline_files,
                                 overflow_files,
+                                file_tree,
                             ) = await build_context_with_stable_list(
                                 context_paths=["/api"],
                                 session_id="test_session",
