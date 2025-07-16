@@ -26,8 +26,10 @@ class TestRouteDescriptor:
 
     def test_descriptor_with_default_factory(self):
         """Test descriptor with default factory."""
+        from mcp_second_brain.tools.descriptors import _NO_DEFAULT
+
         desc = RouteDescriptor(route=RouteType.PROMPT, default_factory=list)
-        assert desc.default is None
+        assert desc.default is _NO_DEFAULT
         assert desc.default_factory is list
 
     def test_descriptor_name_setting(self):
@@ -39,6 +41,25 @@ class TestRouteDescriptor:
 
         # Name should be set when class is created
         assert desc.field_name == "param"
+
+    def test_has_default_property(self):
+        """Test has_default property correctly identifies defaults."""
+        from mcp_second_brain.tools.descriptors import _NO_DEFAULT
+
+        # No default
+        desc1 = RouteDescriptor(route=RouteType.PROMPT)
+        assert desc1.default is _NO_DEFAULT
+        assert not desc1.has_default
+
+        # With default value
+        desc2 = RouteDescriptor(route=RouteType.PROMPT, default=None)
+        assert desc2.default is None
+        assert desc2.has_default
+
+        # With default factory
+        desc3 = RouteDescriptor(route=RouteType.PROMPT, default_factory=list)
+        assert desc3.default is _NO_DEFAULT
+        assert desc3.has_default
 
 
 class TestRoute:

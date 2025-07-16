@@ -1,11 +1,16 @@
 """Route descriptors for parameter routing in tool definitions."""
 
 from __future__ import annotations
-from typing import Any, Optional, TypeVar, Type, Callable, Generic, overload
+from typing import Any, Optional, TypeVar, Type, Callable, Generic, overload, cast
 from dataclasses import dataclass, field
 from enum import Enum
 
 T = TypeVar("T")
+
+# Sentinel value to distinguish "no default" from "default is None"
+_NO_DEFAULT = object()
+
+__all__ = ["RouteType", "RouteDescriptor", "Route", "_NO_DEFAULT"]
 
 
 class RouteType(Enum):
@@ -26,17 +31,22 @@ class RouteDescriptor(Generic[T]):
 
     route: RouteType
     position: Optional[int] = None
-    default: Optional[T] = field(default=None)
+    default: Any = field(default=_NO_DEFAULT)  # Use sentinel to detect no default
     default_factory: Optional[Callable[[], T]] = field(default=None)
     description: Optional[str] = None
 
+    @property
+    def has_default(self) -> bool:
+        """Check if this descriptor has a default value."""
+        return self.default is not _NO_DEFAULT or self.default_factory is not None
+
     def __post_init__(self):
         """Validate that mutable defaults use default_factory."""
-        if self.default is not None and self.default_factory is not None:
+        if self.default is not _NO_DEFAULT and self.default_factory is not None:
             raise ValueError("Cannot specify both default and default_factory")
 
         # Check for mutable defaults without factory
-        if self.default is not None:
+        if self.default is not _NO_DEFAULT and self.default is not None:
             if isinstance(self.default, (list, dict, set)):
                 raise ValueError(
                     f"Mutable default {type(self.default).__name__} should use default_factory. "
@@ -61,9 +71,9 @@ class RouteDescriptor(Generic[T]):
         if self.default_factory is not None:
             # Create new instance from factory
             return self.default_factory()
-        elif self.default is not None:
-            # For immutable defaults, return directly
-            return self.default
+        elif self.default is not _NO_DEFAULT:
+            # For immutable defaults, return directly (including None)
+            return cast(T, self.default)
         else:
             # No default - could be required field
             return None  # type: ignore[return-value]
@@ -111,7 +121,7 @@ class Route:
     def prompt(
         pos: Optional[int] = None,
         description: Optional[str] = None,
-        default: Any = None,
+        default: Any = _NO_DEFAULT,
         default_factory: Optional[Callable[[], Any]] = None,
     ) -> RouteDescriptor:
         """Parameter that goes to the prompt builder."""
@@ -125,7 +135,7 @@ class Route:
 
     @staticmethod
     def adapter(
-        default: Any = None,
+        default: Any = _NO_DEFAULT,
         description: Optional[str] = None,
         default_factory: Optional[Callable[[], Any]] = None,
     ) -> RouteDescriptor:
@@ -145,7 +155,7 @@ class Route:
         """Parameter that triggers vector store creation."""
         return RouteDescriptor(
             route=RouteType.VECTOR_STORE,
-            default=None,
+            default=_NO_DEFAULT,
             default_factory=default_factory,
             description=description,
         )
@@ -158,7 +168,7 @@ class Route:
         """Parameter for session management."""
         return RouteDescriptor(
             route=RouteType.SESSION,
-            default=None,
+            default=_NO_DEFAULT,
             default_factory=default_factory,
             description=description,
         )
@@ -171,7 +181,7 @@ class Route:
         """Parameter for passing vector store IDs directly."""
         return RouteDescriptor(
             route=RouteType.VECTOR_STORE_IDS,
-            default=None,
+            default=_NO_DEFAULT,
             default_factory=default_factory,
             description=description,
         )
@@ -189,7 +199,7 @@ class Route:
         """
         return RouteDescriptor(
             route=RouteType.STRUCTURED_OUTPUT,
-            default=None,
+            default=_NO_DEFAULT,
             default_factory=default_factory,
             description=description,
         )
