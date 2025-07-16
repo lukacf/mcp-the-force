@@ -118,7 +118,11 @@ class ToolExecutor:
 
                 # Call the new context builder
                 logger.info("[STEP 8] Calling context builder with stable list")
-                inline_files, overflow_files = await build_context_with_stable_list(
+                (
+                    inline_files,
+                    overflow_files,
+                    file_tree,
+                ) = await build_context_with_stable_list(
                     context_paths=context_paths,
                     session_id=session_id,
                     cache=cache,
@@ -126,7 +130,7 @@ class ToolExecutor:
                     attachments=attachment_paths,
                 )
                 logger.info(
-                    f"[STEP 8.1] Context builder returned: {len(inline_files)} inline files, {len(overflow_files)} overflow files"
+                    f"[STEP 8.1] Context builder returned: {len(inline_files)} inline files, {len(overflow_files)} overflow files, file tree generated"
                 )
 
                 # Format the prompt with inline files
@@ -138,6 +142,14 @@ class ToolExecutor:
                 ET.SubElement(task, "OutputFormat").text = prompt_params.get(
                     "output_format", ""
                 )
+
+                # Add file map with legend
+                file_map = ET.SubElement(task, "file_map")
+                file_map.text = (
+                    file_tree
+                    + "\n\nLegend: Files marked 'attached' are available via search_attachments. Unmarked files are included below."
+                )
+
                 CTX = ET.SubElement(task, "CONTEXT")
 
                 # Helper function to create file elements
@@ -155,7 +167,7 @@ class ToolExecutor:
                 prompt = ET.tostring(task, encoding="unicode")
                 logger.info(f"[STEP 9.1] Prompt built: {len(prompt)} chars")
                 if overflow_files:
-                    prompt += "\n\nYou have additional information accessible through the file search tool."
+                    prompt += "\n\n<instructions_on_use>The files in the file tree but not included in <CONTEXT> you access via the search_attachments MCP function. They are stored in a vector database and the search function does semantic search.</instructions_on_use>"
 
                 # Store overflow files for vector store creation
                 files_for_vector_store = overflow_files
