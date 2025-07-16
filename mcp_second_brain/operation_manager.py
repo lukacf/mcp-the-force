@@ -4,24 +4,8 @@ import asyncio
 import logging
 import time
 from typing import Dict, Optional, Any, Coroutine
-from datetime import datetime
-import os
 
 logger = logging.getLogger(__name__)
-
-# Debug file for tracking operation manager activity
-DEBUG_FILE = os.path.join(os.getcwd(), "mcp_cancellation_debug.log")
-
-
-def _debug_log(message: str):
-    """Write debug message to file since user can't see stderr in interactive environment."""
-    try:
-        with open(DEBUG_FILE, "a") as f:
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-            f.write(f"[{timestamp}] OPERATION_MANAGER: {message}\n")
-            f.flush()
-    except Exception:
-        pass  # Silent fail if can't write
 
 
 class OperationManager:
@@ -36,7 +20,7 @@ class OperationManager:
         self, operation_id: str, coro: Coroutine[Any, Any, Any], timeout: float
     ) -> Any:
         """Run an operation with timeout and cancellation support."""
-        _debug_log(
+        logger.debug(
             f"run_with_timeout called: operation_id={operation_id}, timeout={timeout}"
         )
 
@@ -46,37 +30,37 @@ class OperationManager:
         self.operation_start_times[operation_id] = time.time()
 
         logger.info(f"Starting operation {operation_id} with {timeout}s timeout")
-        _debug_log(f"Task created and registered: {operation_id}")
+        logger.debug(f"Task created and registered: {operation_id}")
 
         try:
             # Use wait_for on the task
             result = await asyncio.wait_for(task, timeout=timeout)
             logger.info(f"Operation {operation_id} completed successfully")
-            _debug_log(f"Operation completed successfully: {operation_id}")
+            logger.debug(f"Operation completed successfully: {operation_id}")
             return result
         except asyncio.TimeoutError:
             logger.warning(f"Operation {operation_id} timed out after {timeout}s")
-            _debug_log(f"Operation timed out: {operation_id}")
+            logger.debug(f"Operation timed out: {operation_id}")
             raise
         except asyncio.CancelledError:
             logger.info(f"Operation {operation_id} was cancelled by MCP.")
-            _debug_log(f"Operation cancelled by MCP, re-raising: {operation_id}")
+            logger.debug(f"Operation cancelled by MCP, re-raising: {operation_id}")
             # Explicitly cancel the inner task to ensure clean shutdown
             if not task.done():
                 task.cancel()
-                _debug_log(f"Explicitly cancelled inner task: {operation_id}")
+                logger.debug(f"Explicitly cancelled inner task: {operation_id}")
             # Re-raise to let the cancellation propagate properly
             raise
         except Exception as e:
             logger.error(f"Operation {operation_id} failed: {e}")
-            _debug_log(
+            logger.debug(
                 f"Operation failed with error: {operation_id} - {type(e).__name__}: {e}"
             )
             raise
         finally:
             self.active_operations.pop(operation_id, None)
             self.operation_start_times.pop(operation_id, None)
-            _debug_log(f"Cleaned up operation: {operation_id}")
+            logger.debug(f"Cleaned up operation: {operation_id}")
 
     async def cancel_operation(self, operation_id: str):
         """Cancel a specific operation."""
@@ -149,4 +133,4 @@ class OperationManager:
 
 # Global operation manager instance
 operation_manager = OperationManager()
-_debug_log("Global operation_manager instance created")
+logger.debug("Global operation_manager instance created")
