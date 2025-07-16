@@ -152,7 +152,7 @@ class VertexAdapter(BaseAdapter):
 
         # Always add search_project_memory for accessing memory
         memory_search_decl = create_search_memory_declaration_gemini()
-        function_declarations.append(memory_search_decl)
+        function_declarations.append(types.FunctionDeclaration(**memory_search_decl))
 
         # Add attachment search tool when vector stores are provided
         if vector_store_ids:
@@ -160,7 +160,9 @@ class VertexAdapter(BaseAdapter):
                 f"Registering search_session_attachments for {len(vector_store_ids)} vector stores"
             )
             attachment_search_decl = create_attachment_search_declaration_gemini()
-            function_declarations.append(attachment_search_decl)
+            function_declarations.append(
+                types.FunctionDeclaration(**attachment_search_decl)
+            )
 
         # Build tools list
         tools: Optional[List[Any]] = None
@@ -225,7 +227,18 @@ class VertexAdapter(BaseAdapter):
                 thinking_budget=max_reasoning_tokens if max_reasoning_tokens > 0 else -1
             )
 
-        generate_content_config = types.GenerateContentConfig(**config_kwargs)
+        # Create GenerateContentConfig with explicit parameters
+        generate_content_config = types.GenerateContentConfig(
+            temperature=config_kwargs.get("temperature"),
+            top_p=config_kwargs.get("top_p"),
+            max_output_tokens=config_kwargs.get("max_output_tokens"),
+            safety_settings=config_kwargs.get("safety_settings"),
+            tools=config_kwargs.get("tools"),
+            response_schema=config_kwargs.get("response_schema"),
+            response_mime_type=config_kwargs.get("response_mime_type"),
+            system_instruction=config_kwargs.get("system_instruction"),
+            thinking_config=config_kwargs.get("thinking_config"),
+        )
 
         # Generate response
         client = get_client()

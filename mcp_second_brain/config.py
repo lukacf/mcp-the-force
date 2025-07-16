@@ -7,6 +7,7 @@ from pathlib import Path
 from functools import lru_cache
 from typing import Optional, Dict, Any, Tuple
 from pydantic import BaseModel, Field, field_validator
+from pydantic.fields import FieldInfo
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
@@ -32,7 +33,7 @@ class LoggingConfig(BaseModel):
 
     level: str = Field("INFO", description="Logging level")
     developer_mode: DeveloperLoggingConfig = Field(
-        default_factory=DeveloperLoggingConfig
+        default_factory=lambda: DeveloperLoggingConfig()
     )
 
     @field_validator("level")
@@ -115,8 +116,8 @@ class Settings(BaseSettings):
     """Unified settings for mcp-second-brain server."""
 
     # Top-level configs
-    mcp: MCPConfig = Field(default_factory=MCPConfig)
-    logging: LoggingConfig = Field(default_factory=LoggingConfig)
+    mcp: MCPConfig = Field(default_factory=lambda: MCPConfig())
+    logging: LoggingConfig = Field(default_factory=lambda: LoggingConfig())
 
     # Provider configs with legacy environment variable support
     openai: ProviderConfig = Field(
@@ -125,13 +126,13 @@ class Settings(BaseSettings):
     vertex: ProviderConfig = Field(
         default_factory=lambda: ProviderConfig(max_output_tokens=65536)
     )
-    anthropic: ProviderConfig = Field(default_factory=ProviderConfig)
-    xai: ProviderConfig = Field(default_factory=ProviderConfig)
+    anthropic: ProviderConfig = Field(default_factory=lambda: ProviderConfig())
+    xai: ProviderConfig = Field(default_factory=lambda: ProviderConfig())
 
     # Feature configs
-    session: SessionConfig = Field(default_factory=SessionConfig)
-    memory: MemoryConfig = Field(default_factory=MemoryConfig)
-    features: FeaturesConfig = Field(default_factory=FeaturesConfig)
+    session: SessionConfig = Field(default_factory=lambda: SessionConfig())
+    memory: MemoryConfig = Field(default_factory=lambda: MemoryConfig())
+    features: FeaturesConfig = Field(default_factory=lambda: FeaturesConfig())
 
     # Testing
     adapter_mock: bool = Field(False, description="Use mock adapters for testing")
@@ -159,7 +160,7 @@ class Settings(BaseSettings):
             """Load settings from YAML files."""
 
             def get_field_value(
-                self, field_name: str, field_info
+                self, field_name: str, field_info: FieldInfo
             ) -> Tuple[Any, str, bool]:
                 data = self()
                 if field_name in data:
@@ -173,7 +174,7 @@ class Settings(BaseSettings):
             """Load legacy flat environment variables."""
 
             def get_field_value(
-                self, field_name: str, field_info
+                self, field_name: str, field_info: FieldInfo
             ) -> Tuple[Any, str, bool]:
                 data = self()
                 if field_name in data:
