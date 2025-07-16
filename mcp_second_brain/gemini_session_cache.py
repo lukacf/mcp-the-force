@@ -19,17 +19,21 @@ logger = logging.getLogger(__name__)
 def _content_to_dict(content: types.Content) -> Dict[str, Any]:
     """Serialize a Gemini Content object to a JSON-compatible dictionary."""
     parts_list = []
-    for part in content.parts:
-        part_dict = {}
-        # Use getattr to safely access optional attributes
-        if text := getattr(part, "text", None):
-            part_dict["text"] = text
-        if fc := getattr(part, "function_call", None):
-            part_dict["function_call"] = {"name": fc.name, "args": dict(fc.args)}
-        if fr := getattr(part, "function_response", None):
-            part_dict["function_response"] = {"name": fr.name, "response": fr.response}
-        if part_dict:
-            parts_list.append(part_dict)
+    if content.parts is not None:
+        for part in content.parts:
+            part_dict = {}
+            # Use getattr to safely access optional attributes
+            if text := getattr(part, "text", None):
+                part_dict["text"] = text
+            if fc := getattr(part, "function_call", None):
+                part_dict["function_call"] = {"name": fc.name, "args": dict(fc.args)}
+            if fr := getattr(part, "function_response", None):
+                part_dict["function_response"] = {
+                    "name": fr.name,
+                    "response": fr.response,
+                }
+            if part_dict:
+                parts_list.append(part_dict)
     return {"role": getattr(content, "role", "user"), "parts": parts_list}
 
 
@@ -131,9 +135,12 @@ class _SQLiteGeminiSessionCache(BaseSQLiteCache):
         # Convert back to old format for compatibility
         messages = []
         for content in history:
-            for part in content.parts:
-                if hasattr(part, "text") and part.text:
-                    messages.append({"role": content.role, "content": part.text})
+            if content.parts is not None:
+                for part in content.parts:
+                    if hasattr(part, "text") and part.text:
+                        messages.append(
+                            {"role": str(content.role), "content": str(part.text)}
+                        )
         return messages
 
     async def append_exchange(

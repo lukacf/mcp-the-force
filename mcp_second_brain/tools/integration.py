@@ -66,10 +66,9 @@ def create_tool_function(metadata: ToolMetadata):
     # CRITICAL: Set annotations for FastMCP 2.x compatibility
     # FastMCP uses pydantic which expects __annotations__ to be set
     annotations: Dict[str, Any] = {"return": str}
-    # Explicitly type the iteration to help mypy
-    param: Parameter
-    for param in sig_params:
-        annotations[param.name] = param.annotation
+    # Use a different variable name to avoid confusion with earlier loop
+    for sig_param in sig_params:
+        annotations[sig_param.name] = sig_param.annotation
     tool_function.__annotations__ = annotations
 
     return tool_function
