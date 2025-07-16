@@ -1,6 +1,7 @@
 """Adapter for logging tools using VictoriaLogs."""
 
 import json
+import os
 import httpx
 from typing import List, Any, Dict
 
@@ -26,30 +27,40 @@ class LoggingAdapter(BaseAdapter):
         **kwargs: Any,
     ) -> str:
         """Handle logging tool execution."""
-        query = kwargs.get("query", "")
-        level = kwargs.get("level")
+        # Extract new parameter names
+        text = kwargs.get("text")
+        severity = kwargs.get("severity")
         since = kwargs.get("since", "1h")
-        instance_id = kwargs.get("instance_id")
-        all_projects = kwargs.get("all_projects", False)
+        until = kwargs.get("until", "now")
+        project = kwargs.get("project", "current")
+        context = kwargs.get("context", "*")
+        instance = kwargs.get("instance", "*")
         limit = kwargs.get("limit", 100)
+        order = kwargs.get("order", "desc")
 
         return await self._search_logs(
-            query=query,
-            level=level,
+            text=text,
+            severity=severity,
             since=since,
-            instance_id=instance_id,
-            all_projects=all_projects,
+            until=until,
+            project=project,
+            context=context,
+            instance=instance,
             limit=limit,
+            order=order,
         )
 
     async def _search_logs(
         self,
-        query: str,
-        level: str | None = None,
+        text: str | None = None,
+        severity: str | List[str] | None = None,
         since: str = "1h",
-        instance_id: str | None = None,
-        all_projects: bool = False,
+        until: str = "now",
+        project: str = "current",
+        context: str = "*",
+        instance: str = "*",
         limit: int = 100,
+        order: str = "desc",
     ) -> str:
         """Search logs using VictoriaLogs LogsQL with improved LLM-friendly interface."""
         settings = get_settings()
@@ -58,49 +69,62 @@ class LoggingAdapter(BaseAdapter):
             return "Developer logging mode is not enabled. Set logging.developer_mode.enabled=true in config.yaml"
 
         try:
-            # Smart defaults and inference
-            # Auto-infer severity from query text
-            if not level and query:
-                if any(
-                    word in query.lower() for word in ["failed", "error", "exception"]
-                ):
-                    level = "ERROR"
-                elif any(word in query.lower() for word in ["warning", "warn"]):
-                    level = "WARNING"
-
-            # Auto-infer time range from query text
-            if "recently" in query.lower() or "just now" in query.lower():
-                since = "10m"
-            elif "last hour" in query.lower():
-                since = "1h"
-
-            # Build LogsQL query with VictoriaLogs label syntax (space-separated, no AND)
+            # Build LogsQL query with VictoriaLogs label syntax
             filters = ["app:mcp-second-brain"]  # Always filter to our app
 
-            if level:
-                filters.append(f"severity:{level.lower()}")  # Use lowercase
-            if instance_id:
-                # Support wildcards for semantic instance IDs
-                if "*" in instance_id:
-                    # VictoriaLogs regex syntax
-                    regex_pattern = instance_id.replace("*", ".*")
+            # Handle severity filter (single value or list)
+            if severity:
+                if isinstance(severity, list):
+                    # Multiple severities: severity:(info OR warning OR error)
+                    severity_filter = (
+                        "severity:(" + " OR ".join(s.lower() for s in severity) + ")"
+                    )
+                    filters.append(severity_filter)
+                else:
+                    filters.append(f"severity:{severity.lower()}")
+
+            # Handle project filter
+            if project == "current":
+                # Default: filter to current project
+                current_project = os.getenv("MCP_PROJECT_PATH", os.getcwd())
+                filters.append(f'project:"{current_project}"')
+            elif project != "all":
+                # Specific project path
+                filters.append(f'project:"{project}"')
+            # else: project == "all" means no project filter
+
+            # Handle context filter (dev/test/e2e from instance_id)
+            if context != "*":
+                # Match the middle part of semantic instance IDs
+                filters.append(f'instance_id~".*_{context}_.*"')
+
+            # Handle instance filter
+            if instance != "*":
+                if "*" in instance:
+                    # Wildcard pattern
+                    regex_pattern = instance.replace("*", ".*")
                     filters.append(f'instance_id~"{regex_pattern}"')
                 else:
-                    filters.append(f'instance_id:"{instance_id}"')
-            # Temporarily disable project filtering to debug LogsQL syntax
-            # if not all_projects:
-            #     current_project = os.getenv("MCP_PROJECT_PATH", os.getcwd())
-            #     filters.append(f'project:"{current_project}"')
+                    # Exact match
+                    filters.append(f'instance_id:"{instance}"')
 
-            # Build base query (space-separated, no AND operators)
+            # Build base query
             logsql = " ".join(filters)
 
             # Add text search
-            if query:
-                logsql += f' "{query}"'
+            if text:
+                logsql += f' "{text}"'
 
-            # Add time filter and limit (VictoriaLogs returns newest first by default)
-            logsql = f"{logsql} _time:{since}"
+            # Add time filter
+            if until == "now":
+                logsql = f"{logsql} _time:{since}"
+            else:
+                # Both since and until specified
+                logsql = f"{logsql} _time:[{since}, {until}]"
+
+            # Add sorting and limit
+            if order == "asc":
+                logsql += " | sort by (_time)"
             logsql += f" | limit {limit}"
 
             # Query VictoriaLogs (VictoriaLogs returns ND-JSON but we can get it all at once)
@@ -126,14 +150,14 @@ class LoggingAdapter(BaseAdapter):
                 suggestions = []
                 if since == "1h":
                     suggestions.append("Try broadening time range to '2h' or '1d'")
-                if level:
+                if severity:
                     suggestions.append(
-                        f"Try removing level filter (currently: {level})"
+                        f"Try removing severity filter (currently: {severity})"
                     )
-                if instance_id and "*" not in instance_id:
-                    suggestions.append(
-                        "Try using wildcard like 'mcp-second-brain_dev_*'"
-                    )
+                if instance != "*":
+                    suggestions.append("Try broader instance filter or remove it")
+                if project == "current":
+                    suggestions.append('Try searching all projects with project="all"')
 
                 suggestion_text = (
                     f" Suggestions: {'; '.join(suggestions)}" if suggestions else ""
@@ -141,7 +165,8 @@ class LoggingAdapter(BaseAdapter):
                 return f"No logs found matching criteria.{suggestion_text}"
 
             # LLM-optimized formatting
-            output = [f"## Found {len(results)} log entries (last {since})"]
+            time_desc = f"last {since}" if until == "now" else f"{since} to {until}"
+            output = [f"## Found {len(results)} log entries ({time_desc})"]
 
             # Group by instance for better readability
             by_instance: Dict[str, List[Dict[str, Any]]] = {}
