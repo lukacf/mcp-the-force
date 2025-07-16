@@ -40,9 +40,12 @@ async def test_flow_handles_function_execution_failure():
         ],
     }
 
-    with patch("asyncio.sleep", return_value=None), patch(
-        "mcp_second_brain.adapters.openai.client.OpenAIClientFactory.get_instance"
-    ) as mock_factory:
+    with (
+        patch("asyncio.sleep", return_value=None),
+        patch(
+            "mcp_second_brain.adapters.openai.client.OpenAIClientFactory.get_instance"
+        ) as mock_factory,
+    ):
         mock_client = AsyncMock()
         mock_factory.return_value = mock_client
 
@@ -252,9 +255,12 @@ async def test_flow_handles_recursive_function_calls():
         ],
     }
 
-    with patch("asyncio.sleep", return_value=None), patch(
-        "mcp_second_brain.adapters.openai.client.OpenAIClientFactory.get_instance"
-    ) as mock_factory:
+    with (
+        patch("asyncio.sleep", return_value=None),
+        patch(
+            "mcp_second_brain.adapters.openai.client.OpenAIClientFactory.get_instance"
+        ) as mock_factory,
+    ):
         mock_client = AsyncMock()
         mock_factory.return_value = mock_client
 

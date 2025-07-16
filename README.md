@@ -24,9 +24,58 @@ mcp-config validate
 uv run -- mcp-second-brain
 ```
 
-## 🤖 Claude Code Integration
+## 🤖 Claude Desktop Integration
 
-This MCP server is designed to work seamlessly with Claude Code. Once running, Claude Code automatically discovers and connects to the server, giving you access to advanced AI model orchestration with multiple specialized models (OpenAI o3/o3-pro/gpt-4.1, Google Gemini 2.5) and intelligent context management for large codebases.
+### Basic Configuration
+
+Add the following to your Claude Desktop configuration file (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
+
+```json
+{
+  "mcpServers": {
+    "second-brain": {
+      "command": "uv",
+      "args": ["--directory", "/path/to/mcp-second-brain", "run", "mcp-second-brain"]
+    }
+  }
+}
+```
+
+### Advanced Configuration with Logging
+
+To enable the developer logging system for debugging MCP operations:
+
+```json
+{
+  "mcpServers": {
+    "second-brain": {
+      "command": "uv",
+      "args": ["--directory", "/path/to/mcp-second-brain", "run", "mcp-second-brain"],
+      "env": {
+        "LOGGING__DEVELOPER_MODE__ENABLED": "true",
+        "LOGGING__DEVELOPER_MODE__PORT": "4711",
+        "LOGGING__DEVELOPER_MODE__DB_PATH": ".mcp_logs.sqlite3",
+        "LOGGING__DEVELOPER_MODE__BATCH_SIZE": "100",
+        "LOGGING__DEVELOPER_MODE__BATCH_TIMEOUT": "1.0",
+        "LOGGING__DEVELOPER_MODE__MAX_DB_SIZE_MB": "1000"
+      }
+    }
+  }
+}
+```
+
+When developer logging is enabled, you can search logs using the `search_mcp_debug_logs` tool within Claude Desktop.
+
+### Environment Variables in Claude Desktop
+
+Any configuration setting can be overridden via environment variables in the MCP server configuration. The pattern is:
+
+- Use double underscores (`__`) to separate nested configuration levels
+- Examples:
+  - `OPENAI_API_KEY` - Set OpenAI API key
+  - `LOGGING__LEVEL` - Set logging level (DEBUG, INFO, WARNING, ERROR)
+  - `MCP__CONTEXT_PERCENTAGE` - Set context window usage (0.0-1.0)
+  - `PROVIDERS__VERTEX__PROJECT` - Set Google Cloud project
 
 ## 🔧 Configuration
 
@@ -36,9 +85,11 @@ MCP Second-Brain uses a unified YAML-based configuration system with environment
 
 The system loads configuration from multiple sources with clear precedence (highest to lowest):
 
-1. **Environment Variables** - Override any setting for CI/CD and production
-2. **YAML Files** - Primary configuration method (`config.yaml` + `secrets.yaml`)
+1. **Environment Variables** - Override any setting for CI/CD and production (recommended for Claude Desktop)
+2. **YAML Files** - Alternative configuration method (`config.yaml` + `secrets.yaml`)
 3. **Defaults** - Sensible defaults built into the application
+
+**Note**: For Claude Desktop integration, we recommend using environment variables in the MCP server configuration rather than YAML files.
 
 ### Setup Configuration Files
 
@@ -209,6 +260,7 @@ gcloud iam service-accounts add-iam-policy-binding \
 - `list_models` - List all available models and their capabilities
 - `search_project_memory` - Search past conversations and git commits
 - `search_session_attachments` - Search files attached to current session
+- `search_mcp_debug_logs` - Search debug logs (requires developer mode enabled)
 
 ### Tool Naming Convention
 
@@ -347,6 +399,69 @@ Search across project memory:
 # Search past decisions and commit history
 Use second-brain search_project_memory with {"query": "authentication implementation decisions", "max_results": 10}
 ```
+
+## 🔍 Developer Logging System
+
+The MCP server integrates with VictoriaLogs for centralized logging and debugging across multiple projects and instances.
+
+### Features
+- **VictoriaLogs integration**: High-performance log aggregation and search
+- **Multi-project support**: Logs from multiple MCP servers in one place
+- **Instance tracking**: Semantic instance IDs for dev/test/e2e environments
+- **Rich metadata**: Project paths, logger names, severity levels, and structured data
+- **Docker-based deployment**: Easy setup with docker-compose
+
+### Setup
+1. **Start VictoriaLogs**:
+   ```bash
+   docker-compose up -d victorialogs
+   ```
+
+2. **Enable developer mode** in Claude Desktop config:
+   ```json
+   {
+     "env": {
+       "LOGGING__DEVELOPER_MODE__ENABLED": "true"
+     }
+   }
+   ```
+
+### Searching Logs
+Use the `search_mcp_debug_logs` tool with AI-friendly parameters:
+
+```
+# Recent warnings in current project
+search_mcp_debug_logs(severity="warning", since="30m")
+
+# Find text across all projects
+search_mcp_debug_logs(text="CallToolRequest", project="all")
+
+# E2E test errors
+search_mcp_debug_logs(severity="error", context="e2e")
+
+# Specific instance logs
+search_mcp_debug_logs(instance="mcp-second-brain_dev_8747aa1d")
+
+# Oldest to newest with time range
+search_mcp_debug_logs(since="24h", order="asc")
+```
+
+### Search Parameters
+- `text`: Search for text in log messages (case-insensitive)
+- `severity`: Filter by log level (debug|info|warning|error|critical)
+- `since/until`: Time range (5m, 2h, 3d) or absolute timestamps
+- `project`: "current" (default), "all", or specific path
+- `context`: Environment filter (dev|test|e2e|*)
+- `instance`: Instance ID filter (exact or wildcard pattern)
+- `limit`: Maximum results (default: 100)
+- `order`: Sort order ("desc" newest first, "asc" oldest first)
+
+### Log Levels
+- `debug`: Detailed debugging information
+- `info`: General informational messages  
+- `warning`: Warning messages
+- `error`: Error messages
+- `critical`: Critical failures
 
 ## 📚 Documentation
 

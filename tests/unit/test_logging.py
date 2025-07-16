@@ -38,20 +38,28 @@ class TestLoggingSecurity:
         caplog.set_level(logging.DEBUG)
         logger = logging.getLogger("mcp_second_brain")
 
-        # Simulate an error that might contain sensitive data
-        try:
-            # This might happen if someone accidentally includes API key in error
-            api_key = "sk-1234567890abcdef"
-            raise ValueError(f"Failed to connect with key {api_key}")
-        except ValueError as e:
-            # In real code, we should sanitize before logging
-            # This test documents that we need to be careful
-            sanitized_msg = str(e).replace(api_key, "***")
-            logger.error(f"Connection error: {sanitized_msg}")
+        # Temporarily enable propagation for this test to capture logs
+        original_propagate = logger.propagate
+        logger.propagate = True
 
-        # Check that the actual key doesn't appear
-        assert "sk-1234567890abcdef" not in caplog.text
-        assert "***" in caplog.text
+        try:
+            # Simulate an error that might contain sensitive data
+            try:
+                # This might happen if someone accidentally includes API key in error
+                api_key = "sk-1234567890abcdef"
+                raise ValueError(f"Failed to connect with key {api_key}")
+            except ValueError as e:
+                # In real code, we should sanitize before logging
+                # This test documents that we need to be careful
+                sanitized_msg = str(e).replace(api_key, "***")
+                logger.error(f"Connection error: {sanitized_msg}")
+
+            # Check that the actual key doesn't appear
+            assert "sk-1234567890abcdef" not in caplog.text
+            assert "***" in caplog.text
+        finally:
+            # Restore original propagation setting
+            logger.propagate = original_propagate
 
     def test_automatic_secret_redaction(self, caplog, monkeypatch):
         """Test that secrets are automatically redacted from logs."""
@@ -65,9 +73,17 @@ class TestLoggingSecurity:
         redaction_filter = RedactionFilter()
         caplog.handler.addFilter(redaction_filter)
 
-        # Even if someone accidentally logs the key
-        logger.info(f"Using key: {os.environ['OPENAI_API_KEY']}")
+        # Temporarily enable propagation for this test to capture logs
+        original_propagate = logger.propagate
+        logger.propagate = True
 
-        # It should be automatically redacted
-        assert test_key not in caplog.text
-        assert "***" in caplog.text
+        try:
+            # Even if someone accidentally logs the key
+            logger.info(f"Using key: {os.environ['OPENAI_API_KEY']}")
+
+            # It should be automatically redacted
+            assert test_key not in caplog.text
+            assert "***" in caplog.text
+        finally:
+            # Restore original propagation setting
+            logger.propagate = original_propagate

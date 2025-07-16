@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import random
+import time
 from abc import ABC, abstractmethod
 from typing import Dict, Any, List, Set
 from dataclasses import dataclass
@@ -23,9 +24,8 @@ from .constants import (
 )
 from ..memory_search_declaration import create_search_memory_declaration_openai
 from ..attachment_search_declaration import create_attachment_search_declaration_openai
-# Removed validation imports - no longer validating structured output
-# from ...utils.validation import validate_json_schema
-# from jsonschema import ValidationError
+import json
+import jsonschema
 
 logger = logging.getLogger(__name__)
 
@@ -164,17 +164,22 @@ class BaseFlowStrategy(ABC):
         return list(response.output)
 
     def _validate_structured_output(self, content: str) -> None:
-        """Skip validation - let the model response through as-is.
-
-        Structured output schema is a suggestion to the model, not a strict requirement.
-        Validation was causing MCP server crashes on invalid JSON/schema mismatches.
-        """
+        """Validate structured output against schema."""
         if not self.context.request.structured_output_schema:
             return
 
-        logger.debug(
-            f"Structured output schema provided - letting model response through as-is: '{content}'"
-        )
+        try:
+            parsed = json.loads(content)
+            jsonschema.validate(parsed, self.context.request.structured_output_schema)
+        except jsonschema.ValidationError as e:
+            raise AdapterException(
+                ErrorCategory.PARSING,
+                f"Response does not match requested schema: {str(e)}",
+            )
+        except json.JSONDecodeError as e:
+            raise AdapterException(
+                ErrorCategory.PARSING, f"Response is not valid JSON: {str(e)}"
+            )
 
     async def _handle_function_calls(
         self,
@@ -268,7 +273,15 @@ class BackgroundFlowStrategy(BaseFlowStrategy):
             api_params.pop("reasoning_effort", None)
 
         # Create initial response
+        logger.info(
+            f"[ADAPTER] Starting OpenAI responses.create at {time.strftime('%H:%M:%S')}"
+        )
+        api_start_time = time.time()
         initial_response = await self.context.client.responses.create(**api_params)
+        api_end_time = time.time()
+        logger.info(
+            f"[ADAPTER] OpenAI responses.create completed in {api_end_time - api_start_time:.2f}s"
+        )
         response_id = initial_response.id
 
         # Check if the initial response is already completed (for tests/immediate responses)
@@ -306,7 +319,13 @@ class BackgroundFlowStrategy(BaseFlowStrategy):
         )
 
         while True:
-            await asyncio.sleep(delay)
+            try:
+                await asyncio.sleep(delay)
+            except asyncio.CancelledError:
+                logger.info(f"Polling cancelled for {response_id}")
+                # Re-raise to propagate cancellation properly
+                raise
+
             elapsed = asyncio.get_event_loop().time() - start_poll_time
 
             # Check if we've exceeded timeout
@@ -317,7 +336,13 @@ class BackgroundFlowStrategy(BaseFlowStrategy):
                 break
 
             # Check status
+            logger.debug(
+                f"[ADAPTER] Polling OpenAI response status for {response_id} at {time.strftime('%H:%M:%S')} (elapsed: {elapsed:.1f}s)"
+            )
             job = await self.context.client.responses.retrieve(response_id)
+            logger.debug(
+                f"[ADAPTER] OpenAI response {response_id} status: {job.status}"
+            )
 
             if job.status == "completed":
                 # Extract content

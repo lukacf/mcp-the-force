@@ -59,12 +59,15 @@ def track_tool_calls():
         )
         return "E2E_TEST_TOOL_MARKER: search_session_attachments was called"
 
-    with patch(
-        "mcp_second_brain.tools.search_memory.SearchMemoryAdapter.generate",
-        mock_search_memory,
-    ), patch(
-        "mcp_second_brain.tools.search_attachments.SearchAttachmentAdapter.generate",
-        mock_search_attachments,
+    with (
+        patch(
+            "mcp_second_brain.tools.search_memory.SearchMemoryAdapter.generate",
+            mock_search_memory,
+        ),
+        patch(
+            "mcp_second_brain.tools.search_attachments.SearchAttachmentAdapter.generate",
+            mock_search_attachments,
+        ),
     ):
         yield tool_calls
 

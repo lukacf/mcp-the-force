@@ -68,7 +68,9 @@ class TestErrorHandlingIntegration:
         """Test handling of network timeouts."""
         # Use mock_adapter_error to simulate timeout
         with mock_adapter_error(TimeoutError("Request timed out")):
-            with pytest.raises(TimeoutError):
+            with pytest.raises(
+                fastmcp.exceptions.ToolError, match="Tool execution timed out"
+            ):
                 tool_metadata = get_tool("chat_with_o3")
                 if not tool_metadata:
                     raise ValueError("Tool chat_with_o3 not found")
@@ -104,7 +106,9 @@ class TestErrorHandlingIntegration:
     async def test_invalid_parameter_types(self):
         """Test type validation for parameters."""
         # Wrong type for context (should be list)
-        with pytest.raises(TypeError, match="context.*expected list"):
+        with pytest.raises(
+            fastmcp.exceptions.ToolError, match="context.*expected list"
+        ):
             tool_metadata = get_tool("chat_with_gemini25_flash")
             if not tool_metadata:
                 raise ValueError("Tool chat_with_gemini25_flash not found")
@@ -117,7 +121,9 @@ class TestErrorHandlingIntegration:
             )
 
         # Wrong type for temperature
-        with pytest.raises(TypeError, match="temperature.*expected.*float"):
+        with pytest.raises(
+            fastmcp.exceptions.ToolError, match="temperature.*expected.*float"
+        ):
             tool_metadata = get_tool("chat_with_gemini25_flash")
             if not tool_metadata:
                 raise ValueError("Tool chat_with_gemini25_flash not found")
@@ -191,7 +197,9 @@ class TestErrorHandlingIntegration:
         with mock_adapter_error(
             AttributeError("'NoneType' object has no attribute 'output_text'")
         ):
-            with pytest.raises(AttributeError):
+            with pytest.raises(
+                fastmcp.exceptions.ToolError, match="NoneType.*output_text"
+            ):
                 tool_metadata = get_tool("chat_with_o3")
                 if not tool_metadata:
                     raise ValueError("Tool chat_with_o3 not found")

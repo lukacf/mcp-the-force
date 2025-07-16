@@ -2,7 +2,7 @@
 
 from typing import Any, Dict, List, Optional
 from inspect import Parameter, Signature
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 import fastmcp.exceptions
 import logging
 from .registry import list_tools, ToolMetadata
@@ -15,7 +15,7 @@ def create_tool_function(metadata: ToolMetadata):
     """Create a function with proper signature for FastMCP registration."""
 
     # Build parameter list for signature
-    sig_params = []
+    sig_params: List[Parameter] = []
 
     # Get parameters sorted by position (positional first, then keyword-only)
     params_list = list(metadata.parameters.values())
@@ -63,6 +63,14 @@ def create_tool_function(metadata: ToolMetadata):
     # Set signature using setattr to avoid mypy complaints
     setattr(tool_function, "__signature__", signature)
 
+    # CRITICAL: Set annotations for FastMCP 2.x compatibility
+    # FastMCP uses pydantic which expects __annotations__ to be set
+    annotations: Dict[str, Any] = {"return": str}
+    # Use a different variable name to avoid confusion with earlier loop
+    for sig_param in sig_params:
+        annotations[sig_param.name] = sig_param.annotation
+    tool_function.__annotations__ = annotations
+
     return tool_function
 
 
@@ -90,6 +98,34 @@ def register_all_tools(mcp: FastMCP) -> None:
 
         except Exception as e:
             logger.error(f"Failed to register tool {tool_id}: {e}")
+
+    # Conditionally register developer tools
+    _register_developer_tools(mcp)
+
+
+def _register_developer_tools(mcp: FastMCP) -> None:
+    """Register developer-mode tools if enabled."""
+    from ..config import get_settings
+
+    settings = get_settings()
+    if settings.logging.developer_mode.enabled:
+        try:
+            # Import logging tools to trigger @tool registration
+            from . import logging_tools  # noqa: F401
+            from .registry import get_tool
+
+            # Register the logging tool with FastMCP
+            metadata = get_tool("search_mcp_debug_logs")
+            if metadata:
+                tool_func = create_tool_function(metadata)
+                mcp.tool(name="search_mcp_debug_logs")(tool_func)
+                logger.info("Registered developer tool: search_mcp_debug_logs")
+            else:
+                logger.error("Could not find search_mcp_debug_logs tool in registry")
+        except ImportError as e:
+            logger.warning(f"Could not import logging tools: {e}")
+        except Exception as e:
+            logger.error(f"Failed to register developer tools: {e}")
 
 
 def create_list_models_tool(mcp: FastMCP) -> None:
