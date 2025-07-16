@@ -352,7 +352,7 @@ class ToolExecutor:
                 vector_store_ids = (vector_store_ids or []) + list(explicit_vs_ids)
 
             timeout_seconds = metadata.model_config["timeout"]
-            start_time = time.time()
+            adapter_start_time = time.time()
             logger.info(
                 f"[STEP 15] Calling adapter.generate with prompt {len(final_prompt)} chars, vector_store_ids={vector_store_ids}, timeout={timeout_seconds}s"
             )
@@ -376,7 +376,7 @@ class ToolExecutor:
                 )
 
                 end_time = time.time()
-                duration = end_time - start_time
+                duration = end_time - adapter_start_time
                 logger.info(
                     f"[STEP 16] adapter.generate completed in {duration:.2f}s, result type: {type(result)}, length: {len(str(result)) if result else 0}"
                 )
@@ -385,7 +385,7 @@ class ToolExecutor:
                 )
             except asyncio.TimeoutError:
                 timeout_time = time.time()
-                partial_duration = timeout_time - start_time
+                partial_duration = timeout_time - adapter_start_time
                 logger.error(
                     f"[CRITICAL] Adapter timeout after {timeout_seconds}s for {tool_id} (actual duration: {partial_duration:.2f}s)"
                 )
@@ -479,6 +479,15 @@ class ToolExecutor:
 
                 return redacted_result
 
+        except asyncio.CancelledError:
+            # Handle cancellation that happens outside the inner try block
+            # (e.g., during vector store creation)
+            was_cancelled = True
+            logger.warning(
+                f"[CANCEL] {tool_id} received CancelledError in outer executor block"
+            )
+            logger.info("[CANCEL] Re-raising CancelledError from outer block")
+            raise
         except Exception as e:
             # If cancellation already happened, don't let a subsequent error in the
             # cleanup logic cause a crash.
