@@ -402,49 +402,66 @@ Use second-brain search_project_memory with {"query": "authentication implementa
 
 ## 🔍 Developer Logging System
 
-When enabled, the MCP server runs a comprehensive logging system for debugging and monitoring:
+The MCP server integrates with VictoriaLogs for centralized logging and debugging across multiple projects and instances.
 
 ### Features
-- **ZeroMQ-based transport**: High-performance, low-overhead logging via PUSH/PULL pattern
-- **SQLite storage**: Persistent log storage with WAL mode for concurrent access
-- **Project isolation**: Logs are automatically filtered by MCP_PROJECT_PATH
-- **Rich metadata**: Captures file paths, line numbers, instance IDs, and structured data
-- **Batched writes**: Configurable batching for efficient database operations
+- **VictoriaLogs integration**: High-performance log aggregation and search
+- **Multi-project support**: Logs from multiple MCP servers in one place
+- **Instance tracking**: Semantic instance IDs for dev/test/e2e environments
+- **Rich metadata**: Project paths, logger names, severity levels, and structured data
+- **Docker-based deployment**: Easy setup with docker-compose
 
-### Configuration
-Enable via environment variables in Claude Desktop config:
-```json
-{
-  "env": {
-    "LOGGING__DEVELOPER_MODE__ENABLED": "true",
-    "LOGGING__DEVELOPER_MODE__PORT": "4711",         // ZMQ port
-    "LOGGING__DEVELOPER_MODE__DB_PATH": ".mcp_logs.sqlite3", // Project-local DB
-    "LOGGING__DEVELOPER_MODE__BATCH_SIZE": "100",    // Logs per batch
-    "LOGGING__DEVELOPER_MODE__BATCH_TIMEOUT": "1.0", // Seconds
-    "LOGGING__DEVELOPER_MODE__MAX_DB_SIZE_MB": "1000" // Rotation limit
-  }
-}
-```
+### Setup
+1. **Start VictoriaLogs**:
+   ```bash
+   docker-compose up -d victorialogs
+   ```
+
+2. **Enable developer mode** in Claude Desktop config:
+   ```json
+   {
+     "env": {
+       "LOGGING__DEVELOPER_MODE__ENABLED": "true"
+     }
+   }
+   ```
 
 ### Searching Logs
-Once enabled, use the `search_mcp_debug_logs` tool:
-```
-# Search recent errors
-Use second-brain search_mcp_debug_logs with {"query": "error", "level": "ERROR", "since": "1h", "limit": 50}
+Use the `search_mcp_debug_logs` tool with AI-friendly parameters:
 
-# Search specific instance
-Use second-brain search_mcp_debug_logs with {"query": "%", "instance_id": "12345-abcd", "since": "30m"}
-
-# Search across all projects
-Use second-brain search_mcp_debug_logs with {"query": "timeout", "all_projects": true, "since": "1d"}
 ```
+# Recent warnings in current project
+search_mcp_debug_logs(severity="warning", since="30m")
+
+# Find text across all projects
+search_mcp_debug_logs(text="CallToolRequest", project="all")
+
+# E2E test errors
+search_mcp_debug_logs(severity="error", context="e2e")
+
+# Specific instance logs
+search_mcp_debug_logs(instance="mcp-second-brain_dev_8747aa1d")
+
+# Oldest to newest with time range
+search_mcp_debug_logs(since="24h", order="asc")
+```
+
+### Search Parameters
+- `text`: Search for text in log messages (case-insensitive)
+- `severity`: Filter by log level (debug|info|warning|error|critical)
+- `since/until`: Time range (5m, 2h, 3d) or absolute timestamps
+- `project`: "current" (default), "all", or specific path
+- `context`: Environment filter (dev|test|e2e|*)
+- `instance`: Instance ID filter (exact or wildcard pattern)
+- `limit`: Maximum results (default: 100)
+- `order`: Sort order ("desc" newest first, "asc" oldest first)
 
 ### Log Levels
-- `DEBUG`: Detailed debugging information
-- `INFO`: General informational messages
-- `WARNING`: Warning messages
-- `ERROR`: Error messages
-- `CRITICAL`: Critical failures
+- `debug`: Detailed debugging information
+- `info`: General informational messages  
+- `warning`: Warning messages
+- `error`: Error messages
+- `critical`: Critical failures
 
 ## 📚 Documentation
 
