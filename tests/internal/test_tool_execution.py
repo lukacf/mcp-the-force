@@ -5,6 +5,7 @@ Integration tests for complete tool execution flows.
 import pytest
 from unittest.mock import Mock
 import json
+import fastmcp.exceptions
 
 
 class TestToolExecutionIntegration:
@@ -160,7 +161,9 @@ class TestToolExecutionIntegration:
     async def test_error_propagation(self, run_tool):
         """Test that errors are properly propagated."""
         # Test with missing required parameter
-        with pytest.raises(ValueError, match="Missing required parameter"):
+        with pytest.raises(
+            fastmcp.exceptions.ToolError, match="Missing required parameter"
+        ):
             await run_tool(
                 "chat_with_gemini25_flash",
                 instructions="Test",

@@ -96,24 +96,24 @@ class TestToolExecutorSessionHandling:
             {"role": "assistant", "content": "Previous response"},
         ]
 
-        with patch.object(
-            grok_session_cache_module.grok_session_cache,
-            "get_history",
-            return_value=mock_history,
-        ), patch(
-            "mcp_second_brain.adapters.get_adapter"
-        ) as mock_get_adapter, patch.object(
-            tool_executor.validator, "validate"
-        ) as mock_validate, patch.object(
-            tool_executor.router, "route"
-        ) as mock_route, patch(
-            "mcp_second_brain.config.get_settings"
-        ) as mock_settings, patch(
-            "mcp_second_brain.adapters.model_registry.get_model_context_window",
-            return_value=256000,
-        ), patch(
-            "mcp_second_brain.utils.context_builder.build_context_with_stable_list"
-        ) as mock_build_context:
+        with (
+            patch.object(
+                grok_session_cache_module.grok_session_cache,
+                "get_history",
+                return_value=mock_history,
+            ),
+            patch("mcp_second_brain.adapters.get_adapter") as mock_get_adapter,
+            patch.object(tool_executor.validator, "validate") as mock_validate,
+            patch.object(tool_executor.router, "route") as mock_route,
+            patch("mcp_second_brain.config.get_settings") as mock_settings,
+            patch(
+                "mcp_second_brain.adapters.model_registry.get_model_context_window",
+                return_value=256000,
+            ),
+            patch(
+                "mcp_second_brain.utils.context_builder.build_context_with_stable_list"
+            ) as mock_build_context,
+        ):
             # Setup mocks
             mock_adapter = AsyncMock()
             mock_adapter.generate = AsyncMock(
@@ -179,26 +179,27 @@ class TestToolExecutorSessionHandling:
         session_id = "test-openai-session"
         mock_response_id = "resp_12345"
 
-        with patch.object(
-            session_cache_module.session_cache,
-            "get_response_id",
-            return_value=mock_response_id,
-        ) as mock_get_response_id, patch.object(
-            session_cache_module.session_cache, "set_response_id"
-        ) as mock_set_response_id, patch(
-            "mcp_second_brain.adapters.get_adapter"
-        ) as mock_get_adapter, patch.object(
-            tool_executor.validator, "validate"
-        ) as mock_validate, patch.object(
-            tool_executor.router, "route"
-        ) as mock_route, patch(
-            "mcp_second_brain.config.get_settings"
-        ) as mock_settings, patch(
-            "mcp_second_brain.adapters.model_registry.get_model_context_window",
-            return_value=200000,
-        ), patch(
-            "mcp_second_brain.utils.context_builder.build_context_with_stable_list"
-        ) as mock_build_context:
+        with (
+            patch.object(
+                session_cache_module.session_cache,
+                "get_response_id",
+                return_value=mock_response_id,
+            ) as mock_get_response_id,
+            patch.object(
+                session_cache_module.session_cache, "set_response_id"
+            ) as mock_set_response_id,
+            patch("mcp_second_brain.adapters.get_adapter") as mock_get_adapter,
+            patch.object(tool_executor.validator, "validate") as mock_validate,
+            patch.object(tool_executor.router, "route") as mock_route,
+            patch("mcp_second_brain.config.get_settings") as mock_settings,
+            patch(
+                "mcp_second_brain.adapters.model_registry.get_model_context_window",
+                return_value=200000,
+            ),
+            patch(
+                "mcp_second_brain.utils.context_builder.build_context_with_stable_list"
+            ) as mock_build_context,
+        ):
             # Setup mocks
             mock_adapter = AsyncMock()
             mock_adapter.generate = AsyncMock(
@@ -247,9 +248,10 @@ class TestToolExecutorSessionHandling:
             # Verify previous response ID was retrieved
             mock_get_response_id.assert_called_once_with(session_id)
 
-            # Verify adapter was called with previous_response_id
-            mock_adapter.generate.assert_called_once()
-            call_args = mock_adapter.generate.call_args
+            # Verify adapter was called (may be called twice if memory storage is active)
+            assert mock_adapter.generate.call_count >= 1
+            # Get the first call (the actual tool execution, not memory storage)
+            call_args = mock_adapter.generate.call_args_list[0]
             assert "previous_response_id" in call_args.kwargs
             assert call_args.kwargs["previous_response_id"] == mock_response_id
 
@@ -277,24 +279,24 @@ class TestToolExecutorSessionHandling:
             ),
         ]
 
-        with patch.object(
-            gemini_session_cache_module.gemini_session_cache,
-            "get_history",
-            return_value=mock_gemini_history,
-        ) as mock_get_history, patch(
-            "mcp_second_brain.adapters.get_adapter"
-        ) as mock_get_adapter, patch.object(
-            tool_executor.validator, "validate"
-        ) as mock_validate, patch.object(
-            tool_executor.router, "route"
-        ) as mock_route, patch(
-            "mcp_second_brain.config.get_settings"
-        ) as mock_settings, patch(
-            "mcp_second_brain.adapters.model_registry.get_model_context_window",
-            return_value=2000000,
-        ), patch(
-            "mcp_second_brain.utils.context_builder.build_context_with_stable_list"
-        ) as mock_build_context:
+        with (
+            patch.object(
+                gemini_session_cache_module.gemini_session_cache,
+                "get_history",
+                return_value=mock_gemini_history,
+            ) as mock_get_history,
+            patch("mcp_second_brain.adapters.get_adapter") as mock_get_adapter,
+            patch.object(tool_executor.validator, "validate") as mock_validate,
+            patch.object(tool_executor.router, "route") as mock_route,
+            patch("mcp_second_brain.config.get_settings") as mock_settings,
+            patch(
+                "mcp_second_brain.adapters.model_registry.get_model_context_window",
+                return_value=2000000,
+            ),
+            patch(
+                "mcp_second_brain.utils.context_builder.build_context_with_stable_list"
+            ) as mock_build_context,
+        ):
             # Setup mocks
             mock_adapter = AsyncMock()
             mock_adapter.generate = AsyncMock(
@@ -341,8 +343,8 @@ class TestToolExecutorSessionHandling:
             mock_get_history.assert_called_once_with(session_id)
 
             # Verify adapter was called with messages including history
-            mock_adapter.generate.assert_called_once()
-            call_args = mock_adapter.generate.call_args
+            assert mock_adapter.generate.call_count >= 1
+            call_args = mock_adapter.generate.call_args_list[0]
 
             # Should have messages with Gemini history + new user message
             assert "messages" in call_args.kwargs
@@ -378,32 +380,34 @@ class TestToolExecutorSessionHandling:
             )
         ]
 
-        with patch.object(
-            grok_session_cache_module.grok_session_cache,
-            "get_history",
-            return_value=mock_grok_history,
-        ), patch.object(
-            session_cache_module.session_cache,
-            "get_response_id",
-            return_value=mock_openai_response_id,
-        ), patch.object(
-            gemini_session_cache_module.gemini_session_cache,
-            "get_history",
-            return_value=mock_gemini_history,
-        ), patch(
-            "mcp_second_brain.adapters.get_adapter"
-        ) as mock_get_adapter, patch.object(
-            tool_executor.validator, "validate"
-        ) as mock_validate, patch.object(
-            tool_executor.router, "route"
-        ) as mock_route, patch(
-            "mcp_second_brain.config.get_settings"
-        ) as mock_settings, patch(
-            "mcp_second_brain.adapters.model_registry.get_model_context_window",
-            return_value=256000,
-        ), patch(
-            "mcp_second_brain.utils.context_builder.build_context_with_stable_list"
-        ) as mock_build_context:
+        with (
+            patch.object(
+                grok_session_cache_module.grok_session_cache,
+                "get_history",
+                return_value=mock_grok_history,
+            ),
+            patch.object(
+                session_cache_module.session_cache,
+                "get_response_id",
+                return_value=mock_openai_response_id,
+            ),
+            patch.object(
+                gemini_session_cache_module.gemini_session_cache,
+                "get_history",
+                return_value=mock_gemini_history,
+            ),
+            patch("mcp_second_brain.adapters.get_adapter") as mock_get_adapter,
+            patch.object(tool_executor.validator, "validate") as mock_validate,
+            patch.object(tool_executor.router, "route") as mock_route,
+            patch("mcp_second_brain.config.get_settings") as mock_settings,
+            patch(
+                "mcp_second_brain.adapters.model_registry.get_model_context_window",
+                return_value=256000,
+            ),
+            patch(
+                "mcp_second_brain.utils.context_builder.build_context_with_stable_list"
+            ) as mock_build_context,
+        ):
             # Common mock setup
             mock_adapter = AsyncMock()
             mock_get_adapter.return_value = (mock_adapter, None)
@@ -454,7 +458,13 @@ class TestToolExecutorSessionHandling:
             )
 
             # Verify OpenAI response ID was passed
-            openai_call_args = mock_adapter.generate.call_args
+            # Get the last real call before memory storage
+            openai_call_args = None
+            for call in mock_adapter.generate.call_args_list:
+                if "previous_response_id" in call.kwargs:
+                    openai_call_args = call
+                    break
+            assert openai_call_args is not None
             assert "previous_response_id" in openai_call_args.kwargs
             assert (
                 openai_call_args.kwargs["previous_response_id"]
@@ -469,7 +479,13 @@ class TestToolExecutorSessionHandling:
             )
 
             # Verify Gemini history was passed (converted to dict format)
-            vertex_call_args = mock_adapter.generate.call_args
+            # Find the call with messages (not the memory storage call)
+            vertex_call_args = None
+            for call in mock_adapter.generate.call_args_list:
+                if "messages" in call.kwargs:
+                    vertex_call_args = call
+                    break
+            assert vertex_call_args is not None
             assert "messages" in vertex_call_args.kwargs
             vertex_messages = vertex_call_args.kwargs["messages"]
             assert len(vertex_messages) >= 2  # history + new message
@@ -482,20 +498,19 @@ class TestToolExecutorSessionHandling:
         # Test with Grok adapter
         mock_tool_metadata.model_config["adapter_class"] = "xai"
 
-        with patch(
-            "mcp_second_brain.adapters.get_adapter"
-        ) as mock_get_adapter, patch.object(
-            tool_executor.validator, "validate"
-        ) as mock_validate, patch.object(
-            tool_executor.router, "route"
-        ) as mock_route, patch(
-            "mcp_second_brain.config.get_settings"
-        ) as mock_settings, patch(
-            "mcp_second_brain.adapters.model_registry.get_model_context_window",
-            return_value=256000,
-        ), patch(
-            "mcp_second_brain.utils.context_builder.build_context_with_stable_list"
-        ) as mock_build_context:
+        with (
+            patch("mcp_second_brain.adapters.get_adapter") as mock_get_adapter,
+            patch.object(tool_executor.validator, "validate") as mock_validate,
+            patch.object(tool_executor.router, "route") as mock_route,
+            patch("mcp_second_brain.config.get_settings") as mock_settings,
+            patch(
+                "mcp_second_brain.adapters.model_registry.get_model_context_window",
+                return_value=256000,
+            ),
+            patch(
+                "mcp_second_brain.utils.context_builder.build_context_with_stable_list"
+            ) as mock_build_context,
+        ):
             # Setup mocks
             mock_adapter = AsyncMock()
             mock_adapter.generate = AsyncMock(return_value="Response without session")
@@ -537,8 +552,8 @@ class TestToolExecutorSessionHandling:
             )
 
             # Verify adapter was called without session-specific parameters
-            mock_adapter.generate.assert_called_once()
-            call_args = mock_adapter.generate.call_args
+            assert mock_adapter.generate.call_count >= 1
+            call_args = mock_adapter.generate.call_args_list[0]
 
             # For Grok (xai) adapters, messages are always passed (system + user format)
             # even without session_id
@@ -568,20 +583,19 @@ class TestToolExecutorSessionHandling:
         # Configure for Grok adapter
         mock_tool_metadata.model_config["adapter_class"] = "xai"
 
-        with patch(
-            "mcp_second_brain.adapters.get_adapter"
-        ) as mock_get_adapter, patch.object(
-            tool_executor.validator, "validate"
-        ) as mock_validate, patch.object(
-            tool_executor.router, "route"
-        ) as mock_route, patch(
-            "mcp_second_brain.config.get_settings"
-        ) as mock_settings, patch(
-            "mcp_second_brain.adapters.model_registry.get_model_context_window",
-            return_value=256000,
-        ), patch(
-            "mcp_second_brain.utils.context_builder.build_context_with_stable_list"
-        ) as mock_build_context:
+        with (
+            patch("mcp_second_brain.adapters.get_adapter") as mock_get_adapter,
+            patch.object(tool_executor.validator, "validate") as mock_validate,
+            patch.object(tool_executor.router, "route") as mock_route,
+            patch("mcp_second_brain.config.get_settings") as mock_settings,
+            patch(
+                "mcp_second_brain.adapters.model_registry.get_model_context_window",
+                return_value=256000,
+            ),
+            patch(
+                "mcp_second_brain.utils.context_builder.build_context_with_stable_list"
+            ) as mock_build_context,
+        ):
             # Setup mocks
             mock_adapter = AsyncMock()
             mock_adapter.generate = AsyncMock(

@@ -70,11 +70,21 @@ def build_prompt(
 
     # For large context models, try to inline everything
     all_files = ctx_files + [f for f in extras if f not in ctx_files]
+    logger.info(f"[PROMPT_BUILDER] Total files to process: {len(all_files)}")
 
     # Use the shared context loader to get file contents and token counts
+    logger.info(f"[PROMPT_BUILDER] Calling load_text_files with {len(all_files)} files")
     file_data = load_text_files(all_files)
+    logger.info(
+        f"[PROMPT_BUILDER] load_text_files returned {len(file_data)} loaded files"
+    )
 
-    for file_path, content, token_count in file_data:
+    logger.info(f"[PROMPT_BUILDER] Processing {len(file_data)} files for inlining")
+    for i, (file_path, content, token_count) in enumerate(file_data):
+        if i % 50 == 0:  # Log progress every 50 files
+            logger.info(
+                f"[PROMPT_BUILDER] Processing file {i + 1}/{len(file_data)}: {file_path} ({token_count} tokens)"
+            )
         if used + token_count <= max_tokens:
             inline_elements.append(_create_file_element(file_path, content))
             used += token_count
@@ -102,6 +112,7 @@ def build_prompt(
         CTX.append(elem)
 
     prompt = ET.tostring(task, encoding="unicode")
+    logger.info(f"[PROMPT_BUILDER] Final prompt built: {len(prompt)} chars")
     if attachments:
         prompt += "\n\nYou have additional information accessible through the file search tool."
 

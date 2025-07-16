@@ -35,12 +35,22 @@ class TestBasicMCP:
             assert isinstance(content, list)
             assert len(content) > 0
 
-            # Each item should be parseable as JSON
-            for item in content:
-                assert isinstance(item, TextContent)
-                model_data = json.loads(item.text)
+            # The result is a list of TextContent items, each containing a JSON model
+            first_item = content[0]
+            assert isinstance(first_item, TextContent)
+
+            # Parse the JSON array from the first TextContent
+            models = json.loads(first_item.text)
+            assert isinstance(models, list)
+            assert len(models) > 0
+
+            # Each model should have required fields
+            for model_data in models:
                 assert "id" in model_data
                 assert "model" in model_data
+                # Should have standard fields
+                assert "provider" in model_data
+                assert "context_window" in model_data
 
     async def test_gemini_tool_callable(self, mcp_server):
         """Test that a model tool can be called."""

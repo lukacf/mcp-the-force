@@ -92,11 +92,14 @@ def store_commit_memory(commit_sha: Optional[str] = None) -> None:
             tmp_path = tmp_file.name
 
         try:
-            # Upload to vector store
+            # Upload to vector store (fire-and-forget to prevent hangs)
             client = get_client()
             with open(tmp_path, "rb") as f:
-                client.vector_stores.files.upload_and_poll(
-                    vector_store_id=store_id, file=f
+                # First upload file to OpenAI
+                file_obj = client.files.create(file=f, purpose="assistants")
+                # Then add to vector store
+                client.vector_stores.files.create(
+                    vector_store_id=store_id, file_id=file_obj.id
                 )
 
             # Increment count
@@ -160,7 +163,7 @@ def create_commit_summary(commit_sha: str, message: str, files: List[str]) -> st
 
     summary = f"""## Git Commit: {commit_sha[:8]}
 
-**Date**: {datetime.now().strftime('%Y-%m-%d %H:%M UTC')}
+**Date**: {datetime.now().strftime("%Y-%m-%d %H:%M UTC")}
 
 ### Commit Message
 {message}

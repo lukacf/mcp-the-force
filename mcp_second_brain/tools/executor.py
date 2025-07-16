@@ -1,7 +1,10 @@
 """Executor for dataclass-based tools."""
 
 import asyncio
+import contextlib
 import logging
+import time
+import uuid
 from typing import Optional, List, Dict, Any
 import fastmcp.exceptions
 from mcp_second_brain import adapters
@@ -14,9 +17,10 @@ from .parameter_validator import ParameterValidator
 from .parameter_router import ParameterRouter
 
 # Project memory imports
-from ..memory import store_conversation_memory
+from .safe_memory import safe_store_conversation_memory
 from ..config import get_settings
 from ..utils.redaction import redact_secrets
+from ..operation_manager import operation_manager
 
 # Stable list imports
 from ..utils.context_builder import build_context_with_stable_list
@@ -59,9 +63,11 @@ class ToolExecutor:
         tool_id = metadata.id
         vs_id: Optional[str] = None  # Initialize to avoid UnboundLocalError
         memory_tasks: List[asyncio.Task] = []  # Track memory storage tasks
+        was_cancelled = False  # Track if the operation was cancelled
 
         try:
             # 1. Create tool instance and validate inputs
+            logger.info(f"[STEP 1] Creating tool instance for {tool_id}")
             tool_instance = metadata.spec_class()
             validated_params = self.validator.validate(tool_instance, metadata, kwargs)
 
@@ -97,6 +103,7 @@ class ToolExecutor:
                 )
 
                 # Get context and attachment paths
+                logger.info("[STEP 7] Getting context and attachment paths")
                 context_paths = prompt_params.get("context", [])
                 attachment_paths_raw = routed_params.get("vector_store", [])
                 # Ensure it's a list
@@ -105,8 +112,12 @@ class ToolExecutor:
                     if isinstance(attachment_paths_raw, list)
                     else []
                 )
+                logger.info(
+                    f"[STEP 7.1] Context paths: {len(context_paths)}, Attachment paths: {len(attachment_paths)}"
+                )
 
                 # Call the new context builder
+                logger.info("[STEP 8] Calling context builder with stable list")
                 inline_files, overflow_files = await build_context_with_stable_list(
                     context_paths=context_paths,
                     session_id=session_id,
@@ -114,8 +125,12 @@ class ToolExecutor:
                     token_budget=token_budget,
                     attachments=attachment_paths,
                 )
+                logger.info(
+                    f"[STEP 8.1] Context builder returned: {len(inline_files)} inline files, {len(overflow_files)} overflow files"
+                )
 
                 # Format the prompt with inline files
+                logger.info("[STEP 9] Formatting prompt with inline files")
                 task = ET.Element("Task")
                 ET.SubElement(task, "Instructions").text = prompt_params.get(
                     "instructions", ""
@@ -138,6 +153,7 @@ class ToolExecutor:
                     CTX.append(_create_file_element(path, content))
 
                 prompt = ET.tostring(task, encoding="unicode")
+                logger.info(f"[STEP 9.1] Prompt built: {len(prompt)} chars")
                 if overflow_files:
                     prompt += "\n\nYou have additional information accessible through the file search tool."
 
@@ -297,6 +313,7 @@ class ToolExecutor:
                 # Note: Grok (xai) adapter handles its own session loading
 
             # 7. Execute model call
+            logger.info("[STEP 14] Preparing to execute model call")
             adapter_params = routed_params["adapter"]
             assert isinstance(adapter_params, dict)  # Type hint for mypy
 
@@ -322,17 +339,57 @@ class ToolExecutor:
             if explicit_vs_ids:
                 vector_store_ids = (vector_store_ids or []) + list(explicit_vs_ids)
 
-            result = await asyncio.wait_for(
-                adapter.generate(
-                    prompt=final_prompt,
-                    vector_store_ids=vector_store_ids,
-                    timeout=metadata.model_config["timeout"],
-                    **adapter_params,
-                ),
-                timeout=metadata.model_config["timeout"],
+            timeout_seconds = metadata.model_config["timeout"]
+            start_time = time.time()
+            logger.info(
+                f"[STEP 15] Calling adapter.generate with prompt {len(final_prompt)} chars, vector_store_ids={vector_store_ids}, timeout={timeout_seconds}s"
+            )
+            logger.info(
+                f"[TIMING] Starting adapter.generate at {time.strftime('%H:%M:%S')}"
             )
 
+            # Create unique operation ID
+            operation_id = f"{tool_id}_{uuid.uuid4().hex[:8]}"
+
+            try:
+                result = await operation_manager.run_with_timeout(
+                    operation_id,
+                    adapter.generate(
+                        prompt=final_prompt,
+                        vector_store_ids=vector_store_ids,
+                        timeout=timeout_seconds,
+                        **adapter_params,
+                    ),
+                    timeout=timeout_seconds,
+                )
+
+                end_time = time.time()
+                duration = end_time - start_time
+                logger.info(
+                    f"[STEP 16] adapter.generate completed in {duration:.2f}s, result type: {type(result)}, length: {len(str(result)) if result else 0}"
+                )
+                logger.info(
+                    f"[TIMING] Completed adapter.generate at {time.strftime('%H:%M:%S')}"
+                )
+            except asyncio.TimeoutError:
+                timeout_time = time.time()
+                partial_duration = timeout_time - start_time
+                logger.error(
+                    f"[CRITICAL] Adapter timeout after {timeout_seconds}s for {tool_id} (actual duration: {partial_duration:.2f}s)"
+                )
+                raise fastmcp.exceptions.ToolError(
+                    f"Tool execution timed out after {timeout_seconds} seconds"
+                )
+            except asyncio.CancelledError:
+                was_cancelled = True
+                logger.info(f"{tool_id} aborted - letting cancellation bubble up")
+                raise  # Important: do NOT convert or return
+            except Exception as e:
+                logger.error(f"[CRITICAL] Adapter generate failed for {tool_id}: {e}")
+                raise
+
             # 8. Handle response
+            logger.info("[STEP 17] Handling response")
             if isinstance(result, dict):
                 content = result.get("content", "")
                 if (
@@ -356,8 +413,12 @@ class ToolExecutor:
                         conv_messages = prompt_params.get("messages", [])
                         if not isinstance(conv_messages, list):
                             conv_messages = []
+                        # Re-enabled: Memory storage is important for context
+                        logger.info(
+                            f"[MEMORY] Creating background memory storage task for {tool_id}"
+                        )
                         memory_task = asyncio.create_task(
-                            store_conversation_memory(
+                            safe_store_conversation_memory(
                                 session_id=session_id,
                                 tool_name=tool_id,
                                 messages=conv_messages,
@@ -379,8 +440,9 @@ class ToolExecutor:
                         conv_messages = prompt_params.get("messages", [])
                         if not isinstance(conv_messages, list):
                             conv_messages = []
+                        # Re-enabled: Memory storage is important for context
                         memory_task = asyncio.create_task(
-                            store_conversation_memory(
+                            safe_store_conversation_memory(
                                 session_id=session_id,
                                 tool_name=tool_id,
                                 messages=conv_messages,
@@ -396,20 +458,62 @@ class ToolExecutor:
 
                 return redacted_result
 
-        finally:
-            # Cleanup
-            if vs_id:
-                await vector_store_manager.delete(vs_id)
+        except Exception as e:
+            # If cancellation already happened, don't let a subsequent error in the
+            # cleanup logic cause a crash.
+            if was_cancelled:
+                logger.debug(f"Ignoring error after cancellation for {tool_id}: {e}")
+                return ""
 
-            # Wait for memory tasks to complete
+            logger.error(f"[CRITICAL] Tool execution failed for {tool_id}: {e}")
+            import traceback
+
+            logger.error(f"[CRITICAL] Traceback: {traceback.format_exc()}")
+            # Re-raise as ToolError for proper MCP error handling
+            raise fastmcp.exceptions.ToolError(f"Tool execution failed: {str(e)}")
+
+        finally:
+            # If operation was cancelled, do NOT block on more awaits
+            if was_cancelled:
+                # Fast exit - schedule best-effort background cleanup
+                if vs_id:
+
+                    async def safe_cleanup():
+                        try:
+                            await vector_store_manager.delete(vs_id)
+                        except Exception as e:
+                            logger.debug(f"Background cleanup failed (expected): {e}")
+
+                    # Re-enabled: Background cleanup for vector stores
+                    bg_task = asyncio.create_task(safe_cleanup())
+                    # Mark exception as retrieved to prevent ExceptionGroup
+                    bg_task.add_done_callback(lambda t: t.exception())
+                # Cancel memory tasks to free resources
+                logger.info(
+                    f"[MEMORY] Cancelling {len(memory_tasks)} memory storage tasks due to operation cancellation"
+                )
+                for task in memory_tasks:  # type: ignore[assignment]
+                    task.cancel()  # type: ignore[attr-defined]
+                    # Mark exception as retrieved to prevent ExceptionGroup
+                    task.add_done_callback(lambda t: t.exception())  # type: ignore[attr-defined]
+                logger.info(f"{tool_id} cancelled - cleanup scheduled in background")
+                # DON'T return empty string - this prevents proper error handling!
+
+            # Normal path (no cancellation) - safe to await with timeouts
+            if vs_id:
+                # Add timeout to avoid hanging on cleanup
+                with contextlib.suppress(asyncio.TimeoutError):
+                    await asyncio.wait_for(
+                        vector_store_manager.delete(vs_id), timeout=5.0
+                    )
+
+            # Wait for memory tasks to complete (with shorter timeout)
             if memory_tasks:
-                try:
+                with contextlib.suppress(asyncio.TimeoutError):
                     await asyncio.wait_for(
                         asyncio.gather(*memory_tasks, return_exceptions=True),
-                        timeout=120.0,  # 120 second timeout for memory storage (vector indexing can take 10-30s)
+                        timeout=5.0,  # Reduced from 120s to 5s
                     )
-                except asyncio.TimeoutError:
-                    logger.warning("Memory storage tasks timed out")
 
             elapsed = asyncio.get_event_loop().time() - start_time
             logger.info(f"{tool_id} completed in {elapsed:.2f}s")

@@ -2,6 +2,7 @@ from typing import Any, List, Optional, Dict
 import asyncio
 import logging
 import threading
+import time
 from google import genai
 from google.genai import types
 from google.genai.types import HarmCategory, HarmBlockThreshold
@@ -82,8 +83,18 @@ class VertexAdapter(BaseAdapter):
     async def _generate_async(self, client, **kwargs):
         """Async wrapper for synchronous generate_content calls."""
         try:
-            return await asyncio.to_thread(client.models.generate_content, **kwargs)
+            logger.info(
+                f"[ADAPTER] Starting Vertex generate_content at {time.strftime('%H:%M:%S')}"
+            )
+            api_start_time = time.time()
+            result = await asyncio.to_thread(client.models.generate_content, **kwargs)
+            api_end_time = time.time()
+            logger.info(
+                f"[ADAPTER] Vertex generate_content completed in {api_end_time - api_start_time:.2f}s"
+            )
+            return result
         except asyncio.CancelledError:
+            logger.info("[ADAPTER] Vertex generate_content cancelled by user")
             raise
 
     async def generate(
@@ -141,7 +152,7 @@ class VertexAdapter(BaseAdapter):
 
         # Always add search_project_memory for accessing memory
         memory_search_decl = create_search_memory_declaration_gemini()
-        function_declarations.append(memory_search_decl)
+        function_declarations.append(types.FunctionDeclaration(**memory_search_decl))
 
         # Add attachment search tool when vector stores are provided
         if vector_store_ids:
@@ -149,7 +160,9 @@ class VertexAdapter(BaseAdapter):
                 f"Registering search_session_attachments for {len(vector_store_ids)} vector stores"
             )
             attachment_search_decl = create_attachment_search_declaration_gemini()
-            function_declarations.append(attachment_search_decl)
+            function_declarations.append(
+                types.FunctionDeclaration(**attachment_search_decl)
+            )
 
         # Build tools list
         tools: Optional[List[Any]] = None
@@ -214,16 +227,64 @@ class VertexAdapter(BaseAdapter):
                 thinking_budget=max_reasoning_tokens if max_reasoning_tokens > 0 else -1
             )
 
-        generate_content_config = types.GenerateContentConfig(**config_kwargs)
+        # Create GenerateContentConfig with explicit parameters
+        generate_content_config = types.GenerateContentConfig(
+            temperature=config_kwargs.get("temperature"),
+            top_p=config_kwargs.get("top_p"),
+            max_output_tokens=config_kwargs.get("max_output_tokens"),
+            safety_settings=config_kwargs.get("safety_settings"),
+            tools=config_kwargs.get("tools"),
+            response_schema=config_kwargs.get("response_schema"),
+            response_mime_type=config_kwargs.get("response_mime_type"),
+            system_instruction=config_kwargs.get("system_instruction"),
+            thinking_config=config_kwargs.get("thinking_config"),
+        )
 
         # Generate response
         client = get_client()
-        response = await self._generate_async(
-            client,
-            model=self.model_name,
-            contents=contents,
-            config=generate_content_config,
-        )
+        try:
+            response = await self._generate_async(
+                client,
+                model=self.model_name,
+                contents=contents,
+                config=generate_content_config,
+            )
+        except Exception as e:
+            import google.api_core.exceptions
+            from .errors import AdapterException, ErrorCategory
+
+            # Handle specific Google API errors
+            if isinstance(e, google.api_core.exceptions.ResourceExhausted):
+                raise AdapterException(
+                    "Rate limit exceeded. Please try again later.",
+                    error_category=ErrorCategory.RATE_LIMIT,
+                    original_error=e,
+                )
+            elif isinstance(e, google.api_core.exceptions.InvalidArgument):
+                raise AdapterException(
+                    f"Invalid request: {str(e)}",
+                    error_category=ErrorCategory.INVALID_REQUEST,
+                    original_error=e,
+                )
+            elif isinstance(e, google.api_core.exceptions.ServiceUnavailable):
+                raise AdapterException(
+                    "Service temporarily unavailable. Please retry.",
+                    error_category=ErrorCategory.TRANSIENT_ERROR,
+                    original_error=e,
+                )
+            else:
+                # Generic error handling as last resort
+                logger.error(
+                    f"Vertex AI API call failed for model {self.model_name}: {type(e).__name__}: {str(e)}",
+                    exc_info=True,
+                    extra={
+                        "model": self.model_name,
+                        "error_type": type(e).__name__,
+                        "error_message": str(e),
+                        "project": getattr(client, "_project_id", "unknown"),
+                    },
+                )
+                raise
 
         final_response_content = ""
 
@@ -263,12 +324,28 @@ class VertexAdapter(BaseAdapter):
                             session_id, final_history
                         )
 
-        # Skip validation - let the model response through as-is
-        # Structured output schema is a suggestion to the model, not a strict requirement
+        # Validate structured output
         if structured_output_schema:
-            logger.debug(
-                f"Structured output schema provided - letting model response through as-is: '{final_response_content}'"
-            )
+            try:
+                import json
+                import jsonschema
+
+                parsed = json.loads(final_response_content)
+                jsonschema.validate(parsed, structured_output_schema)
+            except jsonschema.ValidationError as e:
+                from .errors import AdapterException, ErrorCategory
+
+                raise AdapterException(
+                    f"Response does not match requested schema: {str(e)}",
+                    error_category=ErrorCategory.PARSING,
+                )
+            except json.JSONDecodeError as e:
+                from .errors import AdapterException, ErrorCategory
+
+                raise AdapterException(
+                    f"Response is not valid JSON: {str(e)}",
+                    error_category=ErrorCategory.PARSING,
+                )
 
         if return_debug:
             return {
