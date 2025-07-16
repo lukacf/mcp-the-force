@@ -26,18 +26,22 @@ setup_logging()
 # monkeypatch_all()  # Apply comprehensive cancellation handling
 
 # Apply write safety patch before any MCP imports
-from . import patch_write_safety  # noqa: F401, E402
+# DISABLED: Testing with only cancellation handler
+# from . import patch_write_safety  # noqa: F401, E402
 
 # Patch MCP responder to handle disconnections gracefully
-from . import patch_mcp_responder  # noqa: F401, E402
+# DISABLED: Testing with only cancellation handler
+# from . import patch_mcp_responder  # noqa: F401, E402
 
 # Patch FastMCP so cancelled requests don't get a 2nd response
-from . import patch_fastmcp_cancel  # noqa: F401, E402
+# DISABLED: Testing with only cancellation handler
+# from . import patch_fastmcp_cancel  # noqa: F401, E402
 
 # Also ensure operation_manager is available for Claude Code abort handling
 from .operation_manager import operation_manager  # noqa: F401, E402
 
 # Patch cancellation handler to prevent double responses
+# This is THE fix for the double response issue when operations are cancelled
 from . import patch_cancellation_handler  # noqa: F401, E402
 
 # NOW import FastMCP after patches are applied
@@ -199,12 +203,6 @@ def main():
             # Define what constitutes a benign disconnect error
             import anyio
             import fastmcp
-
-            anyio_disconnect = (
-                anyio.ClosedResourceError,
-                anyio.BrokenResourceError,
-                anyio.EndOfStream,
-            )
 
             def is_benign(exc: BaseException) -> bool:
                 """Check if exception is benign and should be suppressed."""
