@@ -1,9 +1,10 @@
 from typing import List
 from pathlib import Path
-from openai import OpenAI
+from openai import AsyncOpenAI
 from ..config import get_settings
 import logging
 import time
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +48,7 @@ _client = None
 def get_client():
     global _client
     if _client is None:
-        _client = OpenAI(api_key=get_settings().openai_api_key)
+        _client = AsyncOpenAI(api_key=get_settings().openai_api_key)
     return _client
 
 
@@ -62,7 +63,7 @@ def _is_supported_for_vector_store(file_path: str) -> bool:
     return ext in OPENAI_SUPPORTED_EXTENSIONS
 
 
-def create_vector_store(paths: List[str]) -> str:
+async def create_vector_store(paths: List[str]) -> str:
     """
     Create an OpenAI vector store with the given file paths.
 
@@ -100,7 +101,7 @@ def create_vector_store(paths: List[str]) -> str:
 
     try:
         # Create vector store
-        vs = get_client().vector_stores.create(name="mcp-second-brain-vs")
+        vs = await get_client().vector_stores.create(name="mcp-second-brain-vs")
         logger.info(f"Created vector store {vs.id}")
 
         # Pre-verify all files exist and are readable
@@ -127,7 +128,7 @@ def create_vector_store(paths: List[str]) -> str:
         if not verified_files:
             # No files could be verified
             logger.warning("No accessible files to upload")
-            get_client().vector_stores.delete(vs.id)
+            await get_client().vector_stores.delete(vs.id)
             return ""
 
         # Open verified files for upload
@@ -142,23 +143,37 @@ def create_vector_store(paths: List[str]) -> str:
         if not file_streams:
             # No files could be opened (shouldn't happen after verification)
             logger.warning("No files could be opened for vector store")
-            get_client().vector_stores.delete(vs.id)
+            await get_client().vector_stores.delete(vs.id)
             return ""
 
         logger.info(f"Starting batch upload of {len(file_streams)} files")
 
-        # Use batch upload API
-        file_batch = get_client().vector_stores.file_batches.upload_and_poll(
-            vector_store_id=vs.id, files=file_streams
-        )
-
-        # Close all file streams
-        for stream in file_streams:
+        try:
+            # Use batch upload API
+            file_batch = await get_client().vector_stores.file_batches.upload_and_poll(
+                vector_store_id=vs.id, files=file_streams
+            )
+        except asyncio.CancelledError:
+            # Properly clean up on cancellation
+            logger.warning("Vector store upload cancelled, cleaning up resources")
+            # Delete the partially created vector store
             try:
-                stream.close()
-            except Exception:
-                pass
+                await get_client().vector_stores.delete(vs.id)
+                logger.info(f"Deleted partially created vector store {vs.id}")
+            except Exception as e:
+                logger.error(
+                    f"Failed to delete vector store {vs.id} after cancellation: {e}"
+                )
+            raise
+        finally:
+            # Always close file streams
+            for stream in file_streams:
+                try:
+                    stream.close()
+                except Exception:
+                    pass
 
+        # Only log upload details if file_batch was successfully created (not cancelled)
         logger.info(
             f"Batch upload completed in {time.time() - start_time:.2f}s - Status: {file_batch.status}, File counts: {file_batch.file_counts}"
         )
@@ -179,7 +194,7 @@ def create_vector_store(paths: List[str]) -> str:
                 f"No files successfully uploaded. Failed: {file_batch.file_counts.failed}, Cancelled: {file_batch.file_counts.cancelled}"
             )
             try:
-                get_client().vector_stores.delete(vs.id)
+                await get_client().vector_stores.delete(vs.id)
             except Exception:
                 pass
             return ""
@@ -191,7 +206,7 @@ def create_vector_store(paths: List[str]) -> str:
         return ""
 
 
-def delete_vector_store(vector_store_id: str) -> None:
+async def delete_vector_store(vector_store_id: str) -> None:
     """
     Delete a vector store after use to clean up resources.
 
@@ -202,7 +217,7 @@ def delete_vector_store(vector_store_id: str) -> None:
         return
 
     try:
-        get_client().vector_stores.delete(vector_store_id)
+        await get_client().vector_stores.delete(vector_store_id)
         logger.info(f"Deleted vector store {vector_store_id}")
     except Exception as e:
         logger.warning(f"Failed to delete vector store {vector_store_id}: {e}")

@@ -194,9 +194,8 @@ def create_vector_store_tool(mcp: FastMCP) -> None:
         """
         try:
             from ..utils.vector_store import create_vector_store
-            import asyncio
 
-            vs_id = await asyncio.to_thread(create_vector_store, files)
+            vs_id = await create_vector_store(files)
             if vs_id:
                 return {"vector_store_id": vs_id, "status": "created"}
             else:
