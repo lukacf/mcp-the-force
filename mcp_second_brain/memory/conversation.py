@@ -74,11 +74,14 @@ async def store_conversation_memory(
             tmp_path = tmp_file.name
 
         try:
-            # Upload to vector store
+            # Upload to vector store (fire-and-forget to prevent hangs)
             client = get_client()
             with open(tmp_path, "rb") as f:
-                client.vector_stores.files.upload_and_poll(
-                    vector_store_id=store_id, file=f
+                # First upload file to OpenAI
+                file_obj = client.files.create(file=f, purpose="assistants")
+                # Then add to vector store
+                client.vector_stores.files.create(
+                    vector_store_id=store_id, file_id=file_obj.id
                 )
 
             # Increment count
@@ -190,13 +193,13 @@ async def create_conversation_summary(
         # Build a clean representation of the conversation
         conversation_text = f"""
 ## User Request
-Instructions: {user_components['instructions']}
-Output Format: {user_components['output_format']}
-Context Files: {len(user_components['context_files'])} files provided
-Vector Store Attachments: {'Yes' if user_components['has_attachments'] else 'No'}
+Instructions: {user_components["instructions"]}
+Output Format: {user_components["output_format"]}
+Context Files: {len(user_components["context_files"])} files provided
+Vector Store Attachments: {"Yes" if user_components["has_attachments"] else "No"}
 
 ## Assistant Response ({tool_name})
-{response[:settings.memory_summary_char_limit]}
+{response[: settings.memory_summary_char_limit]}
 """
 
         # Use Gemini Flash to create summary
@@ -236,7 +239,7 @@ Conversation to summarize:
         # Add metadata header
         return f"""## AI Consultation Session
 **Tool**: {tool_name}
-**Date**: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}
+**Date**: {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")}
 
 {summary}
 """
@@ -261,17 +264,17 @@ def _create_fallback_summary(
     summary = f"""## AI Consultation Session
 
 **Tool**: {tool_name}
-**Date**: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}
+**Date**: {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")}
 
 ### User Query
-{user_components['instructions']}
+{user_components["instructions"]}
 
 ### Output Format
-{user_components['output_format'] or 'Not specified'}
+{user_components["output_format"] or "Not specified"}
 
 ### Context
-- Files provided: {len(user_components['context_files'])}
-- Vector store attachments: {'Yes' if user_components['has_attachments'] else 'No'}
+- Files provided: {len(user_components["context_files"])}
+- Vector store attachments: {"Yes" if user_components["has_attachments"] else "No"}
 
 ### Assistant Response
 {response_preview}

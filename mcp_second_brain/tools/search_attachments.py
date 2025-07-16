@@ -4,7 +4,7 @@ This provides a way for models to search ephemeral vector stores created
 from attachments during the current execution.
 """
 
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import logging
 import asyncio
 from ..utils.thread_pool import get_shared_executor
@@ -56,6 +56,8 @@ class SearchAttachmentAdapter(BaseAdapter):
     model_name = "attachment_search"
     context_window = 0  # Not applicable
     description_snippet = "Search current session attachments"
+
+    client: Optional[OpenAI]
 
     # Class-level deduplicator shared across instances
     _deduplicator = SearchDeduplicator("attachment")
@@ -197,9 +199,11 @@ class SearchAttachmentAdapter(BaseAdapter):
                     raise ValueError("OpenAI API key not configured")
                 # OpenAI search is synchronous, run in thread pool
                 loop = asyncio.get_event_loop()
+                # Use a local variable to help mypy understand client is not None
+                client = self.client
                 response = await loop.run_in_executor(
                     executor,
-                    lambda: self.client.vector_stores.search(
+                    lambda: client.vector_stores.search(
                         vector_store_id=store_id,
                         query=query,
                         max_num_results=max_results,

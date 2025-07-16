@@ -7,6 +7,7 @@ from pathlib import Path
 from functools import lru_cache
 from typing import Optional, Dict, Any, Tuple
 from pydantic import BaseModel, Field, field_validator
+from pydantic.fields import FieldInfo
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
@@ -16,10 +17,24 @@ CONFIG_FILE = Path("config.yaml")
 SECRETS_FILE = Path("secrets.yaml")
 
 
+class DeveloperLoggingConfig(BaseModel):
+    """Developer logging settings."""
+
+    enabled: bool = Field(False, description="Enable developer logging mode")
+    port: int = Field(4711, description="ZMQ logging port")
+    db_path: str = Field(".mcp_logs.sqlite3", description="SQLite database path")
+    batch_size: int = Field(100, description="Batch size for database writes")
+    batch_timeout: float = Field(1.0, description="Batch timeout in seconds")
+    max_db_size_mb: int = Field(1000, description="Max database size before rotation")
+
+
 class LoggingConfig(BaseModel):
     """Logging configuration."""
 
     level: str = Field("INFO", description="Logging level")
+    developer_mode: DeveloperLoggingConfig = Field(
+        default_factory=lambda: DeveloperLoggingConfig()
+    )
 
     @field_validator("level")
     @classmethod
@@ -101,8 +116,8 @@ class Settings(BaseSettings):
     """Unified settings for mcp-second-brain server."""
 
     # Top-level configs
-    mcp: MCPConfig = Field(default_factory=MCPConfig)
-    logging: LoggingConfig = Field(default_factory=LoggingConfig)
+    mcp: MCPConfig = Field(default_factory=lambda: MCPConfig())
+    logging: LoggingConfig = Field(default_factory=lambda: LoggingConfig())
 
     # Provider configs with legacy environment variable support
     openai: ProviderConfig = Field(
@@ -111,13 +126,13 @@ class Settings(BaseSettings):
     vertex: ProviderConfig = Field(
         default_factory=lambda: ProviderConfig(max_output_tokens=65536)
     )
-    anthropic: ProviderConfig = Field(default_factory=ProviderConfig)
-    xai: ProviderConfig = Field(default_factory=ProviderConfig)
+    anthropic: ProviderConfig = Field(default_factory=lambda: ProviderConfig())
+    xai: ProviderConfig = Field(default_factory=lambda: ProviderConfig())
 
     # Feature configs
-    session: SessionConfig = Field(default_factory=SessionConfig)
-    memory: MemoryConfig = Field(default_factory=MemoryConfig)
-    features: FeaturesConfig = Field(default_factory=FeaturesConfig)
+    session: SessionConfig = Field(default_factory=lambda: SessionConfig())
+    memory: MemoryConfig = Field(default_factory=lambda: MemoryConfig())
+    features: FeaturesConfig = Field(default_factory=lambda: FeaturesConfig())
 
     # Testing
     adapter_mock: bool = Field(False, description="Use mock adapters for testing")
@@ -145,7 +160,7 @@ class Settings(BaseSettings):
             """Load settings from YAML files."""
 
             def get_field_value(
-                self, field_name: str, field_info
+                self, field_name: str, field_info: FieldInfo
             ) -> Tuple[Any, str, bool]:
                 data = self()
                 if field_name in data:
@@ -159,7 +174,7 @@ class Settings(BaseSettings):
             """Load legacy flat environment variables."""
 
             def get_field_value(
-                self, field_name: str, field_info
+                self, field_name: str, field_info: FieldInfo
             ) -> Tuple[Any, str, bool]:
                 data = self()
                 if field_name in data:
