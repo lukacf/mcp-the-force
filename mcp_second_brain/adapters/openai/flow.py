@@ -70,8 +70,9 @@ class BaseFlowStrategy(ABC):
 
         # Only add custom tools if the model supports them
         if capability is None or capability.supports_custom_tools:
-            # Add search_project_memory tool
-            tools.append(create_search_memory_declaration_openai())
+            # Add search_project_memory tool unless disabled
+            if not self.context.request.disable_memory_search:
+                tools.append(create_search_memory_declaration_openai())
 
             # Add attachment search if vector stores provided
             logger.info(

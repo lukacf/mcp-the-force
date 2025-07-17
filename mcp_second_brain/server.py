@@ -81,6 +81,7 @@ def main():
     import errno
     import selectors
     from typing import Iterator
+    from .utils.docker_manager import docker_manager
 
     def _iter_leaves(exc: BaseException) -> Iterator[BaseException]:
         """Depth-first walk that yields every non-group exception."""
@@ -92,16 +93,22 @@ def main():
 
     # macOS-specific workaround for KqueueSelector stdio hang bug
     # See: https://github.com/python/cpython/issues/104344
+    # BUT: SelectSelector has a 1024 file descriptor limit that causes hangs
+    # with many concurrent file operations (e.g., vector store uploads).
+    # Using PollSelector instead which has no FD limit while still avoiding
+    # the KqueueSelector stdio issues.
     if sys.platform == "darwin":
 
-        class SelectSelectorPolicy(asyncio.DefaultEventLoopPolicy):
+        class PollSelectorPolicy(asyncio.DefaultEventLoopPolicy):
             def new_event_loop(self):
-                selector = selectors.SelectSelector()
+                # poll(2) has no FD_SETSIZE limit unlike select(2)
+                selector = selectors.PollSelector()
                 return asyncio.SelectorEventLoop(selector)
 
-        asyncio.set_event_loop_policy(SelectSelectorPolicy())
+        asyncio.set_event_loop_policy(PollSelectorPolicy())
         logger.info(
-            "Forced SelectSelector on macOS to avoid KqueueSelector stdio hangs"
+            "Using PollSelector on macOS to avoid both KqueueSelector stdio hangs "
+            "and SelectSelector's 1024 FD limit"
         )
 
     # Ignore SIGPIPE to prevent crashes on broken pipes (Unix only)
@@ -163,6 +170,10 @@ def main():
     # Claude spawns a new server process for each session
     try:
         logger.info("Starting MCP server (stdio transport)...")
+        
+        # Ensure Docker services are running (non-blocking)
+        # Run in the existing event loop
+        loop.run_until_complete(docker_manager.ensure_services_running())
 
         mcp.run()  # Will use stdio transport by default
         logger.info("MCP server exited normally")

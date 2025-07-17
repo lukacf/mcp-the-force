@@ -66,7 +66,7 @@ model_capabilities: Dict[str, ModelCapability] = {
         supports_streaming=True,
         force_background=False,
         supports_web_search=True,
-        context_window=1000000,
+        context_window=1000000, # GPT-4.1 has a context window of 1M tokens (May 2025)
         supports_reasoning=False,
         supports_parallel_tool_calls=True,
     ),
@@ -122,6 +122,7 @@ class OpenAIRequest(BaseModel):
     vector_store_ids: Optional[List[str]] = None
     return_debug: bool = False
     structured_output_schema: Optional[Dict[str, Any]] = None
+    disable_memory_search: bool = False
 
     @field_validator("model")
     def model_is_defined(cls, v: str) -> str:
@@ -193,6 +194,7 @@ class OpenAIRequest(BaseModel):
         data.pop("return_debug", None)
         data.pop("timeout", None)
         data.pop("vector_store_ids", None)
+        data.pop("disable_memory_search", None)
 
         # Handle structured output schema
         if "structured_output_schema" in data:
