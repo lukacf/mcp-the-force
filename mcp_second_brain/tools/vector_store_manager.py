@@ -13,13 +13,15 @@ logger = logging.getLogger(__name__)
 
 class VectorStoreManager:
     """Manages vector store creation and cleanup."""
-    
+
     def __init__(self):
         self.loiter_killer = LoiterKillerClient()
         # Track all vector stores created for a session (for attachment search)
         self._session_vs: Dict[str, List[str]] = collections.defaultdict(list)
 
-    async def create(self, files: List[str], session_id: Optional[str] = None) -> Optional[str]:
+    async def create(
+        self, files: List[str], session_id: Optional[str] = None
+    ) -> Optional[str]:
         """Create or acquire vector store from files.
 
         Args:
@@ -35,36 +37,40 @@ class VectorStoreManager:
         # Try Loiter Killer first if session_id is available
         if session_id and self.loiter_killer.enabled:
             logger.info(f"Attempting to use Loiter Killer for session {session_id}")
-            vs_id, existing_file_ids = await self.loiter_killer.get_or_create_vector_store(session_id)
-            
+            (
+                vs_id,
+                existing_file_paths,
+            ) = await self.loiter_killer.get_or_create_vector_store(session_id)
+
             if vs_id:
                 # Track this vector store for the session
                 if vs_id not in self._session_vs[session_id]:
                     self._session_vs[session_id].append(vs_id)
-                
+
                 # Add only new files to the existing vector store
-                if existing_file_ids:
-                    # Loiter Killer tracks file IDs, but we need to deduplicate by path
-                    # For now, we'll add all files and let OpenAI handle deduplication
-                    # TODO: Enhance Loiter Killer to track file paths for better deduplication
-                    uploaded_file_ids, skipped_files = await add_files_to_vector_store(
-                        vs_id, files, []  # Empty existing paths means all files will be considered new
+                uploaded_file_ids, skipped_files = await add_files_to_vector_store(
+                    vs_id,
+                    files,
+                    existing_file_paths,  # Pass existing paths for proper deduplication
+                )
+
+                # Track the new files with Loiter Killer
+                # Calculate which files were actually uploaded
+                new_file_paths = [f for f in files if f not in skipped_files]
+                if new_file_paths:
+                    await self.loiter_killer.track_files(session_id, new_file_paths)
+                    logger.info(
+                        f"Added {len(new_file_paths)} new files to vector store {vs_id}"
                     )
-                    
-                    # Track the new files with Loiter Killer
-                    if uploaded_file_ids:
-                        await self.loiter_killer.track_files(session_id, uploaded_file_ids)
-                        logger.info(
-                            f"Added {len(uploaded_file_ids)} new files to Loiter Killer vector store {vs_id}"
-                        )
-                else:
-                    # First time using this vector store, add all files
-                    # Need to add files to the empty vector store
-                    uploaded_file_ids, _ = await add_files_to_vector_store(vs_id, files, [])
-                    if uploaded_file_ids:
-                        await self.loiter_killer.track_files(session_id, uploaded_file_ids)
-                
-                logger.info(f"Using Loiter Killer vector store {vs_id} for session {session_id}")
+
+                if skipped_files:
+                    logger.info(
+                        f"Skipped {len(skipped_files)} existing files in vector store {vs_id}"
+                    )
+
+                logger.info(
+                    f"Using Loiter Killer vector store {vs_id} for session {session_id}"
+                )
                 return vs_id
 
         # Fallback to direct creation (Loiter Killer unavailable or no session_id)
@@ -99,7 +105,7 @@ class VectorStoreManager:
         """
         if not vs_id:
             return
-        
+
         # Don't delete Loiter Killer managed stores - they handle their own lifecycle
         if self.loiter_killer.enabled:
             logger.debug(f"Skipping delete for Loiter Killer managed store: {vs_id}")
@@ -110,16 +116,16 @@ class VectorStoreManager:
             logger.info(f"Deleted ephemeral vector store: {vs_id}")
         except Exception as e:
             logger.error(f"Error deleting vector store: {e}")
-    
+
     def get_all_for_session(self, session_id: str) -> List[str]:
         """Get all vector store IDs created for a session.
-        
+
         This is used by attachment search to access all vector stores
         from the current session, not just the most recent one.
-        
+
         Args:
             session_id: The session ID
-            
+
         Returns:
             List of vector store IDs for the session
         """

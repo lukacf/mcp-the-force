@@ -170,7 +170,7 @@ def main():
     # Claude spawns a new server process for each session
     try:
         logger.info("Starting MCP server (stdio transport)...")
-        
+
         # Ensure Docker services are running (non-blocking)
         # Run in the existing event loop
         loop.run_until_complete(docker_manager.ensure_services_running())
