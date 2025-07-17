@@ -78,9 +78,9 @@ async def store_conversation_memory(
             client = get_client()
             with open(tmp_path, "rb") as f:
                 # First upload file to OpenAI
-                file_obj = client.files.create(file=f, purpose="assistants")
+                file_obj = await client.files.create(file=f, purpose="assistants")
                 # Then add to vector store
-                client.vector_stores.files.create(
+                await client.vector_stores.files.create(
                     vector_store_id=store_id, file_id=file_obj.id
                 )
 

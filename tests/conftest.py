@@ -117,24 +117,30 @@ def mock_openai_client():
     # Mock async close method
     mock.close = AsyncMock()
 
-    # Mock vector store operations (sync, not async)
+    # Mock file operations (async)
+    mock_file = MagicMock()
+    mock_file.id = "file_test123"
+    mock.files.create = AsyncMock(return_value=mock_file)
+
+    # Mock vector store operations (async)
     mock_vs = MagicMock()
     mock_vs.id = "vs_test123"
     mock_vs.status = "completed"
 
     # Mock both paths - some code uses client.vector_stores, some uses client.beta.vector_stores
-    mock.vector_stores.create = MagicMock(return_value=mock_vs)
-    mock.beta.vector_stores.create = MagicMock(return_value=mock_vs)
+    mock.vector_stores.create = AsyncMock(return_value=mock_vs)
+    mock.beta.vector_stores.create = AsyncMock(return_value=mock_vs)
 
     mock_batch = MagicMock()
     mock_batch.status = "completed"
-    mock.vector_stores.file_batches.upload_and_poll = MagicMock(return_value=mock_batch)
-    mock.beta.vector_stores.file_batches.upload_and_poll = MagicMock(
+    mock_batch.file_counts = MagicMock(completed=3, failed=0)
+    mock.vector_stores.file_batches.upload_and_poll = AsyncMock(return_value=mock_batch)
+    mock.beta.vector_stores.file_batches.upload_and_poll = AsyncMock(
         return_value=mock_batch
     )
 
-    mock.vector_stores.delete = MagicMock()
-    mock.beta.vector_stores.delete = MagicMock()
+    mock.vector_stores.delete = AsyncMock()
+    mock.beta.vector_stores.delete = AsyncMock()
 
     return mock
 
