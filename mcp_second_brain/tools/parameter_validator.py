@@ -140,13 +140,13 @@ class ParameterValidator:
 
     def _coerce_type(self, value: Any, expected_type: type) -> Optional[Any]:
         """Try to coerce a value to the expected type.
-        
+
         Returns the coerced value if successful, None otherwise.
         Handles common cases like string to bool conversion.
         """
         # Get origin for generic types
         origin = get_origin(expected_type)
-        
+
         # Handle Union types (including Optional)
         if origin is Union:
             args = get_args(expected_type)
@@ -158,7 +158,7 @@ class ParameterValidator:
                 if coerced is not None:
                     return coerced
             return None
-        
+
         # Handle basic bool coercion
         if expected_type is bool or (origin is None and expected_type == bool):
             if isinstance(value, bool):
@@ -173,6 +173,6 @@ class ParameterValidator:
             if isinstance(value, (int, float)):
                 # Handle numeric to bool conversion
                 return bool(value)
-        
+
         # No coercion performed
         return None

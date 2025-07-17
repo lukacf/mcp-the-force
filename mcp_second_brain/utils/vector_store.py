@@ -44,6 +44,7 @@ OPENAI_SUPPORTED_EXTENSIONS = {
 
 # Removed global client singleton - use factory instead for proper event loop scoping
 
+
 # Temporary compatibility function for memory config
 # TODO: Refactor memory config to use async properly
 def get_client():
@@ -52,14 +53,16 @@ def get_client():
     New code should use OpenAIClientFactory.get_instance() instead.
     """
     import warnings
+
     warnings.warn(
         "get_client() is deprecated. Use OpenAIClientFactory.get_instance() instead.",
         DeprecationWarning,
-        stacklevel=2
+        stacklevel=2,
     )
     # Return a sync client for the legacy memory config
     # This is not ideal but maintains compatibility
     from openai import OpenAI
+
     return OpenAI(api_key=get_settings().openai_api_key)
 
 
@@ -113,7 +116,9 @@ async def create_vector_store(paths: List[str]) -> str:
     try:
         # Create vector store
         # Use factory to get event-loop scoped client instance
-        client = await OpenAIClientFactory.get_instance(api_key=get_settings().openai_api_key)
+        client = await OpenAIClientFactory.get_instance(
+            api_key=get_settings().openai_api_key
+        )
         vs = await client.vector_stores.create(name="mcp-second-brain-vs")
         logger.info(f"Created vector store {vs.id}")
 
@@ -237,7 +242,9 @@ async def delete_vector_store(vector_store_id: str) -> None:
 
     try:
         # Use factory to get event-loop scoped client instance
-        client = await OpenAIClientFactory.get_instance(api_key=get_settings().openai_api_key)
+        client = await OpenAIClientFactory.get_instance(
+            api_key=get_settings().openai_api_key
+        )
         await client.vector_stores.delete(vector_store_id)
         logger.info(f"Deleted vector store {vector_store_id}")
     except Exception as e:
