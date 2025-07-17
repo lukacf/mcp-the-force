@@ -201,6 +201,12 @@ async def create_vector_store(paths: List[str]) -> str:
 
         return str(vs.id)
 
+    except asyncio.CancelledError:
+        # Handle cancellation at the outer level
+        logger.warning("create_vector_store operation was cancelled")
+        # The vector store ID might have been created before cancellation
+        # but cleanup already happened in the inner handler
+        raise  # CRITICAL: Re-raise the CancelledError to propagate it up the stack
     except Exception as e:
         logger.error(f"Error creating vector store: {e}")
         return ""
