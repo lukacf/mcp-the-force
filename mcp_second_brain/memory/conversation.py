@@ -37,8 +37,14 @@ async def store_conversation_memory(
 
         # Get current git state using subprocess (sync, but quick - run in executor if needed)
         loop = asyncio.get_event_loop()
-        branch = await loop.run_in_executor(None, _git_command, ["branch", "--show-current"]) or "main"
-        prev_commit_sha = await loop.run_in_executor(None, _git_command, ["rev-parse", "HEAD"]) or "initial"
+        branch = (
+            await loop.run_in_executor(None, _git_command, ["branch", "--show-current"])
+            or "main"
+        )
+        prev_commit_sha = (
+            await loop.run_in_executor(None, _git_command, ["rev-parse", "HEAD"])
+            or "initial"
+        )
 
         # Create summary using Gemini Flash (or fallback)
         summary = await create_conversation_summary(messages, response, tool_name)
@@ -82,7 +88,9 @@ async def store_conversation_memory(
 
         finally:
             # Clean up temp file in thread pool
-            await loop.run_in_executor(None, Path(tmp_path).unlink, True)  # missing_ok=True
+            await loop.run_in_executor(
+                None, Path(tmp_path).unlink, True
+            )  # missing_ok=True
 
     except Exception:
         # Log error but don't fail the tool call
@@ -282,7 +290,9 @@ Check commits with matching session_id for implementation details.
 
 def _create_temp_file(doc: Dict[str, Any], session_id: str) -> str:
     """Synchronous helper to create temp file."""
-    with tempfile.NamedTemporaryFile(mode="w", suffix=f"_conv_{session_id}.json", delete=False) as tmp_file:
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=f"_conv_{session_id}.json", delete=False
+    ) as tmp_file:
         json.dump(doc, tmp_file, indent=2)
         return tmp_file.name
 

@@ -66,7 +66,7 @@ model_capabilities: Dict[str, ModelCapability] = {
         supports_streaming=True,
         force_background=False,
         supports_web_search=True,
-        context_window=1000000, # GPT-4.1 has a context window of 1M tokens (May 2025)
+        context_window=1000000,  # GPT-4.1 has a context window of 1M tokens (May 2025)
         supports_reasoning=False,
         supports_parallel_tool_calls=True,
     ),

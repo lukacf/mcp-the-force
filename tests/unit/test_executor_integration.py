@@ -294,6 +294,10 @@ class TestExecutorIntegration:
 
                                         # Verify vector store was created with overflow files
                                         mock_create_vs.assert_called_once_with(
-                                            ["/test/overflow1.py", "/test/overflow2.py"]
+                                            [
+                                                "/test/overflow1.py",
+                                                "/test/overflow2.py",
+                                            ],
+                                            session_id="test-session",
                                         )
                                         assert result == "response"

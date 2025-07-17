@@ -66,10 +66,10 @@ def create_tool_function(metadata: ToolMetadata):
     # CRITICAL: Set annotations for FastMCP 2.x compatibility
     # FastMCP uses pydantic which expects __annotations__ to be set
     annotations: Dict[str, Any] = {"return": str}
-    
+
     for sig_param in sig_params:
         original_annotation = sig_param.annotation
-        
+
         # Fix for FastMCP's strict boolean validation
         # Check if the original type hint is a boolean or Optional[bool]
         is_bool_type = False
@@ -80,7 +80,7 @@ def create_tool_function(metadata: ToolMetadata):
                 is_bool_type = True
         elif original_annotation is bool:
             is_bool_type = True
-        
+
         if is_bool_type:
             # If it's a boolean, tell FastMCP to expect Optional[str]
             # This allows string values "true" and "false" to pass its
@@ -90,7 +90,7 @@ def create_tool_function(metadata: ToolMetadata):
         else:
             # For all other types, use the original annotation
             annotations[sig_param.name] = original_annotation
-    
+
     tool_function.__annotations__ = annotations
 
     return tool_function

@@ -260,7 +260,9 @@ class ToolExecutor:
                 logger.info(
                     f"Creating vector store with {len(files_for_vector_store)} overflow/attachment files: {files_for_vector_store}"
                 )
-                vs_id = await self.vector_store_manager.create(files_for_vector_store, session_id=session_id)
+                vs_id = await self.vector_store_manager.create(
+                    files_for_vector_store, session_id=session_id
+                )
                 vector_store_ids = [vs_id] if vs_id else None
                 logger.info(
                     f"Created vector store {vs_id}, vector_store_ids={vector_store_ids}"
@@ -288,7 +290,9 @@ class ToolExecutor:
                         f"Gathered {len(files)} files from attachments: {files}"
                     )
                     if files:
-                        vs_id = await self.vector_store_manager.create(files, session_id=None)
+                        vs_id = await self.vector_store_manager.create(
+                            files, session_id=None
+                        )
                         vector_store_ids = [vs_id] if vs_id else None
                         logger.info(
                             f"Created vector store {vs_id}, vector_store_ids={vector_store_ids}"
@@ -461,7 +465,9 @@ class ToolExecutor:
                     except Exception as e:
                         logger.warning(f"Failed to store conversation memory: {e}")
                 if settings.memory_enabled and session_id:
-                    logger.warning("[MEMORY] Memory storage temporarily disabled - testing for hang issue")
+                    logger.warning(
+                        "[MEMORY] Memory storage temporarily disabled - testing for hang issue"
+                    )
 
                 return redacted_content
             else:
@@ -488,7 +494,9 @@ class ToolExecutor:
                     except Exception as e:
                         logger.warning(f"Failed to store conversation memory: {e}")
                 if settings.memory_enabled and session_id:
-                    logger.warning("[MEMORY] Memory storage temporarily disabled - testing for hang issue")
+                    logger.warning(
+                        "[MEMORY] Memory storage temporarily disabled - testing for hang issue"
+                    )
 
                 # Session management is now handled inside the adapters themselves
                 # No need to save sessions here for Vertex/Grok models
@@ -528,7 +536,9 @@ class ToolExecutor:
                 # Fast exit - schedule best-effort background cleanup
                 if vs_id:
                     # TEMPORARILY DISABLED: Testing if vector store deletion causes hanging
-                    logger.info(f"[TEST] Skipping vector store deletion for {vs_id} (cancelled path)")
+                    logger.info(
+                        f"[TEST] Skipping vector store deletion for {vs_id} (cancelled path)"
+                    )
                     # async def safe_cleanup():
                     #     try:
                     #         await vector_store_manager.delete(vs_id)
@@ -553,7 +563,9 @@ class ToolExecutor:
             # Normal path (no cancellation) - safe to await with timeouts
             if vs_id:
                 # TEMPORARILY DISABLED: Testing if vector store deletion causes hanging
-                logger.info(f"[TEST] Skipping vector store deletion for {vs_id} (normal path)")
+                logger.info(
+                    f"[TEST] Skipping vector store deletion for {vs_id} (normal path)"
+                )
                 # # Add timeout to avoid hanging on cleanup
                 # with contextlib.suppress(asyncio.TimeoutError):
                 #     await asyncio.wait_for(
