@@ -7,8 +7,9 @@ from pathlib import Path
 from typing import List, Optional, Tuple, Dict
 from datetime import datetime, timezone
 
-from ..utils.vector_store import get_client
+from ..adapters.openai.client import OpenAIClientFactory
 from ..config import get_settings
+from ..utils.vector_store import get_client
 
 logger = logging.getLogger(__name__)
 

@@ -1,7 +1,7 @@
 """Parameter validation for tools."""
 
 import logging
-from typing import Dict, Any, Union, get_origin, get_args
+from typing import Dict, Any, Union, Optional, get_origin, get_args
 from .registry import ToolMetadata
 from .base import ToolSpec
 
@@ -53,13 +53,17 @@ class ParameterValidator:
             if param_info.required and value is None:
                 raise ValueError(f"Required parameter '{name}' cannot be None")
 
-            # Type validation for non-None values
+            # Type validation and coercion for non-None values
             if (
                 value is not None
                 and hasattr(param_info, "type")
                 and param_info.type is not Any
             ):
-                if not self._validate_type(value, param_info.type):
+                # Try to coerce the value if needed
+                coerced_value = self._coerce_type(value, param_info.type)
+                if coerced_value is not None:
+                    value = coerced_value
+                elif not self._validate_type(value, param_info.type):
                     expected = getattr(param_info, "type_str", str(param_info.type))
                     actual = type(value).__name__
                     raise TypeError(
@@ -133,3 +137,42 @@ class ParameterValidator:
 
         # For other generic types, just check the origin
         return isinstance(value, origin)
+
+    def _coerce_type(self, value: Any, expected_type: type) -> Optional[Any]:
+        """Try to coerce a value to the expected type.
+        
+        Returns the coerced value if successful, None otherwise.
+        Handles common cases like string to bool conversion.
+        """
+        # Get origin for generic types
+        origin = get_origin(expected_type)
+        
+        # Handle Union types (including Optional)
+        if origin is Union:
+            args = get_args(expected_type)
+            # Try each type in the union
+            for arg in args:
+                if arg is type(None) and value is None:
+                    return None
+                coerced = self._coerce_type(value, arg)
+                if coerced is not None:
+                    return coerced
+            return None
+        
+        # Handle basic bool coercion
+        if expected_type is bool or (origin is None and expected_type == bool):
+            if isinstance(value, bool):
+                return value
+            if isinstance(value, str):
+                # Handle string to bool conversion
+                lower_val = value.lower()
+                if lower_val in ("true", "1", "yes", "on"):
+                    return True
+                elif lower_val in ("false", "0", "no", "off"):
+                    return False
+            if isinstance(value, (int, float)):
+                # Handle numeric to bool conversion
+                return bool(value)
+        
+        # No coercion performed
+        return None

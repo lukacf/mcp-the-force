@@ -260,7 +260,7 @@ class ToolExecutor:
                 logger.info(
                     f"Creating vector store with {len(files_for_vector_store)} overflow/attachment files: {files_for_vector_store}"
                 )
-                vs_id = await self.vector_store_manager.create(files_for_vector_store)
+                vs_id = await self.vector_store_manager.create(files_for_vector_store, session_id=session_id)
                 vector_store_ids = [vs_id] if vs_id else None
                 logger.info(
                     f"Created vector store {vs_id}, vector_store_ids={vector_store_ids}"
@@ -288,7 +288,7 @@ class ToolExecutor:
                         f"Gathered {len(files)} files from attachments: {files}"
                     )
                     if files:
-                        vs_id = await self.vector_store_manager.create(files)
+                        vs_id = await self.vector_store_manager.create(files, session_id=None)
                         vector_store_ids = [vs_id] if vs_id else None
                         logger.info(
                             f"Created vector store {vs_id}, vector_store_ids={vector_store_ids}"
@@ -365,6 +365,11 @@ class ToolExecutor:
                 f"[TIMING] Starting adapter.generate at {time.strftime('%H:%M:%S')}"
             )
 
+            # Renew lease before long-running operation if using Loiter Killer
+            if session_id and vs_id and self.vector_store_manager.loiter_killer.enabled:
+                await self.vector_store_manager.loiter_killer.renew_lease(session_id)
+                logger.info(f"Renewed Loiter Killer lease for session {session_id}")
+
             # Create unique operation ID
             operation_id = f"{tool_id}_{uuid.uuid4().hex[:8]}"
 
@@ -433,7 +438,8 @@ class ToolExecutor:
                 redacted_content = redact_secrets(str(content))
 
                 # 8a. Store conversation in memory (with redacted content)
-                if settings.memory_enabled and session_id:
+                # TEMPORARILY DISABLED: Memory storage may be causing thread pool exhaustion
+                if False and settings.memory_enabled and session_id:
                     try:
                         # Extract messages from prompt
                         conv_messages = prompt_params.get("messages", [])
@@ -454,6 +460,8 @@ class ToolExecutor:
                         memory_tasks.append(memory_task)
                     except Exception as e:
                         logger.warning(f"Failed to store conversation memory: {e}")
+                if settings.memory_enabled and session_id:
+                    logger.warning("[MEMORY] Memory storage temporarily disabled - testing for hang issue")
 
                 return redacted_content
             else:
@@ -461,7 +469,8 @@ class ToolExecutor:
                 redacted_result = redact_secrets(str(result))
 
                 # Store conversation for Vertex models too (with redacted content)
-                if settings.memory_enabled and session_id:
+                # TEMPORARILY DISABLED: Memory storage may be causing thread pool exhaustion
+                if False and settings.memory_enabled and session_id:
                     try:
                         conv_messages = prompt_params.get("messages", [])
                         if not isinstance(conv_messages, list):
@@ -478,6 +487,8 @@ class ToolExecutor:
                         memory_tasks.append(memory_task)
                     except Exception as e:
                         logger.warning(f"Failed to store conversation memory: {e}")
+                if settings.memory_enabled and session_id:
+                    logger.warning("[MEMORY] Memory storage temporarily disabled - testing for hang issue")
 
                 # Session management is now handled inside the adapters themselves
                 # No need to save sessions here for Vertex/Grok models
@@ -516,17 +527,18 @@ class ToolExecutor:
                 logger.info(f"[CANCEL] Handling cancelled cleanup for {tool_id}")
                 # Fast exit - schedule best-effort background cleanup
                 if vs_id:
-
-                    async def safe_cleanup():
-                        try:
-                            await vector_store_manager.delete(vs_id)
-                        except Exception as e:
-                            logger.debug(f"Background cleanup failed (expected): {e}")
-
-                    # Re-enabled: Background cleanup for vector stores
-                    bg_task = asyncio.create_task(safe_cleanup())
-                    # Mark exception as retrieved to prevent ExceptionGroup
-                    bg_task.add_done_callback(lambda t: t.exception())
+                    # TEMPORARILY DISABLED: Testing if vector store deletion causes hanging
+                    logger.info(f"[TEST] Skipping vector store deletion for {vs_id} (cancelled path)")
+                    # async def safe_cleanup():
+                    #     try:
+                    #         await vector_store_manager.delete(vs_id)
+                    #     except Exception as e:
+                    #         logger.debug(f"Background cleanup failed (expected): {e}")
+                    #
+                    # # Re-enabled: Background cleanup for vector stores
+                    # bg_task = asyncio.create_task(safe_cleanup())
+                    # # Mark exception as retrieved to prevent ExceptionGroup
+                    # bg_task.add_done_callback(lambda t: t.exception())
                 # Cancel memory tasks to free resources
                 logger.info(
                     f"[MEMORY] Cancelling {len(memory_tasks)} memory storage tasks due to operation cancellation"
@@ -540,11 +552,13 @@ class ToolExecutor:
 
             # Normal path (no cancellation) - safe to await with timeouts
             if vs_id:
-                # Add timeout to avoid hanging on cleanup
-                with contextlib.suppress(asyncio.TimeoutError):
-                    await asyncio.wait_for(
-                        vector_store_manager.delete(vs_id), timeout=5.0
-                    )
+                # TEMPORARILY DISABLED: Testing if vector store deletion causes hanging
+                logger.info(f"[TEST] Skipping vector store deletion for {vs_id} (normal path)")
+                # # Add timeout to avoid hanging on cleanup
+                # with contextlib.suppress(asyncio.TimeoutError):
+                #     await asyncio.wait_for(
+                #         vector_store_manager.delete(vs_id), timeout=5.0
+                #     )
 
             # Wait for memory tasks to complete (with shorter timeout)
             if memory_tasks:

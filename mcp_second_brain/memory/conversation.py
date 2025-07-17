@@ -1,5 +1,6 @@
 """Storage of AI assistant conversations in vector store."""
 
+import asyncio
 import json
 import logging
 import subprocess
@@ -10,7 +11,8 @@ import tempfile
 from typing import List, Dict, Any, Optional, TypedDict
 from xml.etree import ElementTree as ET
 
-from ..utils.vector_store import get_client
+from ..adapters.openai.client import OpenAIClientFactory
+from ..config import get_settings
 from ..utils.redaction import redact_dict
 from .config import get_memory_config
 
@@ -20,14 +22,7 @@ logger = logging.getLogger(__name__)
 async def store_conversation_memory(
     session_id: str, tool_name: str, messages: List[Dict[str, Any]], response: str
 ) -> None:
-    """Store conversation summary in vector store after tool call.
-
-    Args:
-        session_id: Current session identifier
-        tool_name: Name of the tool called (e.g., chat_with_o3)
-        messages: Conversation messages
-        response: Tool response
-    """
+    """Store conversation summary in vector store after tool call."""
     # Check if tool writes to memory using capability flag
     from ..tools.registry import get_tool
 
@@ -36,14 +31,19 @@ async def store_conversation_memory(
         return
 
     try:
-        # Get current git state using subprocess
-        branch = _git_command(["branch", "--show-current"]) or "main"
-        prev_commit_sha = _git_command(["rev-parse", "HEAD"]) or "initial"
+        # Get async client
+        settings = get_settings()
+        client = await OpenAIClientFactory.get_instance(api_key=settings.openai_api_key)
+
+        # Get current git state using subprocess (sync, but quick - run in executor if needed)
+        loop = asyncio.get_event_loop()
+        branch = await loop.run_in_executor(None, _git_command, ["branch", "--show-current"]) or "main"
+        prev_commit_sha = await loop.run_in_executor(None, _git_command, ["rev-parse", "HEAD"]) or "initial"
 
         # Create summary using Gemini Flash (or fallback)
         summary = await create_conversation_summary(messages, response, tool_name)
 
-        # Create document with metadata - only store summary, not raw messages
+        # Create document with metadata
         doc = {
             "content": summary,
             "metadata": {
@@ -66,20 +66,13 @@ async def store_conversation_memory(
         config = get_memory_config()
         store_id = config.get_active_conversation_store()
 
-        # Create temporary file
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=f"_conv_{session_id}.json", delete=False
-        ) as tmp_file:
-            json.dump(doc, tmp_file, indent=2)
-            tmp_path = tmp_file.name
+        # Create temporary file in thread pool to avoid blocking
+        tmp_path = await loop.run_in_executor(None, _create_temp_file, doc, session_id)
 
         try:
-            # Upload to vector store (fire-and-forget to prevent hangs)
-            client = get_client()
+            # Upload to vector store (async)
             with open(tmp_path, "rb") as f:
-                # First upload file to OpenAI
                 file_obj = await client.files.create(file=f, purpose="assistants")
-                # Then add to vector store
                 await client.vector_stores.files.create(
                     vector_store_id=store_id, file_id=file_obj.id
                 )
@@ -88,8 +81,8 @@ async def store_conversation_memory(
             config.increment_conversation_count()
 
         finally:
-            # Clean up temp file
-            Path(tmp_path).unlink(missing_ok=True)
+            # Clean up temp file in thread pool
+            await loop.run_in_executor(None, Path(tmp_path).unlink, True)  # missing_ok=True
 
     except Exception:
         # Log error but don't fail the tool call
@@ -285,6 +278,13 @@ Check commits with matching session_id for implementation details.
 """
 
     return summary
+
+
+def _create_temp_file(doc: Dict[str, Any], session_id: str) -> str:
+    """Synchronous helper to create temp file."""
+    with tempfile.NamedTemporaryFile(mode="w", suffix=f"_conv_{session_id}.json", delete=False) as tmp_file:
+        json.dump(doc, tmp_file, indent=2)
+        return tmp_file.name
 
 
 def _git_command(args: List[str]) -> Optional[str]:
