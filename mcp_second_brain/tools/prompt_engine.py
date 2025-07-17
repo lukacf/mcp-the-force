@@ -53,7 +53,6 @@ class PromptEngine:
                 # Use the existing build_prompt utility for now
                 # This maintains backward compatibility
                 from ..utils.prompt_builder import build_prompt
-                import asyncio
 
                 instructions = prompt_params.get("instructions", "")
                 output_format = prompt_params.get("output_format", "")
@@ -62,8 +61,9 @@ class PromptEngine:
                 # Get model name from spec_class if available
                 model_name = getattr(spec_class, "model_name", None)
 
-                prompt, _ = await asyncio.to_thread(
-                    build_prompt,
+                # Call build_prompt directly without asyncio.to_thread
+                # build_prompt is fast enough to not need threading
+                prompt, _ = build_prompt(
                     instructions,
                     output_format,
                     context,

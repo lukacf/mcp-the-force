@@ -97,9 +97,14 @@ class ToolExecutor:
                 model_name = metadata.model_config["model_name"]
                 model_limit = get_model_context_window(model_name)
                 context_percentage = settings.mcp.context_percentage
-                safety_margin = 30000  # Increased to account for prompt overhead (XML, system prompts, etc.)
-                token_budget = max(
-                    int(model_limit * context_percentage) - safety_margin, 1000
+
+                # The context_percentage (default 0.85) already includes safety margin
+                # The remaining 15% is for system prompts, tool responses, etc.
+                token_budget = max(int(model_limit * context_percentage), 1000)
+                logger.info(
+                    f"[TOKEN_BUDGET] Model: {model_name}, limit: {model_limit:,}, "
+                    f"percentage: {context_percentage:.0%}, "
+                    f"budget: {token_budget:,}"
                 )
 
                 # Get context and attachment paths
