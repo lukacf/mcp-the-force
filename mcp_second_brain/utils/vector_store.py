@@ -1,7 +1,7 @@
 from typing import List
 from pathlib import Path
-from openai import AsyncOpenAI
 from ..config import get_settings
+from ..adapters.openai.client import OpenAIClientFactory
 import logging
 import time
 import asyncio
@@ -42,14 +42,25 @@ OPENAI_SUPPORTED_EXTENSIONS = {
     ".zip",
 }
 
-_client = None
+# Removed global client singleton - use factory instead for proper event loop scoping
 
-
+# Temporary compatibility function for memory config
+# TODO: Refactor memory config to use async properly
 def get_client():
-    global _client
-    if _client is None:
-        _client = AsyncOpenAI(api_key=get_settings().openai_api_key)
-    return _client
+    """
+    DEPRECATED: This function is only kept for backward compatibility with memory.config.
+    New code should use OpenAIClientFactory.get_instance() instead.
+    """
+    import warnings
+    warnings.warn(
+        "get_client() is deprecated. Use OpenAIClientFactory.get_instance() instead.",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    # Return a sync client for the legacy memory config
+    # This is not ideal but maintains compatibility
+    from openai import OpenAI
+    return OpenAI(api_key=get_settings().openai_api_key)
 
 
 def _is_supported_for_vector_store(file_path: str) -> bool:
@@ -101,7 +112,9 @@ async def create_vector_store(paths: List[str]) -> str:
 
     try:
         # Create vector store
-        vs = await get_client().vector_stores.create(name="mcp-second-brain-vs")
+        # Use factory to get event-loop scoped client instance
+        client = await OpenAIClientFactory.get_instance(api_key=get_settings().openai_api_key)
+        vs = await client.vector_stores.create(name="mcp-second-brain-vs")
         logger.info(f"Created vector store {vs.id}")
 
         # Pre-verify all files exist and are readable
@@ -128,7 +141,7 @@ async def create_vector_store(paths: List[str]) -> str:
         if not verified_files:
             # No files could be verified
             logger.warning("No accessible files to upload")
-            await get_client().vector_stores.delete(vs.id)
+            await client.vector_stores.delete(vs.id)
             return ""
 
         # Open verified files for upload
@@ -143,14 +156,14 @@ async def create_vector_store(paths: List[str]) -> str:
         if not file_streams:
             # No files could be opened (shouldn't happen after verification)
             logger.warning("No files could be opened for vector store")
-            await get_client().vector_stores.delete(vs.id)
+            await client.vector_stores.delete(vs.id)
             return ""
 
         logger.info(f"Starting batch upload of {len(file_streams)} files")
 
         try:
             # Use batch upload API
-            file_batch = await get_client().vector_stores.file_batches.upload_and_poll(
+            file_batch = await client.vector_stores.file_batches.upload_and_poll(
                 vector_store_id=vs.id, files=file_streams
             )
         except asyncio.CancelledError:
@@ -158,7 +171,7 @@ async def create_vector_store(paths: List[str]) -> str:
             logger.warning("Vector store upload cancelled, cleaning up resources")
             # Delete the partially created vector store
             try:
-                await get_client().vector_stores.delete(vs.id)
+                await client.vector_stores.delete(vs.id)
                 logger.info(f"Deleted partially created vector store {vs.id}")
             except Exception as e:
                 logger.error(
@@ -194,7 +207,7 @@ async def create_vector_store(paths: List[str]) -> str:
                 f"No files successfully uploaded. Failed: {file_batch.file_counts.failed}, Cancelled: {file_batch.file_counts.cancelled}"
             )
             try:
-                await get_client().vector_stores.delete(vs.id)
+                await client.vector_stores.delete(vs.id)
             except Exception:
                 pass
             return ""
@@ -223,7 +236,9 @@ async def delete_vector_store(vector_store_id: str) -> None:
         return
 
     try:
-        await get_client().vector_stores.delete(vector_store_id)
+        # Use factory to get event-loop scoped client instance
+        client = await OpenAIClientFactory.get_instance(api_key=get_settings().openai_api_key)
+        await client.vector_stores.delete(vector_store_id)
         logger.info(f"Deleted vector store {vector_store_id}")
     except Exception as e:
         logger.warning(f"Failed to delete vector store {vector_store_id}: {e}")
