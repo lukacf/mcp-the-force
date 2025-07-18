@@ -16,6 +16,8 @@ from .prompt_engine import prompt_engine
 from .parameter_validator import ParameterValidator
 from .parameter_router import ParameterRouter
 
+# Import debug logger
+
 # Project memory imports
 from .safe_memory import safe_store_conversation_memory
 from ..config import get_settings
@@ -265,8 +267,9 @@ class ToolExecutor:
                 )
                 vector_store_ids = [vs_id] if vs_id else None
                 logger.info(
-                    f"Created vector store {vs_id}, vector_store_ids={vector_store_ids}"
+                    f"Vector store ready: {vs_id}, vector_store_ids={vector_store_ids}"
                 )
+                logger.info("[DEBUG] Exiting IF block for vector store handling")
             else:
                 # Fallback: Gather files from vector_store parameter if no session_id
                 vector_store_param = routed_params.get("vector_store", [])
@@ -302,11 +305,14 @@ class ToolExecutor:
             # Models should use search_project_memory function to access memory
 
             # 5. Get adapter
+            logger.info("[DEBUG] About to get settings")
             settings = get_settings()
+            logger.info("[DEBUG] About to get adapter")
             adapter, error = adapters.get_adapter(
                 metadata.model_config["adapter_class"],
                 metadata.model_config["model_name"],
             )
+            logger.info(f"[DEBUG] Got adapter: {adapter}")
             if not adapter:
                 raise fastmcp.exceptions.ToolError(
                     f"Failed to initialize adapter: {error}"
