@@ -373,3 +373,270 @@ Starting batch upload of 80 files
 2. Implement proper vector store lifecycle management
 3. Add monitoring/alerting when approaching limits
 4. Consider implementing vector store reuse/pooling
+
+## UPDATE (2025-01-17 22:50) - Real Root Cause Discovered
+
+### The 100 Vector Store Limit Was a Misdiagnosis!
+
+**Current vector store count: 8/100** - We're nowhere near the limit!
+
+We built an elaborate "Loiter Killer" service to manage vector store lifecycle and prevent hitting the 100-store limit. While this successfully implements vector store reuse and file deduplication, it didn't fix the hang because the limit wasn't the actual problem.
+
+### The Real Issue: OpenAI Adapter Hangs When Continuing Sessions
+
+**Test Results with In-Memory Session Cache:**
+- Bypassed SQLite session cache entirely (ruled out deadlock)  
+- Used simple dictionary: `_test_session_cache = {}`
+- First query: ✅ Success
+  - No previous response_id
+  - Prompt: 360,558 chars
+  - Successfully creates operation and calls OpenAI
+- Second query: ❌ Hangs at adapter.generate
+  - Successfully reuses vector store (deduplication works!)
+  - Finds previous response_id: `resp_687961d0ba7081a2a25e39184cedf10003f6959d90fa5d2f`
+  - Prompt: 8,441 chars (much smaller)
+  - Hangs IMMEDIATELY after "[STEP 15] Calling adapter.generate"
+  - Never reaches "run_with_timeout" or operation creation
+  - **Hang occurs BEFORE any OpenAI API call**
+
+**Key Observations:**
+1. The hang occurs at the very start of `adapter.generate()` when `previous_response_id` is set
+2. It's NOT related to vector stores, SQLite, thread pools, or even the OpenAI API
+3. Cancel doesn't work - suggests the hang is in synchronous code or a blocking I/O operation
+4. The Loiter Killer service works perfectly for vector store reuse, but that wasn't the problem
+5. The hang happens BEFORE reaching the actual API - it's in the adapter setup/initialization
+
+**Theories:**
+1. The OpenAI adapter has a blocking operation when `previous_response_id` is passed
+2. There's a synchronous validation or state retrieval that blocks the event loop
+3. The adapter might be trying to fetch previous response metadata synchronously
+
+**Next Steps:**
+1. Investigate OpenAI adapter's `generate()` method when `previous_response_id` is set
+2. Look for any synchronous operations at the start of the method
+3. Consider disabling session continuation as a workaround
+
+## ROOT CAUSE FINALLY DISCOVERED (2025-01-17 23:45)
+
+### 🎯 Update 2025-07-18: The Real Issue is NOT VictoriaLogs!
+
+**Latest findings**: Even after fixing VictoriaLogs with `LokiQueueHandler`, the hang STILL occurs!
+
+**Critical observation**:
+- First query: Completes successfully (~2 minutes)
+- Second query: Dies at **random code location** after **consistent time interval**
+- The hang location changes: file filtering, duplicate checks, etc.
+- **IT'S NOT ABOUT WHAT THE CODE DOES, IT'S ABOUT WHEN IT HAPPENS**
+
+**It's NOT**:
+- ❌ Vector store limits (we only have 8/100)
+- ❌ SQLite deadlocks
+- ❌ OpenAI SDK bugs
+- ❌ Session cache issues
+- ❌ Thread pool exhaustion
+- ❌ VictoriaLogs blocking (fixed with LokiQueueHandler)
+- ❌ Empty file uploads
+- ❌ Any specific code path
+
+**Possible causes**:
+- ⚠️ Reused OpenAI client timing out
+- ⚠️ MCP layer timeout/cleanup
+- ⚠️ FastMCP request timeout
+- ⚠️ Resource cleanup after first query
+- ⚠️ HTTP/2 connection state issues
+
+**Evidence timeline**:
+1. Fixed VictoriaLogs blocking → Still hangs
+2. Hang always on second query regardless of session
+3. Death location varies based on code execution speed
+4. No actual API calls made when it hangs
+5. Consistent time interval suggests timeout mechanism
+6. **TEST RESULT**: Different sessions (test-different-session-001 & 002) → Still hangs
+7. **NOT session-related**: Both queries created NEW vector stores
+8. **Time-based**: Hang occurs at consistent interval from server start (~47s after first query completes)
+9. **CRITICAL FINDING**: Complex o3 query with ZERO context (no files) → Works perfectly!
+10. **Confirms**: Issue is specifically related to file handling/vector stores, NOT o3 API
+11. **PATTERN BREAK**: After no-context query, next file-based query worked! Then 4th query hung
+12. **KEY INSIGHT**: The hang happens even when NO vector store operations occur (reused session)
+
+**Detailed sequence of the pattern-breaking test**:
+1. Query 1: Normal query with context overflow → Created vector store → SUCCESS (58.84s)
+2. Query 2: Complex Gödel query with ZERO context → No files, no vector store → SUCCESS 
+3. **(8.6s pause between queries)**
+4. Query 3: Normal query with NEW session → Created NEW vector store → SUCCESS! (Pattern break!)
+5. Query 4: Normal query with ANOTHER new session → Hung at "gather_file_paths" (early in execution)
+
+**Critical observations**:
+- The no-context query somehow "reset" the problematic state
+- This allowed ONE more file-based query to succeed
+- The 4th query hung much earlier (during file gathering, not vector store ops)
+- Confirms the issue accumulates with file operations, not API calls
+
+**BREAKTHROUGH: 5-minute wait test**:
+1. Query 1: Normal query with context (test-5min-wait-001) → SUCCESS
+2. **Waited 5 minutes**
+3. Query 2: Same query, different session (test-5min-wait-002) → SUCCESS! 
+
+**This proves**:
+- Time alone can reset the problematic state
+- Some resource has a ~5 minute timeout/cleanup cycle
+- Not permanent corruption but temporary resource exhaustion
+- Likely connection pooling, file handles, or similar with TTL
+
+**CRITICAL UPDATE: 1-minute wait test**:
+1. Previous successful query completed
+2. **Waited only 3 minutes**
+3. Query 1: test-1min-wait-001 → HUNG at "Creating vector store with 92 overflow/attachment files"
+
+**This narrows the window**:
+- Resource cleanup happens between 3-5 minutes
+- The hang can now occur on FIRST query if previous activity was recent
+- The resource exhaustion persists across queries within ~3 minute window
+- Points strongly to connection pool or httpx client timeout issues
+
+### The REAL Smoking Gun
+
+The hang is **resource pool exhaustion with 3-5 minute cleanup**:
+- Occurs when file operations happen within 3 minutes of previous query
+- 5 minute wait allows cleanup and reset
+- 3 minute wait is insufficient - resource still exhausted
+- Hang location varies but always involves file/vector store operations
+- NOT the file operations themselves, but the HTTP client/connection pool used
+
+**Critical Discovery - OpenAI Client Singleton Pattern**:
+The OpenAIClientFactory uses a **singleton pattern per event loop**, NOT creating new clients each call:
+```python
+# From mcp_second_brain/adapters/openai/client.py
+# Configure robust HTTP transport with connection pooling.
+limits = httpx.Limits(max_keepalive_connections=20, max_connections=100)
+```
+
+This explains why resource exhaustion persists across queries:
+- The same AsyncOpenAI client instance is reused for ALL requests in an event loop
+- The httpx connection pool (20 keepalive, 100 max connections) is shared
+- File upload operations may exhaust the connection pool
+- Pool cleanup/timeout appears to be 3-5 minutes
+
+**Critical Contradiction - No-Context Queries Work**:
+The user correctly points out: If OpenAI's connection pool was the issue, why do no-context queries work perfectly? This rules out the OpenAI client as the primary cause.
+
+**Evidence**:
+- No-context queries use the SAME OpenAI client singleton
+- They make the SAME API calls (responses.create, polling, etc.)
+- Yet they NEVER hang, even when run immediately after a context query
+- The only difference: no-context queries skip file operations and vector stores
+
+**Updated suspects** (after ruling out OpenAI client):
+1. ~~OpenAI httpx connection pool exhaustion~~ (RULED OUT - no-context queries work)
+2. **File operations during context gathering** (primary suspect again)
+3. **Vector store file upload operations** (even when reusing, still processes files)
+4. **File system resource exhaustion** (file handles, memory mapping, etc.)
+5. **Something specific to file reading/processing in gather_file_paths**
+6. **Pattern confirms**: Resource exhaustion from FILE operations, not API operations
+
+### Proof
+
+The hang always occurs during a logging call, not during actual async operations:
+- Sometimes after "Skipping duplicate file" logs
+- Sometimes after "Vector store ready"
+- Sometimes after other log statements
+- But ALWAYS while the logger is trying to send to VictoriaLogs
+
+### The Fix
+
+**Immediate fix**: Use `logging.handlers.QueueHandler` to move VictoriaLogs communication to a background thread:
+
+```python
+# Wrap the VictoriaLogs handler
+queue = queue.Queue(-1)
+queue_handler = logging.handlers.QueueHandler(queue)
+queue_listener = logging.handlers.QueueListener(
+    queue, victoria_logs_handler, respect_handler_level=True
+)
+queue_listener.start()
+
+# Replace direct handler with queue handler
+logger.addHandler(queue_handler)
+```
+
+**Alternative fixes**:
+1. Aggregate logs in tight loops (e.g., "Skipped 87 files" instead of 87 individual logs)
+2. Set production log level to INFO, keep per-file logs at DEBUG
+3. Use an async-aware logging handler
+4. Disable VictoriaLogs handler entirely (stderr only)
+
+### Why This Explains Everything
+
+- **Always second query**: First query has fewer duplicate files to log
+- **Loiter Killer "fixed" nothing**: The vector store reuse creates MORE duplicate file logs!
+- **Cancel doesn't work**: Event loop is blocked, can't process signals
+- **Hang location varies**: Depends on when the log buffer fills
+
+### Lessons Learned
+
+1. **Never do blocking I/O in the event loop** - including logging!
+2. **Use `PYTHONASYNCIODEBUG=1`** to catch slow callbacks
+3. **Always use QueueHandler** for network-based log handlers
+4. The most complex bugs often have the simplest causes
+
+## Issue #3: OpenAI Batch Upload Performance Degradation
+
+### The Discovery
+
+After fixing the async logging issue, we discovered the MCP server still hangs on sequential queries. Investigation revealed:
+
+**Batch uploads are taking 6-7x longer than normal**:
+- Expected: ~15-20 seconds for 90 files
+- Actual: 104-123 seconds
+- This happens even in standalone tests with raw OpenAI SDK
+
+### Evidence
+
+1. **MCP server context**: 123 seconds for 90 files
+   ```
+   2025-07-18 12:15:31.656 [DEBUG] About to batch upload 90 files
+   2025-07-18 12:17:34.866 Batch upload completed in 123.22s
+   ```
+
+2. **Standalone test**: 104 seconds for 89 files
+   ```
+   Completed in 104.31s
+   Status: completed
+   ⚠️  SLOW UPLOAD: 104.31s (expected ~15s)
+   ```
+
+3. **Normal baseline**: 16.5 seconds for 95 files (from test_vector_store_realistic.py)
+
+### Root Cause Analysis
+
+This is NOT an MCP-specific issue:
+- Happens with raw OpenAI SDK
+- Affects all Claude instances using the same OpenAI account
+- Shows progressive degradation pattern
+- Has 3-5 minute recovery window
+
+**Likely causes**:
+1. **OpenAI API throttling** - Account hitting rate limits
+2. **Vector store quota pressure** - Even though under 100 limit
+3. **File upload quotas** - Cumulative file operations being throttled
+
+### Impact
+
+The slow uploads cause cascading failures:
+- Exhausts timeouts in the MCP/tool execution pipeline
+- Creates the appearance of "hangs" that are actually slow operations
+- Affects all Claude instances sharing the OpenAI account
+
+### Workarounds
+
+1. **Increase timeouts** - Set MCP tool timeout to 300000ms (5 minutes)
+2. **Batch size reduction** - Upload fewer files per batch
+3. **Cooldown periods** - Wait 5 minutes between vector store operations
+4. **Monitor quotas** - Check OpenAI usage dashboard for limits
+
+### TODO
+
+- [ ] Implement exponential backoff for batch uploads
+- [ ] Add upload speed monitoring and alerts
+- [ ] Consider chunking large batches into smaller uploads
+- [ ] Investigate OpenAI rate limit headers for dynamic adjustment
