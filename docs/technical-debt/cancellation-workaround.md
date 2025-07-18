@@ -55,7 +55,7 @@ When removing:
 
 ## Action Items
 
-- [ ] Add cancellation tests for Grok adapter
-- [ ] Add cancellation tests for OpenAI adapter  
+- [x] Add cancellation tests for all adapters (simplified tests in test_adapter_cancellation.py)
+- [x] Fix missing cancel_aware_flow import in OpenAI adapter
 - [ ] Set calendar reminder for Q3 2025 review
 - [ ] Monitor MCP library releases for fix
