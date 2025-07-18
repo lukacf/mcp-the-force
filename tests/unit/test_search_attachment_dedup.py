@@ -33,17 +33,28 @@ class MockSearchResponse:
 @pytest.fixture
 def mock_openai_client():
     """Mock OpenAI client."""
+    from unittest.mock import AsyncMock
+
     client = Mock()
     client.vector_stores = Mock()
+    client.vector_stores.search = AsyncMock()
     return client
 
 
 @pytest.fixture
 def search_adapter(mock_openai_client):
     """Create SearchAttachmentAdapter with mocks."""
-    with patch("mcp_second_brain.tools.search_attachments.get_settings"):
+
+    async def mock_get_client():
+        return mock_openai_client
+
+    with patch(
+        "mcp_second_brain.tools.search_attachments.OpenAIClientFactory.get_instance"
+    ) as mock_factory:
+        mock_factory.return_value = mock_openai_client
         adapter = SearchAttachmentAdapter()
-        adapter.client = mock_openai_client
+        # Override the _get_client method to return our mock directly
+        adapter._get_client = mock_get_client
         return adapter
 
 

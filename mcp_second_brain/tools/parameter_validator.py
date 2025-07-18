@@ -160,7 +160,7 @@ class ParameterValidator:
             return None
 
         # Handle basic bool coercion
-        if expected_type is bool or (origin is None and expected_type == bool):
+        if expected_type is bool:
             if isinstance(value, bool):
                 return value
             if isinstance(value, str):
