@@ -189,7 +189,7 @@ class StateResetManager:
                                 logger.debug(
                                     f"[STATE RESET] Cleared cache for {module.__name__}.{attr_name}"
                                 )
-                            except:
+                            except Exception:
                                 pass
         except Exception as e:
             logger.error(f"[STATE RESET] Failed to clear module caches: {e}")
