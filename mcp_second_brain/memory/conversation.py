@@ -15,6 +15,7 @@ from ..adapters.openai.client import OpenAIClientFactory
 from ..config import get_settings
 from ..utils.redaction import redact_dict
 from .config import get_memory_config
+from ..tools.registry import get_tool
 
 logger = logging.getLogger(__name__)
 
@@ -24,8 +25,6 @@ async def store_conversation_memory(
 ) -> None:
     """Store conversation summary in vector store after tool call."""
     # Check if tool writes to memory using capability flag
-    from ..tools.registry import get_tool
-
     tool_metadata = get_tool(tool_name)
     if not tool_metadata or not tool_metadata.capabilities.get("writes_memory"):
         return

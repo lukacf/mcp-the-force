@@ -17,35 +17,117 @@ async def _upload_batch(
 ) -> dict:
     """Upload a single batch of files and return results"""
     start = time.time()
-    try:
+    
+    async def _do_upload():
+        """Inner function to perform the actual upload"""
         logger.debug(f"Batch {batch_num}: Uploading {len(files)} files")
         batch = await client.vector_stores.file_batches.upload_and_poll(
             vector_store_id=vector_store_id, files=files
         )
-        elapsed = time.time() - start
-        logger.info(
-            f"Batch {batch_num}: Completed in {elapsed:.2f}s - "
-            f"{batch.file_counts.completed}/{batch.file_counts.total} succeeded"
-        )
-        return {
-            "batch_num": batch_num,
-            "elapsed": elapsed,
-            "completed": batch.file_counts.completed,
-            "failed": batch.file_counts.failed,
-            "total": batch.file_counts.total,
-            "batch": batch,
-        }
-    except Exception as e:
-        elapsed = time.time() - start
-        logger.error(f"Batch {batch_num}: Failed after {elapsed:.2f}s - {e}")
-        return {
-            "batch_num": batch_num,
-            "elapsed": elapsed,
-            "completed": 0,
-            "failed": len(files),
-            "total": len(files),
-            "error": str(e),
-        }
+        return batch
+    
+    # Try upload with timeout and retry
+    for attempt in range(2):  # Try twice
+        try:
+            # 15 second timeout per attempt
+            batch = await asyncio.wait_for(_do_upload(), timeout=15.0)
+            
+            elapsed = time.time() - start
+            logger.info(
+                f"Batch {batch_num}: Completed in {elapsed:.2f}s - "
+                f"{batch.file_counts.completed}/{batch.file_counts.total} succeeded"
+            )
+            return {
+                "batch_num": batch_num,
+                "elapsed": elapsed,
+                "completed": batch.file_counts.completed,
+                "failed": batch.file_counts.failed,
+                "total": batch.file_counts.total,
+                "batch": batch,
+            }
+            
+        except asyncio.TimeoutError:
+            elapsed = time.time() - start
+            # Log the files that are causing timeout
+            file_names = []
+            for f in files:
+                try:
+                    file_names.append(f.name)
+                except:
+                    file_names.append("<unknown>")
+            
+            if attempt == 0:
+                logger.warning(f"Batch {batch_num}: Timed out after 15s, switching to file-by-file upload. Files: {file_names}")
+                # Instead of retrying the batch, try uploading files one by one
+                logger.info(f"Batch {batch_num}: Attempting to upload {len(files)} files individually")
+                
+                completed = 0
+                failed = 0
+                
+                for i, file in enumerate(files):
+                    try:
+                        file_name = file.name if hasattr(file, 'name') else f"<file_{i}>"
+                        logger.info(f"Batch {batch_num}: Uploading file {i+1}/{len(files)}: {file_name}")
+                        
+                        # Upload single file with 10 second timeout
+                        single_batch = await asyncio.wait_for(
+                            client.vector_stores.file_batches.upload_and_poll(
+                                vector_store_id=vector_store_id, 
+                                files=[file]
+                            ), 
+                            timeout=10.0
+                        )
+                        
+                        if single_batch.file_counts.completed > 0:
+                            completed += 1
+                            logger.info(f"Batch {batch_num}: File {i+1}/{len(files)} uploaded successfully: {file_name}")
+                        else:
+                            failed += 1
+                            logger.error(f"Batch {batch_num}: File {i+1}/{len(files)} failed: {file_name}")
+                            
+                    except asyncio.TimeoutError:
+                        failed += 1
+                        file_name = file.name if hasattr(file, 'name') else f"<file_{i}>"
+                        logger.error(f"Batch {batch_num}: File {i+1}/{len(files)} timed out after 10s: {file_name}")
+                    except Exception as e:
+                        failed += 1
+                        file_name = file.name if hasattr(file, 'name') else f"<file_{i}>"
+                        logger.error(f"Batch {batch_num}: File {i+1}/{len(files)} error: {file_name} - {e}")
+                
+                elapsed_total = time.time() - start
+                logger.info(f"Batch {batch_num}: File-by-file upload completed in {elapsed_total:.2f}s - {completed}/{len(files)} succeeded")
+                
+                return {
+                    "batch_num": batch_num,
+                    "elapsed": elapsed_total,
+                    "completed": completed,
+                    "failed": failed,
+                    "total": len(files),
+                    "fallback_mode": "file-by-file",
+                }
+            else:
+                # This shouldn't happen anymore since we don't retry
+                logger.error(f"Batch {batch_num}: Timed out after {elapsed:.2f}s. Files: {file_names}")
+                return {
+                    "batch_num": batch_num,
+                    "elapsed": elapsed,
+                    "completed": 0,
+                    "failed": len(files),
+                    "total": len(files),
+                    "error": "Timeout",
+                }
+                
+        except Exception as e:
+            elapsed = time.time() - start
+            logger.error(f"Batch {batch_num}: Failed after {elapsed:.2f}s - {e}")
+            return {
+                "batch_num": batch_num,
+                "elapsed": elapsed,
+                "completed": 0,
+                "failed": len(files),
+                "total": len(files),
+                "error": str(e),
+            }
 
 
 # OpenAI supported file extensions for vector stores
