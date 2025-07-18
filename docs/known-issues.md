@@ -868,3 +868,55 @@ The combination of Loiter Killer's 5-minute cycle and thread pool exhaustion cre
 - It's not about WHAT operation is running when the hang occurs
 - It's about HOW MANY operations have run and what state has accumulated
 - The 5-minute recovery suggests some resource is being exhausted and needs time to clean up
+
+## UPDATE 2025-07-18 16:22 - SearchAttachmentAdapter Fix Did NOT Solve Issue
+
+Despite fixing the connection pool leak in SearchAttachmentAdapter, the hang persists:
+
+**What we fixed**:
+- SearchAttachmentAdapter was creating sync OpenAI clients with their own connection pools
+- Changed to use the async singleton from OpenAIClientFactory
+- This should have eliminated the connection pool exhaustion issue
+
+**Test results**:
+- First o3 query: ✅ Success (created vector store)
+- Second o3 query: ❌ STILL HANGS
+- Hang location: After logging "Adding 2 new files to vector store vs_687a585a4f50819194e03d385d33671a (skipped 92 duplicates)"
+- Next line would have been about skipping unsupported files, but never reached
+- Cancel hook not triggered
+
+**This reveals**:
+1. The hang is NOT in SearchAttachmentAdapter (we fixed that)
+2. The hang occurs during vector store file addition operations
+3. Something in the file addition process is blocking the event loop
+4. The 5-minute recovery pattern persists
+
+**Current understanding**:
+- The issue is deeper than just connection pools
+- It's related to vector store operations specifically
+- The exact blocking operation is somewhere between duplicate checking and file type validation
+
+### Latest Discovery (2025-07-18)
+
+After fixing the SearchAttachmentAdapter to use async singleton, the hang still occurs but now at:
+```
+# In vector_store_files.py
+from .vector_store import _is_supported_for_vector_store  # <-- HANG OCCURS HERE
+```
+
+This happens AFTER logging "Adding 2 new files to vector store" but before checking supported file types. The import works fine on first query but hangs on second query within 5 minutes.
+
+**UPDATE**: A Gemini call without file context timed out after 600 seconds, but this is likely unrelated to our main hanging issue:
+- Gemini call timed out after 600 seconds (legitimate timeout, possibly on Google's side)
+- Cancel was attempted at 17:17 but had NO EFFECT
+- This appears to be a separate issue with ToolError handling, possibly due to our extensive patching
+- NOT representative of the original file-context hang problem
+
+Log evidence:
+```
+2025-07-18 17:13:17.985 chat_with_gemini25_pro completed in 600.03s
+2025-07-18 17:13:17.973 [CRITICAL] Traceback: ... TimeoutError
+2025-07-18 17:13:17.965 Cleaned up operation: chat_with_gemini25_pro_c2b5ce0a
+```
+
+The main hanging issue remains specific to file operations and vector store handling, with the consistent 5-minute recovery pattern.
