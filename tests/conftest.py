@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 import pytest
 import pytest_asyncio
-from unittest.mock import MagicMock, Mock, AsyncMock
+from unittest.mock import MagicMock, Mock, AsyncMock, patch
 import asyncio
 import time
 import contextlib
@@ -133,7 +133,7 @@ def mock_openai_client():
 
     mock_batch = MagicMock()
     mock_batch.status = "completed"
-    mock_batch.file_counts = MagicMock(completed=3, failed=0)
+    mock_batch.file_counts = MagicMock(completed=3, failed=0, total=3)
     mock.vector_stores.file_batches.upload_and_poll = AsyncMock(return_value=mock_batch)
     mock.beta.vector_stores.file_batches.upload_and_poll = AsyncMock(
         return_value=mock_batch
@@ -143,6 +143,31 @@ def mock_openai_client():
     mock.beta.vector_stores.delete = AsyncMock()
 
     return mock
+
+
+@pytest.fixture
+def mock_openai_factory(mock_openai_client):
+    """Patch OpenAIClientFactory to return the mock client."""
+
+    # Create an async mock that returns the client
+    async def mock_get_instance(*args, **kwargs):
+        return mock_openai_client
+
+    with (
+        patch(
+            "mcp_second_brain.utils.vector_store.OpenAIClientFactory.get_instance",
+            new=mock_get_instance,
+        ),
+        patch(
+            "mcp_second_brain.utils.vector_store_files.OpenAIClientFactory.get_instance",
+            new=mock_get_instance,
+        ),
+        patch(
+            "mcp_second_brain.adapters.openai.client.OpenAIClientFactory.get_instance",
+            new=mock_get_instance,
+        ),
+    ):
+        yield mock_openai_client
 
 
 @pytest.fixture
