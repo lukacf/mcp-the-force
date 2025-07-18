@@ -228,9 +228,13 @@ def assert_no_secrets_in_logs(caplog, secrets: list[str]):
 def parse_adapter_response():
     """Parse the JSON string returned by MockAdapter."""
 
-    def _parse(resp: str) -> dict:
+    def _parse(resp) -> dict:
         import json
 
+        # Handle OpenAI models that return dict with 'content' field
+        if isinstance(resp, dict) and "content" in resp:
+            return json.loads(resp["content"])
+        # Handle other models that return JSON string directly
         return json.loads(resp)
 
     return _parse
