@@ -1,41 +1,11 @@
 #!/usr/bin/env python3
 """MCP Second-Brain Server with dataclass-based tools."""
 
-# TEMPORARY: Debug hooks for investigating cancellation - DISABLED
-# import sys
-# import os
-# sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-# try:
-#     import debug_hooks  # noqa: E402
-# except ImportError:
-#     pass  # Debug hooks are optional
-
 import logging
 from .logging.setup import setup_logging
 
 # Initialize the new logging system first
 setup_logging()
-
-# Apply THE ONE PATCH for stdio writes before any MCP imports
-# import mcp_second_brain.patch_stdio_writer  # noqa: F401, E402
-
-# Apply patches BEFORE importing any MCP modules
-# This is critical - patches must be in place before MCP loads
-# from mcp_second_brain.cancellation_patch import monkeypatch_all  # noqa: E402
-
-# monkeypatch_all()  # Apply comprehensive cancellation handling
-
-# Apply write safety patch before any MCP imports
-# DISABLED: Testing with only cancellation handler
-# from . import patch_write_safety  # noqa: F401, E402
-
-# Patch MCP responder to handle disconnections gracefully
-# DISABLED: Testing with only cancellation handler
-# from . import patch_mcp_responder  # noqa: F401, E402
-
-# Patch FastMCP so cancelled requests don't get a 2nd response
-# DISABLED: Testing with only cancellation handler
-# from . import patch_fastmcp_cancel  # noqa: F401, E402
 
 # Also ensure operation_manager is available for Claude Code abort handling
 from .operation_manager import operation_manager  # noqa: F401, E402
