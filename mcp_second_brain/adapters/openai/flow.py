@@ -277,6 +277,10 @@ class BackgroundFlowStrategy(BaseFlowStrategy):
         logger.info(
             f"[ADAPTER] Starting OpenAI responses.create at {time.strftime('%H:%M:%S')}"
         )
+        logger.info(f"[DEBUG] api_params keys: {list(api_params.keys())}")
+        logger.info(
+            f"[DEBUG] previous_response_id: {api_params.get('previous_response_id')}"
+        )
         api_start_time = time.time()
         initial_response = await self.context.client.responses.create(**api_params)
         api_end_time = time.time()

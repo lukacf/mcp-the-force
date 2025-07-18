@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, BinaryIO, Sequence
 from pathlib import Path
 from ..config import get_settings
 from ..adapters.openai.client import OpenAIClientFactory
@@ -7,6 +7,46 @@ import time
 import asyncio
 
 logger = logging.getLogger(__name__)
+
+# Number of parallel batches for upload
+PARALLEL_BATCHES = 10
+
+
+async def _upload_batch(
+    client, vector_store_id: str, files: Sequence[BinaryIO], batch_num: int
+) -> dict:
+    """Upload a single batch of files and return results"""
+    start = time.time()
+    try:
+        logger.debug(f"Batch {batch_num}: Uploading {len(files)} files")
+        batch = await client.vector_stores.file_batches.upload_and_poll(
+            vector_store_id=vector_store_id, files=files
+        )
+        elapsed = time.time() - start
+        logger.info(
+            f"Batch {batch_num}: Completed in {elapsed:.2f}s - "
+            f"{batch.file_counts.completed}/{batch.file_counts.total} succeeded"
+        )
+        return {
+            "batch_num": batch_num,
+            "elapsed": elapsed,
+            "completed": batch.file_counts.completed,
+            "failed": batch.file_counts.failed,
+            "total": batch.file_counts.total,
+            "batch": batch,
+        }
+    except Exception as e:
+        elapsed = time.time() - start
+        logger.error(f"Batch {batch_num}: Failed after {elapsed:.2f}s - {e}")
+        return {
+            "batch_num": batch_num,
+            "elapsed": elapsed,
+            "completed": 0,
+            "failed": len(files),
+            "total": len(files),
+            "error": str(e),
+        }
+
 
 # OpenAI supported file extensions for vector stores
 OPENAI_SUPPORTED_EXTENSIONS = {
@@ -167,10 +207,73 @@ async def create_vector_store(paths: List[str]) -> str:
         logger.info(f"Starting batch upload of {len(file_streams)} files")
 
         try:
-            # Use batch upload API
-            file_batch = await client.vector_stores.file_batches.upload_and_poll(
-                vector_store_id=vs.id, files=file_streams
-            )
+            # Decide whether to use parallel or single batch based on file count
+            if len(file_streams) <= 20:
+                # For small uploads, use single batch
+                file_batch = await client.vector_stores.file_batches.upload_and_poll(
+                    vector_store_id=vs.id, files=file_streams
+                )
+            else:
+                # For larger uploads, use parallel batches
+                logger.info(f"Using parallel batch upload ({PARALLEL_BATCHES} batches)")
+
+                # Split files into batches
+                batch_size = max(1, len(file_streams) // PARALLEL_BATCHES)
+                batches = []
+                for i in range(0, len(file_streams), batch_size):
+                    batches.append(file_streams[i : i + batch_size])
+
+                # Ensure we don't have more than PARALLEL_BATCHES
+                while len(batches) > PARALLEL_BATCHES:
+                    batches[-2].extend(batches[-1])
+                    batches.pop()
+
+                logger.info(
+                    f"Created {len(batches)} batches with sizes: {[len(b) for b in batches]}"
+                )
+
+                # Upload all batches in parallel
+                tasks = [
+                    _upload_batch(client, vs.id, batch, i + 1)
+                    for i, batch in enumerate(batches)
+                ]
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+
+                # Calculate totals and get last successful batch for return
+                total_completed = 0
+                total_failed = 0
+                total_files = 0
+                file_batch = None
+
+                for r in results:
+                    if isinstance(r, dict) and "completed" in r:
+                        total_completed += r["completed"]
+                        total_failed += r["failed"]
+                        total_files += r["total"]
+                        if "batch" in r and r["batch"]:
+                            file_batch = r["batch"]
+                    elif isinstance(r, Exception):
+                        logger.error(f"Batch failed with exception: {r}")
+                        total_failed += 1
+
+                if not file_batch:
+                    # All batches failed - create a synthetic batch result
+                    class FileCounts:
+                        def __init__(self):
+                            self.completed = total_completed
+                            self.failed = total_failed
+                            self.total = total_files
+                            self.in_progress = 0
+                            self.cancelled = 0
+
+                    class SyntheticBatch:
+                        def __init__(self):
+                            self.status = (
+                                "failed" if total_completed == 0 else "completed"
+                            )
+                            self.file_counts = FileCounts()
+
+                    file_batch = SyntheticBatch()
         except asyncio.CancelledError:
             # Properly clean up on cancellation
             logger.warning("Vector store upload cancelled, cleaning up resources")
