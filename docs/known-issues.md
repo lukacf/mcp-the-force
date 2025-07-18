@@ -2,6 +2,30 @@
 
 This document tracks known issues, failed tests, and debugging observations for the MCP Second-Brain server.
 
+## Summary of Major Discoveries (2025-07-18)
+
+Through extensive debugging of MCP server hangs, we discovered:
+
+1. **VictoriaLogs Blocking**: Synchronous HTTP logging was blocking the event loop
+   - Fixed with async handler and queue-based approach
+   
+2. **OpenAI API Performance Degradation**: Batch uploads taking 6-7x longer than normal
+   - Not MCP-specific - affects raw OpenAI SDK
+   - Variable performance: same upload can take 15s or 123s
+   - Fixed with parallel batch uploads (10 concurrent batches)
+
+3. **File Path Deduplication**: Implemented proper tracking in Loiter Killer
+   - OpenAI doesn't deduplicate files, leading to duplicate uploads
+   - Now tracks file paths as primary identifier
+
+4. **Resource Exhaustion Pattern**: 3-5 minute recovery window
+   - Initially misdiagnosed as connection pool exhaustion
+   - Actually OpenAI API throttling/rate limiting
+
+5. **Cross-Instance Impact**: Multiple Claude instances affected simultaneously
+   - Shared services (VictoriaLogs, Loiter Killer) were initial suspects
+   - Root cause was OpenAI account-level throttling
+
 ## 1. Intermittent Vector Store Creation Hang
 
 **Status**: 🟡 Partially Fixed (semaphore issue fixed, but new cancellation issue found)
@@ -634,9 +658,25 @@ The slow uploads cause cascading failures:
 3. **Cooldown periods** - Wait 5 minutes between vector store operations
 4. **Monitor quotas** - Check OpenAI usage dashboard for limits
 
+### Solution Implemented
+
+**Parallel Batch Uploads** (implemented in commit ac12576):
+- Files >20 are split into 10 parallel batches
+- Small uploads (≤20 files) use single batch to avoid overhead
+- Each batch can fail independently without affecting others
+- Test results show ~30% speedup with parallel processing
+
+### Additional Discoveries
+
+1. **Variable API Performance**: The same upload can take 15s or 123s depending on API state
+2. **Cross-instance Impact**: Multiple Claude instances are affected simultaneously
+3. **OpenAI Client Singleton**: The OpenAIClientFactory maintains a singleton client per event loop with connection pooling (20 keepalive, 100 max connections)
+4. **Not Connection Pool Exhaustion**: No-context queries work perfectly, ruling out client-side issues
+
 ### TODO
 
-- [ ] Implement exponential backoff for batch uploads
+- [x] ~~Implement parallel batch uploads~~ ✓ Completed
 - [ ] Add upload speed monitoring and alerts
-- [ ] Consider chunking large batches into smaller uploads
+- [ ] Implement exponential backoff for failed batches
 - [ ] Investigate OpenAI rate limit headers for dynamic adjustment
+- [ ] Consider adaptive batch sizing based on current API performance
