@@ -7,6 +7,7 @@ from typing import List, Tuple
 
 from .fs import gather_file_paths
 from .token_counter import count_tokens
+from .thread_pool import run_in_thread_pool
 
 
 def load_specific_files(file_paths: List[str]) -> List[Tuple[str, str, int]]:
@@ -141,4 +142,22 @@ def load_text_files(items: List[str]) -> List[Tuple[str, str, int]]:
             logger.warning(f"Failed to read file {path}: {type(e).__name__}: {e}")
             continue
 
+    return result
+
+
+async def load_text_files_async(items: List[str]) -> List[Tuple[str, str, int]]:
+    """Asynchronously load text files to avoid blocking the event loop."""
+    result: List[Tuple[str, str, int]] = await run_in_thread_pool(
+        load_text_files, items
+    )
+    return result
+
+
+async def load_specific_files_async(
+    file_paths: List[str],
+) -> List[Tuple[str, str, int]]:
+    """Asynchronously load specific text files."""
+    result: List[Tuple[str, str, int]] = await run_in_thread_pool(
+        load_specific_files, file_paths
+    )
     return result
