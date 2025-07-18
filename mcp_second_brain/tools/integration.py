@@ -7,6 +7,7 @@ import fastmcp.exceptions
 import logging
 from .registry import list_tools, ToolMetadata
 from .executor import executor
+from ..utils.state_reset import state_reset_manager
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +53,24 @@ def create_tool_function(metadata: ToolMetadata):
         try:
             bound = signature.bind(*args, **kwargs)
             bound.apply_defaults()
-            return await executor.execute(metadata, **bound.arguments)
+            
+            # DISABLED: State reset causing server crashes
+            # # Wrap execution with state reset
+            # async def execute_with_reset():
+            #     result = await executor.execute(metadata, **bound.arguments)
+            #     logger.info(f"[INTEGRATION] Tool {metadata.id} completed, returning result")
+            #     return result
+            # 
+            # # Use state reset manager to ensure clean state after execution
+            # result = await state_reset_manager.wrap_tool_execution(
+            #     execute_with_reset
+            # )
+            # return result
+            
+            # Direct execution without state reset
+            result = await executor.execute(metadata, **bound.arguments)
+            logger.info(f"[INTEGRATION] Tool {metadata.id} completed, returning result")
+            return result
         except TypeError as e:
             # Provide helpful error message via MCP error mechanism
             raise fastmcp.exceptions.ToolError(f"Invalid arguments: {e}")

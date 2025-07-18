@@ -36,6 +36,16 @@ def setup_logging():
     if not settings.logging.developer_mode.enabled:
         app_logger.addHandler(logging.NullHandler())
         return
+    
+    # Check if we should disable VictoriaLogs
+    if os.getenv("DISABLE_VICTORIA_LOGS", "").lower() in ("1", "true", "yes"):
+        # Add stderr handler so we can still see critical messages
+        stderr_handler = logging.StreamHandler(sys.stderr)
+        stderr_handler.setLevel(logging.WARNING)
+        stderr_handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+        app_logger.addHandler(stderr_handler)
+        app_logger.warning("VictoriaLogs DISABLED via DISABLE_VICTORIA_LOGS env var")
+        return
 
     # Generate instance ID once for this session
     instance_id = generate_instance_id()

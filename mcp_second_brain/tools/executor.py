@@ -432,20 +432,26 @@ class ToolExecutor:
             # 8. Handle response
             logger.info("[STEP 17] Handling response")
             if isinstance(result, dict):
+                logger.info("[STEP 17.1] Result is dict")
                 content = result.get("content", "")
+                logger.info(f"[STEP 17.2] Got content, length: {len(str(content))}")
                 if (
                     session_id
                     and metadata.model_config["adapter_class"] == "openai"
                     and "response_id" in result
                 ):
+                    logger.info(f"[STEP 17.3] Saving response_id for session {session_id}")
                     await session_cache_module.session_cache.set_response_id(
                         session_id, result["response_id"]
                     )
+                    logger.info(f"[STEP 17.4] Response_id saved")
                 # Session management is now handled inside the adapters themselves
                 # No need to save sessions here for Vertex/Grok models
 
                 # Redact secrets from content
+                logger.info("[STEP 17.5] Starting redaction")
                 redacted_content = redact_secrets(str(content))
+                logger.info("[STEP 17.6] Redaction complete")
 
                 # 8a. Store conversation in memory (with redacted content)
                 # TEMPORARILY DISABLED: Memory storage may be causing thread pool exhaustion
@@ -475,6 +481,7 @@ class ToolExecutor:
                         "[MEMORY] Memory storage temporarily disabled - testing for hang issue"
                     )
 
+                logger.info(f"[STEP 17.7] About to return redacted content, length: {len(redacted_content)}")
                 return redacted_content
             else:
                 # Redact secrets from result

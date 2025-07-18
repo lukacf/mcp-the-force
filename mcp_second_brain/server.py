@@ -91,25 +91,28 @@ def main():
         else:
             yield exc
 
-    # macOS-specific workaround for KqueueSelector stdio hang bug
-    # See: https://github.com/python/cpython/issues/104344
-    # BUT: SelectSelector has a 1024 file descriptor limit that causes hangs
-    # with many concurrent file operations (e.g., vector store uploads).
-    # Using PollSelector instead which has no FD limit while still avoiding
-    # the KqueueSelector stdio issues.
-    if sys.platform == "darwin":
+    # DISABLED: Testing if custom selector is causing race conditions
+    # # macOS-specific workaround for KqueueSelector stdio hang bug
+    # # See: https://github.com/python/cpython/issues/104344
+    # # BUT: SelectSelector has a 1024 file descriptor limit that causes hangs
+    # # with many concurrent file operations (e.g., vector store uploads).
+    # # Using PollSelector instead which has no FD limit while still avoiding
+    # # the KqueueSelector stdio issues.
+    # if sys.platform == "darwin":
 
-        class PollSelectorPolicy(asyncio.DefaultEventLoopPolicy):
-            def new_event_loop(self):
-                # poll(2) has no FD_SETSIZE limit unlike select(2)
-                selector = selectors.PollSelector()
-                return asyncio.SelectorEventLoop(selector)
+    #     class PollSelectorPolicy(asyncio.DefaultEventLoopPolicy):
+    #         def new_event_loop(self):
+    #             # poll(2) has no FD_SETSIZE limit unlike select(2)
+    #             selector = selectors.PollSelector()
+    #             return asyncio.SelectorEventLoop(selector)
 
-        asyncio.set_event_loop_policy(PollSelectorPolicy())
-        logger.info(
-            "Using PollSelector on macOS to avoid both KqueueSelector stdio hangs "
-            "and SelectSelector's 1024 FD limit"
-        )
+    #     asyncio.set_event_loop_policy(PollSelectorPolicy())
+    #     logger.info(
+    #         "Using PollSelector on macOS to avoid both KqueueSelector stdio hangs "
+    #         "and SelectSelector's 1024 FD limit"
+    #     )
+    
+    logger.warning("Custom PollSelector DISABLED - using default event loop selector")
 
     # Ignore SIGPIPE to prevent crashes on broken pipes (Unix only)
     if sys.platform != "win32":
@@ -161,21 +164,39 @@ def main():
         # Fallback to default handler
         loop.default_exception_handler(context)
 
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.set_exception_handler(ignore_broken_pipe)
-    logger.info("Installed custom event loop exception handler")
-
+    # Let FastMCP create and manage its own event loop
+    # This avoids conflicts between our custom loop management and FastMCP's internal handling
+    
+    # Install exception handler on the default event loop policy
+    def setup_exception_handler():
+        loop = asyncio.get_event_loop()
+        loop.set_exception_handler(ignore_broken_pipe)
+        logger.info("Installed custom event loop exception handler")
+    
     # No loop for stdio transport - run once and exit on disconnection
     # Claude spawns a new server process for each session
     try:
         logger.info("Starting MCP server (stdio transport)...")
 
-        # Ensure Docker services are running (non-blocking)
-        # Run in the existing event loop
-        loop.run_until_complete(docker_manager.ensure_services_running())
-
-        mcp.run()  # Will use stdio transport by default
+        # DISABLED: Docker manager may be causing event loop issues
+        # Skip Docker initialization to test if it's the cause of hangs
+        logger.warning("Docker service initialization DISABLED for debugging")
+        
+        # Clear any existing event loop so FastMCP can create its own
+        asyncio.set_event_loop(None)
+        
+        # Register cleanup handlers for state reset
+        from .utils.state_reset import state_reset_manager
+        from .adapters.openai.client import OpenAIClientFactory
+        
+        # Register singletons to be cleared
+        if hasattr(OpenAIClientFactory, '_instances'):
+            state_reset_manager.register_singleton(OpenAIClientFactory._instances)
+        
+        logger.info("State reset manager configured for aggressive cleanup between queries")
+        
+        # Now let FastMCP handle everything
+        mcp.run()  # Will create its own event loop
         logger.info("MCP server exited normally")
 
     except KeyboardInterrupt:
