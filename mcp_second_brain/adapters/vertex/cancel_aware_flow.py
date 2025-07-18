@@ -24,12 +24,12 @@ logger = logging.getLogger(__name__)
 
 def patch_vertex_adapter():
     """No-op patch - Vertex's async client propagates CancelledError naturally.
-    
+
     Unlike Grok/OpenAI adapters, Vertex doesn't need method wrapping because:
     - The google-genai client uses proper async/await patterns
     - CancelledError propagates cleanly without intervention
     - No custom polling loops that need explicit cancellation handling
-    
+
     This file exists to maintain the pattern that ALL adapters must have
     cancel_aware_flow.py imported in their __init__.py.
     """
