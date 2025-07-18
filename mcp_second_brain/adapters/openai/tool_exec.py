@@ -152,7 +152,7 @@ class BuiltInToolDispatcher:
         if name == "search_project_memory":
             # Import and execute search
             from ...tools.search_memory import SearchMemoryAdapter
-            
+
             adapter = SearchMemoryAdapter()
             return await adapter.generate(
                 prompt=arguments.get("query", ""),
@@ -164,7 +164,7 @@ class BuiltInToolDispatcher:
         elif name == "search_session_attachments":
             # Import and execute attachment search
             from ...tools.search_attachments import SearchAttachmentAdapter
-            
+
             adapter_attachment = SearchAttachmentAdapter()
             return await adapter_attachment.generate(
                 prompt=arguments.get("query", ""),
