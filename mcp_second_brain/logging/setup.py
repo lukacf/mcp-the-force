@@ -6,9 +6,10 @@ import sys
 import uuid
 import queue
 import logging.handlers
+import atexit
 from pathlib import Path
-from logging_loki import LokiQueueHandler
 from ..config import get_settings
+from .handlers import TimeoutLokiHandler
 
 
 def generate_instance_id() -> str:
@@ -39,14 +40,13 @@ def setup_logging():
     # Generate instance ID once for this session
     instance_id = generate_instance_id()
 
-    # Set up non-blocking VictoriaLogs handler using queue
+    # Set up non-blocking VictoriaLogs handler using queue with timeout protection
     try:
         # Create a queue for non-blocking logging
         log_queue = queue.Queue(-1)  # -1 means unlimited size
 
-        # Create the queue handler that will immediately return
-        queue_handler = LokiQueueHandler(
-            log_queue,
+        # Create our custom handler with timeout
+        loki_handler = TimeoutLokiHandler(
             url="http://localhost:9428/insert/loki/api/v1/push?_stream_fields=app,instance_id",
             tags={
                 "app": "mcp-second-brain",
@@ -54,12 +54,28 @@ def setup_logging():
                 "project": os.getenv("MCP_PROJECT_PATH", os.getcwd()),
             },
             version="1",
+            timeout=10.0,  # 10 second timeout to prevent stale connection hangs
         )
-        queue_handler.setLevel(settings.logging.level)
+        loki_handler.setLevel(settings.logging.level)
+
+        # Create the queue handler
+        queue_handler = logging.handlers.QueueHandler(log_queue)
+
+        # Create and start the queue listener
+        queue_listener = logging.handlers.QueueListener(
+            log_queue, loki_handler, respect_handler_level=True
+        )
+        queue_listener.start()
+
+        # Store listener for cleanup
+        app_logger._queue_listener = queue_listener
+
+        # Register cleanup on exit
+        atexit.register(queue_listener.stop)
 
         app_logger.addHandler(queue_handler)
         app_logger.info(
-            f"Non-blocking VictoriaLogs handler configured for instance {instance_id}"
+            f"Non-blocking VictoriaLogs handler configured for instance {instance_id} with 10s timeout"
         )
     except Exception as e:
         # Don't block server startup if VictoriaLogs is unavailable
@@ -79,5 +95,8 @@ def setup_logging():
 
 
 def shutdown_logging():
-    """No-op shutdown for compatibility."""
-    pass
+    """Stop the queue listener if it exists."""
+    app_logger = logging.getLogger("mcp_second_brain")
+    if hasattr(app_logger, "_queue_listener"):
+        app_logger._queue_listener.stop()
+        delattr(app_logger, "_queue_listener")
