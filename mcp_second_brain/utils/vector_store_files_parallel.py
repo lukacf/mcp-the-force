@@ -4,6 +4,7 @@ from typing import List, Tuple, BinaryIO, Sequence
 from pathlib import Path
 from ..config import get_settings
 from ..adapters.openai.client import OpenAIClientFactory
+from .vector_store import _is_supported_for_vector_store
 import logging
 import time
 import asyncio
@@ -92,9 +93,6 @@ async def add_files_to_vector_store_parallel(
         f"Adding {len(new_files)} new files to vector store {vector_store_id} "
         f"(skipped {len(skipped_files)} duplicates)"
     )
-
-    # Import the supported extensions check
-    from .vector_store import _is_supported_for_vector_store
 
     # Filter for supported files
     supported_new_files = [f for f in new_files if _is_supported_for_vector_store(f)]
