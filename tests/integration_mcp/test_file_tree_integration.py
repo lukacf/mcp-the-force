@@ -53,11 +53,9 @@ async def test_file_tree_in_prompt():
                 "mcp_second_brain.adapters.model_registry.get_model_context_window",
                 return_value=100000,
             ),
+            patch("mcp_second_brain.utils.fs.gather_file_paths_async") as mock_gather,
             patch(
-                "mcp_second_brain.utils.context_builder.gather_file_paths"
-            ) as mock_gather,
-            patch(
-                "mcp_second_brain.utils.context_builder.load_specific_files"
+                "mcp_second_brain.utils.context_loader.load_specific_files_async"
             ) as mock_load,
         ):
             # Setup mocks
@@ -161,6 +159,6 @@ async def test_file_tree_in_prompt():
             file_elements = context_elem.findall(".//file")
             assert len(file_elements) == 2  # main.py and utils.py
 
-            paths_in_context = [f.get("path") for f in file_elements]
-            assert str(root / "src" / "main.py") in paths_in_context
-            assert str(root / "src" / "utils.py") in paths_in_context
+            paths_in_context = [Path(f.get("path")).resolve() for f in file_elements]
+            assert (root / "src" / "main.py").resolve() in paths_in_context
+            assert (root / "src" / "utils.py").resolve() in paths_in_context
