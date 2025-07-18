@@ -1,11 +1,13 @@
-"""Logging system setup using VictoriaLogs via logging-loki."""
+"""Logging system setup using VictoriaLogs via non-blocking queue handler."""
 
 import logging
 import os
 import sys
 import uuid
+import queue
+import logging.handlers
 from pathlib import Path
-from logging_loki import LokiHandler
+from logging_loki import LokiQueueHandler
 from ..config import get_settings
 
 
@@ -34,21 +36,37 @@ def setup_logging():
         app_logger.addHandler(logging.NullHandler())
         return
 
-    # Try to set up VictoriaLogs handler, but don't block startup if it fails
+    # Generate instance ID once for this session
+    instance_id = generate_instance_id()
+
+    # Set up non-blocking VictoriaLogs handler using queue
     try:
-        loki_handler = LokiHandler(
+        # Create a queue for non-blocking logging
+        log_queue = queue.Queue(-1)  # -1 means unlimited size
+
+        # Create the queue handler that will immediately return
+        queue_handler = LokiQueueHandler(
+            log_queue,
             url="http://localhost:9428/insert/loki/api/v1/push?_stream_fields=app,instance_id",
             tags={
                 "app": "mcp-second-brain",
-                "instance_id": generate_instance_id(),  # Semantic instance ID
+                "instance_id": instance_id,
                 "project": os.getenv("MCP_PROJECT_PATH", os.getcwd()),
             },
             version="1",
         )
-        app_logger.addHandler(loki_handler)
+        queue_handler.setLevel(settings.logging.level)
+
+        app_logger.addHandler(queue_handler)
+        app_logger.info(
+            f"Non-blocking VictoriaLogs handler configured for instance {instance_id}"
+        )
     except Exception as e:
         # Don't block server startup if VictoriaLogs is unavailable
-        print(f"Warning: Could not connect to VictoriaLogs: {e}", file=sys.stderr)
+        print(
+            f"Warning: Could not set up VictoriaLogs queue handler: {e}",
+            file=sys.stderr,
+        )
 
     # CRITICAL: Also add stderr handler for MCP servers (stdout must stay clean for JSON-RPC)
     stderr_handler = logging.StreamHandler(sys.stderr)

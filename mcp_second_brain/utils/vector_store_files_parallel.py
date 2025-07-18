@@ -1,4 +1,4 @@
-"""Utilities for managing files in vector stores."""
+"""Utilities for managing files in vector stores with parallel batch uploads."""
 
 from typing import List, Tuple, BinaryIO, Sequence
 from pathlib import Path
@@ -7,9 +7,6 @@ from ..adapters.openai.client import OpenAIClientFactory
 import logging
 import time
 import asyncio
-
-# Import debug logger (optional)
-debug_logger = None  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -52,11 +49,11 @@ async def _upload_batch(
         }
 
 
-async def add_files_to_vector_store(
+async def add_files_to_vector_store_parallel(
     vector_store_id: str, file_paths: List[str], existing_file_paths: List[str]
 ) -> Tuple[List[str], List[str]]:
     """
-    Add new files to an existing vector store, skipping duplicates.
+    Add new files to an existing vector store using parallel batch uploads.
 
     Args:
         vector_store_id: The vector store to add files to
@@ -106,21 +103,14 @@ async def add_files_to_vector_store(
         logger.warning(f"Skipping {len(unsupported)} unsupported files: {unsupported}")
         skipped_files.extend(unsupported)
 
-    logger.info(
-        f"[DEBUG] After filtering: {len(supported_new_files)} supported files out of {len(new_files)} new files"
-    )
     if not supported_new_files:
-        logger.info("[DEBUG] No supported files, returning early")
+        logger.info("No supported files to upload")
         return [], skipped_files
 
     try:
-        logger.info(
-            f"[DEBUG] Getting OpenAI client for {len(supported_new_files)} files"
-        )
         client = await OpenAIClientFactory.get_instance(
             api_key=get_settings().openai_api_key
         )
-        logger.info("[DEBUG] Got OpenAI client")
 
         # Verify and open files
         file_streams = []
@@ -144,77 +134,68 @@ async def add_files_to_vector_store(
                 skipped_files.append(path)
 
         if not file_streams:
-            logger.info("[DEBUG] No file streams to upload")
+            logger.info("No file streams to upload")
             return [], skipped_files
 
-        logger.info(f"[DEBUG] About to batch upload {len(file_streams)} files")
-        # Upload files to the existing vector store using batch upload
-        try:
-            # Decide whether to use parallel or single batch based on file count
-            if len(file_streams) <= 20:
-                # For small uploads, use single batch
-                logger.info(
-                    f"Starting single batch upload of {len(file_streams)} files to vector store {vector_store_id}"
-                )
-
+        # Decide whether to use parallel or single batch based on file count
+        if len(file_streams) <= 20:
+            # For small uploads, use single batch
+            logger.info(f"Using single batch upload for {len(file_streams)} files")
+            try:
                 file_batch = await client.vector_stores.file_batches.upload_and_poll(
                     vector_store_id=vector_store_id, files=file_streams
                 )
 
                 logger.info(
-                    f"Batch upload completed in {time.time() - start_time:.2f}s - Status: {file_batch.status}, "
+                    f"Batch upload completed in {time.time() - start_time:.2f}s - "
+                    f"Status: {file_batch.status}, "
                     f"File counts: completed={file_batch.file_counts.completed}, "
                     f"failed={file_batch.file_counts.failed}, "
                     f"total={file_batch.file_counts.total}"
                 )
 
-            else:
-                # For larger uploads, use parallel batches
-                logger.info(
-                    f"Starting parallel batch upload ({PARALLEL_BATCHES} batches) for {len(file_streams)} files to vector store {vector_store_id}"
-                )
+                return [], skipped_files
 
-                # Split files into batches
-                batch_size = max(1, len(file_streams) // PARALLEL_BATCHES)
-                batches = []
-                for i in range(0, len(file_streams), batch_size):
-                    batches.append(file_streams[i : i + batch_size])
+            finally:
+                # Close all file streams
+                for stream in file_streams:
+                    try:
+                        stream.close()
+                    except Exception:
+                        pass
+        else:
+            # For larger uploads, use parallel batches
+            logger.info(
+                f"Using parallel batch upload ({PARALLEL_BATCHES} batches) for {len(file_streams)} files"
+            )
 
-                # Ensure we don't have more than PARALLEL_BATCHES
-                while len(batches) > PARALLEL_BATCHES:
-                    batches[-2].extend(batches[-1])
-                    batches.pop()
+            # Split files into batches
+            batch_size = max(1, len(file_streams) // PARALLEL_BATCHES)
+            batches = []
+            for i in range(0, len(file_streams), batch_size):
+                batches.append(file_streams[i : i + batch_size])
 
-                logger.info(
-                    f"Created {len(batches)} batches with sizes: {[len(b) for b in batches]}"
-                )
+            # Ensure we don't have more than PARALLEL_BATCHES
+            while len(batches) > PARALLEL_BATCHES:
+                batches[-2].extend(batches[-1])
+                batches.pop()
 
+            logger.info(
+                f"Created {len(batches)} batches with sizes: {[len(b) for b in batches]}"
+            )
+
+            try:
                 # Upload all batches in parallel
                 tasks = [
                     _upload_batch(client, vector_store_id, batch, i + 1)
                     for i, batch in enumerate(batches)
                 ]
-                results = await asyncio.gather(*tasks, return_exceptions=True)
+                results = await asyncio.gather(*tasks)
 
-                # Calculate totals from successful results
-                total_completed = sum(
-                    r["completed"]
-                    for r in results
-                    if isinstance(r, dict) and "completed" in r
-                )
-                total_failed = sum(
-                    r["failed"]
-                    for r in results
-                    if isinstance(r, dict) and "failed" in r
-                )
-                total_files = sum(
-                    r["total"] for r in results if isinstance(r, dict) and "total" in r
-                )
-
-                # Count exception results as failures
-                exception_count = sum(1 for r in results if isinstance(r, Exception))
-                if exception_count > 0:
-                    logger.error(f"{exception_count} batches failed with exceptions")
+                # Calculate totals
+                total_completed = sum(r["completed"] for r in results)
+                total_failed = sum(r["failed"] for r in results)
+                total_files = sum(r["total"] for r in results)
 
                 elapsed = time.time() - start_time
                 logger.info(
@@ -222,19 +203,23 @@ async def add_files_to_vector_store(
                     f"Total files: completed={total_completed}, failed={total_failed}, total={total_files}"
                 )
 
-            # We can't easily get individual file IDs from batch upload, so return empty list
-            # The files are in the vector store, which is what matters
-            uploaded_file_ids: List[str] = []
+                # Log any failed batches
+                failed_batches = [r for r in results if "error" in r]
+                if failed_batches:
+                    for r in failed_batches:
+                        logger.error(
+                            f"Batch {r['batch_num']} error: {r.get('error', 'Unknown error')}"
+                        )
 
-        finally:
-            # Close all file streams
-            for stream in file_streams:
-                try:
-                    stream.close()
-                except Exception:
-                    pass
+                return [], skipped_files
 
-        return uploaded_file_ids, skipped_files
+            finally:
+                # Close all file streams
+                for stream in file_streams:
+                    try:
+                        stream.close()
+                    except Exception:
+                        pass
 
     except Exception as e:
         logger.error(f"Error adding files to vector store: {e}")
