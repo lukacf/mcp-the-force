@@ -58,7 +58,7 @@ async def _upload_batch(
             for f in files:
                 try:
                     file_names.append(f.name)
-                except:
+                except Exception:
                     file_names.append("<unknown>")
 
             if attempt == 0:
@@ -79,7 +79,7 @@ async def _upload_batch(
                             file.name if hasattr(file, "name") else f"<file_{i}>"
                         )
                         logger.info(
-                            f"Batch {batch_num}: Uploading file {i+1}/{len(files)}: {file_name}"
+                            f"Batch {batch_num}: Uploading file {i + 1}/{len(files)}: {file_name}"
                         )
 
                         # Upload single file with 10 second timeout
@@ -93,12 +93,12 @@ async def _upload_batch(
                         if single_batch.file_counts.completed > 0:
                             completed += 1
                             logger.info(
-                                f"Batch {batch_num}: File {i+1}/{len(files)} uploaded successfully: {file_name}"
+                                f"Batch {batch_num}: File {i + 1}/{len(files)} uploaded successfully: {file_name}"
                             )
                         else:
                             failed += 1
                             logger.error(
-                                f"Batch {batch_num}: File {i+1}/{len(files)} failed: {file_name}"
+                                f"Batch {batch_num}: File {i + 1}/{len(files)} failed: {file_name}"
                             )
 
                     except asyncio.TimeoutError:
@@ -107,7 +107,7 @@ async def _upload_batch(
                             file.name if hasattr(file, "name") else f"<file_{i}>"
                         )
                         logger.error(
-                            f"Batch {batch_num}: File {i+1}/{len(files)} timed out after 10s: {file_name}"
+                            f"Batch {batch_num}: File {i + 1}/{len(files)} timed out after 10s: {file_name}"
                         )
                     except Exception as e:
                         failed += 1
@@ -115,7 +115,7 @@ async def _upload_batch(
                             file.name if hasattr(file, "name") else f"<file_{i}>"
                         )
                         logger.error(
-                            f"Batch {batch_num}: File {i+1}/{len(files)} error: {file_name} - {e}"
+                            f"Batch {batch_num}: File {i + 1}/{len(files)} error: {file_name} - {e}"
                         )
 
                 elapsed_total = time.time() - start
@@ -156,6 +156,16 @@ async def _upload_batch(
                 "total": len(files),
                 "error": str(e),
             }
+
+    # This should never be reached, but mypy needs it
+    return {
+        "batch_num": batch_num,
+        "elapsed": 0.0,
+        "completed": 0,
+        "failed": len(files),
+        "total": len(files),
+        "error": "Unexpected error",
+    }
 
 
 async def add_files_to_vector_store(
