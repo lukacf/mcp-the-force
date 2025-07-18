@@ -4,8 +4,8 @@ import os
 import logging
 from typing import List, Tuple, Optional
 
-from ..utils.fs import gather_file_paths
-from ..utils.context_loader import load_specific_files
+from ..utils.fs import gather_file_paths_async
+from ..utils.context_loader import load_specific_files_async
 from .stable_list_cache import StableListCache
 from .file_tree import build_file_tree_from_paths
 
@@ -105,7 +105,7 @@ async def build_context_with_stable_list(
                 logger.info(f"DEBUG: Error statting file: {e}")
 
     # Gather all files from context paths
-    all_files = gather_file_paths(context_paths)
+    all_files = await gather_file_paths_async(context_paths)
     logger.info(f"Gathered {len(all_files)} files from context paths")
 
     # Check if we have a stable list
@@ -141,7 +141,7 @@ async def build_context_with_stable_list(
         logger.info(
             f"Loading {len(inline_paths)} inline files (estimated), {len(overflow_paths)} overflow files"
         )
-        file_data = load_specific_files(inline_paths)
+        file_data = await load_specific_files_async(inline_paths)
 
         # Safety check: trim if our size estimates were too optimistic
         file_data.sort(key=lambda t: t[2])  # Sort by actual token count
@@ -204,7 +204,7 @@ async def build_context_with_stable_list(
                 # This file should go inline
                 if await cache.file_changed_since_last_send(session_id, file_path):
                     # File has changed, need to resend it
-                    file_data = load_specific_files([file_path])
+                    file_data = await load_specific_files_async([file_path])
                     if file_data:
                         files_to_send.append(file_data[0])
                         # Update sent info
@@ -227,7 +227,9 @@ async def build_context_with_stable_list(
 
     # Add attachments to overflow (they always go to vector store)
     if attachments:
-        attachment_files = gather_file_paths(attachments, skip_safety_check=True)
+        attachment_files = await gather_file_paths_async(
+            attachments, skip_safety_check=True
+        )
         # Deduplicate: convert to set to remove any files already in overflow_paths
         overflow_paths_set = set(overflow_paths)
         new_attachments = [f for f in attachment_files if f not in overflow_paths_set]
