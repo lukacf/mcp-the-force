@@ -106,7 +106,7 @@ services:
 
 ### Or Simple Python Process
 ```bash
-python loiter_killer.py
+python loiter_killer/loiter_killer.py
 # Runs on localhost:9876
 # SQLite DB in ./loiter_killer.db
 ```
@@ -236,12 +236,12 @@ if files_overflow_context:
 
 #### 1. Docker Setup
 
-Create `Dockerfile.loiter_killer`:
+Create `loiter_killer/Dockerfile`:
 ```dockerfile
 FROM python:3.11-slim
 WORKDIR /app
-COPY loiter_killer.py requirements-loiter.txt ./
-RUN pip install -r requirements-loiter.txt
+COPY loiter_killer.py requirements.txt ./
+RUN pip install -r requirements.txt
 ENV PYTHONUNBUFFERED=1
 CMD ["python", "loiter_killer.py"]
 ```
@@ -251,8 +251,8 @@ Add to `docker-compose.yml`:
 services:
   loiter-killer:
     build:
-      context: .
-      dockerfile: Dockerfile.loiter_killer
+      context: loiter_killer
+      dockerfile: Dockerfile
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
     ports:

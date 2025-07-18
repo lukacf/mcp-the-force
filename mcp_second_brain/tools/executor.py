@@ -440,11 +440,13 @@ class ToolExecutor:
                     and metadata.model_config["adapter_class"] == "openai"
                     and "response_id" in result
                 ):
-                    logger.info(f"[STEP 17.3] Saving response_id for session {session_id}")
+                    logger.info(
+                        f"[STEP 17.3] Saving response_id for session {session_id}"
+                    )
                     await session_cache_module.session_cache.set_response_id(
                         session_id, result["response_id"]
                     )
-                    logger.info(f"[STEP 17.4] Response_id saved")
+                    logger.info("[STEP 17.4] Response_id saved")
                 # Session management is now handled inside the adapters themselves
                 # No need to save sessions here for Vertex/Grok models
 
@@ -481,7 +483,9 @@ class ToolExecutor:
                         "[MEMORY] Memory storage temporarily disabled - testing for hang issue"
                     )
 
-                logger.info(f"[STEP 17.7] About to return redacted content, length: {len(redacted_content)}")
+                logger.info(
+                    f"[STEP 17.7] About to return redacted content, length: {len(redacted_content)}"
+                )
                 return redacted_content
             else:
                 # Redact secrets from result

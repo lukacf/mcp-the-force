@@ -2,7 +2,6 @@
 
 import asyncio
 import logging
-import collections
 from typing import List, Optional, Dict, Tuple
 from ..utils.vector_store import create_vector_store, delete_vector_store
 from ..utils.vector_store_files import add_files_to_vector_store
@@ -17,17 +16,21 @@ class MockLoiterKiller:
         self.enabled = True  # Pretend it's always enabled
         # Map session_id -> (vector_store_id, file_paths)
         self._sessions: Dict[str, Tuple[str, List[str]]] = {}
-    
-    async def get_or_create_vector_store(self, session_id: str) -> Tuple[Optional[str], List[str]]:
+
+    async def get_or_create_vector_store(
+        self, session_id: str
+    ) -> Tuple[Optional[str], List[str]]:
         """Mock implementation that stores in memory."""
         if session_id in self._sessions:
             vs_id, file_paths = self._sessions[session_id]
-            logger.info(f"[MOCK LK] Reusing vector store {vs_id} for session {session_id} with {len(file_paths)} files")
+            logger.info(
+                f"[MOCK LK] Reusing vector store {vs_id} for session {session_id} with {len(file_paths)} files"
+            )
             return vs_id, file_paths
         else:
             logger.info(f"[MOCK LK] No existing vector store for session {session_id}")
             return None, []
-    
+
     async def track_files(self, session_id: str, file_paths: List[str]):
         """Mock implementation that updates in-memory tracking."""
         if session_id in self._sessions:
@@ -35,15 +38,21 @@ class MockLoiterKiller:
             # Add new paths to existing ones
             all_paths = list(set(existing_paths + file_paths))
             self._sessions[session_id] = (vs_id, all_paths)
-            logger.info(f"[MOCK LK] Updated session {session_id} with {len(file_paths)} new files, total: {len(all_paths)}")
+            logger.info(
+                f"[MOCK LK] Updated session {session_id} with {len(file_paths)} new files, total: {len(all_paths)}"
+            )
         else:
-            logger.warning(f"[MOCK LK] Cannot track files for unknown session {session_id}")
-    
+            logger.warning(
+                f"[MOCK LK] Cannot track files for unknown session {session_id}"
+            )
+
     def register_vector_store(self, session_id: str, vs_id: str, file_paths: List[str]):
         """Helper to register a newly created vector store."""
         self._sessions[session_id] = (vs_id, file_paths)
-        logger.info(f"[MOCK LK] Registered vector store {vs_id} for session {session_id} with {len(file_paths)} files")
-    
+        logger.info(
+            f"[MOCK LK] Registered vector store {vs_id} for session {session_id} with {len(file_paths)} files"
+        )
+
     async def renew_lease(self, session_id: str):
         """Mock implementation of lease renewal."""
         logger.debug(f"[MOCK LK] Renewing lease for session {session_id}")
@@ -81,7 +90,6 @@ class VectorStoreManager:
             ) = await self.loiter_killer.get_or_create_vector_store(session_id)
 
             if vs_id:
-
                 # Add only new files to the existing vector store
                 uploaded_file_ids, skipped_files = await add_files_to_vector_store(
                     vs_id,

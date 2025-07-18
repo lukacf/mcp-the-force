@@ -15,7 +15,6 @@ import time
 import uvicorn
 import logging
 import sys
-import uuid
 
 
 def setup_logging():

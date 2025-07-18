@@ -825,7 +825,7 @@ Despite implementing proper httpx timeouts to prevent stale connection hangs, th
 After extensive analysis, o3 identified multiple contributing factors that perfectly explain the 5-minute recovery pattern:
 
 ### 1. **Loiter Killer's 5-minute cleanup cycle** (PRIMARY CAUSE)
-- Background cleanup runs every **300 seconds** (5 minutes) - see `loiter_killer.py:180`
+- Background cleanup runs every **300 seconds** (5 minutes) - see `loiter_killer/loiter_killer.py:180`
 - When the second request tries to create/reuse a vector store, it may block waiting for Loiter Killer's cleanup to complete
 - This explains the exact 5-minute recovery window we observe
 

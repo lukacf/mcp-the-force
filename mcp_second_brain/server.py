@@ -49,9 +49,7 @@ def main():
     import sys
     import signal
     import errno
-    import selectors
     from typing import Iterator
-    from .utils.docker_manager import docker_manager
 
     def _iter_leaves(exc: BaseException) -> Iterator[BaseException]:
         """Depth-first walk that yields every non-group exception."""
@@ -81,7 +79,7 @@ def main():
     #         "Using PollSelector on macOS to avoid both KqueueSelector stdio hangs "
     #         "and SelectSelector's 1024 FD limit"
     #     )
-    
+
     logger.warning("Custom PollSelector DISABLED - using default event loop selector")
 
     # Ignore SIGPIPE to prevent crashes on broken pipes (Unix only)
@@ -136,13 +134,13 @@ def main():
 
     # Let FastMCP create and manage its own event loop
     # This avoids conflicts between our custom loop management and FastMCP's internal handling
-    
+
     # Install exception handler on the default event loop policy
     def setup_exception_handler():
         loop = asyncio.get_event_loop()
         loop.set_exception_handler(ignore_broken_pipe)
         logger.info("Installed custom event loop exception handler")
-    
+
     # No loop for stdio transport - run once and exit on disconnection
     # Claude spawns a new server process for each session
     try:
@@ -151,20 +149,22 @@ def main():
         # DISABLED: Docker manager may be causing event loop issues
         # Skip Docker initialization to test if it's the cause of hangs
         logger.warning("Docker service initialization DISABLED for debugging")
-        
+
         # Clear any existing event loop so FastMCP can create its own
         asyncio.set_event_loop(None)
-        
+
         # Register cleanup handlers for state reset
         from .utils.state_reset import state_reset_manager
         from .adapters.openai.client import OpenAIClientFactory
-        
+
         # Register singletons to be cleared
-        if hasattr(OpenAIClientFactory, '_instances'):
+        if hasattr(OpenAIClientFactory, "_instances"):
             state_reset_manager.register_singleton(OpenAIClientFactory._instances)
-        
-        logger.info("State reset manager configured for aggressive cleanup between queries")
-        
+
+        logger.info(
+            "State reset manager configured for aggressive cleanup between queries"
+        )
+
         # Now let FastMCP handle everything
         mcp.run()  # Will create its own event loop
         logger.info("MCP server exited normally")

@@ -6,8 +6,8 @@ services:
 
   loiter-killer:
     build:
-      context: .
-      dockerfile: Dockerfile.loiter_killer
+      context: loiter_killer
+      dockerfile: Dockerfile
     container_name: loiter-killer
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
