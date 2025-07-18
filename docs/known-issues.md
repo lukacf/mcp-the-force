@@ -28,7 +28,7 @@ Through extensive debugging of MCP server hangs, we discovered:
 
 ## 1. Intermittent Vector Store Creation Hang
 
-**Status**: 🟡 Partially Fixed (semaphore issue fixed, but new cancellation issue found)
+**Status**: ❌ NOT FIXED - Still occurs despite async file I/O fix
 
 **Symptoms**:
 - First vector store creation works perfectly (completes in ~17 seconds)
@@ -48,7 +48,24 @@ Through extensive debugging of MCP server hangs, we discovered:
 - File descriptor limit is high (1M+) with only 13 FDs in use
 - PollSelector is being used (fixed from SelectSelector)
 
-**Root Cause**: Unknown - awaiting further investigation
+**Root Cause FOUND (2025-07-18)**: Blocking I/O operations in async event loop
+- `gather_file_paths` and `load_text_files` were doing synchronous file I/O (os.walk, Path.read_text)
+- These blocking calls starved the event loop on second query
+- Different OS file caching behavior between first and second runs explained the pattern
+
+**Fix Applied (commit a20611d)**:
+- Added async wrappers using `run_in_thread_pool` for all file operations
+- Updated `context_builder.py` to use `gather_file_paths_async` and `load_specific_files_async`
+- All file I/O now runs in separate threads, keeping the event loop free
+- **RESULT**: Fix did NOT work - hang still occurs on second query
+
+**Update (2025-07-18 13:41)** - Testing async file I/O fix:
+- First o3 query: ✅ Success
+- Second o3 query: ❌ STILL HANGS
+- **NEW HANG LOCATION**: Now hangs during duplicate file checking when reusing vector store
+- Last log: "Skipping duplicate file: /Users/luka/src/cc/mcp-second-brain/tests/unit/test_gemini_session_cache.py"
+- This is happening in the vector store reuse path, not during initial file gathering
+- The hang has moved to a different location but still occurs consistently on second query
 
 **Update (2025-07-17 12:23-12:24)**:
 - Tested with o3 low reasoning effort
@@ -97,6 +114,13 @@ Through extensive debugging of MCP server hangs, we discovered:
 **Still Unexplained**:
 - Why does it ALWAYS work on first run but ALWAYS hang on second?
 - What resource or state accumulates between runs?
+- Why does the hang location move when we fix one blocking operation?
+
+**Pattern Observed**:
+- The hang consistently occurs during rapid operations (file gathering, duplicate checking, logging)
+- Each fix moves the hang to a different rapid operation
+- Common factor: All hang locations involve many rapid sequential operations
+- This suggests resource exhaustion that builds up during rapid operations
 - Why does abort now kill the server completely?
 
 **Update (2025-07-17 13:18)**:
@@ -680,3 +704,167 @@ The slow uploads cause cascading failures:
 - [ ] Implement exponential backoff for failed batches
 - [ ] Investigate OpenAI rate limit headers for dynamic adjustment
 - [ ] Consider adaptive batch sizing based on current API performance
+
+## UPDATE 2025-07-18 14:24 - TimeoutLokiHandler Fix Did NOT Work
+
+Despite implementing TimeoutLokiHandler to prevent stale HTTP connection hangs, the intermittent hang issue persists:
+
+**Test Results**:
+- First o3 query: ✅ Success
+- Second o3 query: ❌ STILL HANGS
+- Hang location: During duplicate file checking when reusing vector store
+- Last logs before hang:
+  ```
+  2025-07-18 14:24:20.859 Skipping duplicate file: /Users/luka/src/cc/mcp-second-brain/tests/unit/test_executor_integration.py
+  2025-07-18 14:24:20.861 Skipping duplicate file: /Users/luka/src/cc/mcp-second-brain/tests/unit/test_file_utils.py
+  [NO FURTHER OUTPUT - HANG]
+  ```
+- Cancel/abort still doesn't work - server becomes unresponsive
+
+**Key Observations**:
+1. The TimeoutLokiHandler fix did not resolve the issue
+2. Hang still occurs on second query, but now during duplicate file checking
+3. The hang location keeps moving as we fix individual blocking operations
+4. This suggests a deeper systemic issue, not just stale connections
+
+**Theories Still Under Investigation**:
+1. File system operations during duplicate checking blocking the event loop
+2. Some other shared resource between queries causing exhaustion
+3. A different component (not LokiHandler) with stale connections or blocking I/O
+
+The pattern remains consistent: first query works, second query hangs, 5-minute recovery window.
+
+## UPDATE 2025-07-18 14:36 - Hang Occurs AFTER Tool Execution Completes
+
+**Critical new discovery**: The hang can occur even after a tool execution finishes (successfully or with error).
+
+**Test case**: Attempted Gemini query that failed due to:
+1. Token limit exceeded (1219784 tokens vs 1048576 limit)
+2. ModuleNotFoundError: No module named 'google.api_core'
+
+**Key observations**:
+```
+2025-07-18 14:36:10.390 Task created: chat_with_gemini25_pro_e581dab0
+2025-07-18 14:36:15.308 Operation failed: No module named 'google.api_core'
+2025-07-18 14:36:15.333 [CANCEL] In finally block, was_cancelled=False
+2025-07-18 14:36:15.421 chat_with_gemini25_pro completed in 5.34s
+[HANG OCCURS HERE - NO FURTHER OUTPUT]
+```
+
+**This reveals**:
+1. The tool execution completed (with error) in 5.34s
+2. The hang occurs AFTER the tool returns its result
+3. Cancel doesn't work at this point
+4. The hang is happening in the MCP/FastMCP layer, not in our tool execution code
+
+**Implications**:
+- The problem isn't just in vector store operations or file handling
+- It can affect ANY tool execution on the second query
+- The hang happens after our code completes but before the response reaches Claude
+- This points to an issue in the MCP server framework layer or how responses are sent
+
+## UPDATE 2025-07-18 14:48 - httpx Timeout Fix Did NOT Work
+
+Despite implementing proper httpx timeouts to prevent stale connection hangs, the issue persists:
+
+**Fix attempted**:
+- Set `keepalive_expiry=60.0` to discard idle connections after 60 seconds
+- Changed dangerous `None` timeouts to explicit values:
+  - `read=180.0` (3 minutes, was None - wait forever)
+  - `pool=60.0` (60 seconds, was None - wait forever)
+
+**Test results**:
+- First o3 query with full context: ✅ Success (created vector store)
+- Second o3 query with same context: ❌ STILL HANGS
+- Hang location: During duplicate file checking when reusing vector store
+- Last logs:
+  ```
+  2025-07-18 14:48:11.315 Skipping duplicate file: /Users/luka/src/cc/mcp-second-brain/tests/e2e_dind/conftest.py
+  2025-07-18 14:48:11.316 Skipping duplicate file: /Users/luka/src/cc/mcp-second-brain/tests/e2e_dind/scenarios/test_failures.py
+  [NO FURTHER OUTPUT - HANG]
+  ```
+- Cancel still doesn't work
+
+**Conclusion**: The httpx stale connection theory was incorrect. The OpenAI client singleton with its connection pool is NOT the root cause of the hang.
+
+## UPDATE 2025-07-18 15:08 - Hang Occurs Even After Error Response
+
+**Critical discovery**: The server can hang even after a tool execution appears to complete with an error.
+
+**Test case**: o3 query with debugging prompt that triggered policy violation
+- Query failed with `invalid_prompt` error
+- Logs showed: `chat_with_o3 completed in 212.36s`
+- But server was actually hung - had to restart
+- Cancel didn't work even though the tool appeared to have exited
+
+**Key observations**:
+1. Tool execution logs can be misleading - showing "completed" when server is hung
+2. The hang happens somewhere after our tool code returns but before MCP processes the response
+3. OpenAI adapter was calling `search_attachment` function (should not have vector/file functions)
+4. Even error responses can trigger the hang condition
+
+**This confirms**: The hang is in the MCP/FastMCP framework layer, not in our tool execution code
+
+## ROOT CAUSE IDENTIFIED by o3 - 2025-07-18 15:15
+
+After extensive analysis, o3 identified multiple contributing factors that perfectly explain the 5-minute recovery pattern:
+
+### 1. **Loiter Killer's 5-minute cleanup cycle** (PRIMARY CAUSE)
+- Background cleanup runs every **300 seconds** (5 minutes) - see `loiter_killer.py:180`
+- When the second request tries to create/reuse a vector store, it may block waiting for Loiter Killer's cleanup to complete
+- This explains the exact 5-minute recovery window we observe
+
+### 2. **Thread Pool Exhaustion**
+- First request queues thousands of file operations in the shared `ThreadPoolExecutor`
+- Operations include: `gather_file_paths`, `load_text_files`, file deduplication
+- Second request arrives while thread pool is still processing, causing contention
+- Thread pool is a singleton shared across all requests
+
+### 3. **OpenAI Client Singleton Contention**
+- `OpenAIClientFactory` maintains one `AsyncOpenAI` client per event loop
+- Background tasks (if enabled) would use the same client instance
+- Internal semaphores and connection pools become points of contention
+
+### 4. **HTTP/2 Connection Reuse Issues**
+- Keep-alive connections may be in ambiguous state after large uploads
+- 60-second `keepalive_expiry` helps but doesn't eliminate all issues
+- Stale connections cause writes to stall until remote gateway times out
+
+### Key Evidence:
+- Loiter Killer cleanup: `await asyncio.sleep(300)  # Check every 5 minutes`
+- Thread pool singleton: `utils/thread_pool.py` creates one shared executor
+- OpenAI singleton: `adapters/openai/client.py` caches client per event loop
+- All file operations go through thread pool: `run_in_thread_pool()`
+
+### o3's Recommended Fixes:
+1. **Separate OpenAI client for background operations** - Prevent semaphore contention
+2. **Circuit breaker for vector store operations** - Fail fast if cleanup is running
+3. **Lower keep-alive timeout** or use fresh connections for vector store operations
+4. **Monitor active operations** before starting expensive file work
+
+The combination of Loiter Killer's 5-minute cycle and thread pool exhaustion creates the perfect storm where the second request within 5 minutes will hang, but waiting 5 minutes allows both to complete/reset.
+
+## UPDATE 2025-07-18 15:38 - Hang During Repeated Attachment Searches
+
+**New pattern discovered**: Server can hang during repeated `search_session_attachments` operations.
+
+**Test case**: o3 query that performed multiple attachment searches
+- o3 executed 11+ consecutive `search_session_attachments` calls
+- Each search completed successfully (20 results returned)
+- Server eventually hung after:
+  ```
+  2025-07-18 15:38:57.646 [DEBUG] api_params keys: ['model', 'stream', 'background', 'previous_response_id', 'tools', 'input', 'parallel_tool_calls', 'reasoning']
+  [NO FURTHER OUTPUT - HANG]
+  ```
+- Cancel didn't work - MCP server completely unresponsive
+
+**Key observations**:
+1. Hang can occur during normal operations, not just duplicate file checking
+2. Multiple successful operations can precede the hang
+3. The hang seems related to accumulated state from repeated operations
+4. Even attachment searches (which should be lightweight) can trigger it
+
+**Pattern emerging**:
+- It's not about WHAT operation is running when the hang occurs
+- It's about HOW MANY operations have run and what state has accumulated
+- The 5-minute recovery suggests some resource is being exhausted and needs time to clean up
