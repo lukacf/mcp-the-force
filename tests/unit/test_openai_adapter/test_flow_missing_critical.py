@@ -459,8 +459,8 @@ async def test_flow_attachment_tool_only_with_vector_stores():
 
             has_attachment_tool = any(
                 (
-                    t.get("function", {}).get("name") == "search_session_attachments"
-                    or t.get("name") == "search_session_attachments"
+                    t.get("function", {}).get("name") == "search_task_files"
+                    or t.get("name") == "search_task_files"
                 )
                 for t in tools
                 if t.get("type") == "function"

@@ -67,10 +67,10 @@ class TestGrokToolHandlerIntegration:
         assert "description" in memory_tool
         assert "parameters" in memory_tool
 
-        # Check second tool (search_session_attachments) - this was missing before the fix
+        # Check second tool (search_task_files) - this was missing before the fix
         attachment_tool = tools[1]
         assert attachment_tool["type"] == "function"
-        assert attachment_tool["name"] == "search_session_attachments"
+        assert attachment_tool["name"] == "search_task_files"
         assert "description" in attachment_tool
         assert "parameters" in attachment_tool
 
@@ -104,14 +104,14 @@ class TestGrokToolHandlerIntegration:
 
             assert result == "memory search result"
 
-    def test_tool_execution_search_session_attachments(self, mock_grok_settings):
-        """Test that tool execution works for search_session_attachments."""
+    def test_tool_execution_search_task_files(self, mock_grok_settings):
+        """Test that tool execution works for search_task_files."""
         adapter = GrokAdapter("grok-4")
         vector_store_ids = ["vs-123"]
 
-        # Mock the SearchAttachmentAdapter
+        # Mock the SearchTaskFilesAdapter
         with patch(
-            "mcp_second_brain.tools.search_attachments.SearchAttachmentAdapter"
+            "mcp_second_brain.tools.search_task_files.SearchTaskFilesAdapter"
         ) as mock_adapter:
             mock_instance = mock_adapter.return_value
 
@@ -123,7 +123,7 @@ class TestGrokToolHandlerIntegration:
 
             # Execute the tool
             result = adapter.tool_handler.execute_tool_call(
-                tool_name="search_session_attachments",
+                tool_name="search_task_files",
                 tool_args={"query": "test query"},
                 vector_store_ids=vector_store_ids,
             )

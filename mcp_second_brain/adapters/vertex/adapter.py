@@ -8,7 +8,7 @@ from google.genai.types import HarmCategory, HarmBlockThreshold
 from ...config import get_settings
 from ..base import BaseAdapter
 from ..memory_search_declaration import create_search_memory_declaration_gemini
-from ..attachment_search_declaration import create_attachment_search_declaration_gemini
+from ..task_files_search_declaration import create_task_files_search_declaration_gemini
 from ...gemini_session_cache import gemini_session_cache
 
 # Removed validation imports - no longer validating structured output
@@ -156,11 +156,11 @@ class VertexAdapter(BaseAdapter):
         # Add attachment search tool when vector stores are provided
         if vector_store_ids:
             logger.info(
-                f"Registering search_session_attachments for {len(vector_store_ids)} vector stores"
+                f"Registering search_task_files for {len(vector_store_ids)} vector stores"
             )
-            attachment_search_decl = create_attachment_search_declaration_gemini()
+            task_files_search_decl = create_task_files_search_declaration_gemini()
             function_declarations.append(
-                types.FunctionDeclaration(**attachment_search_decl)
+                types.FunctionDeclaration(**task_files_search_decl)
             )
 
         # Build tools list
@@ -419,18 +419,18 @@ class VertexAdapter(BaseAdapter):
                             )
                         )
 
-                    elif fc.function_call.name == "search_session_attachments":
+                    elif fc.function_call.name == "search_task_files":
                         # Extract parameters
                         query = fc.function_call.args.get("query", "")
                         max_results = fc.function_call.args.get("max_results", 20)
 
-                        logger.info(f"Executing search_session_attachments: '{query}'")
+                        logger.info(f"Executing search_task_files: '{query}'")
 
                         # Import and execute the search
-                        from ...tools.search_attachments import SearchAttachmentAdapter
+                        from ...tools.search_task_files import SearchTaskFilesAdapter
 
-                        attachment_search = SearchAttachmentAdapter()
-                        search_result_text = await attachment_search.generate(
+                        task_files_search = SearchTaskFilesAdapter()
+                        search_result_text = await task_files_search.generate(
                             prompt=query,
                             query=query,
                             max_results=max_results,

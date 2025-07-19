@@ -60,18 +60,18 @@ class TestToolFeatureParity:
                         attr.route == expected_route_type
                     ), f"{model_class.__name__}.{feature} has wrong route type"
 
-    def test_all_models_have_attachments_support(self):
-        """All chat models should support attachments for RAG."""
+    def test_all_models_have_priority_context_support(self):
+        """All chat models should support priority_context for prioritized inline inclusion."""
         for model_class in ALL_CHAT_MODELS:
             assert hasattr(
-                model_class, "attachments"
-            ), f"{model_class.__name__} missing attachments parameter - cannot use RAG"
+                model_class, "priority_context"
+            ), f"{model_class.__name__} missing priority_context parameter - cannot prioritize files"
 
-            attr = getattr(model_class, "attachments")
+            attr = getattr(model_class, "priority_context")
             if isinstance(attr, RouteDescriptor):
                 assert (
-                    attr.route == RouteType.VECTOR_STORE
-                ), f"{model_class.__name__}.attachments should be Route.vector_store"
+                    attr.route == RouteType.PROMPT
+                ), f"{model_class.__name__}.priority_context should be Route.prompt"
 
     def test_reasoning_models_have_reasoning_effort(self):
         """O3 models should have reasoning_effort parameter."""

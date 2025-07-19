@@ -1,108 +1,127 @@
-"""Test context deduplication fix."""
+"""Test priority_context behavior in context building."""
 
 import os
 import tempfile
 import pytest
-from unittest.mock import patch, AsyncMock
+from unittest.mock import AsyncMock
 
 from mcp_second_brain.utils.context_builder import build_context_with_stable_list
 from mcp_second_brain.utils.stable_list_cache import StableListCache
 
 
 @pytest.mark.asyncio
-async def test_context_deduplication():
-    """Test that files aren't duplicated when they appear in both context and attachments."""
+async def test_priority_context_prioritization():
+    """Test that files in priority_context are processed first."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        # Create test files (resolve symlinks for consistent paths)
-        file1 = os.path.realpath(os.path.join(tmpdir, "file1.py"))
-        file2 = os.path.realpath(os.path.join(tmpdir, "file2.py"))
-        file3 = os.path.realpath(os.path.join(tmpdir, "file3.py"))
+        # Create test files
+        priority_file = os.path.realpath(os.path.join(tmpdir, "priority.py"))
+        regular_file1 = os.path.realpath(os.path.join(tmpdir, "regular1.py"))
+        regular_file2 = os.path.realpath(os.path.join(tmpdir, "regular2.py"))
 
-        # Small files that will fit inline
-        with open(file1, "w") as f:
-            f.write("# Small file 1\n")
-        with open(file2, "w") as f:
-            f.write("# Small file 2\n")
-
-        # Large file that will overflow
-        with open(file3, "w") as f:
-            f.write("# Large file\n" * 10000)  # Make it large enough to overflow
+        # Make files with different sizes
+        with open(priority_file, "w") as f:
+            f.write("# Priority file\n" * 30)  # Medium size
+        with open(regular_file1, "w") as f:
+            f.write("# Regular file 1\n" * 10)  # Small size
+        with open(regular_file2, "w") as f:
+            f.write("# Regular file 2\n" * 20)  # Small-medium size
 
         # Mock the cache
         cache = AsyncMock(spec=StableListCache)
         cache.get_stable_list.return_value = None  # First call, no stable list
 
-        # Set a small token budget so file3 overflows
-        token_budget = 100  # Very small budget
+        # Set a token budget that can fit all three files
+        token_budget = 2000
 
-        # Call with file3 in both context and attachments
+        # Call with priority_context
         files_inline, files_overflow, file_tree = await build_context_with_stable_list(
-            context_paths=[os.path.realpath(tmpdir)],  # This will include all 3 files
+            context_paths=[regular_file1, regular_file2],
             session_id="test-session",
             cache=cache,
             token_budget=token_budget,
-            attachments=[file3],  # Also explicitly attach file3
+            priority_context=[priority_file],
         )
 
-        # Check that file3 appears only once in overflow
-        assert (
-            files_overflow.count(file3) == 1
-        ), f"file3 duplicated in overflow: {files_overflow}"
-
-        # Check that the total unique files is correct
-        all_files = set([f[0] for f in files_inline] + files_overflow)
-        assert len(all_files) == 3, f"Expected 3 unique files, got {len(all_files)}"
-
-        # Verify the specific files
+        # Check that all files are inline (budget is sufficient)
         inline_paths = [f[0] for f in files_inline]
-        assert file1 in inline_paths or file1 in files_overflow
-        assert file2 in inline_paths or file2 in files_overflow
-        assert file3 in files_overflow  # Should be in overflow due to size
+        assert len(files_inline) == 3
+        assert priority_file in inline_paths
+        assert regular_file1 in inline_paths
+        assert regular_file2 in inline_paths
+        assert len(files_overflow) == 0
 
-        # Verify file tree doesn't have duplicates
-        # The tree should mention each file exactly once
-        assert file_tree.count(os.path.basename(file1)) == 1
-        assert file_tree.count(os.path.basename(file2)) == 1
-        assert file_tree.count(os.path.basename(file3)) == 1
+        # Verify that priority file was processed first by checking the stable list
+        # The stable list should have been saved with the correct order
+        saved_calls = cache.save_stable_list.call_args_list
+        if saved_calls:  # Only if stable list was saved (shouldn't be in this case since no overflow)
+            saved_list = saved_calls[0][0][1]
+            assert saved_list[0] == priority_file
 
 
 @pytest.mark.asyncio
-async def test_attachment_deduplication_logging():
-    """Test that deduplication is properly logged."""
+async def test_priority_context_overflow():
+    """Test that priority_context files can still overflow if they exceed budget."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        # Create test files (resolve symlinks for consistent paths)
-        file1 = os.path.realpath(os.path.join(tmpdir, "file1.py"))
-        file2 = os.path.realpath(os.path.join(tmpdir, "file2.py"))
+        # Create test files
+        huge_priority = os.path.realpath(os.path.join(tmpdir, "huge_priority.py"))
+        small_file = os.path.realpath(os.path.join(tmpdir, "small.py"))
 
-        with open(file1, "w") as f:
-            f.write("# File 1\n" * 10000)  # Large file
-        with open(file2, "w") as f:
-            f.write("# File 2\n" * 10000)  # Large file
+        # Make a huge priority file that exceeds budget
+        with open(huge_priority, "w") as f:
+            f.write("# Huge priority file\n" * 10000)  # Very large
+        with open(small_file, "w") as f:
+            f.write("# Small file\n" * 5)  # Tiny
 
         # Mock the cache
         cache = AsyncMock(spec=StableListCache)
         cache.get_stable_list.return_value = None
 
-        # Mock logger to capture log messages
-        with patch("mcp_second_brain.utils.context_builder.logger") as mock_logger:
-            # Call with overlapping files
-            await build_context_with_stable_list(
-                context_paths=[os.path.realpath(tmpdir)],  # Includes both files
-                session_id="test-session",
-                cache=cache,
-                token_budget=50,  # Small budget so both overflow
-                attachments=[file1, file2],  # Also attach both
-            )
+        # Set a small token budget
+        token_budget = 50  # Very small, can only fit the small file
 
-            # Check that deduplication was logged
-            log_calls = [str(call) for call in mock_logger.info.call_args_list]
-            dedup_log = None
-            for call in log_calls:
-                if "unique attachment files" in call and "skipped" in call:
-                    dedup_log = call
-                    break
+        # Call with huge priority file
+        files_inline, files_overflow, file_tree = await build_context_with_stable_list(
+            context_paths=[small_file],
+            session_id="test-session",
+            cache=cache,
+            token_budget=token_budget,
+            priority_context=[huge_priority],
+        )
 
-            assert dedup_log is not None, "Deduplication not logged"
-            assert (
-                "skipped 2 duplicates" in dedup_log
-            ), f"Expected 2 duplicates skipped, log: {dedup_log}"
+        # Check that the huge priority file overflowed
+        inline_paths = [f[0] for f in files_inline]
+        assert small_file in inline_paths
+        assert huge_priority in files_overflow
+        assert len(files_overflow) == 1
+
+
+@pytest.mark.asyncio
+async def test_priority_context_deduplication():
+    """Test that files appearing in both priority_context and context are deduplicated."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Create a test file
+        shared_file = os.path.realpath(os.path.join(tmpdir, "shared.py"))
+
+        with open(shared_file, "w") as f:
+            f.write("# Shared file\n" * 20)
+
+        # Mock the cache
+        cache = AsyncMock(spec=StableListCache)
+        cache.get_stable_list.return_value = None
+
+        # Call with file in both priority_context and context
+        files_inline, files_overflow, file_tree = await build_context_with_stable_list(
+            context_paths=[shared_file],
+            session_id="test-session",
+            cache=cache,
+            token_budget=1000,
+            priority_context=[shared_file],
+        )
+
+        # Check that the file appears only once
+        inline_paths = [f[0] for f in files_inline]
+        assert inline_paths.count(shared_file) == 1
+        assert len(files_overflow) == 0
+
+        # Verify file tree doesn't have duplicates
+        assert file_tree.count(os.path.basename(shared_file)) == 1

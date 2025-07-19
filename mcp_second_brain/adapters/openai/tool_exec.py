@@ -129,7 +129,7 @@ class ToolExecutor:
 
 
 class BuiltInToolDispatcher:
-    """Handles execution of OpenAI's built-in tools (search_memory, search_attachments)."""
+    """Handles execution of OpenAI's built-in tools (search_memory, search_task_files)."""
 
     def __init__(self, vector_store_ids: Optional[List[str]] = None):
         """Initialize with optional vector store IDs for attachment search.
@@ -143,7 +143,7 @@ class BuiltInToolDispatcher:
         """Dispatch to the appropriate built-in tool.
 
         Args:
-            name: Tool name (e.g., "search_project_memory", "search_session_attachments")
+            name: Tool name (e.g., "search_project_memory", "search_task_files")
             arguments: Parsed arguments for the tool
 
         Returns:
@@ -161,11 +161,11 @@ class BuiltInToolDispatcher:
                 store_types=arguments.get("store_types", ["conversation", "commit"]),
             )
 
-        elif name == "search_session_attachments":
+        elif name == "search_task_files":
             # Import and execute attachment search
-            from ...tools.search_attachments import SearchAttachmentAdapter
+            from ...tools.search_task_files import SearchTaskFilesAdapter
 
-            adapter_attachment = SearchAttachmentAdapter()
+            adapter_attachment = SearchTaskFilesAdapter()
             return await adapter_attachment.generate(
                 prompt=arguments.get("query", ""),
                 query=arguments.get("query", ""),

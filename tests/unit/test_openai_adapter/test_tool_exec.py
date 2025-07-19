@@ -195,21 +195,21 @@ async def test_builtin_tool_dispatcher_search_memory():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_builtin_tool_dispatcher_search_attachments():
-    """Test the built-in tool dispatcher for search_session_attachments."""
+async def test_builtin_tool_dispatcher_search_task_files():
+    """Test the built-in tool dispatcher for search_task_files."""
 
     vector_store_ids = ["vs_123", "vs_456"]
     dispatcher = BuiltInToolDispatcher(vector_store_ids=vector_store_ids)
 
     with patch(
-        "mcp_second_brain.tools.search_attachments.SearchAttachmentAdapter"
+        "mcp_second_brain.tools.search_task_files.SearchTaskFilesAdapter"
     ) as mock_adapter:
         mock_instance = AsyncMock()
-        mock_instance.generate.return_value = {"attachments": ["file1", "file2"]}
+        mock_instance.generate.return_value = {"task_files": ["file1", "file2"]}
         mock_adapter.return_value = mock_instance
 
         result = await dispatcher.dispatch(
-            "search_session_attachments", {"query": "test attachment", "max_results": 5}
+            "search_task_files", {"query": "test attachment", "max_results": 5}
         )
 
         mock_instance.generate.assert_called_once_with(
@@ -218,7 +218,7 @@ async def test_builtin_tool_dispatcher_search_attachments():
             max_results=5,
             vector_store_ids=vector_store_ids,
         )
-        assert result == {"attachments": ["file1", "file2"]}
+        assert result == {"task_files": ["file1", "file2"]}
 
 
 @pytest.mark.unit

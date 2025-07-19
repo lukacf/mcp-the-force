@@ -45,7 +45,7 @@ def track_tool_calls():
     """
     tool_calls: Dict[str, List[Dict]] = {
         "search_project_memory": [],
-        "search_session_attachments": [],
+        "search_task_files": [],
     }
 
     async def mock_search_memory(*args, **kwargs):
@@ -53,11 +53,9 @@ def track_tool_calls():
         # Return a marker that we can detect in responses
         return "E2E_TEST_TOOL_MARKER: search_project_memory was called"
 
-    async def mock_search_attachments(*args, **kwargs):
-        tool_calls["search_session_attachments"].append(
-            {"args": args, "kwargs": kwargs}
-        )
-        return "E2E_TEST_TOOL_MARKER: search_session_attachments was called"
+    async def mock_search_task_files(*args, **kwargs):
+        tool_calls["search_task_files"].append({"args": args, "kwargs": kwargs})
+        return "E2E_TEST_TOOL_MARKER: search_task_files was called"
 
     with (
         patch(
@@ -65,8 +63,8 @@ def track_tool_calls():
             mock_search_memory,
         ),
         patch(
-            "mcp_second_brain.tools.search_attachments.SearchAttachmentAdapter.generate",
-            mock_search_attachments,
+            "mcp_second_brain.tools.search_task_files.SearchTaskFilesAdapter.generate",
+            mock_search_task_files,
         ),
     ):
         yield tool_calls
