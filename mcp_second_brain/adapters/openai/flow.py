@@ -78,8 +78,13 @@ class BaseFlowStrategy(ABC):
                 f"{self.context.request.model}: vector_store_ids={self.context.request.vector_store_ids}"
             )
             if self.context.request.vector_store_ids:
-                # Use OpenAI's native file_search tool
-                tools.append({"type": "file_search"})
+                # Use OpenAI's native file_search tool with vector store IDs
+                tools.append(
+                    {
+                        "type": "file_search",
+                        "vector_store_ids": self.context.request.vector_store_ids,
+                    }
+                )
 
         # Add web search for supported models
         if capability and capability.supports_web_search:

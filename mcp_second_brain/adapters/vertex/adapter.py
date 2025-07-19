@@ -173,8 +173,15 @@ class VertexAdapter(BaseAdapter):
         max_tokens = settings.vertex.max_output_tokens or 65535
 
         # Build base config
+        actual_temperature = (
+            temperature if temperature is not None else settings.default_temperature
+        )
+        logger.info(
+            f"Using temperature: {actual_temperature} (requested: {temperature}, default: {settings.default_temperature})"
+        )
+
         config_kwargs = {
-            "temperature": temperature or settings.default_temperature,
+            "temperature": actual_temperature,
             "top_p": 0.95,
             "max_output_tokens": max_tokens,
             "safety_settings": safety_settings,
@@ -227,8 +234,11 @@ class VertexAdapter(BaseAdapter):
             )
 
         # Create GenerateContentConfig with explicit parameters
+        final_temperature = config_kwargs.get("temperature")
+        logger.info(f"Final temperature for GenerateContentConfig: {final_temperature}")
+
         generate_content_config = types.GenerateContentConfig(
-            temperature=config_kwargs.get("temperature"),
+            temperature=final_temperature,
             top_p=config_kwargs.get("top_p"),
             max_output_tokens=config_kwargs.get("max_output_tokens"),
             safety_settings=config_kwargs.get("safety_settings"),

@@ -217,7 +217,8 @@ async def build_context_with_stable_list(
 
         # Check each file in context
         for file_path in all_combined_files:
-            if file_path in stable_list:
+            # Priority files ALWAYS go inline, even if not in stable list
+            if file_path in priority_files or file_path in stable_list:
                 # This file should go inline
                 if await cache.file_changed_since_last_send(session_id, file_path):
                     # File has changed, need to resend it
@@ -254,8 +255,8 @@ async def build_context_with_stable_list(
     # Determine which files are inline
     inline_file_paths = []
     if stable_list:
-        # Use the stable list
-        inline_file_paths = list(stable_list)
+        # Use the stable list + priority files (priority always inline)
+        inline_file_paths = list(set(stable_list) | set(priority_files))
     else:
         # Use the current inline paths
         inline_file_paths = list(inline_paths)
