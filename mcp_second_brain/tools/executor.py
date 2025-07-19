@@ -361,6 +361,13 @@ class ToolExecutor:
             assert isinstance(structured_output_params, dict)
             adapter_params.update(structured_output_params)
 
+            # Merge prompt parameters for adapters that need them (e.g., SearchMemoryAdapter)
+            # Don't include 'prompt' itself as it's passed as positional arg
+            prompt_params_for_adapter = {
+                k: v for k, v in prompt_params.items() if k != "prompt"
+            }
+            adapter_params.update(prompt_params_for_adapter)
+
             explicit_vs_ids = routed_params.get("vector_store_ids")
             assert isinstance(explicit_vs_ids, list)
             if explicit_vs_ids:
@@ -456,8 +463,7 @@ class ToolExecutor:
                 logger.info("[STEP 17.6] Redaction complete")
 
                 # 8a. Store conversation in memory (with redacted content)
-                # TEMPORARILY DISABLED: Memory storage may be causing thread pool exhaustion
-                if False and settings.memory_enabled and session_id:
+                if settings.memory_enabled and session_id:
                     try:
                         # Extract messages from prompt
                         conv_messages = prompt_params.get("messages", [])
@@ -478,10 +484,6 @@ class ToolExecutor:
                         memory_tasks.append(memory_task)
                     except Exception as e:
                         logger.warning(f"Failed to store conversation memory: {e}")
-                if settings.memory_enabled and session_id:
-                    logger.warning(
-                        "[MEMORY] Memory storage temporarily disabled - testing for hang issue"
-                    )
 
                 logger.info(
                     f"[STEP 17.7] About to return redacted content, length: {len(redacted_content)}"
@@ -492,8 +494,7 @@ class ToolExecutor:
                 redacted_result = redact_secrets(str(result))
 
                 # Store conversation for Vertex models too (with redacted content)
-                # TEMPORARILY DISABLED: Memory storage may be causing thread pool exhaustion
-                if False and settings.memory_enabled and session_id:
+                if settings.memory_enabled and session_id:
                     try:
                         conv_messages = prompt_params.get("messages", [])
                         if not isinstance(conv_messages, list):
@@ -510,10 +511,6 @@ class ToolExecutor:
                         memory_tasks.append(memory_task)
                     except Exception as e:
                         logger.warning(f"Failed to store conversation memory: {e}")
-                if settings.memory_enabled and session_id:
-                    logger.warning(
-                        "[MEMORY] Memory storage temporarily disabled - testing for hang issue"
-                    )
 
                 # Session management is now handled inside the adapters themselves
                 # No need to save sessions here for Vertex/Grok models
@@ -589,12 +586,12 @@ class ToolExecutor:
                 #         vector_store_manager.delete(vs_id), timeout=5.0
                 #     )
 
-            # Wait for memory tasks to complete (with shorter timeout)
+            # Wait for memory tasks to complete
             if memory_tasks:
                 with contextlib.suppress(asyncio.TimeoutError):
                     await asyncio.wait_for(
                         asyncio.gather(*memory_tasks, return_exceptions=True),
-                        timeout=5.0,  # Reduced from 120s to 5s
+                        timeout=120.0,  # Original timeout for memory storage
                     )
 
             elapsed = asyncio.get_event_loop().time() - start_time

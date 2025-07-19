@@ -61,7 +61,8 @@ class TestMemoryConfig:
 
         assert store_id == "vs_test_store_id"
         mock_client.vector_stores.create.assert_called_once_with(
-            name="project-conversations-001"
+            name="project-conversations-001",
+            expires_after={"anchor": "last_active_at", "days": 365},
         )
 
         # Check database state
@@ -84,7 +85,8 @@ class TestMemoryConfig:
 
         assert store_id == "vs_test_store_id"
         mock_client.vector_stores.create.assert_called_once_with(
-            name="project-commits-001"
+            name="project-commits-001",
+            expires_after={"anchor": "last_active_at", "days": 365},
         )
 
     def test_increment_counts(self, temp_db, mock_client):
@@ -227,7 +229,7 @@ class TestMemoryConfig:
         def create_mock_client():
             client = MagicMock()
 
-            def create_store(name):
+            def create_store(name, expires_after=None):
                 store = MagicMock()
                 store.id = f"vs_{uuid.uuid4().hex[:8]}"
                 return store

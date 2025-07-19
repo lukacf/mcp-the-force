@@ -169,6 +169,23 @@ class OpenAICleanupManager:
         # Sort by created_at (oldest first)
         vector_stores.sort(key=lambda x: x.created_at)
 
+        # Filter out permanent project memory stores
+        deletable_stores = []
+        for vs in vector_stores:
+            # Skip permanent project memories (they have no expiry and
+            # their names always start with "project-").
+            if vs.name and vs.name.startswith("project-"):
+                print(f"{BLUE}⚡ Skipping permanent store: {vs.name}{RESET}")
+                continue
+            deletable_stores.append(vs)
+
+        # Check if we have enough deletable stores
+        if len(deletable_stores) < to_delete:
+            print(
+                f"{YELLOW}⚠️  Only {len(deletable_stores)} deletable stores available (requested {to_delete}){RESET}"
+            )
+            to_delete = len(deletable_stores)
+
         deleted = 0
         failed = 0
 
@@ -177,7 +194,7 @@ class OpenAICleanupManager:
 
         # Process in batches of 20 for parallel deletion
         batch_size = 20
-        stores_to_delete = vector_stores[:to_delete]
+        stores_to_delete = deletable_stores[:to_delete]
 
         for batch_start in range(0, len(stores_to_delete), batch_size):
             batch_end = min(batch_start + batch_size, len(stores_to_delete))
