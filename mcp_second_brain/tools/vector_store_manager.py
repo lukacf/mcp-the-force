@@ -114,7 +114,7 @@ class VectorStoreManager:
                 logger.info(
                     f"Using Loiter Killer vector store {vs_id} for session {session_id}"
                 )
-                return vs_id
+                return vs_id  # type: ignore[no-any-return]
 
         # Fallback to direct creation (Loiter Killer unavailable or no session_id)
         logger.info("Creating ephemeral vector store (Loiter Killer not available)")
@@ -131,7 +131,7 @@ class VectorStoreManager:
                 # Track the files with Loiter Killer for the new vector store
                 if session_id and self.loiter_killer.enabled:
                     await self.loiter_killer.track_files(session_id, files)
-            return vs_id
+            return vs_id  # type: ignore[no-any-return]
         except asyncio.CancelledError:
             # Don't swallow CancelledError - let it propagate
             logger.warning("VectorStoreManager.create cancelled")

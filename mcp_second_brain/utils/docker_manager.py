@@ -103,7 +103,7 @@ class DockerManager:
         try:
             async with httpx.AsyncClient(timeout=2.0) as client:
                 response = await client.get(health_url)
-                return response.status_code == 200
+                return bool(response.status_code == 200)
         except Exception:
             return False
 
