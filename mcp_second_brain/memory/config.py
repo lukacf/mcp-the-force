@@ -95,7 +95,11 @@ class MemoryConfig:
     def _create_store(self, store_type: str, store_num: int) -> str:
         """Create a new vector store."""
         name = f"project-{store_type}s-{store_num:03d}"
-        store = self._client.vector_stores.create(name=name)
+        # Create with 365 day expiration as backup protection
+        # (cleanup tools should skip based on name prefix anyway)
+        store = self._client.vector_stores.create(
+            name=name, expires_after={"anchor": "last_active_at", "days": 365}
+        )
         store_id: str = store.id
         return store_id
 
