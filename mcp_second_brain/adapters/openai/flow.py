@@ -23,7 +23,7 @@ from .constants import (
     STREAM_TIMEOUT_THRESHOLD,
 )
 from ..memory_search_declaration import create_search_memory_declaration_openai
-from ..attachment_search_declaration import create_attachment_search_declaration_openai
+from ..task_files_search_declaration import create_task_files_search_declaration_openai
 import json
 import jsonschema
 
@@ -74,12 +74,12 @@ class BaseFlowStrategy(ABC):
             if not self.context.request.disable_memory_search:
                 tools.append(create_search_memory_declaration_openai())
 
-            # Add attachment search if vector stores provided
+            # Add task files search if vector stores provided
             logger.info(
                 f"{self.context.request.model}: vector_store_ids={self.context.request.vector_store_ids}"
             )
             if self.context.request.vector_store_ids:
-                tools.append(create_attachment_search_declaration_openai())
+                tools.append(create_task_files_search_declaration_openai())
 
         # Add web search for supported models
         if capability and capability.supports_web_search:

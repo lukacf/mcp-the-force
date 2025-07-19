@@ -147,7 +147,7 @@ class TestGeminiSerialization:
             "parts": [
                 {
                     "function_call": {
-                        "name": "search_session_attachments",
+                        "name": "search_task_files",
                         "args": {"query": "test", "max_results": 20},
                     }
                 }
@@ -160,7 +160,7 @@ class TestGeminiSerialization:
         assert len(content.parts) == 1
         part = content.parts[0]
         assert hasattr(part, "function_call")
-        assert part.function_call.name == "search_session_attachments"
+        assert part.function_call.name == "search_task_files"
         assert part.function_call.args["query"] == "test"
         assert part.function_call.args["max_results"] == 20
 
@@ -172,7 +172,7 @@ class TestGeminiSerialization:
                 types.Part.from_text(text="I'll help you with that."),
                 types.Part(
                     function_call=types.FunctionCall(
-                        name="search_session_attachments",
+                        name="search_task_files",
                         args={"query": "neural networks", "max_results": 15},
                     )
                 ),

@@ -63,14 +63,14 @@ def get_adapter(
                 None,
                 f"Adapter {adapter_key} could not be loaded due to an import error.",
             )
-    if adapter_key == "SearchAttachmentAdapter" and adapter_key not in ADAPTER_REGISTRY:
+    if adapter_key == "SearchTaskFilesAdapter" and adapter_key not in ADAPTER_REGISTRY:
         try:
-            from ..tools.search_attachments import SearchAttachmentAdapter
+            from ..tools.search_task_files import SearchTaskFilesAdapter
 
-            register_adapter("SearchAttachmentAdapter", SearchAttachmentAdapter)
-            logger.info("Lazily registered SearchAttachmentAdapter")
+            register_adapter("SearchTaskFilesAdapter", SearchTaskFilesAdapter)
+            logger.info("Lazily registered SearchTaskFilesAdapter")
         except ImportError as e:
-            logger.error(f"Failed to lazy-load SearchAttachmentAdapter: {e}")
+            logger.error(f"Failed to lazy-load SearchTaskFilesAdapter: {e}")
             return (
                 None,
                 f"Adapter {adapter_key} could not be loaded due to an import error.",

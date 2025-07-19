@@ -59,8 +59,7 @@ Important: The ZEPHYR code is: QX-7742-ALPHA
             tool_metadata,
             instructions="Store these documents for later retrieval",
             output_format="confirmation",
-            context=[],  # Empty inline context
-            attachments=[str(tmp_path)],  # Use vector store
+            context=[str(tmp_path)],  # Use vector store
             session_id="retrieval-test",
         )
 
@@ -85,8 +84,7 @@ Important: The ZEPHYR code is: QX-7742-ALPHA
             tool_metadata,
             instructions="What is the ZEPHYR code and how many gigawatts are needed?",
             output_format="specific answer only",
-            context=[],  # Empty inline context
-            attachments=[str(tmp_path)],  # Need to provide attachments again
+            context=[str(tmp_path)],  # Need to provide context again
             session_id="retrieval-test",  # Same session
         )
 
@@ -127,8 +125,7 @@ The OMEGA protocol activation sequence:
             tool_metadata,
             instructions="Store this protocol information",
             output_format="brief",
-            context=[],
-            attachments=[str(tmp_path)],
+            context=[str(tmp_path)],
             session_id="session-1",
         )
 
@@ -148,8 +145,7 @@ The OMEGA protocol activation sequence:
             tool_metadata,
             instructions="What is the OMEGA code and frequency?",
             output_format="specific values only",
-            context=[],
-            attachments=[str(tmp_path)],  # Need to provide attachments
+            context=[str(tmp_path)],  # Need to provide context
             session_id="session-2",  # Different session
         )
 
@@ -181,8 +177,7 @@ The OMEGA protocol activation sequence:
             tool_metadata,
             instructions="Explain quantum entanglement",
             output_format="detailed explanation",
-            context=[],
-            attachments=[str(tmp_path)],
+            context=[str(tmp_path)],
             session_id="test-irrelevant",
         )
 

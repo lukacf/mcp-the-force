@@ -1,7 +1,7 @@
-"""Search session attachments tool implementation.
+"""Search task files tool implementation.
 
 This provides a way for models to search ephemeral vector stores created
-from attachments during the current execution.
+from overflow files during the current execution.
 """
 
 from typing import List, Dict, Any
@@ -25,11 +25,11 @@ search_semaphore = asyncio.Semaphore(3)
 
 
 @tool
-class SearchSessionAttachments(ToolSpec):
-    """Search ephemeral attachment vector stores for current session."""
+class SearchTaskFiles(ToolSpec):
+    """Search task files in vector stores for current session."""
 
-    model_name = "attachment_search"
-    adapter_class = "SearchAttachmentAdapter"
+    model_name = "task_files_search"
+    adapter_class = "SearchTaskFilesAdapter"
     context_window = 0  # Not applicable for search
     timeout = 20  # 20 second timeout for searches
 
@@ -45,17 +45,17 @@ class SearchSessionAttachments(ToolSpec):
     )
 
 
-class SearchAttachmentAdapter(BaseAdapter):
-    """Adapter for searching ephemeral attachment stores."""
+class SearchTaskFilesAdapter(BaseAdapter):
+    """Adapter for searching task files in vector stores."""
 
-    model_name = "attachment_search"
+    model_name = "task_files_search"
     context_window = 0  # Not applicable
-    description_snippet = "Search current session attachments"
+    description_snippet = "Search current session task files"
 
     # Class-level deduplicator shared across instances
-    _deduplicator = SearchDeduplicator("attachment")
+    _deduplicator = SearchDeduplicator("task_files")
 
-    def __init__(self, model_name: str = "attachment_search"):
+    def __init__(self, model_name: str = "task_files_search"):
         self.model_name = model_name
         # Client will be obtained asynchronously via _get_client()
 
@@ -74,7 +74,7 @@ class SearchAttachmentAdapter(BaseAdapter):
         vector_store_ids: List[str] | None = None,
         **kwargs: Any,
     ) -> str:
-        """Search attachment stores and return formatted results.
+        """Search task files in vector stores and return formatted results.
 
         This searches only the vector stores provided via ``vector_store_ids``.
         """
@@ -86,9 +86,9 @@ class SearchAttachmentAdapter(BaseAdapter):
             raise fastmcp.exceptions.ToolError("Search query is required")
 
         # Use provided vector store IDs
-        attachment_stores = vector_store_ids or []
-        if not attachment_stores:
-            return "No attachments available to search in this session"
+        task_file_stores = vector_store_ids or []
+        if not task_file_stores:
+            return "No task files available to search in this session"
 
         try:
             # Support multiple queries (semicolon-separated)
@@ -98,9 +98,9 @@ class SearchAttachmentAdapter(BaseAdapter):
                 else [query]
             )
 
-            # Search all attachment stores in parallel
+            # Search all task file stores in parallel
             search_tasks = []
-            for store_id in attachment_stores:
+            for store_id in task_file_stores:
                 for q in queries:
                     # Ensure each query gets at least 1 result slot
                     per_query_limit = max(1, max_results // max(len(queries), 1))
@@ -114,9 +114,9 @@ class SearchAttachmentAdapter(BaseAdapter):
                     timeout=30.0,  # 30 second timeout for all searches
                 )
             except asyncio.TimeoutError:
-                logger.warning("Attachment search timed out")
+                logger.warning("Task file search timed out")
                 raise fastmcp.exceptions.ToolError(
-                    "Attachment search timed out after 30 seconds"
+                    "Task file search timed out after 30 seconds"
                 )
 
             # Aggregate and sort results
@@ -149,11 +149,11 @@ class SearchAttachmentAdapter(BaseAdapter):
                     f"No results after deduplication. Total results before: {len(all_results)}, "
                     f"Duplicate count: {duplicate_count}, Query: '{query}'"
                 )
-                return f"No results found in attachments for query: '{query}'"
+                return f"No results found in task files for query: '{query}'"
 
             # Build formatted response
             response_parts = [
-                f"Found {len(deduplicated_results)} results in session attachments:"
+                f"Found {len(deduplicated_results)} results in session task files:"
             ]
 
             for i, search_result in enumerate(deduplicated_results, 1):
@@ -178,8 +178,8 @@ class SearchAttachmentAdapter(BaseAdapter):
             return "\n".join(response_parts)
 
         except Exception as e:
-            logger.error(f"Attachment search failed: {e}")
-            raise fastmcp.exceptions.ToolError(f"Error searching attachments: {e}")
+            logger.error(f"Task file search failed: {e}")
+            raise fastmcp.exceptions.ToolError(f"Error searching task files: {e}")
 
     async def _search_single_store(
         self, query: str, store_id: str, max_results: int
@@ -236,5 +236,5 @@ class SearchAttachmentAdapter(BaseAdapter):
                 return results
 
             except Exception as e:
-                logger.error(f"Failed to search attachment store {store_id}: {e}")
+                logger.error(f"Failed to search task file store {store_id}: {e}")
                 raise

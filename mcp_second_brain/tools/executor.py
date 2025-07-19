@@ -109,18 +109,12 @@ class ToolExecutor:
                     f"budget: {token_budget:,}"
                 )
 
-                # Get context and attachment paths
-                logger.info("[STEP 7] Getting context and attachment paths")
+                # Get context and priority_context paths
+                logger.info("[STEP 7] Getting context and priority_context paths")
                 context_paths = prompt_params.get("context", [])
-                attachment_paths_raw = routed_params.get("vector_store", [])
-                # Ensure it's a list
-                attachment_paths = (
-                    attachment_paths_raw
-                    if isinstance(attachment_paths_raw, list)
-                    else []
-                )
+                priority_context_paths = prompt_params.get("priority_context", [])
                 logger.info(
-                    f"[STEP 7.1] Context paths: {len(context_paths)}, Attachment paths: {len(attachment_paths)}"
+                    f"[STEP 7.1] Context paths: {len(context_paths)}, Priority context paths: {len(priority_context_paths)}"
                 )
 
                 # Call the new context builder
@@ -134,7 +128,7 @@ class ToolExecutor:
                     session_id=session_id,
                     cache=cache,
                     token_budget=token_budget,
-                    attachments=attachment_paths,
+                    priority_context=priority_context_paths,
                 )
                 logger.info(
                     f"[STEP 8.1] Context builder returned: {len(inline_files)} inline files, {len(overflow_files)} overflow files, file tree generated"
@@ -154,7 +148,7 @@ class ToolExecutor:
                 file_map = ET.SubElement(task, "file_map")
                 file_map.text = (
                     file_tree
-                    + "\n\nLegend: Files marked 'attached' are available via search_attachments. Unmarked files are included below."
+                    + "\n\nLegend: Files marked 'attached' are available via search_task_files. Unmarked files are included below."
                 )
 
                 CTX = ET.SubElement(task, "CONTEXT")
@@ -174,7 +168,7 @@ class ToolExecutor:
                 prompt = ET.tostring(task, encoding="unicode")
                 logger.info(f"[STEP 9.1] Prompt built: {len(prompt)} chars")
                 if overflow_files:
-                    prompt += "\n\n<instructions_on_use>The files in the file tree but not included in <CONTEXT> you access via the search_attachments MCP function. They are stored in a vector database and the search function does semantic search.</instructions_on_use>"
+                    prompt += "\n\n<instructions_on_use>The files in the file tree but not included in <CONTEXT> you access via the search_task_files MCP function. They are stored in a vector database and the search function does semantic search.</instructions_on_use>"
 
                 # Store overflow files for vector store creation
                 files_for_vector_store = overflow_files
@@ -252,11 +246,11 @@ class ToolExecutor:
             if session_id and files_for_vector_store:
                 # Use pre-calculated overflow files from stable list
                 # Clear attachment search cache for new attachments
-                from .search_attachments import SearchAttachmentAdapter
+                from .search_task_files import SearchTaskFilesAdapter
 
-                await SearchAttachmentAdapter.clear_deduplication_cache()
+                await SearchTaskFilesAdapter.clear_deduplication_cache()
                 logger.info(
-                    "Cleared SearchAttachmentAdapter deduplication cache for new attachments"
+                    "Cleared SearchTaskFilesAdapter deduplication cache for new task files"
                 )
 
                 logger.info(
@@ -276,11 +270,11 @@ class ToolExecutor:
                 assert isinstance(vector_store_param, list)  # Type hint for mypy
                 if vector_store_param:
                     # Clear attachment search cache for new attachments
-                    from .search_attachments import SearchAttachmentAdapter
+                    from .search_task_files import SearchTaskFilesAdapter
 
-                    await SearchAttachmentAdapter.clear_deduplication_cache()
+                    await SearchTaskFilesAdapter.clear_deduplication_cache()
                     logger.info(
-                        "Cleared SearchAttachmentAdapter deduplication cache for new attachments"
+                        "Cleared SearchTaskFilesAdapter deduplication cache for new attachments"
                     )
 
                     # Gather files from directories (skip safety check for attachments)
