@@ -97,13 +97,16 @@ def setup_logging():
         )
 
     # CRITICAL: Also add stderr handler for MCP servers (stdout must stay clean for JSON-RPC)
-    stderr_handler = logging.StreamHandler(sys.stderr)
-    stderr_handler.setFormatter(
-        logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-    )
-    app_logger.addHandler(stderr_handler)
+    # TESTING: Commenting out stderr handler to test if it's causing hangs
+    # stderr_handler = logging.StreamHandler(sys.stderr)
+    # stderr_handler.setFormatter(
+    #     logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    # )
+    # app_logger.addHandler(stderr_handler)
 
-    app_logger.info("Logging initialized with VictoriaLogs and stderr")
+    app_logger.info(
+        "Logging initialized with VictoriaLogs only (stderr disabled for testing)"
+    )
 
 
 def shutdown_logging():
