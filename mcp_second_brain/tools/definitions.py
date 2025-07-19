@@ -166,6 +166,10 @@ Please approach this task step-by-step, showing your reasoning process."""
     reasoning_effort: Optional[str] = Route.adapter(
         default="medium", description="Controls reasoning effort (low/medium/high)"
     )
+    disable_memory_search: Optional[bool] = Route.adapter(
+        default=False,
+        description="Disable search_project_memory tool to prevent access to past conversations",
+    )
 
 
 @tool
@@ -212,6 +216,10 @@ class ChatWithO3Pro(ToolSpec):
     reasoning_effort: Optional[str] = Route.adapter(
         default="high", description="Controls reasoning effort (low/medium/high)"
     )
+    disable_memory_search: Optional[bool] = Route.adapter(
+        default=False,
+        description="Disable search_project_memory tool to prevent access to past conversations",
+    )
 
 
 @tool
@@ -253,6 +261,10 @@ class ChatWithGPT4_1(ToolSpec):
     )
     temperature: Optional[float] = Route.adapter(
         default=0.2, description="Sampling temperature"
+    )
+    disable_memory_search: Optional[bool] = Route.adapter(
+        default=False,
+        description="Disable search_project_memory tool to prevent access to past conversations",
     )
 
 

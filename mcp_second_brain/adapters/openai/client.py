@@ -47,15 +47,21 @@ class OpenAIClientFactory:
                 return cls._instances[loop]
 
             # Configure robust HTTP transport with connection pooling.
-            limits = httpx.Limits(max_keepalive_connections=20, max_connections=100)
+            # CRITICAL: keepalive_expiry=60.0 discards idle connections after 60s
+            # This prevents reusing stale connections that cause hangs
+            limits = httpx.Limits(
+                max_keepalive_connections=20,
+                max_connections=100,
+                keepalive_expiry=60.0,  # Discard idle connections after 60 seconds
+            )
 
-            # Match the current timeout configuration:
-            # connect=30, write=30, read=None (disabled for streaming)
+            # Set explicit timeouts to prevent indefinite hangs on stale connections
+            # These replace the dangerous None values that wait forever
             timeout = httpx.Timeout(
-                connect=30.0,
-                write=30.0,
-                read=None,  # Disable read timeout for long-running streaming
-                pool=None,
+                connect=20.0,  # 20s to establish connection
+                write=60.0,  # 60s to write request
+                read=180.0,  # 3 minutes for response (was None - wait forever)
+                pool=60.0,  # 60s to get connection from pool (was None - wait forever)
             )
 
             # Enable retries for transient errors

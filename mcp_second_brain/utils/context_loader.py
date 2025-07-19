@@ -7,6 +7,7 @@ from typing import List, Tuple
 
 from .fs import gather_file_paths
 from .token_counter import count_tokens
+from .thread_pool import run_in_thread_pool
 
 
 def load_specific_files(file_paths: List[str]) -> List[Tuple[str, str, int]]:
@@ -85,15 +86,16 @@ def load_text_files(items: List[str]) -> List[Tuple[str, str, int]]:
         try:
             # Debug: Check file existence and permissions
             abs_path = os.path.abspath(path)
-            logger.info(
-                f"DEBUG load_text_files: Processing path '{path}' | abs_path '{abs_path}'"
-            )
+            # logger.info(
+            #     f"DEBUG load_text_files: Processing path '{path}' | abs_path '{abs_path}'"
+            # )
 
             if os.path.exists(abs_path):
-                stat = os.stat(abs_path)
-                logger.info(
-                    f"DEBUG load_text_files: File exists! size={stat.st_size}, mode={oct(stat.st_mode)}, uid={stat.st_uid}, gid={stat.st_gid}"
-                )
+                # stat = os.stat(abs_path)
+                # logger.info(
+                #     f"DEBUG load_text_files: File exists! size={stat.st_size}, mode={oct(stat.st_mode)}, uid={stat.st_uid}, gid={stat.st_gid}"
+                # )
+                pass
             else:
                 logger.warning(
                     f"DEBUG load_text_files: File does NOT exist at '{abs_path}'"
@@ -121,17 +123,17 @@ def load_text_files(items: List[str]) -> List[Tuple[str, str, int]]:
 
             # Read file content with UTF-8 encoding, ignoring errors
             content = Path(path).read_text(encoding="utf-8", errors="ignore")
-            logger.info(
-                f"[CONTEXT_LOADER] Successfully read {len(content)} chars from {path}"
-            )
+            # logger.info(
+            #     f"[CONTEXT_LOADER] Successfully read {len(content)} chars from {path}"
+            # )
 
             # Remove null bytes which can cause issues
             content = content.replace("\x00", "")
 
             # Count tokens for this content
-            logger.info(f"[CONTEXT_LOADER] Counting tokens for {path}")
+            # logger.info(f"[CONTEXT_LOADER] Counting tokens for {path}")
             token_count = count_tokens([content])
-            logger.info(f"[CONTEXT_LOADER] File {path} has {token_count} tokens")
+            # logger.info(f"[CONTEXT_LOADER] File {path} has {token_count} tokens")
 
             result.append((path, content, token_count))
 
@@ -140,4 +142,22 @@ def load_text_files(items: List[str]) -> List[Tuple[str, str, int]]:
             logger.warning(f"Failed to read file {path}: {type(e).__name__}: {e}")
             continue
 
+    return result
+
+
+async def load_text_files_async(items: List[str]) -> List[Tuple[str, str, int]]:
+    """Asynchronously load text files to avoid blocking the event loop."""
+    result: List[Tuple[str, str, int]] = await run_in_thread_pool(
+        load_text_files, items
+    )
+    return result
+
+
+async def load_specific_files_async(
+    file_paths: List[str],
+) -> List[Tuple[str, str, int]]:
+    """Asynchronously load specific text files."""
+    result: List[Tuple[str, str, int]] = await run_in_thread_pool(
+        load_specific_files, file_paths
+    )
     return result
