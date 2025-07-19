@@ -421,19 +421,19 @@ async def test_flow_handles_non_serializable_tool_result():
 
 @pytest.mark.unit
 async def test_flow_attachment_tool_only_with_vector_stores():
-    """Test attachment search tool is only added when vector_store_ids present."""
+    """Test native file_search tool is only added when vector_store_ids present."""
     from mcp_second_brain.adapters.openai.flow import FlowOrchestrator
 
     orchestrator = FlowOrchestrator(tool_dispatcher=AsyncMock())
 
     # Test with and without vector_store_ids
     test_cases = [
-        ({"vector_store_ids": ["vs_123"]}, True),  # Should have attachment tool
-        ({"vector_store_ids": None}, False),  # Should not have attachment tool
+        ({"vector_store_ids": ["vs_123"]}, True),  # Should have file_search tool
+        ({"vector_store_ids": None}, False),  # Should not have file_search tool
         ({}, False),  # No vector_store_ids at all
     ]
 
-    for extra_params, should_have_attachment_tool in test_cases:
+    for extra_params, should_have_file_search in test_cases:
         request_data = {
             "model": "gpt-4.1",
             "messages": [{"role": "user", "content": "Test"}],
@@ -456,14 +456,17 @@ async def test_flow_attachment_tool_only_with_vector_stores():
 
             create_call = mock_client.responses.create.call_args
             tools = create_call.kwargs.get("tools", [])
+            tool_resources = create_call.kwargs.get("tool_resources", {})
 
-            has_attachment_tool = any(
-                (
-                    t.get("function", {}).get("name") == "search_task_files"
-                    or t.get("name") == "search_task_files"
+            # Check for native file_search tool
+            has_file_search_tool = any(t.get("type") == "file_search" for t in tools)
+
+            assert has_file_search_tool == should_have_file_search
+
+            # Also check tool_resources when file_search is present
+            if should_have_file_search:
+                assert "file_search" in tool_resources
+                assert (
+                    tool_resources["file_search"]["vector_store_ids"]
+                    == extra_params["vector_store_ids"]
                 )
-                for t in tools
-                if t.get("type") == "function"
-            )
-
-            assert has_attachment_tool == should_have_attachment_tool
