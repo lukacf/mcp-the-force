@@ -190,5 +190,17 @@ class ParameterValidator:
                 # Handle numeric to bool conversion
                 return bool(value)
 
+        # Handle float coercion
+        if expected_type is float:
+            if isinstance(value, float):
+                return value
+            if isinstance(value, str):
+                try:
+                    return float(value)
+                except ValueError:
+                    pass
+            if isinstance(value, int):
+                return float(value)
+
         # No coercion performed
         return None
