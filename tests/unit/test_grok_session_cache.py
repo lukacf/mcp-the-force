@@ -204,7 +204,7 @@ class TestSQLiteGrokSessionCache:
                         "id": "call_complex",
                         "type": "function",
                         "function": {
-                            "name": "search_session_attachments",
+                            "name": "search_task_files",
                             "arguments": json.dumps(
                                 {
                                     "query": "test with \"quotes\" and 'apostrophes'",
@@ -219,7 +219,7 @@ class TestSQLiteGrokSessionCache:
             {
                 "tool_call_id": "call_complex",
                 "role": "tool",
-                "name": "search_session_attachments",
+                "name": "search_task_files",
                 "content": json.dumps(
                     {
                         "results": [

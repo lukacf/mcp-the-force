@@ -56,8 +56,8 @@ class ChatWithGemini25Pro(ToolSpec):
         description="Session ID for multi-turn conversations"
     )
     # Optional parameters
-    attachments: Optional[List[str]] = Route.vector_store(
-        description="Files for vector store (RAG)"
+    priority_context: Optional[List[str]] = Route.prompt(
+        description="Files/directories to prioritize for inline inclusion"
     )
     structured_output_schema: Optional[Dict[str, Any]] = Route.structured_output(
         description="JSON schema for structured output validation. For OpenAI models: requires strict validation with 'additionalProperties: false' at every object level and all properties with constraints (minimum, maximum, enum, pattern) must be listed in 'required'"
@@ -100,8 +100,8 @@ class ChatWithGemini25Flash(ToolSpec):
         description="Session ID for multi-turn conversations"
     )
     # Optional parameters
-    attachments: Optional[List[str]] = Route.vector_store(
-        description="Files for vector store (RAG)"
+    priority_context: Optional[List[str]] = Route.prompt(
+        description="Files/directories to prioritize for inline inclusion"
     )
     structured_output_schema: Optional[Dict[str, Any]] = Route.structured_output(
         description="JSON schema for structured output validation. For OpenAI models: requires strict validation with 'additionalProperties: false' at every object level and all properties with constraints (minimum, maximum, enum, pattern) must be listed in 'required'"
@@ -157,8 +157,8 @@ Please approach this task step-by-step, showing your reasoning process."""
         description="Session ID for multi-turn conversations"
     )
     # Optional parameters with defaults
-    attachments: Optional[List[str]] = Route.vector_store(
-        description="Files for vector store (RAG)"
+    priority_context: Optional[List[str]] = Route.prompt(
+        description="Files/directories to prioritize for inline inclusion"
     )
     structured_output_schema: Optional[Dict[str, Any]] = Route.structured_output(
         description="JSON schema for structured output validation. For OpenAI models: requires strict validation with 'additionalProperties: false' at every object level and all properties with constraints (minimum, maximum, enum, pattern) must be listed in 'required'"
@@ -204,8 +204,8 @@ class ChatWithO3Pro(ToolSpec):
         description="Session ID for multi-turn conversations"
     )
     # Optional parameters with defaults
-    attachments: Optional[List[str]] = Route.vector_store(
-        description="Files for vector store (RAG)"
+    priority_context: Optional[List[str]] = Route.prompt(
+        description="Files/directories to prioritize for inline inclusion"
     )
     max_reasoning_tokens: Optional[int] = Route.adapter(
         default=None, description="Maximum reasoning tokens"
@@ -231,7 +231,7 @@ class ChatWithGPT4_1(ToolSpec):
     - instructions: "Refactor this codebase to use modern React patterns and hooks"
     - output_format: "Migration guide with: 1) Files to change 2) Specific refactoring steps 3) Testing checklist"
     - context: ["/project/src/components"]
-    - attachments: ["/project/legacy"] (optional, for RAG on large codebases)
+    - priority_context: ["/project/legacy"] (optional, prioritize these files inline)
     - temperature: 0.2 (default, for consistent refactoring)
     - session_id: "react-refactor-001"""
 
@@ -253,8 +253,8 @@ class ChatWithGPT4_1(ToolSpec):
         description="Session ID for multi-turn conversations"
     )
     # Optional parameters with defaults
-    attachments: Optional[List[str]] = Route.vector_store(
-        description="Files for vector store (RAG)"
+    priority_context: Optional[List[str]] = Route.prompt(
+        description="Files/directories to prioritize for inline inclusion"
     )
     structured_output_schema: Optional[Dict[str, Any]] = Route.structured_output(
         description="JSON schema for structured output validation. For OpenAI models: requires strict validation with 'additionalProperties: false' at every object level and all properties with constraints (minimum, maximum, enum, pattern) must be listed in 'required'"
@@ -311,8 +311,8 @@ Please approach this task step-by-step, showing your reasoning process."""
         description="Session ID for multi-turn conversations"
     )
     # Optional parameters with defaults
-    attachments: Optional[List[str]] = Route.vector_store(
-        description="Files for vector store (RAG)"
+    priority_context: Optional[List[str]] = Route.prompt(
+        description="Files/directories to prioritize for inline inclusion"
     )
 
 
@@ -347,8 +347,8 @@ class ResearchWithO4MiniDeepResearch(ToolSpec):
         description="Session ID for multi-turn conversations"
     )
     # Optional parameters with defaults
-    attachments: Optional[List[str]] = Route.vector_store(
-        description="Files for vector store (RAG)"
+    priority_context: Optional[List[str]] = Route.prompt(
+        description="Files/directories to prioritize for inline inclusion"
     )
 
 
@@ -430,8 +430,8 @@ class ChatWithGrok4(ToolSpec):
     session_id: str = Route.session(description="Session ID for multi-turn context")
 
     # Optional parameters
-    attachments: Optional[List[str]] = Route.vector_store(
-        description="Files for vector database context"
+    priority_context: Optional[List[str]] = Route.prompt(
+        description="Files/directories to prioritize for inline inclusion"
     )
     structured_output_schema: Optional[Dict[str, Any]] = Route.structured_output(
         description="JSON Schema for structured output (optional)"
@@ -487,8 +487,8 @@ class ChatWithGrok3Reasoning(ToolSpec):
     session_id: str = Route.session(description="Session ID for multi-step reasoning")
 
     # Optional parameters
-    attachments: Optional[List[str]] = Route.vector_store(
-        description="Additional reference materials"
+    priority_context: Optional[List[str]] = Route.prompt(
+        description="Files/directories to prioritize for inline inclusion"
     )
     structured_output_schema: Optional[Dict[str, Any]] = Route.structured_output(
         description="JSON Schema for structured output (optional)"

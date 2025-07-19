@@ -64,7 +64,7 @@ async def build_context_with_stable_list(
     session_id: str,
     cache: StableListCache,
     token_budget: int,
-    attachments: Optional[List[str]] = None,
+    priority_context: Optional[List[str]] = None,
 ) -> Tuple[List[Tuple[str, str, int]], List[str], str]:
     """Build context using stable-inline list approach.
 
@@ -76,7 +76,7 @@ async def build_context_with_stable_list(
         session_id: Session identifier
         cache: StableListCache instance
         token_budget: Maximum tokens for inline content
-        attachments: Optional list of attachment paths
+        priority_context: Optional list of paths to prioritize for inline inclusion
 
     Returns:
         Tuple of (files_to_send_inline, files_for_vector_store, file_tree)
@@ -104,6 +104,12 @@ async def build_context_with_stable_list(
             except Exception as e:
                 logger.info(f"DEBUG: Error statting file: {e}")
 
+    # Gather priority files first if provided
+    priority_files = []
+    if priority_context:
+        priority_files = await gather_file_paths_async(priority_context)
+        logger.info(f"Gathered {len(priority_files)} priority files")
+
     # Gather all files from context paths
     all_files = await gather_file_paths_async(context_paths)
     logger.info(f"Gathered {len(all_files)} files from context paths")
@@ -116,7 +122,15 @@ async def build_context_with_stable_list(
         logger.info(f"No stable list for session {session_id}, creating one")
 
         # Sort files deterministically
-        sorted_files = sort_files_for_stable_list(all_files)
+        sorted_regular_files = sort_files_for_stable_list(all_files)
+        sorted_priority_files = (
+            sort_files_for_stable_list(priority_files) if priority_files else []
+        )
+
+        # Combine with priority files first
+        sorted_files = sorted_priority_files + [
+            f for f in sorted_regular_files if f not in priority_files
+        ]
 
         # Use size-based estimation to determine split (fast)
         inline_paths = []
@@ -198,8 +212,11 @@ async def build_context_with_stable_list(
         files_to_send = []
         overflow_paths = []
 
+        # Combine all files (priority + regular)
+        all_combined_files = list(set(priority_files + all_files))
+
         # Check each file in context
-        for file_path in all_files:
+        for file_path in all_combined_files:
             if file_path in stable_list:
                 # This file should go inline
                 if await cache.file_changed_since_last_send(session_id, file_path):
@@ -225,22 +242,9 @@ async def build_context_with_stable_list(
 
         logger.info(f"Sending {len(files_to_send)} changed files inline")
 
-    # Add attachments to overflow (they always go to vector store)
-    if attachments:
-        attachment_files = await gather_file_paths_async(
-            attachments, skip_safety_check=True
-        )
-        # Deduplicate: convert to set to remove any files already in overflow_paths
-        overflow_paths_set = set(overflow_paths)
-        new_attachments = [f for f in attachment_files if f not in overflow_paths_set]
-        overflow_paths.extend(new_attachments)
-        logger.info(
-            f"Added {len(new_attachments)} unique attachment files to vector store (skipped {len(attachment_files) - len(new_attachments)} duplicates)"
-        )
-
-    # Generate file tree from ALL files (context + attachments)
+    # Generate file tree from ALL files (context + priority)
     # Combine all files that were requested (deduplicated)
-    all_requested_files = list(all_files)  # Files from context paths
+    all_requested_files = list(set(priority_files + all_files))  # All unique files
     if overflow_paths:
         # Only add overflow files that aren't already in all_files
         all_files_set = set(all_files)

@@ -144,7 +144,7 @@ async def test_file_tree_in_prompt():
             # Check legend
             assert "Legend:" in file_map_text
             assert "attached" in file_map_text
-            assert "search_attachments" in file_map_text
+            assert "search_task_files" in file_map_text
 
             # Check that files are shown with correct markers
             # Since we mocked the file tree building, we should see our files

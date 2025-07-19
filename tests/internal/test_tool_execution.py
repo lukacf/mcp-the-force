@@ -105,7 +105,7 @@ class TestToolExecutionIntegration:
             # Vector store creation will be handled by the mock client
 
             # Collect all the created files as attachments
-            attachment_files = [str(temp_project / f"module{i}.py") for i in range(10)]
+            context_files = [str(temp_project / f"module{i}.py") for i in range(10)]
 
             # Also add some files that will fit in context to ensure both paths work
             [str(temp_project / "src")]
@@ -114,8 +114,7 @@ class TestToolExecutionIntegration:
                 "chat_with_gpt4_1",
                 instructions="Analyze this large codebase",
                 output_format="summary",
-                context=[],  # Empty context to force vector store usage
-                attachments=attachment_files,  # Use attachments parameter
+                context=context_files,  # Files for context
                 session_id="test-large",
             )
 
@@ -152,10 +151,9 @@ class TestToolExecutionIntegration:
             "chat_with_gpt4_1",
             instructions="Test with all param types",
             output_format="json",
-            context=[],
+            context=[str(test_file)],  # context with real file
             temperature=0.8,  # adapter param
             session_id="test-params",  # session param
-            attachments=[str(test_file)],  # vector_store param with real file
         )
 
         # Verify parameters were routed correctly
