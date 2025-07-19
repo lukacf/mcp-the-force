@@ -159,6 +159,22 @@ class ParameterValidator:
                     return coerced
             return None
 
+        # Handle List types
+        if origin is list or expected_type is list:
+            if isinstance(value, list):
+                return value
+            if isinstance(value, str):
+                # Try to parse JSON string
+                try:
+                    import json
+
+                    parsed = json.loads(value)
+                    if isinstance(parsed, list):
+                        return parsed
+                except (json.JSONDecodeError, ValueError):
+                    pass
+            return None
+
         # Handle basic bool coercion
         if expected_type is bool:
             if isinstance(value, bool):
