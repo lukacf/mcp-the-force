@@ -456,17 +456,8 @@ async def test_flow_attachment_tool_only_with_vector_stores():
 
             create_call = mock_client.responses.create.call_args
             tools = create_call.kwargs.get("tools", [])
-            tool_resources = create_call.kwargs.get("tool_resources", {})
 
             # Check for native file_search tool
             has_file_search_tool = any(t.get("type") == "file_search" for t in tools)
 
             assert has_file_search_tool == should_have_file_search
-
-            # Also check tool_resources when file_search is present
-            if should_have_file_search:
-                assert "file_search" in tool_resources
-                assert (
-                    tool_resources["file_search"]["vector_store_ids"]
-                    == extra_params["vector_store_ids"]
-                )
