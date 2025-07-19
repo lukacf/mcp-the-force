@@ -88,15 +88,20 @@ def create_tool_function(metadata: ToolMetadata):
         original_annotation = sig_param.annotation
 
         # Fix for FastMCP's strict validation
-        # Check if the original type hint is a boolean or Optional[bool]
+        # Check if the original type hint is a boolean, float, or Optional[bool/float]
         is_bool_type = False
+        is_float_type = False
         is_list_str_type = False
         origin = get_origin(original_annotation)
 
-        if origin is Union:  # Handles Optional[bool] and Optional[List[str]]
+        if (
+            origin is Union
+        ):  # Handles Optional[bool], Optional[float], and Optional[List[str]]
             args = get_args(original_annotation)
             if bool in args:
                 is_bool_type = True
+            elif float in args:
+                is_float_type = True
             # Check for List[str] in Optional
             for arg in args:
                 if get_origin(arg) is list:
@@ -106,17 +111,19 @@ def create_tool_function(metadata: ToolMetadata):
                         break
         elif original_annotation is bool:
             is_bool_type = True
+        elif original_annotation is float:
+            is_float_type = True
         elif origin is list:
             # Direct List[str]
             list_args = get_args(original_annotation)
             if list_args and list_args[0] is str:
                 is_list_str_type = True
 
-        if is_bool_type or is_list_str_type:
-            # If it's a boolean or list of strings, tell FastMCP to expect Optional[str]
-            # This allows string values "true"/"false" or JSON arrays like '["a", "b"]'
-            # to pass Pydantic validation. Our internal ParameterValidator
-            # will then correctly coerce the string to the expected type.
+        if is_bool_type or is_float_type or is_list_str_type:
+            # If it's a boolean, float, or list of strings, tell FastMCP to expect Optional[str]
+            # This allows string values "true"/"false", numeric strings like "0.5",
+            # or JSON arrays like '["a", "b"]' to pass Pydantic validation.
+            # Our internal ParameterValidator will then correctly coerce the string to the expected type.
             annotations[sig_param.name] = Optional[str]
         else:
             # For all other types, use the original annotation
