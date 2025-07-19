@@ -1,5 +1,7 @@
 """
-Unit tests for CLI entry point.
+Integration tests for CLI entry point.
+
+These tests spawn actual Python subprocesses to test the full CLI behavior.
 """
 
 import subprocess
