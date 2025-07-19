@@ -129,21 +129,25 @@ class ToolExecutor:
 
 
 class BuiltInToolDispatcher:
-    """Handles execution of OpenAI's built-in tools (search_memory, search_task_files)."""
+    """Handles execution of OpenAI's built-in tools (search_memory only).
+
+    File search is now handled natively by OpenAI through the file_search tool.
+    """
 
     def __init__(self, vector_store_ids: Optional[List[str]] = None):
-        """Initialize with optional vector store IDs for attachment search.
+        """Initialize the dispatcher.
 
         Args:
-            vector_store_ids: List of vector store IDs for attachment search.
+            vector_store_ids: No longer used - kept for backward compatibility.
         """
-        self.vector_store_ids = vector_store_ids
+        # vector_store_ids is now handled by OpenAI's native file_search
+        pass
 
     async def dispatch(self, name: str, arguments: Dict[str, Any]) -> Any:
         """Dispatch to the appropriate built-in tool.
 
         Args:
-            name: Tool name (e.g., "search_project_memory", "search_task_files")
+            name: Tool name (e.g., "search_project_memory")
             arguments: Parsed arguments for the tool
 
         Returns:
@@ -159,18 +163,6 @@ class BuiltInToolDispatcher:
                 query=arguments.get("query", ""),
                 max_results=arguments.get("max_results", 40),
                 store_types=arguments.get("store_types", ["conversation", "commit"]),
-            )
-
-        elif name == "search_task_files":
-            # Import and execute attachment search
-            from ...tools.search_task_files import SearchTaskFilesAdapter
-
-            adapter_attachment = SearchTaskFilesAdapter()
-            return await adapter_attachment.generate(
-                prompt=arguments.get("query", ""),
-                query=arguments.get("query", ""),
-                max_results=arguments.get("max_results", 20),
-                vector_store_ids=self.vector_store_ids,
             )
         else:
             raise ValueError(f"Unknown built-in tool: {name}")
