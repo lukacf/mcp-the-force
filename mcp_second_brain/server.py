@@ -1,41 +1,11 @@
 #!/usr/bin/env python3
 """MCP Second-Brain Server with dataclass-based tools."""
 
-# TEMPORARY: Debug hooks for investigating cancellation - DISABLED
-# import sys
-# import os
-# sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-# try:
-#     import debug_hooks  # noqa: E402
-# except ImportError:
-#     pass  # Debug hooks are optional
-
 import logging
 from .logging.setup import setup_logging
 
 # Initialize the new logging system first
 setup_logging()
-
-# Apply THE ONE PATCH for stdio writes before any MCP imports
-# import mcp_second_brain.patch_stdio_writer  # noqa: F401, E402
-
-# Apply patches BEFORE importing any MCP modules
-# This is critical - patches must be in place before MCP loads
-# from mcp_second_brain.cancellation_patch import monkeypatch_all  # noqa: E402
-
-# monkeypatch_all()  # Apply comprehensive cancellation handling
-
-# Apply write safety patch before any MCP imports
-# DISABLED: Testing with only cancellation handler
-# from . import patch_write_safety  # noqa: F401, E402
-
-# Patch MCP responder to handle disconnections gracefully
-# DISABLED: Testing with only cancellation handler
-# from . import patch_mcp_responder  # noqa: F401, E402
-
-# Patch FastMCP so cancelled requests don't get a 2nd response
-# DISABLED: Testing with only cancellation handler
-# from . import patch_fastmcp_cancel  # noqa: F401, E402
 
 # Also ensure operation_manager is available for Claude Code abort handling
 from .operation_manager import operation_manager  # noqa: F401, E402
@@ -79,7 +49,6 @@ def main():
     import sys
     import signal
     import errno
-    import selectors
     from typing import Iterator
 
     def _iter_leaves(exc: BaseException) -> Iterator[BaseException]:
@@ -90,19 +59,28 @@ def main():
         else:
             yield exc
 
-    # macOS-specific workaround for KqueueSelector stdio hang bug
-    # See: https://github.com/python/cpython/issues/104344
-    if sys.platform == "darwin":
+    # DISABLED: Testing if custom selector is causing race conditions
+    # # macOS-specific workaround for KqueueSelector stdio hang bug
+    # # See: https://github.com/python/cpython/issues/104344
+    # # BUT: SelectSelector has a 1024 file descriptor limit that causes hangs
+    # # with many concurrent file operations (e.g., vector store uploads).
+    # # Using PollSelector instead which has no FD limit while still avoiding
+    # # the KqueueSelector stdio issues.
+    # if sys.platform == "darwin":
 
-        class SelectSelectorPolicy(asyncio.DefaultEventLoopPolicy):
-            def new_event_loop(self):
-                selector = selectors.SelectSelector()
-                return asyncio.SelectorEventLoop(selector)
+    #     class PollSelectorPolicy(asyncio.DefaultEventLoopPolicy):
+    #         def new_event_loop(self):
+    #             # poll(2) has no FD_SETSIZE limit unlike select(2)
+    #             selector = selectors.PollSelector()
+    #             return asyncio.SelectorEventLoop(selector)
 
-        asyncio.set_event_loop_policy(SelectSelectorPolicy())
-        logger.info(
-            "Forced SelectSelector on macOS to avoid KqueueSelector stdio hangs"
-        )
+    #     asyncio.set_event_loop_policy(PollSelectorPolicy())
+    #     logger.info(
+    #         "Using PollSelector on macOS to avoid both KqueueSelector stdio hangs "
+    #         "and SelectSelector's 1024 FD limit"
+    #     )
+
+    logger.warning("Custom PollSelector DISABLED - using default event loop selector")
 
     # Ignore SIGPIPE to prevent crashes on broken pipes (Unix only)
     if sys.platform != "win32":
@@ -154,17 +132,41 @@ def main():
         # Fallback to default handler
         loop.default_exception_handler(context)
 
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.set_exception_handler(ignore_broken_pipe)
-    logger.info("Installed custom event loop exception handler")
+    # Let FastMCP create and manage its own event loop
+    # This avoids conflicts between our custom loop management and FastMCP's internal handling
+
+    # Install exception handler on the default event loop policy
+    def setup_exception_handler():
+        loop = asyncio.get_event_loop()
+        loop.set_exception_handler(ignore_broken_pipe)
+        logger.info("Installed custom event loop exception handler")
 
     # No loop for stdio transport - run once and exit on disconnection
     # Claude spawns a new server process for each session
     try:
         logger.info("Starting MCP server (stdio transport)...")
 
-        mcp.run()  # Will use stdio transport by default
+        # DISABLED: Docker manager may be causing event loop issues
+        # Skip Docker initialization to test if it's the cause of hangs
+        logger.warning("Docker service initialization DISABLED for debugging")
+
+        # Clear any existing event loop so FastMCP can create its own
+        asyncio.set_event_loop(None)
+
+        # Register cleanup handlers for state reset
+        from .utils.state_reset import state_reset_manager
+        from .adapters.openai.client import OpenAIClientFactory
+
+        # Register singletons to be cleared
+        if hasattr(OpenAIClientFactory, "_instances"):
+            state_reset_manager.register_singleton(OpenAIClientFactory._instances)
+
+        logger.info(
+            "State reset manager configured for aggressive cleanup between queries"
+        )
+
+        # Now let FastMCP handle everything
+        mcp.run()  # Will create its own event loop
         logger.info("MCP server exited normally")
 
     except KeyboardInterrupt:

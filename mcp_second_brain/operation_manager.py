@@ -43,12 +43,30 @@ class OperationManager:
             logger.debug(f"Operation timed out: {operation_id}")
             raise
         except asyncio.CancelledError:
-            logger.info(f"Operation {operation_id} was cancelled by MCP.")
-            logger.debug(f"Operation cancelled by MCP, re-raising: {operation_id}")
+            logger.warning(f"[CANCEL] Operation {operation_id} received CancelledError")
+            logger.info(
+                f"[CANCEL] Task state - done: {task.done()}, cancelled: {task.cancelled()}"
+            )
+            logger.info(
+                f"[CANCEL] Active tasks before cancel: {len(asyncio.all_tasks())}"
+            )
+
             # Explicitly cancel the inner task to ensure clean shutdown
             if not task.done():
+                logger.info(
+                    f"[CANCEL] Task not done, calling task.cancel() for {operation_id}"
+                )
                 task.cancel()
-                logger.debug(f"Explicitly cancelled inner task: {operation_id}")
+                logger.info(
+                    f"[CANCEL] task.cancel() called, task.cancelled()={task.cancelled()}"
+                )
+            else:
+                logger.info(f"[CANCEL] Task already done for {operation_id}")
+
+            logger.info(
+                f"[CANCEL] Active tasks after cancel: {len(asyncio.all_tasks())}"
+            )
+            logger.info(f"[CANCEL] Re-raising CancelledError for {operation_id}")
             # Re-raise to let the cancellation propagate properly
             raise
         except Exception as e:

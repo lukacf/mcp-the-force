@@ -97,10 +97,11 @@ async def test_client_configuration():
             assert call_kwargs["limits"].max_keepalive_connections == 20
             assert call_kwargs["limits"].max_connections == 100
 
-            # Verify timeout (read timeout should be None for streaming)
-            assert call_kwargs["timeout"].connect == 30.0
-            assert call_kwargs["timeout"].write == 30.0
-            assert call_kwargs["timeout"].read is None
+            # Verify timeout - updated with new values to prevent stale connection hangs
+            assert call_kwargs["timeout"].connect == 20.0
+            assert call_kwargs["timeout"].write == 60.0
+            assert call_kwargs["timeout"].read == 180.0
+            assert call_kwargs["timeout"].pool == 60.0
 
             # Verify OpenAI client configuration
             openai_kwargs = mock_openai.call_args.kwargs

@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import List, Set
 import logging
 import time
+from .thread_pool import run_in_thread_pool
 
 logger = logging.getLogger(__name__)
 
@@ -459,5 +460,15 @@ def gather_file_paths(items: List[str], skip_safety_check: bool = False) -> List
     result = sorted(out)  # Return sorted for consistent ordering
     logger.info(
         f"gather_file_paths completed in {time.time() - start_time:.2f}s - found {len(result)} files, total size: {total_size / 1024 / 1024:.2f}MB"
+    )
+    return result
+
+
+async def gather_file_paths_async(
+    items: List[str], skip_safety_check: bool = False
+) -> List[str]:
+    """Asynchronously gather file paths to avoid blocking the event loop."""
+    result: List[str] = await run_in_thread_pool(
+        gather_file_paths, items, skip_safety_check
     )
     return result

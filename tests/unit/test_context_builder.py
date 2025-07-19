@@ -134,11 +134,11 @@ class TestBuildContextWithStableList:
                 raise FileNotFoundError()
 
             with patch(
-                "mcp_second_brain.utils.context_builder.gather_file_paths",
+                "mcp_second_brain.utils.context_builder.gather_file_paths_async",
                 side_effect=mock_gather_files,
             ):
                 with patch(
-                    "mcp_second_brain.utils.context_builder.load_specific_files",
+                    "mcp_second_brain.utils.context_builder.load_specific_files_async",
                     side_effect=mock_load_files,
                 ):
                     with patch("os.path.getsize", side_effect=mock_getsize):
@@ -155,6 +155,7 @@ class TestBuildContextWithStableList:
                             (
                                 inline_files,
                                 overflow_files,
+                                file_tree,
                             ) = await build_context_with_stable_list(
                                 context_paths=["/api"],
                                 session_id="test_session",
@@ -212,7 +213,7 @@ class TestBuildContextWithStableList:
 
             with patch("os.stat", return_value=mock_stat):
                 with patch(
-                    "mcp_second_brain.utils.context_builder.gather_file_paths",
+                    "mcp_second_brain.utils.context_builder.gather_file_paths_async",
                     side_effect=mock_gather_files,
                 ):
                     with patch(
@@ -222,6 +223,7 @@ class TestBuildContextWithStableList:
                         (
                             inline_files,
                             overflow_files,
+                            file_tree,
                         ) = await build_context_with_stable_list(
                             context_paths=["/api"],
                             session_id="test_session",
@@ -290,16 +292,17 @@ class TestBuildContextWithStableList:
 
             with patch("os.stat", side_effect=mock_stat):
                 with patch(
-                    "mcp_second_brain.utils.context_builder.gather_file_paths",
+                    "mcp_second_brain.utils.context_builder.gather_file_paths_async",
                     side_effect=mock_gather_files,
                 ):
                     with patch(
-                        "mcp_second_brain.utils.context_builder.load_specific_files",
+                        "mcp_second_brain.utils.context_builder.load_specific_files_async",
                         side_effect=mock_load_files,
                     ):
                         (
                             inline_files,
                             overflow_files,
+                            file_tree,
                         ) = await build_context_with_stable_list(
                             context_paths=["/api"],
                             session_id="test_session",
@@ -346,11 +349,11 @@ class TestBuildContextWithStableList:
                 raise FileNotFoundError()
 
             with patch(
-                "mcp_second_brain.utils.context_builder.gather_file_paths",
+                "mcp_second_brain.utils.context_builder.gather_file_paths_async",
                 side_effect=mock_gather_files,
             ):
                 with patch(
-                    "mcp_second_brain.utils.context_builder.load_specific_files",
+                    "mcp_second_brain.utils.context_builder.load_specific_files_async",
                     side_effect=mock_load_files,
                 ):
                     with patch("os.path.getsize", side_effect=mock_getsize):
@@ -367,6 +370,7 @@ class TestBuildContextWithStableList:
                             (
                                 inline_files,
                                 overflow_files,
+                                file_tree,
                             ) = await build_context_with_stable_list(
                                 context_paths=["/api"],
                                 session_id="test_session",

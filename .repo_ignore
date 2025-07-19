@@ -1,0 +1,7 @@
+.claude/
+.gcloud_old/
+.ruff_cache/
+mcp_second_brain.egg-info/
+.coverage
+coverage.xml
+uv.lock

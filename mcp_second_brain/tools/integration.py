@@ -1,6 +1,6 @@
 """Integration layer between dataclass tools and FastMCP."""
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, get_origin, get_args, Union
 from inspect import Parameter, Signature
 from fastmcp import FastMCP
 import fastmcp.exceptions
@@ -52,7 +52,24 @@ def create_tool_function(metadata: ToolMetadata):
         try:
             bound = signature.bind(*args, **kwargs)
             bound.apply_defaults()
-            return await executor.execute(metadata, **bound.arguments)
+
+            # DISABLED: State reset causing server crashes
+            # # Wrap execution with state reset
+            # async def execute_with_reset():
+            #     result = await executor.execute(metadata, **bound.arguments)
+            #     logger.info(f"[INTEGRATION] Tool {metadata.id} completed, returning result")
+            #     return result
+            #
+            # # Use state reset manager to ensure clean state after execution
+            # result = await state_reset_manager.wrap_tool_execution(
+            #     execute_with_reset
+            # )
+            # return result
+
+            # Direct execution without state reset
+            result = await executor.execute(metadata, **bound.arguments)
+            logger.info(f"[INTEGRATION] Tool {metadata.id} completed, returning result")
+            return result
         except TypeError as e:
             # Provide helpful error message via MCP error mechanism
             raise fastmcp.exceptions.ToolError(f"Invalid arguments: {e}")
@@ -66,9 +83,31 @@ def create_tool_function(metadata: ToolMetadata):
     # CRITICAL: Set annotations for FastMCP 2.x compatibility
     # FastMCP uses pydantic which expects __annotations__ to be set
     annotations: Dict[str, Any] = {"return": str}
-    # Use a different variable name to avoid confusion with earlier loop
+
     for sig_param in sig_params:
-        annotations[sig_param.name] = sig_param.annotation
+        original_annotation = sig_param.annotation
+
+        # Fix for FastMCP's strict boolean validation
+        # Check if the original type hint is a boolean or Optional[bool]
+        is_bool_type = False
+        origin = get_origin(original_annotation)
+        if origin is Union:  # Handles Optional[bool] and bool | None
+            args = get_args(original_annotation)
+            if bool in args:
+                is_bool_type = True
+        elif original_annotation is bool:
+            is_bool_type = True
+
+        if is_bool_type:
+            # If it's a boolean, tell FastMCP to expect Optional[str]
+            # This allows string values "true" and "false" to pass its
+            # Pydantic validation layer. Our internal ParameterValidator
+            # will then correctly coerce the string to a boolean value.
+            annotations[sig_param.name] = Optional[str]
+        else:
+            # For all other types, use the original annotation
+            annotations[sig_param.name] = original_annotation
+
     tool_function.__annotations__ = annotations
 
     return tool_function
@@ -194,9 +233,8 @@ def create_vector_store_tool(mcp: FastMCP) -> None:
         """
         try:
             from ..utils.vector_store import create_vector_store
-            import asyncio
 
-            vs_id = await asyncio.to_thread(create_vector_store, files)
+            vs_id = await create_vector_store(files)
             if vs_id:
                 return {"vector_store_id": vs_id, "status": "created"}
             else:

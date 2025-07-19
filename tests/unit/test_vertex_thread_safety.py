@@ -1,4 +1,4 @@
-"""Test Vertex adapter thread safety and async behavior."""
+"""Test Vertex adapter with async client."""
 
 import pytest
 import asyncio
@@ -32,34 +32,20 @@ def create_mock_response(with_function_call=False, text="Test response"):
 
 
 class TestVertexThreadSafety:
-    """Test Vertex adapter thread safety and async behavior."""
+    """Test Vertex adapter with async client."""
 
     @pytest.mark.asyncio
-    async def test_vertex_runs_in_thread(self, monkeypatch):
-        """Verify Vertex calls run in thread pool."""
-        main_thread_id = threading.get_ident()
-        call_thread_id = None
-        called_in_thread = False
+    async def test_vertex_uses_async_client(self, monkeypatch):
+        """Verify Vertex uses async client.aio API."""
+        call_count = 0
 
-        def mock_generate(*args, **kwargs):
-            nonlocal call_thread_id, called_in_thread
-            call_thread_id = threading.get_ident()
-            # Should be in different thread when called via asyncio.to_thread
-            called_in_thread = call_thread_id != main_thread_id
+        async def mock_generate(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
             return create_mock_response()
 
         mock_client = Mock()
-        mock_client.models.generate_content = mock_generate
-
-        # Track calls to asyncio.to_thread
-        to_thread_called = False
-        original_to_thread = asyncio.to_thread
-
-        async def track_to_thread(func, *args, **kwargs):
-            nonlocal to_thread_called
-            to_thread_called = True
-            # Actually run in thread to test the real behavior
-            return await original_to_thread(func, *args, **kwargs)
+        mock_client.aio.models.generate_content = mock_generate
 
         with patch(
             "mcp_second_brain.adapters.vertex.adapter.genai.Client",
@@ -68,30 +54,22 @@ class TestVertexThreadSafety:
             # Clear the cached singleton client
             vertex_module._client = None
 
-            # Patch asyncio.to_thread correctly
-            with patch.object(
-                vertex_module.asyncio, "to_thread", side_effect=track_to_thread
-            ):
-                monkeypatch.setenv("VERTEX_PROJECT", "test-project")
-                monkeypatch.setenv("VERTEX_LOCATION", "us-central1")
+            monkeypatch.setenv("VERTEX_PROJECT", "test-project")
+            monkeypatch.setenv("VERTEX_LOCATION", "us-central1")
 
-                # Clear settings cache
-                from mcp_second_brain.config import get_settings
+            # Clear settings cache
+            from mcp_second_brain.config import get_settings
 
-                get_settings.cache_clear()
+            get_settings.cache_clear()
 
-                adapter = VertexAdapter("gemini-2.5-pro")
+            adapter = VertexAdapter("gemini-2.5-pro")
 
-                await adapter.generate("test prompt")
+            await adapter.generate("test prompt")
 
-                # Verify asyncio.to_thread was called
-                assert to_thread_called, "asyncio.to_thread should be called"
-                assert (
-                    call_thread_id is not None
-                ), "generate_content should have been called"
-                assert (
-                    called_in_thread
-                ), "generate_content should be called in a different thread"
+            # Verify async client was called
+            assert (
+                call_count == 1
+            ), "Async generate_content should have been called once"
 
     @pytest.mark.asyncio
     async def test_cancellation_propagates(self, monkeypatch):
@@ -102,6 +80,7 @@ class TestVertexThreadSafety:
             return create_mock_response()
 
         mock_client = Mock()
+        mock_client.aio.models.generate_content = slow_generate
 
         with patch(
             "mcp_second_brain.adapters.vertex.adapter.genai.Client",
@@ -110,42 +89,35 @@ class TestVertexThreadSafety:
             # Clear the cached singleton client
             vertex_module._client = None
 
-            with patch.object(
-                vertex_module.asyncio, "to_thread", side_effect=slow_generate
-            ):
-                monkeypatch.setenv("VERTEX_PROJECT", "test-project")
-                monkeypatch.setenv("VERTEX_LOCATION", "us-central1")
+            monkeypatch.setenv("VERTEX_PROJECT", "test-project")
+            monkeypatch.setenv("VERTEX_LOCATION", "us-central1")
 
-                adapter = VertexAdapter("gemini-2.5-pro")
+            adapter = VertexAdapter("gemini-2.5-pro")
 
-                # Create and cancel the task
-                task = asyncio.create_task(adapter.generate("test"))
-                await asyncio.sleep(0.1)
-                task.cancel()
+            # Create and cancel the task
+            task = asyncio.create_task(adapter.generate("test"))
+            await asyncio.sleep(0.1)
+            task.cancel()
 
-                with pytest.raises(asyncio.CancelledError):
-                    await task
+            with pytest.raises(asyncio.CancelledError):
+                await task
 
     @pytest.mark.asyncio
     async def test_function_call_limit_enforced(self, monkeypatch):
         """Test that function calls are limited."""
         call_count = 0
 
-        def mock_generate(*args, **kwargs):
+        async def mock_generate(*args, **kwargs):
             nonlocal call_count
             call_count += 1
             # Always return a function call
             return create_mock_response(with_function_call=True)
 
         mock_client = Mock()
-        mock_client.models.generate_content = mock_generate
+        mock_client.aio.models.generate_content = mock_generate
 
         mock_search = Mock()
         mock_search.generate = AsyncMock(return_value="search results")
-
-        # Patch asyncio.to_thread to run synchronously for testing
-        async def mock_to_thread(func, *args, **kwargs):
-            return func(*args, **kwargs)
 
         with patch(
             "mcp_second_brain.adapters.vertex.adapter.genai.Client",
@@ -154,42 +126,39 @@ class TestVertexThreadSafety:
             # Clear the cached singleton client
             vertex_module._client = None
 
-            with patch.object(
-                vertex_module.asyncio, "to_thread", side_effect=mock_to_thread
+            with patch(
+                "mcp_second_brain.tools.search_memory.SearchMemoryAdapter",
+                return_value=mock_search,
             ):
-                with patch(
-                    "mcp_second_brain.tools.search_memory.SearchMemoryAdapter",
-                    return_value=mock_search,
-                ):
-                    monkeypatch.setenv("VERTEX_PROJECT", "test-project")
-                    monkeypatch.setenv("VERTEX_LOCATION", "us-central1")
-                    monkeypatch.setenv("VERTEX__MAX_FUNCTION_CALLS", "3")
+                monkeypatch.setenv("VERTEX_PROJECT", "test-project")
+                monkeypatch.setenv("VERTEX_LOCATION", "us-central1")
+                monkeypatch.setenv("VERTEX__MAX_FUNCTION_CALLS", "3")
 
-                    from mcp_second_brain.config import get_settings
+                from mcp_second_brain.config import get_settings
 
-                    get_settings.cache_clear()
+                get_settings.cache_clear()
 
-                    adapter = VertexAdapter("gemini-2.5-pro")
+                adapter = VertexAdapter("gemini-2.5-pro")
 
-                    # Create initial response with function call
-                    initial_response = create_mock_response(with_function_call=True)
+                # Create initial response with function call
+                initial_response = create_mock_response(with_function_call=True)
 
-                    # Create initial conversation context
-                    contents = [
-                        types.Content(
-                            role="user", parts=[types.Part(text="Search for test")]
-                        )
-                    ]
-
-                    # Call the handler
-                    result, _ = await adapter._handle_function_calls(
-                        initial_response, contents, types.GenerateContentConfig()
+                # Create initial conversation context
+                contents = [
+                    types.Content(
+                        role="user", parts=[types.Part(text="Search for test")]
                     )
+                ]
 
-                    # Should hit the limit
-                    assert call_count == 3  # 3 follow-up calls after initial
-                    assert "TooManyFunctionCalls" in result
-                    assert "Exceeded 3 function call rounds" in result
+                # Call the handler
+                result, _ = await adapter._handle_function_calls(
+                    initial_response, contents, types.GenerateContentConfig()
+                )
+
+                # Should hit the limit
+                assert call_count == 3  # 3 follow-up calls after initial
+                assert "TooManyFunctionCalls" in result
+                assert "Exceeded 3 function call rounds" in result
 
     @pytest.mark.asyncio
     async def test_max_output_tokens_from_config(self, monkeypatch):
@@ -197,17 +166,13 @@ class TestVertexThreadSafety:
         mock_client = Mock()
         generate_content_config = None
 
-        def capture_config(*args, **kwargs):
+        async def capture_config(*args, **kwargs):
             nonlocal generate_content_config
             if "config" in kwargs:
                 generate_content_config = kwargs["config"]
             return create_mock_response()
 
-        mock_client.models.generate_content = capture_config
-
-        # Patch asyncio.to_thread to run synchronously for testing
-        async def mock_to_thread(func, *args, **kwargs):
-            return func(*args, **kwargs)
+        mock_client.aio.models.generate_content = capture_config
 
         with patch(
             "mcp_second_brain.adapters.vertex.adapter.genai.Client",
@@ -216,22 +181,19 @@ class TestVertexThreadSafety:
             # Clear the cached singleton client
             vertex_module._client = None
 
-            with patch.object(
-                vertex_module.asyncio, "to_thread", side_effect=mock_to_thread
-            ):
-                monkeypatch.setenv("VERTEX_PROJECT", "test-project")
-                monkeypatch.setenv("VERTEX_LOCATION", "us-central1")
-                monkeypatch.setenv("VERTEX__MAX_OUTPUT_TOKENS", "4096")
+            monkeypatch.setenv("VERTEX_PROJECT", "test-project")
+            monkeypatch.setenv("VERTEX_LOCATION", "us-central1")
+            monkeypatch.setenv("VERTEX__MAX_OUTPUT_TOKENS", "4096")
 
-                from mcp_second_brain.config import get_settings
+            from mcp_second_brain.config import get_settings
 
-                get_settings.cache_clear()
+            get_settings.cache_clear()
 
-                adapter = VertexAdapter("gemini-2.5-pro")
-                await adapter.generate("test")
+            adapter = VertexAdapter("gemini-2.5-pro")
+            await adapter.generate("test")
 
-                assert generate_content_config is not None
-                assert generate_content_config.max_output_tokens == 4096
+            assert generate_content_config is not None
+            assert generate_content_config.max_output_tokens == 4096
 
     @pytest.mark.asyncio
     async def test_function_call_error_handling(self, monkeypatch):
@@ -241,21 +203,17 @@ class TestVertexThreadSafety:
         responses = [create_mock_response(text="Final response")]
         call_idx = 0
 
-        def mock_generate(*args, **kwargs):
+        async def mock_generate(*args, **kwargs):
             nonlocal call_idx
             resp = responses[min(call_idx, len(responses) - 1)]
             call_idx += 1
             return resp
 
         mock_client = Mock()
-        mock_client.models.generate_content = Mock(side_effect=mock_generate)
+        mock_client.aio.models.generate_content = mock_generate
 
         mock_search = Mock()
         mock_search.generate = AsyncMock(side_effect=Exception("Database error"))
-
-        # Patch asyncio.to_thread to run synchronously for testing
-        async def mock_to_thread(func, *args, **kwargs):
-            return func(*args, **kwargs)
 
         with patch(
             "mcp_second_brain.adapters.vertex.adapter.genai.Client",
@@ -264,31 +222,28 @@ class TestVertexThreadSafety:
             # Clear the cached singleton client
             vertex_module._client = None
 
-            with patch.object(
-                vertex_module.asyncio, "to_thread", side_effect=mock_to_thread
+            with patch(
+                "mcp_second_brain.tools.search_memory.SearchMemoryAdapter",
+                return_value=mock_search,
             ):
-                with patch(
-                    "mcp_second_brain.tools.search_memory.SearchMemoryAdapter",
-                    return_value=mock_search,
-                ):
-                    monkeypatch.setenv("VERTEX_PROJECT", "test-project")
-                    monkeypatch.setenv("VERTEX_LOCATION", "us-central1")
+                monkeypatch.setenv("VERTEX_PROJECT", "test-project")
+                monkeypatch.setenv("VERTEX_LOCATION", "us-central1")
 
-                    adapter = VertexAdapter("gemini-2.5-pro")
+                adapter = VertexAdapter("gemini-2.5-pro")
 
-                    # Create initial response with function call
-                    initial_response = create_mock_response(with_function_call=True)
+                # Create initial response with function call
+                initial_response = create_mock_response(with_function_call=True)
 
-                    # Call the handler
-                    result, _ = await adapter._handle_function_calls(
-                        initial_response, [], types.GenerateContentConfig()
-                    )
+                # Call the handler
+                result, _ = await adapter._handle_function_calls(
+                    initial_response, [], types.GenerateContentConfig()
+                )
 
-                    # Should return the final text despite the error
-                    assert result == "Final response"
+                # Should return the final text despite the error
+                assert result == "Final response"
 
-                    # Verify that generate_content was called to continue after error
-                    assert mock_client.models.generate_content.call_count == 1
+                # Verify that generate_content was called
+                assert call_idx == 1
 
     def test_client_singleton_thread_safety(self):
         """Test get_client is thread-safe."""

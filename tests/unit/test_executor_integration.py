@@ -122,7 +122,11 @@ class TestExecutorIntegration:
                             with patch(
                                 "mcp_second_brain.tools.executor.build_context_with_stable_list",
                                 new_callable=AsyncMock,
-                                return_value=([("/test/file.py", "content", 100)], []),
+                                return_value=(
+                                    [("/test/file.py", "content", 100)],
+                                    [],
+                                    "/test\n└── file.py",
+                                ),
                             ) as mock_build:
                                 with patch.object(
                                     executor.prompt_engine,
@@ -262,6 +266,7 @@ class TestExecutorIntegration:
                                 return_value=(
                                     [("/test/inline.py", "content", 100)],
                                     ["/test/overflow1.py", "/test/overflow2.py"],
+                                    "/test\n├── inline.py\n├── overflow1.py attached\n└── overflow2.py attached",
                                 ),
                             ):
                                 with patch.object(
@@ -289,6 +294,10 @@ class TestExecutorIntegration:
 
                                         # Verify vector store was created with overflow files
                                         mock_create_vs.assert_called_once_with(
-                                            ["/test/overflow1.py", "/test/overflow2.py"]
+                                            [
+                                                "/test/overflow1.py",
+                                                "/test/overflow2.py",
+                                            ],
+                                            session_id="test-session",
                                         )
                                         assert result == "response"
