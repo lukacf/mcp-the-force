@@ -4,9 +4,10 @@ import os
 import logging
 from typing import List, Tuple, Optional
 
-from ..utils.fs import gather_file_paths
-from ..utils.context_loader import load_specific_files
+from ..utils.fs import gather_file_paths_async
+from ..utils.context_loader import load_specific_files_async
 from .stable_list_cache import StableListCache
+from .file_tree import build_file_tree_from_paths
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +65,7 @@ async def build_context_with_stable_list(
     cache: StableListCache,
     token_budget: int,
     attachments: Optional[List[str]] = None,
-) -> Tuple[List[Tuple[str, str, int]], List[str]]:
+) -> Tuple[List[Tuple[str, str, int]], List[str], str]:
     """Build context using stable-inline list approach.
 
     On first call with overflow, establishes a stable list of files
@@ -78,9 +79,10 @@ async def build_context_with_stable_list(
         attachments: Optional list of attachment paths
 
     Returns:
-        Tuple of (files_to_send_inline, files_for_vector_store)
+        Tuple of (files_to_send_inline, files_for_vector_store, file_tree)
         - files_to_send_inline: List of (path, content, tokens) tuples
         - files_for_vector_store: List of file paths
+        - file_tree: ASCII tree representation with INLINE markers
     """
     # Debug logging to understand file access issues
     logger.info(f"DEBUG: CWD inside context_builder: {os.getcwd()}")
@@ -103,7 +105,7 @@ async def build_context_with_stable_list(
                 logger.info(f"DEBUG: Error statting file: {e}")
 
     # Gather all files from context paths
-    all_files = gather_file_paths(context_paths)
+    all_files = await gather_file_paths_async(context_paths)
     logger.info(f"Gathered {len(all_files)} files from context paths")
 
     # Check if we have a stable list
@@ -139,7 +141,7 @@ async def build_context_with_stable_list(
         logger.info(
             f"Loading {len(inline_paths)} inline files (estimated), {len(overflow_paths)} overflow files"
         )
-        file_data = load_specific_files(inline_paths)
+        file_data = await load_specific_files_async(inline_paths)
 
         # Safety check: trim if our size estimates were too optimistic
         file_data.sort(key=lambda t: t[2])  # Sort by actual token count
@@ -202,7 +204,7 @@ async def build_context_with_stable_list(
                 # This file should go inline
                 if await cache.file_changed_since_last_send(session_id, file_path):
                     # File has changed, need to resend it
-                    file_data = load_specific_files([file_path])
+                    file_data = await load_specific_files_async([file_path])
                     if file_data:
                         files_to_send.append(file_data[0])
                         # Update sent info
@@ -225,11 +227,46 @@ async def build_context_with_stable_list(
 
     # Add attachments to overflow (they always go to vector store)
     if attachments:
-        attachment_files = gather_file_paths(attachments, skip_safety_check=True)
-        overflow_paths.extend(attachment_files)
-        logger.info(f"Added {len(attachment_files)} attachment files to vector store")
+        attachment_files = await gather_file_paths_async(
+            attachments, skip_safety_check=True
+        )
+        # Deduplicate: convert to set to remove any files already in overflow_paths
+        overflow_paths_set = set(overflow_paths)
+        new_attachments = [f for f in attachment_files if f not in overflow_paths_set]
+        overflow_paths.extend(new_attachments)
+        logger.info(
+            f"Added {len(new_attachments)} unique attachment files to vector store (skipped {len(attachment_files) - len(new_attachments)} duplicates)"
+        )
+
+    # Generate file tree from ALL files (context + attachments)
+    # Combine all files that were requested (deduplicated)
+    all_requested_files = list(all_files)  # Files from context paths
+    if overflow_paths:
+        # Only add overflow files that aren't already in all_files
+        all_files_set = set(all_files)
+        unique_overflow = [f for f in overflow_paths if f not in all_files_set]
+        all_requested_files.extend(unique_overflow)
+
+    # Determine which files are inline
+    inline_file_paths = []
+    if stable_list:
+        # Use the stable list
+        inline_file_paths = list(stable_list)
+    else:
+        # Use the current inline paths
+        inline_file_paths = list(inline_paths)
+
+    # Build file tree showing only requested files with attached markers
+    # We mark attachment files (not inline files) since inline is the majority
+    attachment_paths = list(set(all_requested_files) - set(inline_file_paths))
+
+    file_tree = build_file_tree_from_paths(
+        all_paths=all_requested_files,
+        attachment_paths=attachment_paths,  # Mark these as attached
+        root_path=None,  # Will find common root automatically
+    )
 
     logger.info(
-        f"[CONTEXT_BUILDER] Completed: returning {len(files_to_send)} inline files, {len(overflow_paths)} overflow files"
+        f"[CONTEXT_BUILDER] Completed: returning {len(files_to_send)} inline files, {len(overflow_paths)} overflow files, file tree with {len(attachment_paths)} attached markers"
     )
-    return files_to_send, overflow_paths
+    return files_to_send, overflow_paths, file_tree

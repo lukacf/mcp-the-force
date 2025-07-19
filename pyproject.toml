@@ -48,6 +48,9 @@ dev = [
     "pre-commit>=3.5",
 ]
 
+[tool.setuptools]
+packages = ["mcp_second_brain"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
@@ -90,4 +93,7 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = "mcp_second_brain.tools.definitions"
 disable_error_code = ["assignment"]
+
+[tool.ruff]
+target-version = "py313"
 

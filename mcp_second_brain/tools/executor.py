@@ -16,6 +16,8 @@ from .prompt_engine import prompt_engine
 from .parameter_validator import ParameterValidator
 from .parameter_router import ParameterRouter
 
+# Import debug logger
+
 # Project memory imports
 from .safe_memory import safe_store_conversation_memory
 from ..config import get_settings
@@ -97,9 +99,14 @@ class ToolExecutor:
                 model_name = metadata.model_config["model_name"]
                 model_limit = get_model_context_window(model_name)
                 context_percentage = settings.mcp.context_percentage
-                safety_margin = 30000  # Increased to account for prompt overhead (XML, system prompts, etc.)
-                token_budget = max(
-                    int(model_limit * context_percentage) - safety_margin, 1000
+
+                # The context_percentage (default 0.85) already includes safety margin
+                # The remaining 15% is for system prompts, tool responses, etc.
+                token_budget = max(int(model_limit * context_percentage), 1000)
+                logger.info(
+                    f"[TOKEN_BUDGET] Model: {model_name}, limit: {model_limit:,}, "
+                    f"percentage: {context_percentage:.0%}, "
+                    f"budget: {token_budget:,}"
                 )
 
                 # Get context and attachment paths
@@ -118,7 +125,11 @@ class ToolExecutor:
 
                 # Call the new context builder
                 logger.info("[STEP 8] Calling context builder with stable list")
-                inline_files, overflow_files = await build_context_with_stable_list(
+                (
+                    inline_files,
+                    overflow_files,
+                    file_tree,
+                ) = await build_context_with_stable_list(
                     context_paths=context_paths,
                     session_id=session_id,
                     cache=cache,
@@ -126,7 +137,7 @@ class ToolExecutor:
                     attachments=attachment_paths,
                 )
                 logger.info(
-                    f"[STEP 8.1] Context builder returned: {len(inline_files)} inline files, {len(overflow_files)} overflow files"
+                    f"[STEP 8.1] Context builder returned: {len(inline_files)} inline files, {len(overflow_files)} overflow files, file tree generated"
                 )
 
                 # Format the prompt with inline files
@@ -138,6 +149,14 @@ class ToolExecutor:
                 ET.SubElement(task, "OutputFormat").text = prompt_params.get(
                     "output_format", ""
                 )
+
+                # Add file map with legend
+                file_map = ET.SubElement(task, "file_map")
+                file_map.text = (
+                    file_tree
+                    + "\n\nLegend: Files marked 'attached' are available via search_attachments. Unmarked files are included below."
+                )
+
                 CTX = ET.SubElement(task, "CONTEXT")
 
                 # Helper function to create file elements
@@ -155,7 +174,7 @@ class ToolExecutor:
                 prompt = ET.tostring(task, encoding="unicode")
                 logger.info(f"[STEP 9.1] Prompt built: {len(prompt)} chars")
                 if overflow_files:
-                    prompt += "\n\nYou have additional information accessible through the file search tool."
+                    prompt += "\n\n<instructions_on_use>The files in the file tree but not included in <CONTEXT> you access via the search_attachments MCP function. They are stored in a vector database and the search function does semantic search.</instructions_on_use>"
 
                 # Store overflow files for vector store creation
                 files_for_vector_store = overflow_files
@@ -243,11 +262,14 @@ class ToolExecutor:
                 logger.info(
                     f"Creating vector store with {len(files_for_vector_store)} overflow/attachment files: {files_for_vector_store}"
                 )
-                vs_id = await self.vector_store_manager.create(files_for_vector_store)
+                vs_id = await self.vector_store_manager.create(
+                    files_for_vector_store, session_id=session_id
+                )
                 vector_store_ids = [vs_id] if vs_id else None
                 logger.info(
-                    f"Created vector store {vs_id}, vector_store_ids={vector_store_ids}"
+                    f"Vector store ready: {vs_id}, vector_store_ids={vector_store_ids}"
                 )
+                logger.info("[DEBUG] Exiting IF block for vector store handling")
             else:
                 # Fallback: Gather files from vector_store parameter if no session_id
                 vector_store_param = routed_params.get("vector_store", [])
@@ -271,7 +293,9 @@ class ToolExecutor:
                         f"Gathered {len(files)} files from attachments: {files}"
                     )
                     if files:
-                        vs_id = await self.vector_store_manager.create(files)
+                        vs_id = await self.vector_store_manager.create(
+                            files, session_id=None
+                        )
                         vector_store_ids = [vs_id] if vs_id else None
                         logger.info(
                             f"Created vector store {vs_id}, vector_store_ids={vector_store_ids}"
@@ -281,11 +305,14 @@ class ToolExecutor:
             # Models should use search_project_memory function to access memory
 
             # 5. Get adapter
+            logger.info("[DEBUG] About to get settings")
             settings = get_settings()
+            logger.info("[DEBUG] About to get adapter")
             adapter, error = adapters.get_adapter(
                 metadata.model_config["adapter_class"],
                 metadata.model_config["model_name"],
             )
+            logger.info(f"[DEBUG] Got adapter: {adapter}")
             if not adapter:
                 raise fastmcp.exceptions.ToolError(
                     f"Failed to initialize adapter: {error}"
@@ -340,13 +367,18 @@ class ToolExecutor:
                 vector_store_ids = (vector_store_ids or []) + list(explicit_vs_ids)
 
             timeout_seconds = metadata.model_config["timeout"]
-            start_time = time.time()
+            adapter_start_time = time.time()
             logger.info(
                 f"[STEP 15] Calling adapter.generate with prompt {len(final_prompt)} chars, vector_store_ids={vector_store_ids}, timeout={timeout_seconds}s"
             )
             logger.info(
                 f"[TIMING] Starting adapter.generate at {time.strftime('%H:%M:%S')}"
             )
+
+            # Renew lease before long-running operation if using Loiter Killer
+            if session_id and vs_id and self.vector_store_manager.loiter_killer.enabled:
+                await self.vector_store_manager.loiter_killer.renew_lease(session_id)
+                logger.info(f"Renewed Loiter Killer lease for session {session_id}")
 
             # Create unique operation ID
             operation_id = f"{tool_id}_{uuid.uuid4().hex[:8]}"
@@ -364,7 +396,7 @@ class ToolExecutor:
                 )
 
                 end_time = time.time()
-                duration = end_time - start_time
+                duration = end_time - adapter_start_time
                 logger.info(
                     f"[STEP 16] adapter.generate completed in {duration:.2f}s, result type: {type(result)}, length: {len(str(result)) if result else 0}"
                 )
@@ -373,7 +405,7 @@ class ToolExecutor:
                 )
             except asyncio.TimeoutError:
                 timeout_time = time.time()
-                partial_duration = timeout_time - start_time
+                partial_duration = timeout_time - adapter_start_time
                 logger.error(
                     f"[CRITICAL] Adapter timeout after {timeout_seconds}s for {tool_id} (actual duration: {partial_duration:.2f}s)"
                 )
@@ -382,7 +414,16 @@ class ToolExecutor:
                 )
             except asyncio.CancelledError:
                 was_cancelled = True
-                logger.info(f"{tool_id} aborted - letting cancellation bubble up")
+                logger.warning(
+                    f"[CANCEL] {tool_id} received CancelledError in executor"
+                )
+                logger.info(
+                    f"[CANCEL] Active tasks in executor: {len(asyncio.all_tasks())}"
+                )
+                logger.info(f"[CANCEL] Vector store IDs were: {vector_store_ids}")
+                logger.info(f"[CANCEL] Session ID was: {session_id}")
+                logger.info(f"[CANCEL] Adapter was: {adapter_class}")
+                logger.info("[CANCEL] Re-raising CancelledError from executor")
                 raise  # Important: do NOT convert or return
             except Exception as e:
                 logger.error(f"[CRITICAL] Adapter generate failed for {tool_id}: {e}")
@@ -391,23 +432,32 @@ class ToolExecutor:
             # 8. Handle response
             logger.info("[STEP 17] Handling response")
             if isinstance(result, dict):
+                logger.info("[STEP 17.1] Result is dict")
                 content = result.get("content", "")
+                logger.info(f"[STEP 17.2] Got content, length: {len(str(content))}")
                 if (
                     session_id
                     and metadata.model_config["adapter_class"] == "openai"
                     and "response_id" in result
                 ):
+                    logger.info(
+                        f"[STEP 17.3] Saving response_id for session {session_id}"
+                    )
                     await session_cache_module.session_cache.set_response_id(
                         session_id, result["response_id"]
                     )
+                    logger.info("[STEP 17.4] Response_id saved")
                 # Session management is now handled inside the adapters themselves
                 # No need to save sessions here for Vertex/Grok models
 
                 # Redact secrets from content
+                logger.info("[STEP 17.5] Starting redaction")
                 redacted_content = redact_secrets(str(content))
+                logger.info("[STEP 17.6] Redaction complete")
 
                 # 8a. Store conversation in memory (with redacted content)
-                if settings.memory_enabled and session_id:
+                # TEMPORARILY DISABLED: Memory storage may be causing thread pool exhaustion
+                if False and settings.memory_enabled and session_id:
                     try:
                         # Extract messages from prompt
                         conv_messages = prompt_params.get("messages", [])
@@ -428,14 +478,22 @@ class ToolExecutor:
                         memory_tasks.append(memory_task)
                     except Exception as e:
                         logger.warning(f"Failed to store conversation memory: {e}")
+                if settings.memory_enabled and session_id:
+                    logger.warning(
+                        "[MEMORY] Memory storage temporarily disabled - testing for hang issue"
+                    )
 
+                logger.info(
+                    f"[STEP 17.7] About to return redacted content, length: {len(redacted_content)}"
+                )
                 return redacted_content
             else:
                 # Redact secrets from result
                 redacted_result = redact_secrets(str(result))
 
                 # Store conversation for Vertex models too (with redacted content)
-                if settings.memory_enabled and session_id:
+                # TEMPORARILY DISABLED: Memory storage may be causing thread pool exhaustion
+                if False and settings.memory_enabled and session_id:
                     try:
                         conv_messages = prompt_params.get("messages", [])
                         if not isinstance(conv_messages, list):
@@ -452,12 +510,25 @@ class ToolExecutor:
                         memory_tasks.append(memory_task)
                     except Exception as e:
                         logger.warning(f"Failed to store conversation memory: {e}")
+                if settings.memory_enabled and session_id:
+                    logger.warning(
+                        "[MEMORY] Memory storage temporarily disabled - testing for hang issue"
+                    )
 
                 # Session management is now handled inside the adapters themselves
                 # No need to save sessions here for Vertex/Grok models
 
                 return redacted_result
 
+        except asyncio.CancelledError:
+            # Handle cancellation that happens outside the inner try block
+            # (e.g., during vector store creation)
+            was_cancelled = True
+            logger.warning(
+                f"[CANCEL] {tool_id} received CancelledError in outer executor block"
+            )
+            logger.info("[CANCEL] Re-raising CancelledError from outer block")
+            raise
         except Exception as e:
             # If cancellation already happened, don't let a subsequent error in the
             # cleanup logic cause a crash.
@@ -473,21 +544,28 @@ class ToolExecutor:
             raise fastmcp.exceptions.ToolError(f"Tool execution failed: {str(e)}")
 
         finally:
+            logger.info(f"[CANCEL] In finally block, was_cancelled={was_cancelled}")
+            logger.info(f"[CANCEL] Active tasks in finally: {len(asyncio.all_tasks())}")
+
             # If operation was cancelled, do NOT block on more awaits
             if was_cancelled:
+                logger.info(f"[CANCEL] Handling cancelled cleanup for {tool_id}")
                 # Fast exit - schedule best-effort background cleanup
                 if vs_id:
-
-                    async def safe_cleanup():
-                        try:
-                            await vector_store_manager.delete(vs_id)
-                        except Exception as e:
-                            logger.debug(f"Background cleanup failed (expected): {e}")
-
-                    # Re-enabled: Background cleanup for vector stores
-                    bg_task = asyncio.create_task(safe_cleanup())
-                    # Mark exception as retrieved to prevent ExceptionGroup
-                    bg_task.add_done_callback(lambda t: t.exception())
+                    # TEMPORARILY DISABLED: Testing if vector store deletion causes hanging
+                    logger.info(
+                        f"[TEST] Skipping vector store deletion for {vs_id} (cancelled path)"
+                    )
+                    # async def safe_cleanup():
+                    #     try:
+                    #         await vector_store_manager.delete(vs_id)
+                    #     except Exception as e:
+                    #         logger.debug(f"Background cleanup failed (expected): {e}")
+                    #
+                    # # Re-enabled: Background cleanup for vector stores
+                    # bg_task = asyncio.create_task(safe_cleanup())
+                    # # Mark exception as retrieved to prevent ExceptionGroup
+                    # bg_task.add_done_callback(lambda t: t.exception())
                 # Cancel memory tasks to free resources
                 logger.info(
                     f"[MEMORY] Cancelling {len(memory_tasks)} memory storage tasks due to operation cancellation"
@@ -501,11 +579,15 @@ class ToolExecutor:
 
             # Normal path (no cancellation) - safe to await with timeouts
             if vs_id:
-                # Add timeout to avoid hanging on cleanup
-                with contextlib.suppress(asyncio.TimeoutError):
-                    await asyncio.wait_for(
-                        vector_store_manager.delete(vs_id), timeout=5.0
-                    )
+                # TEMPORARILY DISABLED: Testing if vector store deletion causes hanging
+                logger.info(
+                    f"[TEST] Skipping vector store deletion for {vs_id} (normal path)"
+                )
+                # # Add timeout to avoid hanging on cleanup
+                # with contextlib.suppress(asyncio.TimeoutError):
+                #     await asyncio.wait_for(
+                #         vector_store_manager.delete(vs_id), timeout=5.0
+                #     )
 
             # Wait for memory tasks to complete (with shorter timeout)
             if memory_tasks:

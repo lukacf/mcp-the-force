@@ -70,8 +70,9 @@ class BaseFlowStrategy(ABC):
 
         # Only add custom tools if the model supports them
         if capability is None or capability.supports_custom_tools:
-            # Add search_project_memory tool
-            tools.append(create_search_memory_declaration_openai())
+            # Add search_project_memory tool unless disabled
+            if not self.context.request.disable_memory_search:
+                tools.append(create_search_memory_declaration_openai())
 
             # Add attachment search if vector stores provided
             logger.info(
@@ -276,6 +277,10 @@ class BackgroundFlowStrategy(BaseFlowStrategy):
         logger.info(
             f"[ADAPTER] Starting OpenAI responses.create at {time.strftime('%H:%M:%S')}"
         )
+        logger.info(f"[DEBUG] api_params keys: {list(api_params.keys())}")
+        logger.info(
+            f"[DEBUG] previous_response_id: {api_params.get('previous_response_id')}"
+        )
         api_start_time = time.time()
         initial_response = await self.context.client.responses.create(**api_params)
         api_end_time = time.time()
@@ -322,7 +327,11 @@ class BackgroundFlowStrategy(BaseFlowStrategy):
             try:
                 await asyncio.sleep(delay)
             except asyncio.CancelledError:
-                logger.info(f"Polling cancelled for {response_id}")
+                logger.warning(f"[CANCEL] Polling cancelled for {response_id}")
+                logger.info(
+                    f"[CANCEL] Active tasks during OpenAI poll cancel: {len(asyncio.all_tasks())}"
+                )
+                logger.info("[CANCEL] Re-raising from OpenAI polling loop")
                 # Re-raise to propagate cancellation properly
                 raise
 

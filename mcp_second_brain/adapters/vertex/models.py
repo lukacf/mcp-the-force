@@ -22,7 +22,7 @@ _MAX_BUDGET_FLASH = 24576
 # Model capabilities registry
 model_capabilities: Dict[str, ModelCapability] = {
     "gemini-2.5-pro": ModelCapability(
-        context_window=2_000_000,  # Consistent with adapter.py
+        context_window=1_000_000,  # Gemini 2.5 Pro has a context window of 1M tokens (June 2025)
         max_thinking_budget=_MAX_BUDGET_PRO,
         reasoning_effort_map={
             "low": int(_MAX_BUDGET_PRO * 0.40),  # 13107
@@ -31,7 +31,7 @@ model_capabilities: Dict[str, ModelCapability] = {
         },
     ),
     "gemini-2.5-flash": ModelCapability(
-        context_window=2_000_000,  # Consistent with adapter.py
+        context_window=1_000_000,  # Gemini 2.5 Flash has a context window of 1M tokens (June 2025)
         max_thinking_budget=_MAX_BUDGET_FLASH,
         reasoning_effort_map={
             "low": int(_MAX_BUDGET_FLASH * 0.40),  # 9830

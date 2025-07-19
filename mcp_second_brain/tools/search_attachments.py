@@ -4,26 +4,21 @@ This provides a way for models to search ephemeral vector stores created
 from attachments during the current execution.
 """
 
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 import logging
 import asyncio
-from ..utils.thread_pool import get_shared_executor
 
-from openai import OpenAI
+from openai import AsyncOpenAI
 import fastmcp.exceptions
 
-from ..config import get_settings
 from ..adapters.base import BaseAdapter
+from ..adapters.openai.client import OpenAIClientFactory
 from .base import ToolSpec
 from .descriptors import Route
 from .registry import tool
 from .search_dedup import SearchDeduplicator
 
 logger = logging.getLogger(__name__)
-
-
-# Thread pool for synchronous OpenAI operations (shared)
-executor = get_shared_executor()
 
 # Semaphore to limit concurrent searches
 search_semaphore = asyncio.Semaphore(3)
@@ -57,19 +52,16 @@ class SearchAttachmentAdapter(BaseAdapter):
     context_window = 0  # Not applicable
     description_snippet = "Search current session attachments"
 
-    client: Optional[OpenAI]
-
     # Class-level deduplicator shared across instances
     _deduplicator = SearchDeduplicator("attachment")
 
     def __init__(self, model_name: str = "attachment_search"):
         self.model_name = model_name
-        settings = get_settings()
-        api_key = settings.openai_api_key
-        if api_key:
-            self.client = OpenAI(api_key=api_key)
-        else:
-            self.client = None
+        # Client will be obtained asynchronously via _get_client()
+
+    async def _get_client(self) -> AsyncOpenAI:
+        """Get the OpenAI client instance using the singleton factory."""
+        return await OpenAIClientFactory.get_instance()
 
     @classmethod
     async def clear_deduplication_cache(cls):
@@ -195,19 +187,14 @@ class SearchAttachmentAdapter(BaseAdapter):
         """Search a single vector store."""
         async with search_semaphore:  # Limit concurrent searches
             try:
-                if self.client is None:
-                    raise ValueError("OpenAI API key not configured")
-                # OpenAI search is synchronous, run in thread pool
-                loop = asyncio.get_event_loop()
-                # Use a local variable to help mypy understand client is not None
-                client = self.client
-                response = await loop.run_in_executor(
-                    executor,
-                    lambda: client.vector_stores.search(
-                        vector_store_id=store_id,
-                        query=query,
-                        max_num_results=max_results,
-                    ),
+                # Get the async client from singleton factory
+                client = await self._get_client()
+
+                # Use the async vector store search method
+                response = await client.vector_stores.search(
+                    vector_store_id=store_id,
+                    query=query,
+                    max_num_results=max_results,
                 )
 
                 # Format results
