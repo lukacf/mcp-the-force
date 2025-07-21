@@ -32,7 +32,7 @@ def stack(request):
     env_vars = {
         "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY", ""),
         "ANTHROPIC_API_KEY": os.getenv("ANTHROPIC_API_KEY", ""),
-        "VERTEX_PROJECT": os.getenv("VERTEX_PROJECT", "mcp-test-project"),
+        "VERTEX_PROJECT": os.getenv("VERTEX_PROJECT", ""),  # Don't default yet
         "VERTEX_LOCATION": os.getenv("VERTEX_LOCATION", "us-central1"),
     }
 
@@ -83,20 +83,63 @@ def stack(request):
         env_vars["ADC_JSON_B64"] = base64.b64encode(creds_json.encode()).decode()
 
         # ------------------------------------------------------------------
-        # choose a real project id so Vertex/Gemini can authorise
+        # Load VERTEX_PROJECT from config.yaml/secrets.yaml if not set
         # ------------------------------------------------------------------
-        if env_vars["VERTEX_PROJECT"] in ("", "mcp-test-project"):
+        if not env_vars["VERTEX_PROJECT"]:
             try:
-                cred_obj = json.loads(creds_json)
-                pj = (
-                    cred_obj.get("project_id")  # service-account creds
-                    or cred_obj.get("quota_project_id")  # authorised_user creds
-                    or ""
-                )
-                if pj:
-                    env_vars["VERTEX_PROJECT"] = pj
-            except Exception:
-                pass  # keep whatever was already set
+                import yaml
+
+                # Check for config files in the project root
+                project_root = Path(
+                    __file__
+                ).parent.parent.parent  # tests/e2e_dind/conftest.py -> project root
+                config_file = project_root / "config.yaml"
+                secrets_file = project_root / "secrets.yaml"
+
+                vertex_project = None
+
+                # Try loading from config.yaml first
+                if config_file.exists():
+                    with open(config_file) as f:
+                        config_data = yaml.safe_load(f) or {}
+                        # Check both new and legacy formats
+                        vertex_config = config_data.get(
+                            "vertex", {}
+                        ) or config_data.get("providers", {}).get("vertex", {})
+                        vertex_project = vertex_config.get("project")
+                        if vertex_project:
+                            print(
+                                f"✅ Loaded VERTEX_PROJECT from config.yaml: {vertex_project}"
+                            )
+
+                # Try secrets.yaml if not found
+                if not vertex_project and secrets_file.exists():
+                    with open(secrets_file) as f:
+                        secrets_data = yaml.safe_load(f) or {}
+                        # Check both new and legacy formats
+                        vertex_config = secrets_data.get(
+                            "vertex", {}
+                        ) or secrets_data.get("providers", {}).get("vertex", {})
+                        vertex_project = vertex_config.get("project")
+                        if vertex_project:
+                            print(
+                                f"✅ Loaded VERTEX_PROJECT from secrets.yaml: {vertex_project}"
+                            )
+
+                if vertex_project:
+                    env_vars["VERTEX_PROJECT"] = vertex_project
+                else:
+                    print("⚠️  No VERTEX_PROJECT found in config.yaml or secrets.yaml")
+
+            except Exception as e:
+                print(f"⚠️  Failed to load VERTEX_PROJECT from config files: {e}")
+
+        # If we still don't have a project, default to test project
+        if not env_vars["VERTEX_PROJECT"]:
+            env_vars["VERTEX_PROJECT"] = "mcp-test-project"
+            print(
+                "⚠️  No VERTEX_PROJECT found, using default test project (Gemini will fail)"
+            )
     else:
         # No credentials found, skip Gemini tests
         import pytest
@@ -105,6 +148,9 @@ def stack(request):
 
     # Set environment variables in os.environ for Docker Compose interpolation
     os.environ.update(env_vars)
+    print(
+        f"DEBUG: Stack fixture VERTEX_PROJECT: {env_vars.get('VERTEX_PROJECT', 'NOT SET')}"
+    )
 
     # Create compose instance using isolated directory
     compose = DockerCompose(
@@ -166,6 +212,26 @@ def stack(request):
         # Give a moment for containers to fully start
         time.sleep(3)
 
+        # Wait for server container to be ready
+        print("Waiting for server container to be ready...")
+        for i in range(30):
+            try:
+                # Try a simple command to check if container is responsive
+                stdout, stderr, return_code = compose.exec_in_container(
+                    ["echo", "ready"], "server"
+                )
+                if return_code == 0:
+                    print("✅ Server container is ready")
+                    break
+            except Exception:
+                pass
+
+            if i == 29:
+                print("⚠️  Server container failed to become ready")
+                raise RuntimeError("Server container not responding after 30 seconds")
+
+            time.sleep(1)
+
         # Inject Google Cloud credentials into the container if we found them
         if "ADC_JSON_B64" in env_vars:
             try:
@@ -218,6 +284,37 @@ def stack(request):
         # Return compose instance for test use
         yield compose
     finally:
+        # CRITICAL: Nuke all OpenAI resources before destroying containers
+        try:
+            print("\n🔥 NUKING all OpenAI vector stores created during E2E tests...")
+            stdout, stderr, return_code = compose.exec_in_container(
+                [
+                    "curl",
+                    "-s",
+                    "-X",
+                    "POST",
+                    "-H",
+                    "Content-Type: application/json",
+                    "http://localhost:9876/nuke",
+                ],
+                "server",
+            )
+            if return_code == 0:
+                try:
+                    result = json.loads(stdout)
+                    print(
+                        f"✅ NUKE COMPLETE: {result.get('message', 'Unknown result')}"
+                    )
+                except Exception:
+                    print(
+                        f"✅ NUKE completed (raw response: {stdout.strip()[:200]}...)"
+                    )
+            else:
+                print(f"⚠️  NUKE failed: {stderr}")
+        except Exception as e:
+            print(f"⚠️  Failed to nuke OpenAI resources: {e}")
+            print("⚠️  WARNING: OpenAI vector stores may be orphaned!")
+
         # Clean up - testcontainers stop() doesn't accept extra parameters
         try:
             # Force stop and remove containers to prevent hanging
@@ -259,6 +356,22 @@ def claude(stack, request) -> Callable[[str, int], str]:
     with proper MCP configuration.
     """
 
+    # Get the resolved VERTEX_PROJECT from the server container's environment
+    stdout, _, _ = stack.exec_in_container(
+        ["bash", "-c", "echo $VERTEX_PROJECT"], "server"
+    )
+    resolved_vertex_project = stdout.strip() or os.getenv(
+        "VERTEX_PROJECT", "mcp-test-project"
+    )
+    print(f"DEBUG: Resolved VERTEX_PROJECT for Claude MCP: {resolved_vertex_project}")
+
+    stdout, _, _ = stack.exec_in_container(
+        ["bash", "-c", "echo $VERTEX_LOCATION"], "server"
+    )
+    resolved_vertex_location = stdout.strip() or os.getenv(
+        "VERTEX_LOCATION", "us-central1"
+    )
+
     # Configure MCP server using claude mcp add-json
     mcp_config = {
         "command": "mcp-second-brain",
@@ -266,14 +379,14 @@ def claude(stack, request) -> Callable[[str, int], str]:
         "env": {
             "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY", ""),
             "ANTHROPIC_API_KEY": os.getenv("ANTHROPIC_API_KEY", ""),
-            "VERTEX_PROJECT": os.getenv(
-                "VERTEX_PROJECT", "mcp-test-project"
-            ),  # Use the resolved project
-            "VERTEX_LOCATION": os.getenv("VERTEX_LOCATION", "us-central1"),
+            "VERTEX_PROJECT": resolved_vertex_project,
+            "VERTEX_LOCATION": resolved_vertex_location,
             "GOOGLE_APPLICATION_CREDENTIALS": "/home/claude/.config/gcloud/application_default_credentials.json",
             "LOG_LEVEL": "DEBUG",
             "CI_E2E": "1",  # This MUST be set for the MCP server to allow /tmp paths
             "PYTHONPATH": "/host-project",
+            "VICTORIA_LOGS_URL": "http://host.docker.internal:9428",  # Critical for logging!
+            "LOITER_KILLER_URL": "http://localhost:9876",  # LoiterKiller running in server container
             # Stable list is now always enabled - no feature flag needed
         },
         "timeout": 60000,

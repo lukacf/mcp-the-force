@@ -85,6 +85,12 @@ class CleanupResponse(BaseModel):
     cleaned: int
 
 
+class NukeResponse(BaseModel):
+    sessions_deleted: int
+    vector_stores_deleted: int
+    message: str
+
+
 # Database setup
 def init_db():
     """Initialize SQLite database."""
@@ -358,6 +364,56 @@ async def trigger_cleanup():
     """Manually trigger cleanup of expired sessions."""
     cleaned = await cleanup_expired_sessions()
     return CleanupResponse(cleaned=cleaned)
+
+
+@app.post("/nuke", response_model=NukeResponse)
+async def nuke_everything():
+    """DELETE EVERYTHING - all sessions, vector stores, and files. For E2E test cleanup only!"""
+    logger.warning(
+        "NUKE EVERYTHING requested - deleting all vector stores and sessions!"
+    )
+
+    # Get all sessions (expired and active)
+    cursor = db.execute("SELECT session_id, vector_store_id FROM sessions")
+    all_sessions = cursor.fetchall()
+
+    sessions_deleted = 0
+    vector_stores_deleted = 0
+
+    for session_id, vector_store_id in all_sessions:
+        try:
+            # Delete vector store (this also deletes all its files)
+            if os.getenv("TEST_MODE") == "true":
+                logger.info(f"TEST MODE: Would delete vector store {vector_store_id}")
+            else:
+                try:
+                    await client.vector_stores.delete(vector_store_id)
+                    logger.info(
+                        f"NUKED vector store {vector_store_id} and all its files"
+                    )
+                    vector_stores_deleted += 1
+                except Exception as e:
+                    logger.error(f"Failed to nuke vector store {vector_store_id}: {e}")
+
+            sessions_deleted += 1
+
+        except Exception as e:
+            logger.error(f"Error nuking session {session_id}: {e}")
+
+    # Clear all database tables
+    db.execute("DELETE FROM file_paths")
+    db.execute("DELETE FROM sessions")
+    db.commit()
+
+    logger.warning(
+        f"NUKE COMPLETE: Deleted {sessions_deleted} sessions and {vector_stores_deleted} vector stores"
+    )
+
+    return NukeResponse(
+        sessions_deleted=sessions_deleted,
+        vector_stores_deleted=vector_stores_deleted,
+        message=f"Successfully nuked {sessions_deleted} sessions and {vector_stores_deleted} vector stores with all their files",
+    )
 
 
 if __name__ == "__main__":

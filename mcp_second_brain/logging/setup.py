@@ -58,8 +58,18 @@ def setup_logging():
         log_queue = queue.Queue(-1)  # -1 means unlimited size
 
         # Create our custom handler with timeout
+        # Allow overriding the VictoriaLogs URL for E2E tests
+        victoria_logs_url = os.getenv("VICTORIA_LOGS_URL", "http://localhost:9428")
+
+        # Debug log the URL in E2E mode
+        if os.getenv("CI_E2E") == "1":
+            print(
+                f"E2E: VictoriaLogs URL configured as: {victoria_logs_url}",
+                file=sys.stderr,
+            )
+
         loki_handler = TimeoutLokiHandler(
-            url="http://localhost:9428/insert/loki/api/v1/push?_stream_fields=app,instance_id",
+            url=f"{victoria_logs_url}/insert/loki/api/v1/push?_stream_fields=app,instance_id",
             tags={
                 "app": "mcp-second-brain",
                 "instance_id": instance_id,
