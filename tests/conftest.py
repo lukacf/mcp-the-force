@@ -195,6 +195,7 @@ def sample_tool_params():
         "instructions": "Test instruction",
         "output_format": "plain text",
         "context": [],
+        "priority_context": [],
     }
 
 

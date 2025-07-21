@@ -108,6 +108,7 @@ class TestStableInlineList:
             ),
             "output_format": "List each token found with the quoted sentence containing it.",
             "context": [small_file, large_file],
+            "priority_context": [],  # Add for consistency with new parameter
             "attachments": [attachment],
             "session_id": "stable-list-test-split",
         }
@@ -153,6 +154,7 @@ class TestStableInlineList:
             "instructions": f"Find and quote the exact sentence containing the token '{MARKER_SMALL_FILE}' from the context files provided.",
             "output_format": "Quote the exact sentence containing the token.",
             "context": [context_file],
+            "priority_context": [],  # Add for consistency with new parameter
             "attachments": [attachment1],
             "session_id": "stable-list-test-dedup",
         }
@@ -184,6 +186,7 @@ class TestStableInlineList:
                 "2. Quote the sentence containing the new attachment token."
             ),
             "context": [context_file],  # Same context, should not be resent
+            "priority_context": [],  # Add empty priority_context for consistency
             "attachments": [attachment2],  # New attachment
             "session_id": "stable-list-test-dedup",  # Same session
         }
@@ -223,6 +226,7 @@ class TestStableInlineList:
             "instructions": f"Find and quote the sentence containing token '{MARKER_SMALL_FILE}'.",
             "output_format": "Quote the exact sentence containing the token.",
             "context": [changing_file],
+            "priority_context": [],  # Add for consistency with new parameter
             "attachments": [],
             "session_id": "stable-list-test-change",
         }
@@ -245,6 +249,7 @@ class TestStableInlineList:
             "instructions": f"Find and quote the sentence containing token '{MARKER_MODIFIED_FILE}'.",
             "output_format": "Quote the exact sentence containing the token.",
             "context": [changing_file],  # Same file, but modified
+            "priority_context": [],  # Add for consistency with new parameter
             "attachments": [],
             "session_id": "stable-list-test-change",  # Same session
         }
