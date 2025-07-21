@@ -1,6 +1,7 @@
 """Client for communicating with the Loiter Killer service."""
 
 import logging
+import os
 from typing import Optional, Tuple, List
 import httpx
 
@@ -11,7 +12,8 @@ class LoiterKillerClient:
     """Client for the Loiter Killer vector store management service."""
 
     def __init__(self):
-        self.base_url = "http://localhost:9876"
+        # Allow overriding the URL for E2E tests
+        self.base_url = os.getenv("LOITER_KILLER_URL", "http://localhost:9876")
         self.enabled = False
         self._check_availability()
 

@@ -5,11 +5,13 @@ import time
 from google import genai
 from google.genai import types
 from google.genai.types import HarmCategory, HarmBlockThreshold
+import google.api_core.exceptions
 from ...config import get_settings
 from ..base import BaseAdapter
 from ..memory_search_declaration import create_search_memory_declaration_gemini
 from ..task_files_search_declaration import create_task_files_search_declaration_gemini
 from ...gemini_session_cache import gemini_session_cache
+from .errors import AdapterException, ErrorCategory
 
 # Removed validation imports - no longer validating structured output
 # from ...utils.validation import validate_json_schema
@@ -259,9 +261,6 @@ class VertexAdapter(BaseAdapter):
                 config=generate_content_config,
             )
         except Exception as e:
-            import google.api_core.exceptions
-            from .errors import AdapterException, ErrorCategory
-
             # Handle specific Google API errors
             if isinstance(e, google.api_core.exceptions.ResourceExhausted):
                 raise AdapterException(

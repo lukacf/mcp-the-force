@@ -9,7 +9,10 @@ services:
       VERTEX_LOCATION: ${VERTEX_LOCATION}
       LOG_LEVEL: INFO
       CI_E2E: "1"
+      LOITER_KILLER_URL: http://localhost:9876
     working_dir: /host-project
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # For Linux compatibility
     entrypoint: ["tail", "-f", "/dev/null"]  # Override pytest entrypoint and keep alive
     volumes:
       - shared-tmp:/tmp  # Share temp directory with server
@@ -26,7 +29,13 @@ services:
       HOST: 0.0.0.0
       PORT: 8000
       LOG_LEVEL: DEBUG
-    entrypoint: ["tail", "-f", "/dev/null"]  # Override server start and keep alive
+      VICTORIA_LOGS_URL: http://host.docker.internal:9428
+      LOITER_KILLER_URL: http://localhost:9876
+      PYTHONPATH: /app
+      CI_E2E: "1"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # For Linux compatibility
+    entrypoint: ["/startup.sh"]  # Run our custom startup script
     volumes:
       - shared-tmp:/tmp  # Share temp directory with runner
 
