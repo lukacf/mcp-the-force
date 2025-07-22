@@ -700,15 +700,14 @@ def create_file_in_container(stack: DockerCompose) -> Callable[[str, str], None]
             ]
             stack.exec_in_container(mkdir_cmd, "test-runner")
 
-        # Write file content using base64 to handle special characters
-        content_b64 = base64.b64encode(content.encode("utf-8")).decode("ascii")
-
+        # Write content to file using echo to avoid issues with heredocs
+        # For small files this is fine, and with CONTEXT_PERCENTAGE=0.01 we only need small files
         write_cmd = [
-            "bash",
+            "sh",
             "-c",
-            f"echo '{content_b64}' | base64 -d > {shlex.quote(file_path)} && "
-            f"chown claude:claude {shlex.quote(file_path)} && "
-            f"chmod 644 {shlex.quote(file_path)}",
+            f"echo {shlex.quote(content)} > {shlex.quote(file_path)} "
+            f"&& chown claude:claude {shlex.quote(file_path)} "
+            f"&& chmod 644 {shlex.quote(file_path)}",
         ]
 
         stdout, stderr, return_code = stack.exec_in_container(write_cmd, "test-runner")
