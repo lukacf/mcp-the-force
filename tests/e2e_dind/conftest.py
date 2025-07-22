@@ -766,77 +766,109 @@ def parse_response() -> Callable[[str], Optional[Dict[str, Any]]]:
 
 
 @pytest.fixture
-def setup_mcp_with_low_context(stack) -> Callable[[], None]:
+def claude_with_low_context(stack, request) -> Callable[[str, int], str]:
     """
-    Provides a function to reconfigure MCP with low CONTEXT_PERCENTAGE for overflow testing.
-
-    This allows specific tests to set CONTEXT_PERCENTAGE=0.01 (1%) to force overflow
-    with smaller files, without affecting other tests.
-
-    Returns:
-        A function that reconfigures MCP with CONTEXT_PERCENTAGE=0.01
+    Returns a callable `claude(prompt: str, timeout=60) -> str`
+    with MCP configured with low CONTEXT_PERCENTAGE for overflow testing.
     """
 
-    def _setup_low_context():
-        # Get the resolved project values
-        stdout, _, _ = stack.exec_in_container(
-            ["bash", "-c", "echo $VERTEX_PROJECT"], "server"
-        )
-        resolved_vertex_project = stdout.strip() or os.getenv(
-            "VERTEX_PROJECT", "mcp-test-project"
-        )
+    # Get the resolved VERTEX_PROJECT from the server container's environment
+    stdout, _, _ = stack.exec_in_container(
+        ["bash", "-c", "echo $VERTEX_PROJECT"], "server"
+    )
+    resolved_vertex_project = stdout.strip() or os.getenv(
+        "VERTEX_PROJECT", "mcp-test-project"
+    )
+    print(f"DEBUG: Resolved VERTEX_PROJECT for Claude MCP: {resolved_vertex_project}")
 
-        stdout, _, _ = stack.exec_in_container(
-            ["bash", "-c", "echo $VERTEX_LOCATION"], "server"
-        )
-        resolved_vertex_location = stdout.strip() or os.getenv(
-            "VERTEX_LOCATION", "us-central1"
-        )
+    stdout, _, _ = stack.exec_in_container(
+        ["bash", "-c", "echo $VERTEX_LOCATION"], "server"
+    )
+    resolved_vertex_location = stdout.strip() or os.getenv(
+        "VERTEX_LOCATION", "us-central1"
+    )
 
-        # Configure MCP server with low CONTEXT_PERCENTAGE
-        mcp_config = {
-            "command": "mcp-second-brain",
-            "args": [],
-            "env": {
-                "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY", ""),
-                "ANTHROPIC_API_KEY": os.getenv("ANTHROPIC_API_KEY", ""),
-                "VERTEX_PROJECT": resolved_vertex_project,
-                "VERTEX_LOCATION": resolved_vertex_location,
-                "GOOGLE_APPLICATION_CREDENTIALS": "/home/claude/.config/gcloud/application_default_credentials.json",
-                "LOG_LEVEL": "DEBUG",
-                "CI_E2E": "1",
-                "PYTHONPATH": "/host-project",
-                "VICTORIA_LOGS_URL": "http://host.docker.internal:9428",
-                "LOITER_KILLER_URL": "http://server:9876",
-                "LOKI_APP_TAG": os.getenv("LOKI_APP_TAG", "e2e-test-unknown"),
-                "CONTEXT_PERCENTAGE": "0.01",  # Set to 1% to force overflow with smaller files
-            },
-            "timeout": 60000,
-            "description": "MCP Second-Brain server (low context for overflow testing)",
-        }
+    # Configure MCP server using claude mcp add-json with low CONTEXT_PERCENTAGE
+    mcp_config = {
+        "command": "mcp-second-brain",
+        "args": [],
+        "env": {
+            "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY", ""),
+            "ANTHROPIC_API_KEY": os.getenv("ANTHROPIC_API_KEY", ""),
+            "VERTEX_PROJECT": resolved_vertex_project,
+            "VERTEX_LOCATION": resolved_vertex_location,
+            "GOOGLE_APPLICATION_CREDENTIALS": "/home/claude/.config/gcloud/application_default_credentials.json",
+            "LOG_LEVEL": "DEBUG",
+            "CI_E2E": "1",  # This MUST be set for the MCP server to allow /tmp paths
+            "PYTHONPATH": "/host-project",
+            "VICTORIA_LOGS_URL": "http://host.docker.internal:9428",  # Critical for logging!
+            "LOITER_KILLER_URL": "http://server:9876",  # LoiterKiller running in server container
+            "LOKI_APP_TAG": os.getenv(
+                "LOKI_APP_TAG", "e2e-test-unknown"
+            ),  # Pass test-specific tag
+            "CONTEXT_PERCENTAGE": "0.01",  # Set to 1% to force overflow with smaller files
+        },
+        "timeout": 60000,
+        "description": "MCP Second-Brain server (low context for overflow testing)",
+    }
 
-        # Reconfigure MCP server
-        config_cmd = [
-            "gosu",
-            "claude",
-            "claude",
-            "mcp",
-            "add-json",
-            "second-brain",
-            json.dumps(mcp_config),
-        ]
+    # Configure MCP server
+    config_cmd = [
+        "gosu",
+        "claude",
+        "claude",
+        "mcp",
+        "add-json",
+        "second-brain-overflow",  # Use different name to avoid conflict
+        json.dumps(mcp_config),
+    ]
 
+    try:
         stdout, stderr, return_code = stack.exec_in_container(config_cmd, "test-runner")
         if return_code != 0:
-            raise RuntimeError(
-                f"Failed to reconfigure MCP server with low context: {stderr}"
-            )
+            print(f"MCP configuration failed: {stderr}")
+            raise RuntimeError(f"Failed to configure MCP server: {stderr}")
+        print(f"MCP server configured successfully with low context: {stdout}")
+    except Exception as e:
+        print(f"Failed to configure MCP: {e}")
+        raise
 
-        print(
-            "✅ MCP server reconfigured with CONTEXT_PERCENTAGE=0.01 for overflow testing"
-        )
+    def run_claude(prompt: str, timeout: int = 60) -> str:
+        """Execute claude command with low context MCP."""
+        import shlex
 
-        # Give a moment for the configuration to take effect
-        time.sleep(1)
+        # Build command with proper parameter order: command first, service name second
+        # Use gosu to run Claude CLI as non-root user to allow --dangerously-skip-permissions
+        cmd = [
+            "gosu",
+            "claude",
+            "bash",
+            "-c",
+            f"cd /host-project && claude -p --dangerously-skip-permissions {shlex.quote(prompt)}",
+        ]
 
-    return _setup_low_context
+        try:
+            # Call exec_in_container with correct parameter order
+            stdout, stderr, return_code = stack.exec_in_container(cmd, "test-runner")
+
+            if return_code != 0:
+                # Collect logs on failure
+                _collect_failure_logs(stack)
+                raise RuntimeError(
+                    f"Claude Code failed (exit {return_code}): {stderr.strip()}"
+                )
+
+            return stdout
+
+        except Exception as e:
+            _collect_failure_logs(stack)
+            # Try to extract stderr from CalledProcessError if available
+            if hasattr(e, "stderr") and e.stderr:
+                error_detail = f"stderr: {e.stderr.strip()}"
+            elif hasattr(e, "stdout") and e.stdout:
+                error_detail = f"stdout: {e.stdout.strip()}"
+            else:
+                error_detail = str(e)
+            raise RuntimeError(f"Claude command failed: {error_detail}")
+
+    return run_claude
