@@ -225,55 +225,11 @@ class TestContextOverflowAndRag:
         self,
         isolated_test_dir,
         create_file_in_container,
-        claude_with_low_context,
+        call_claude_tool,  # Use regular claude for this test
     ):
         """Test that the stable list mechanism works across multiple calls in the same session."""
         print("🔍 Starting stable list mechanism test...")
-
-        # We need to create a call_claude_tool function using the low context claude
-        def call_claude_tool(
-            tool_name: str, response_format: str = "", **kwargs
-        ) -> str:
-            # Convert parameters to natural language format
-            param_parts = []
-
-            for key, value in kwargs.items():
-                if key == "instructions":
-                    param_parts.append(f"instructions: {value}")
-                elif key == "output_format":
-                    param_parts.append(f"output_format: {value}")
-                elif key == "context":
-                    # Ensure context is passed as a list
-                    if isinstance(value, str):
-                        param_parts.append(f"context: [{json.dumps(value)}]")
-                    else:
-                        param_parts.append(f"context: {json.dumps(value)}")
-                elif key == "priority_context":
-                    # Ensure priority_context is passed as a list
-                    if isinstance(value, str):
-                        param_parts.append(f"priority_context: [{json.dumps(value)}]")
-                    else:
-                        param_parts.append(f"priority_context: {json.dumps(value)}")
-                elif key == "session_id":
-                    param_parts.append(f"session_id: {value}")
-                elif key == "structured_output_schema":
-                    param_parts.append(f"structured_output_schema: {json.dumps(value)}")
-                else:
-                    # For other parameters, use JSON encoding
-                    if isinstance(value, str):
-                        param_parts.append(f"{key}: {value}")
-                    else:
-                        param_parts.append(f"{key}: {json.dumps(value)}")
-
-            # Construct the natural language command
-            prompt = f"Use second-brain {tool_name} with {', '.join(param_parts)}"
-
-            # Add response format instruction if provided
-            if response_format:
-                prompt += f" and {response_format}"
-
-            # Call Claude CLI with low context
-            return claude_with_low_context(prompt)
+        # This test doesn't need overflow, so we use regular claude
 
         session_id = f"stable-list-test-{uuid.uuid4().hex[:8]}"
 
