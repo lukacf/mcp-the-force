@@ -19,21 +19,32 @@ class LoiterKillerClient:
 
     def _check_availability(self) -> bool:
         """Check if loiter killer is available."""
+        logger.info(f"[LOITER_KILLER] Checking availability at {self.base_url}/health")
         try:
             response = httpx.get(f"{self.base_url}/health", timeout=2.0)
             self.enabled = response.status_code == 200
             if self.enabled:
-                logger.info("Loiter Killer service is available")
+                logger.info(f"[LOITER_KILLER] Service is available at {self.base_url}")
+            else:
+                logger.warning(
+                    f"[LOITER_KILLER] Service returned status {response.status_code}"
+                )
             return bool(self.enabled)
         except Exception as e:
-            logger.debug(f"Loiter Killer not available: {e}")
+            logger.warning(
+                f"[LOITER_KILLER] Service not available at {self.base_url}: {e}"
+            )
             self.enabled = False
             return False
 
     async def get_or_create_vector_store(
-        self, session_id: str
+        self, session_id: str, protected: bool = False
     ) -> Tuple[Optional[str], List[str]]:
         """Get existing or create new vector store for session.
+
+        Args:
+            session_id: The session ID
+            protected: Whether this is a protected store (e.g., project memory)
 
         Returns:
             Tuple of (vector_store_id, existing_file_paths)
@@ -46,13 +57,15 @@ class LoiterKillerClient:
 
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
+                request_data = {"protected": protected}
                 response = await client.post(
-                    f"{self.base_url}/session/{session_id}/acquire"
+                    f"{self.base_url}/session/{session_id}/acquire", json=request_data
                 )
                 if response.status_code == 200:
                     data = response.json()
                     logger.info(
                         f"Loiter Killer: {'Reused' if data['reused'] else 'Created'} "
+                        f"{'protected ' if protected else ''}"
                         f"vector store {data['vector_store_id']} for session {session_id}"
                     )
                     return (
@@ -69,6 +82,48 @@ class LoiterKillerClient:
             self.enabled = False
 
         return None, []
+
+    async def register_existing_store(
+        self, session_id: str, vector_store_id: str, protected: bool = True
+    ) -> bool:
+        """Register an already-created vector store with LoiterKiller.
+
+        Args:
+            session_id: The session ID to use for tracking
+            vector_store_id: The existing OpenAI vector store ID
+            protected: Whether this is a protected store (default True for project memory)
+
+        Returns:
+            True if successfully registered, False otherwise
+        """
+        if not self.enabled:
+            logger.debug("LoiterKiller not enabled, skipping registration")
+            return False
+
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                request_data = {
+                    "vector_store_id": vector_store_id,
+                    "protected": protected,
+                }
+                response = await client.post(
+                    f"{self.base_url}/session/{session_id}/register", json=request_data
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    logger.info(
+                        f"Registered existing store {vector_store_id} with LoiterKiller "
+                        f"for session {session_id} (status: {data['status']})"
+                    )
+                    return True
+                else:
+                    logger.warning(
+                        f"Failed to register store: {response.status_code} - {response.text}"
+                    )
+                    return False
+        except Exception as e:
+            logger.warning(f"Failed to register existing store: {e}")
+            return False
 
     async def track_files(self, session_id: str, file_paths: List[str]):
         """Track files for cleanup when session expires.

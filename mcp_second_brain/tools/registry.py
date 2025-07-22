@@ -121,6 +121,8 @@ def tool(
             "gpt-4.1",
             "gemini-2.5-pro",
             "gemini-2.5-flash",
+            "grok-4",
+            "grok-3-beta",
         ]:
             metadata.capabilities["writes_memory"] = True
 

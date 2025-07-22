@@ -50,7 +50,8 @@ class ChatWithGemini25Pro(ToolSpec):
     )
     output_format: str = Route.prompt(pos=1, description="Desired output format")
     context: List[str] = Route.prompt(
-        pos=2, description="List of file/directory paths to include"
+        pos=2,
+        description="List of file/directory paths to include (e.g., ['/path/to/file.py', '/path/to/dir'])",
     )
     session_id: str = Route.session(
         description="Session ID for multi-turn conversations"
@@ -94,7 +95,8 @@ class ChatWithGemini25Flash(ToolSpec):
     )
     output_format: str = Route.prompt(pos=1, description="Desired output format")
     context: List[str] = Route.prompt(
-        pos=2, description="List of file/directory paths to include"
+        pos=2,
+        description="List of file/directory paths to include (e.g., ['/path/to/file.py', '/path/to/dir'])",
     )
     session_id: str = Route.session(
         description="Session ID for multi-turn conversations"
@@ -151,7 +153,8 @@ Please approach this task step-by-step, showing your reasoning process."""
     )
     output_format: str = Route.prompt(pos=1, description="Desired output format")
     context: List[str] = Route.prompt(
-        pos=2, description="List of file/directory paths to include"
+        pos=2,
+        description="List of file/directory paths to include (e.g., ['/path/to/file.py', '/path/to/dir'])",
     )
     session_id: str = Route.session(
         description="Session ID for multi-turn conversations"
@@ -198,7 +201,8 @@ class ChatWithO3Pro(ToolSpec):
     )
     output_format: str = Route.prompt(pos=1, description="Desired output format")
     context: List[str] = Route.prompt(
-        pos=2, description="List of file/directory paths to include"
+        pos=2,
+        description="List of file/directory paths to include (e.g., ['/path/to/file.py', '/path/to/dir'])",
     )
     session_id: str = Route.session(
         description="Session ID for multi-turn conversations"
@@ -247,7 +251,8 @@ class ChatWithGPT4_1(ToolSpec):
     )
     output_format: str = Route.prompt(pos=1, description="Desired output format")
     context: List[str] = Route.prompt(
-        pos=2, description="List of file/directory paths to include"
+        pos=2,
+        description="List of file/directory paths to include (e.g., ['/path/to/file.py', '/path/to/dir'])",
     )
     session_id: str = Route.session(
         description="Session ID for multi-turn conversations"
@@ -305,7 +310,8 @@ Please approach this task step-by-step, showing your reasoning process."""
     )
     output_format: str = Route.prompt(pos=1, description="Desired output format")
     context: List[str] = Route.prompt(
-        pos=2, description="List of file/directory paths to include"
+        pos=2,
+        description="List of file/directory paths to include (e.g., ['/path/to/file.py', '/path/to/dir'])",
     )
     session_id: str = Route.session(
         description="Session ID for multi-turn conversations"
@@ -341,7 +347,8 @@ class ResearchWithO4MiniDeepResearch(ToolSpec):
     )
     output_format: str = Route.prompt(pos=1, description="Desired output format")
     context: List[str] = Route.prompt(
-        pos=2, description="List of file/directory paths to include"
+        pos=2,
+        description="List of file/directory paths to include (e.g., ['/path/to/file.py', '/path/to/dir'])",
     )
     session_id: str = Route.session(
         description="Session ID for multi-turn conversations"

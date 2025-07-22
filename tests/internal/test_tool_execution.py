@@ -97,8 +97,16 @@ class TestToolExecutionIntegration:
             mock_vs_manager = AsyncMock()
             mock_vs_manager.create = AsyncMock(return_value="vs-test-id")
 
-            with patch(
-                "mcp_second_brain.tools.executor.vector_store_manager", mock_vs_manager
+            # Also mock memory storage to prevent real async calls
+            # Import the executor to patch its vector_store_manager
+            from mcp_second_brain.tools.executor import executor
+
+            with (
+                patch.object(executor, "vector_store_manager", mock_vs_manager),
+                patch(
+                    "mcp_second_brain.tools.safe_memory.safe_store_conversation_memory",
+                    new_callable=AsyncMock,
+                ),
             ):
                 result = await run_tool(
                     "chat_with_gpt4_1",

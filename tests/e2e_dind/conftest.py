@@ -5,13 +5,44 @@ import os
 import time
 import uuid
 import base64
+import shlex
+import logging
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Dict, Any, Optional
 import pytest
 from testcontainers.compose import DockerCompose
 
+# Import our dedicated E2E logging setup
+import sys
+
+sys.path.insert(0, "/host-project/tests/e2e_dind")
+from e2e_logging import setup_e2e_logging
+
 # Base template directory
 _TEMPLATE_DIR = Path("/compose-template")
+
+
+@pytest.fixture(scope="module", autouse=True)
+def setup_test_logging(request):
+    """Setup logging for each test module with unique tags."""
+    # Extract test name from module path
+    # e.g., "tests/e2e_dind/scenarios/test_smoke.py" -> "smoke"
+    module_name = request.module.__name__
+    if "test_" in module_name:
+        test_name = module_name.split("test_")[-1]
+    else:
+        test_name = module_name.split(".")[-1]
+
+    # Setup logging with test-specific tags
+    victoria_logs_url = os.getenv(
+        "VICTORIA_LOGS_URL", "http://host.docker.internal:9428"
+    )
+    setup_e2e_logging(test_name=test_name, victoria_logs_url=victoria_logs_url)
+
+    # Set the LOKI_APP_TAG for the MCP server to inherit
+    os.environ["LOKI_APP_TAG"] = f"e2e-test-{test_name}"
+
+    print(f"✅ Configured logging for test: e2e-test-{test_name}")
 
 
 @pytest.fixture(scope="function")
@@ -386,7 +417,10 @@ def claude(stack, request) -> Callable[[str, int], str]:
             "CI_E2E": "1",  # This MUST be set for the MCP server to allow /tmp paths
             "PYTHONPATH": "/host-project",
             "VICTORIA_LOGS_URL": "http://host.docker.internal:9428",  # Critical for logging!
-            "LOITER_KILLER_URL": "http://localhost:9876",  # LoiterKiller running in server container
+            "LOITER_KILLER_URL": "http://server:9876",  # LoiterKiller running in server container
+            "LOKI_APP_TAG": os.getenv(
+                "LOKI_APP_TAG", "e2e-test-unknown"
+            ),  # Pass test-specific tag
             # Stable list is now always enabled - no feature flag needed
         },
         "timeout": 60000,
@@ -471,3 +505,239 @@ def _collect_failure_logs(compose: DockerCompose) -> None:
                 print(f"Failed to collect logs for {service}: {e}")
     except Exception as e:
         print(f"Failed to collect failure logs: {e}")
+
+
+# ===== NEW E2E TEST FIXTURES =====
+# These fixtures simplify test writing and fix common issues
+
+
+@pytest.fixture(autouse=True)
+def ensure_loiter_killer(stack: DockerCompose) -> None:
+    """
+    Ensures LoiterKiller service is running and healthy in the server container.
+
+    LoiterKiller manages OpenAI vector store lifecycle and is required for
+    proper operation of the MCP server when using context overflow.
+
+    This fixture runs automatically for all tests to ensure LoiterKiller
+    is available before any MCP operations.
+    """
+    print("Ensuring LoiterKiller is available...")
+
+    # Wait for LoiterKiller to be ready (up to 30 seconds)
+    for i in range(30):
+        try:
+            stdout, stderr, return_code = stack.exec_in_container(
+                [
+                    "bash",
+                    "-c",
+                    "curl -s http://localhost:9876/health || echo 'LoiterKiller not ready'",
+                ],
+                "server",
+            )
+
+            if return_code == 0 and "healthy" in stdout.lower():
+                print("✅ LoiterKiller is healthy")
+                return
+
+        except Exception:
+            pass
+
+        if i == 29:
+            # Last attempt - check processes to debug
+            ps_out, _, _ = stack.exec_in_container(["bash", "-c", "ps aux"], "server")
+            print(f"LoiterKiller not available after 30s. Processes:\n{ps_out}")
+            raise RuntimeError("LoiterKiller failed to become available")
+
+        time.sleep(1)
+
+
+@pytest.fixture
+def call_claude_tool(claude: Callable[[str], str]) -> Callable[..., str]:
+    """
+    Provides a helper to call MCP tools via Claude CLI with proper formatting.
+
+    This abstracts away the natural language command construction and JSON
+    serialization, preventing common errors.
+
+    Args:
+        tool_name (str): The name of the tool to call (e.g., 'chat_with_o3')
+        **kwargs: Tool parameters as keyword arguments
+
+    Returns:
+        The raw string response from Claude
+
+    Example:
+        response = call_claude_tool(
+            "chat_with_gemini25_flash",
+            instructions="Summarize this file",
+            output_format="Brief summary",
+            context=["/path/to/file.py"],
+            session_id="test-session-001"
+        )
+    """
+
+    def _call_tool(tool_name: str, response_format: str = "", **kwargs) -> str:
+        # Convert parameters to natural language format
+        # Special handling for common parameters
+        param_parts = []
+
+        for key, value in kwargs.items():
+            if key == "instructions":
+                param_parts.append(f"instructions: {value}")
+            elif key == "output_format":
+                param_parts.append(f"output_format: {value}")
+            elif key == "context":
+                # Ensure context is passed as a list
+                if isinstance(value, str):
+                    param_parts.append(f"context: [{json.dumps(value)}]")
+                else:
+                    param_parts.append(f"context: {json.dumps(value)}")
+            elif key == "session_id":
+                param_parts.append(f"session_id: {value}")
+            elif key == "structured_output_schema":
+                param_parts.append(f"structured_output_schema: {json.dumps(value)}")
+            else:
+                # For other parameters, use JSON encoding
+                if isinstance(value, str):
+                    param_parts.append(f"{key}: {value}")
+                else:
+                    param_parts.append(f"{key}: {json.dumps(value)}")
+
+        # Construct the natural language command
+        prompt = f"Use second-brain {tool_name} with {', '.join(param_parts)}"
+
+        # Add response format instruction if provided
+        if response_format:
+            prompt += f" and {response_format}"
+
+        # Log the prompt for debugging
+        logger = logging.getLogger(__name__)
+        logger.info(f"Claude prompt: {prompt}")
+
+        # Call Claude CLI
+        response = claude(prompt)
+
+        # Log response for debugging
+        logger.info(
+            f"Claude response: {response[:200]}..."
+            if len(response) > 200
+            else f"Claude response: {response}"
+        )
+
+        return response
+
+    return _call_tool
+
+
+@pytest.fixture
+def isolated_test_dir(stack: DockerCompose) -> str:
+    """
+    Creates an isolated directory for test files within the project workspace.
+
+    The directory is created in /host-project (which is bind-mounted) with
+    permissions that allow the 'claude' user to read/write. This solves the
+    permission mismatch issues where root-created files can't be read by the
+    MCP server running as 'claude'.
+
+    The directory is automatically cleaned up after the test.
+
+    Returns:
+        Path to the isolated test directory (e.g., /host-project/test_data_abc123)
+    """
+    # Generate unique directory name
+    test_dir = f"/host-project/test_data_{uuid.uuid4().hex[:8]}"
+
+    # Create directory with proper permissions
+    # We need to ensure claude user can read/write/execute
+    create_cmd = [
+        "bash",
+        "-c",
+        f"mkdir -p {shlex.quote(test_dir)} && "
+        f"chown claude:claude {shlex.quote(test_dir)} && "
+        f"chmod 755 {shlex.quote(test_dir)}",
+    ]
+
+    stdout, stderr, return_code = stack.exec_in_container(create_cmd, "test-runner")
+    if return_code != 0:
+        raise RuntimeError(f"Failed to create test directory: {stderr}")
+
+    yield test_dir
+
+    # Cleanup after test
+    cleanup_cmd = ["rm", "-rf", test_dir]
+    try:
+        stack.exec_in_container(cleanup_cmd, "test-runner")
+    except Exception as e:
+        print(f"Warning: Failed to cleanup test directory {test_dir}: {e}")
+
+
+@pytest.fixture
+def create_file_in_container(stack: DockerCompose) -> Callable[[str, str], None]:
+    """
+    Provides a function to create files in the test container with proper ownership.
+
+    Files are created with 'claude' as the owner, ensuring the MCP server can
+    read them. This solves permission issues where root-created files cause
+    "Permission Denied" errors.
+
+    Returns:
+        A function that takes (file_path, content) and creates the file
+
+    Example:
+        create_file_in_container("/host-project/test.txt", "Hello World")
+    """
+
+    def _create_file(file_path: str, content: str) -> None:
+        # Ensure parent directory exists
+        parent_dir = os.path.dirname(file_path)
+        if parent_dir and parent_dir != "/":
+            mkdir_cmd = [
+                "bash",
+                "-c",
+                f"mkdir -p {shlex.quote(parent_dir)} && "
+                f"chown claude:claude {shlex.quote(parent_dir)}",
+            ]
+            stack.exec_in_container(mkdir_cmd, "test-runner")
+
+        # Write file content using base64 to handle special characters
+        content_b64 = base64.b64encode(content.encode("utf-8")).decode("ascii")
+
+        write_cmd = [
+            "bash",
+            "-c",
+            f"echo '{content_b64}' | base64 -d > {shlex.quote(file_path)} && "
+            f"chown claude:claude {shlex.quote(file_path)} && "
+            f"chmod 644 {shlex.quote(file_path)}",
+        ]
+
+        stdout, stderr, return_code = stack.exec_in_container(write_cmd, "test-runner")
+        if return_code != 0:
+            raise RuntimeError(f"Failed to create file {file_path}: {stderr}")
+
+    return _create_file
+
+
+@pytest.fixture
+def parse_response() -> Callable[[str], Optional[Dict[str, Any]]]:
+    """
+    Provides the safe_json parser as a fixture for parsing tool responses.
+
+    This handles extracting JSON from various response formats including
+    markdown code blocks and mixed text.
+
+    Returns:
+        The safe_json function
+
+    Example:
+        result = parse_response(response)
+        if result:
+            assert result["status"] == "success"
+    """
+    # Import here to avoid circular imports
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).parent / "scenarios"))
+    from json_utils import safe_json
+
+    return safe_json

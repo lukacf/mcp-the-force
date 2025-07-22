@@ -119,12 +119,16 @@ def create_tool_function(metadata: ToolMetadata):
             if list_args and list_args[0] is str:
                 is_list_str_type = True
 
-        if is_bool_type or is_float_type or is_list_str_type:
-            # If it's a boolean, float, or list of strings, tell FastMCP to expect Optional[str]
-            # This allows string values "true"/"false", numeric strings like "0.5",
-            # or JSON arrays like '["a", "b"]' to pass Pydantic validation.
+        if is_bool_type or is_float_type:
+            # If it's a boolean or float, tell FastMCP to expect Optional[str]
+            # This allows string values "true"/"false" or numeric strings like "0.5"
+            # to pass Pydantic validation.
             # Our internal ParameterValidator will then correctly coerce the string to the expected type.
             annotations[sig_param.name] = Optional[str]
+        elif is_list_str_type:
+            # Keep List[str] as-is - don't convert to Optional[str]
+            # MCP clients should pass lists correctly
+            annotations[sig_param.name] = original_annotation
         else:
             # For all other types, use the original annotation
             annotations[sig_param.name] = original_annotation

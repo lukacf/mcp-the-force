@@ -17,7 +17,8 @@ RUN mkdir -p /usr/local/lib/docker/cli-plugins && \
 RUN npm install -g @anthropic-ai/claude-code
 RUN pip install --no-cache-dir \
       pytest pytest-timeout testcontainers[compose] \
-      anyio pytest-asyncio rich uv uvicorn httpx
+      anyio pytest-asyncio rich uv uvicorn httpx \
+      python-logging-loki
 
 # Copy project under /host-project where inner compose stack expects it
 WORKDIR /host-project

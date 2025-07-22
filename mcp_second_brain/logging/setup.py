@@ -71,7 +71,7 @@ def setup_logging():
         loki_handler = TimeoutLokiHandler(
             url=f"{victoria_logs_url}/insert/loki/api/v1/push?_stream_fields=app,instance_id",
             tags={
-                "app": "mcp-second-brain",
+                "app": os.getenv("LOKI_APP_TAG", "mcp-second-brain"),
                 "instance_id": instance_id,
                 "project": os.getenv("MCP_PROJECT_PATH", os.getcwd()),
             },

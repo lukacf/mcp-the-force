@@ -1,5 +1,6 @@
 """Parameter validation for tools."""
 
+import os
 import logging
 from typing import Dict, Any, Union, Optional, get_origin, get_args
 from .registry import ToolMetadata
@@ -36,6 +37,14 @@ class ParameterValidator:
         Raises:
             ValueError: If required parameter missing or unknown parameter in strict mode
         """
+        # Debug logging for E2E tests
+        if os.getenv("CI_E2E") == "1":
+            logger.info(f"Validating parameters for {tool_instance.__class__.__name__}")
+            logger.info(f"Received kwargs: {kwargs}")
+            logger.info(
+                f"Kwargs types: {[(k, type(v).__name__) for k, v in kwargs.items()]}"
+            )
+
         validated = {}
 
         # Check required parameters
