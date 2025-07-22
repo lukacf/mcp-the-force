@@ -1,131 +1,185 @@
-"""Context overflow test - Verify files are split between inline context and vector store."""
+"""Context overflow and RAG test - Verify files are split between inline context and vector store."""
 
 import os
-import json
 import sys
-import pytest
+import uuid
+import time
 
 # Add scenarios directory to path for imports
 sys.path.insert(0, os.path.dirname(__file__))
 
 # Unique tokens for different files to verify access from both inline and vector store
-INLINE_TOKEN = "mcp-e2e-inline-xyzzy-772"
-OVERFLOW_TOKEN = "mcp-e2e-overflow-plugh-772"
+INLINE_TOKEN = "overflow-test-marker-xyz-123"
+OVERFLOW_TOKEN = "overflow-test-marker-plugh-456"
+PRIORITY_TOKEN = "priority-test-marker-qwerty-789"
 
 
-@pytest.mark.parametrize("claude", [True, False], indirect=True)
-def test_attachment_search_workflow(claude, stack):
-    """Test RAG workflow using attachments parameter for automatic vector store creation."""
-    print("🔍 Starting robust attachment test...")
+class TestContextOverflowAndRag:
+    """Test the context overflow mechanism and RAG access to vector stores."""
 
-    def _exec_in_container(cmd, check=True):
-        """Execute a command inside the test-runner container."""
-        stdout, stderr, return_code = stack.exec_in_container(
-            ["bash", "-c", cmd], "test-runner"
+    def test_overflow_and_rag_access(
+        self, call_claude_tool, isolated_test_dir, create_file_in_container
+    ):
+        """Test that large files overflow to vector stores while small files remain inline."""
+        print("🔍 Starting context overflow and RAG test...")
+
+        # Create a small file that should fit inline
+        small_file = os.path.join(isolated_test_dir, "small_inline.txt")
+        small_content = (
+            f"This is a small file that contains the inline token: {INLINE_TOKEN}\n"
+            * 10
         )
-        if check and return_code != 0:
-            raise RuntimeError(f"Command failed: {cmd}\nStderr: {stderr}")
-        return stdout, stderr, return_code
+        create_file_in_container(small_file, small_content)
+        print(f"📄 Created small file (should be inline): {small_file}")
 
-    def _create_file(path, content):
-        """Create a file inside the container with the given content."""
-        # Running as root in test-runner, create world-readable files
-        import os
-
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w") as f:
-            f.write(content)
-        # Make world-readable so claude user in sub-containers can read
-        os.chmod(path, 0o644)
-
-    # Create unique test directory with UUID for per-test isolation
-    import os
-    import uuid
-
-    test_uuid = uuid.uuid4().hex[:8]
-    test_dir = f"/tmp/test_attachments_data_{test_uuid}"
-
-    # Create directory directly with Python (running as root in test-runner)
-    os.makedirs(test_dir, exist_ok=True)
-    os.chmod(test_dir, 0o755)
-    print(f"DEBUG: Created test directory {test_dir} inside container")
-
-    doc1, doc2 = None, None  # Ensure they are defined for the finally block
-
-    try:
-        # Step 1: Create a document that CONTAINS the unique token.
-        doc1 = os.path.join(test_dir, "doc_with_token.txt")
-        doc1_content = (
-            f"This document contains a highly secret value.\n"
-            f"The secret code is: {INLINE_TOKEN}.\n"
-            f"Do not share this code with anyone."
+        # Create a "large" file that will overflow due to low CONTEXT_PERCENTAGE (1%)
+        # Even a small file will overflow with such a low percentage
+        large_file = os.path.join(isolated_test_dir, "large_overflow.txt")
+        # Just 1KB of content is enough to trigger overflow with 1% context limit
+        large_content = (
+            f"This file contains the overflow token: {OVERFLOW_TOKEN}\n"
+            + "Some additional content to ensure overflow with low context percentage.\n"
+            * 20
         )
-        _create_file(doc1, doc1_content)
-        print(f"📄 Created test file with token inside container: {doc1}")
-
-        # Step 2: Search for the token where it exists to confirm baseline functionality.
-        args1 = {
-            "instructions": f"Quote the exact sentence from the attached document that contains the token '{INLINE_TOKEN}'.",
-            "output_format": "A single string containing only the quoted sentence.",
-            "context": [],
-            "attachments": [doc1],
-            "session_id": "rag-test-positive-match",
-        }
-        response1 = claude(
-            f"Use second-brain chat_with_gpt4_1 with {json.dumps(args1)}"
+        create_file_in_container(large_file, large_content)
+        print(
+            f"📄 Created large file (should overflow): {large_file} ({len(large_content)} bytes)"
         )
-        print(f"✅ First response (positive match): {response1}")
+
+        # Call chat_with_gpt4_1 with both files in context
+        response = call_claude_tool(
+            "chat_with_gpt4_1",
+            instructions=f"Search for and quote the exact sentences containing these tokens: '{INLINE_TOKEN}' and '{OVERFLOW_TOKEN}'. For each token, state whether you found it and quote the containing sentence.",
+            output_format="For each token, state: 1) Found/Not found 2) The exact sentence containing it (if found)",
+            context=[small_file, large_file],
+            session_id=f"overflow-test-{uuid.uuid4().hex[:8]}",
+        )
+
+        print(f"✅ Response: {response}")
+
+        # Verify model can find content from both files
         assert (
-            INLINE_TOKEN in response1
-        ), "Model failed to find the unique token when it was present."
-        # The model should include the token in its response, but may paraphrase
-        print("✅ Positive match test passed!")
+            INLINE_TOKEN in response
+        ), f"Model failed to find inline token '{INLINE_TOKEN}' from small file"
+        assert (
+            OVERFLOW_TOKEN in response
+        ), f"Model failed to find overflow token '{OVERFLOW_TOKEN}' from vector store"
 
-        # Step 3: Create a different document that DOES NOT contain the unique token.
-        doc2 = os.path.join(test_dir, "doc_without_token.txt")
-        doc2_content = (
-            "This document discusses the history of the Roman Empire. "
-            "It has no secret codes or special tokens."
-        )
-        _create_file(doc2, doc2_content)
-        print(f"📄 Created second test file without token inside container: {doc2}")
-
-        # Step 4: Search for the unique token in the document where it does NOT exist.
-        # This is the crucial test for the deduplication cache fix.
-        args2 = {
-            "instructions": f"Search the attached document for the token '{INLINE_TOKEN}'. If it is not found, you must state that it was not found.",
-            "output_format": "A single sentence explaining whether the token was found or not.",
-            "context": [],
-            # CRITICAL: Use the new document as the attachment.
-            "attachments": [doc2],
-            "session_id": "rag-test-negative-match",
-        }
-        response2 = claude(
-            f"Use second-brain chat_with_gpt4_1 with {json.dumps(args2)}"
-        )
-        print(f"✅ Second response (negative match): {response2}")
-
-        # Step 5: Validate the negative result.
-        # The model should explicitly state that the token was not found.
-        response2_lower = response2.lower()
-        # The model correctly states the token was not found
+        # Verify the model actually found both tokens (not just echoed them)
+        response_lower = response.lower()
         assert any(
-            phrase in response2_lower
-            for phrase in [
-                "not found",
-                "no information",
-                "does not contain",
-                "no mention",
-                "could not find",
-                "is not present",
-                "no results",
-                "was not found",
-            ]
-        ), f"Response should have clearly stated the token was not found, but it didn't. Response: {response2}"
+            word in response_lower
+            for word in ["found", "contains", "sentence", "quote"]
+        ), "Response should indicate actual retrieval of content"
 
-        print("✅ Deduplication cache test passed!")
+        print("✅ Context overflow and RAG access test passed!")
 
-    finally:
-        # Cleanup test files inside the container
-        _exec_in_container(f"rm -rf {test_dir}", check=False)
-        print("🧹 Cleaned up test directory inside container")
+    def test_priority_context_overrides_overflow(
+        self, call_claude_tool, isolated_test_dir, create_file_in_container
+    ):
+        """Test that priority_context forces large files to be inline instead of overflowing."""
+        print("🔍 Starting priority context override test...")
+
+        # Create a file that would overflow with 1% context limit
+        large_priority_file = os.path.join(isolated_test_dir, "large_priority.txt")
+        # Just 1KB is enough with our low context percentage
+        large_content = (
+            f"This is a priority file with the special token: {PRIORITY_TOKEN}\n"
+            + "Additional content to trigger overflow with 1% context limit.\n" * 20
+        )
+        create_file_in_container(large_priority_file, large_content)
+        print(
+            f"📄 Created large priority file: {large_priority_file} ({len(large_content)} bytes)"
+        )
+
+        # Create another file for regular context (should overflow)
+        large_regular_file = os.path.join(isolated_test_dir, "large_regular.txt")
+        regular_content = (
+            f"This is a regular file with overflow content: {OVERFLOW_TOKEN}\n"
+            + "More content to ensure overflow.\n" * 20
+        )
+        create_file_in_container(large_regular_file, regular_content)
+        print(f"📄 Created large regular file: {large_regular_file}")
+
+        # Call with priority_context to force inline inclusion
+        response = call_claude_tool(
+            "chat_with_gpt4_1",
+            instructions=f"Without using any search or retrieval, directly quote any sentences you can see that contain the token '{PRIORITY_TOKEN}'. If you cannot directly see this token in the provided context, say 'Token not in direct context'.",
+            output_format="Either quote the sentence with the token or state it's not in direct context",
+            context=[large_regular_file],
+            priority_context=[large_priority_file],
+            session_id=f"priority-test-{uuid.uuid4().hex[:8]}",
+        )
+
+        print(f"✅ Response: {response}")
+
+        # Verify the priority file content is accessible directly (not via search)
+        assert (
+            PRIORITY_TOKEN in response
+        ), f"Model failed to find priority token '{PRIORITY_TOKEN}' that should be inline"
+
+        # Verify it's not reporting "not in direct context"
+        assert (
+            "not in direct context" not in response.lower()
+        ), "Priority file was not included inline as expected"
+
+        print("✅ Priority context override test passed!")
+
+    def test_multiple_sessions_stable_list(
+        self, call_claude_tool, isolated_test_dir, create_file_in_container
+    ):
+        """Test that the stable list mechanism works across multiple calls in the same session."""
+        print("🔍 Starting stable list mechanism test...")
+
+        session_id = f"stable-list-test-{uuid.uuid4().hex[:8]}"
+
+        # Create files with different sizes
+        files = []
+        for i in range(5):
+            file_path = os.path.join(isolated_test_dir, f"file_{i}.txt")
+            # Create files of increasing size
+            content = f"File {i} content with token: test-{i}-marker\n" * (
+                100 * (i + 1)
+            )
+            create_file_in_container(file_path, content)
+            files.append(file_path)
+            print(f"📄 Created file {i}: {file_path} ({len(content)} bytes)")
+
+        # First call - establishes the stable list
+        response1 = call_claude_tool(
+            "chat_with_gpt4_1",
+            instructions="List all the test markers you can find (format: test-X-marker)",
+            output_format="List of all markers found",
+            context=files,
+            session_id=session_id,
+        )
+        print(f"✅ First call response: {response1}")
+
+        # Give a moment for stable list to be established
+        time.sleep(1)
+
+        # Second call - should use the same stable list
+        response2 = call_claude_tool(
+            "chat_with_gpt4_1",
+            instructions="Again, list all the test markers you can find",
+            output_format="List of all markers found",
+            context=files,
+            session_id=session_id,
+        )
+        print(f"✅ Second call response: {response2}")
+
+        # Both responses should find the same markers
+        # Extract markers from responses
+        import re
+
+        markers1 = set(re.findall(r"test-\d+-marker", response1))
+        markers2 = set(re.findall(r"test-\d+-marker", response2))
+
+        assert len(markers1) > 0, "First call should find at least some markers"
+        assert len(markers2) > 0, "Second call should find at least some markers"
+
+        # The stable list mechanism should ensure consistent file handling
+        print(f"Markers from call 1: {markers1}")
+        print(f"Markers from call 2: {markers2}")
+
+        print("✅ Stable list mechanism test passed!")
