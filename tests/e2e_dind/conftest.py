@@ -418,6 +418,7 @@ def claude(stack, request) -> Callable[[str, int], str]:
             "PYTHONPATH": "/host-project",
             "VICTORIA_LOGS_URL": "http://host.docker.internal:9428",  # Critical for logging!
             "LOITER_KILLER_URL": "http://server:9876",  # LoiterKiller running in server container
+            "SESSION_DB_PATH": "/tmp/mcp_sessions.sqlite3",  # Use absolute path for session persistence across processes
             "LOKI_APP_TAG": os.getenv(
                 "LOKI_APP_TAG", "e2e-test-unknown"
             ),  # Pass test-specific tag
@@ -803,6 +804,7 @@ def claude_with_low_context(stack, request) -> Callable[[str, int], str]:
             "PYTHONPATH": "/host-project",
             "VICTORIA_LOGS_URL": "http://host.docker.internal:9428",  # Critical for logging!
             "LOITER_KILLER_URL": "http://server:9876",  # LoiterKiller running in server container
+            "SESSION_DB_PATH": "/tmp/mcp_sessions.sqlite3",  # Use absolute path for session persistence across processes
             "LOKI_APP_TAG": os.getenv(
                 "LOKI_APP_TAG", "e2e-test-unknown"
             ),  # Pass test-specific tag
