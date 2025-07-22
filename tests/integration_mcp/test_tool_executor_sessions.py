@@ -267,24 +267,18 @@ class TestToolExecutorSessionHandling:
         """Test Vertex (Gemini) session handling with history."""
         session_id = "test-vertex-session"
 
-        # Mock Gemini history (Content objects)
-        from google.genai import types
-
-        mock_gemini_history = [
-            types.Content(
-                role="user", parts=[types.Part.from_text(text="Previous question")]
-            ),
-            types.Content(
-                role="assistant", parts=[types.Part.from_text(text="Previous answer")]
-            ),
+        # Mock Gemini history as dictionaries (get_messages returns dicts)
+        mock_gemini_messages = [
+            {"role": "user", "content": "Previous question"},
+            {"role": "assistant", "content": "Previous answer"},
         ]
 
         with (
             patch.object(
                 gemini_session_cache_module.gemini_session_cache,
-                "get_history",
-                return_value=mock_gemini_history,
-            ) as mock_get_history,
+                "get_messages",
+                return_value=mock_gemini_messages,
+            ) as mock_get_messages,
             patch("mcp_second_brain.adapters.get_adapter") as mock_get_adapter,
             patch.object(tool_executor.validator, "validate") as mock_validate,
             patch.object(tool_executor.router, "route") as mock_route,
@@ -311,12 +305,13 @@ class TestToolExecutorSessionHandling:
                 "session_id": session_id,
             }
 
+            # For Vertex, the history is handled by the executor, not the router
             mock_route.return_value = {
                 "prompt": {
                     "instructions": "Test instructions",
                     "output_format": "Text format",
                     "context": [],
-                    "messages": [],
+                    "messages": [],  # Router doesn't include messages for Vertex
                 },
                 "adapter": {"temperature": 1.0},
                 "session": {"session_id": session_id},
@@ -340,7 +335,7 @@ class TestToolExecutorSessionHandling:
             )
 
             # Verify session history was loaded
-            mock_get_history.assert_called_once_with(session_id)
+            mock_get_messages.assert_called_once_with(session_id)
 
             # Verify adapter was called with messages including history
             assert mock_adapter.generate.call_count >= 1
@@ -372,14 +367,6 @@ class TestToolExecutorSessionHandling:
         mock_grok_history = [{"role": "user", "content": "Grok conversation"}]
         mock_openai_response_id = "openai_resp_123"
 
-        from google.genai import types
-
-        mock_gemini_history = [
-            types.Content(
-                role="user", parts=[types.Part.from_text(text="Gemini conversation")]
-            )
-        ]
-
         with (
             patch.object(
                 grok_session_cache_module.grok_session_cache,
@@ -393,8 +380,11 @@ class TestToolExecutorSessionHandling:
             ),
             patch.object(
                 gemini_session_cache_module.gemini_session_cache,
-                "get_history",
-                return_value=mock_gemini_history,
+                "get_messages",
+                return_value=[
+                    {"role": "user", "content": "Previous question"},
+                    {"role": "assistant", "content": "Previous answer"},
+                ],
             ),
             patch("mcp_second_brain.adapters.get_adapter") as mock_get_adapter,
             patch.object(tool_executor.validator, "validate") as mock_validate,

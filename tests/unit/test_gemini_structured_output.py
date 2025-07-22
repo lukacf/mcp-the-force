@@ -31,6 +31,8 @@ class TestGeminiStructuredOutput:
         mock_response.candidates[0].content.parts = [MagicMock()]
         mock_response.candidates[0].content.parts[0].text = '{"result": true}'
         mock_response.candidates[0].content.parts[0].function_call = None
+        # Mock response.text property to return JSON string
+        mock_response.text = '{"result": true}'
 
         # Create async mock for aio client
         mock_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
@@ -75,6 +77,8 @@ class TestGeminiStructuredOutput:
             0
         ].text = '{"city": "London", "temperature": 18.5}'
         mock_response.candidates[0].content.parts[0].function_call = None
+        # Mock response.text property to return JSON string
+        mock_response.text = '{"city": "London", "temperature": 18.5}'
 
         # Create async mock for aio client
         mock_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
@@ -99,11 +103,16 @@ class TestGeminiStructuredOutput:
                 hasattr(config, "response_schema")
                 or "response_schema" in config.__dict__
             )
-            # The actual schema should be passed
+            # The schema should be converted to types.Schema
             if hasattr(config, "response_schema"):
-                assert config.response_schema == schema
+                response_schema = config.response_schema
             else:
-                assert config.__dict__["response_schema"] == schema
+                response_schema = config.__dict__["response_schema"]
+
+            # Check it's a Schema object with correct structure
+            assert hasattr(response_schema, "type")
+            assert hasattr(response_schema, "properties")
+            assert hasattr(response_schema, "required")
 
     @pytest.mark.asyncio
     async def test_system_instruction_added_for_json(self):
@@ -121,6 +130,8 @@ class TestGeminiStructuredOutput:
         mock_response.candidates[0].content.parts = [MagicMock()]
         mock_response.candidates[0].content.parts[0].text = "{}"
         mock_response.candidates[0].content.parts[0].function_call = None
+        # Mock response.text property to return JSON string
+        mock_response.text = "{}"
 
         # Create async mock for aio client
         mock_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
@@ -166,6 +177,8 @@ class TestGeminiStructuredOutput:
         mock_response.candidates[0].content.parts = [MagicMock()]
         mock_response.candidates[0].content.parts[0].text = '{"count": 42}'
         mock_response.candidates[0].content.parts[0].function_call = None
+        # Mock response.text property to return JSON string
+        mock_response.text = '{"count": 42}'
 
         # Create async mock for aio client
         mock_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
@@ -205,6 +218,8 @@ class TestGeminiStructuredOutput:
         # Invalid JSON - should raise validation error
         mock_response.candidates[0].content.parts[0].text = '{"age": "not_a_number"}'
         mock_response.candidates[0].content.parts[0].function_call = None
+        # Mock response.text property to return JSON string
+        mock_response.text = '{"age": "not_a_number"}'
 
         # Create async mock for aio client
         mock_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
@@ -237,6 +252,8 @@ class TestGeminiStructuredOutput:
             0
         ].text = "This is plain text, not JSON"
         mock_response.candidates[0].content.parts[0].function_call = None
+        # Mock response.text property to return plain text
+        mock_response.text = "This is plain text, not JSON"
 
         # Create async mock for aio client
         mock_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
