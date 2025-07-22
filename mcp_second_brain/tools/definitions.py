@@ -70,6 +70,10 @@ class ChatWithGemini25Pro(ToolSpec):
         default="medium",
         description="Controls reasoning effort (low/medium/high) - maps to thinking_budget internally",
     )
+    disable_memory_search: Optional[bool] = Route.adapter(
+        default=False,
+        description="Disable search_project_memory tool to prevent access to past conversations",
+    )
 
 
 @tool
@@ -114,6 +118,10 @@ class ChatWithGemini25Flash(ToolSpec):
     reasoning_effort: Optional[str] = Route.adapter(
         default="low",
         description="Controls reasoning effort (low/medium/high) - maps to thinking_budget internally",
+    )
+    disable_memory_search: Optional[bool] = Route.adapter(
+        default=False,
+        description="Disable search_project_memory tool to prevent access to past conversations",
     )
 
 
