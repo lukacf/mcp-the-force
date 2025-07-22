@@ -593,6 +593,12 @@ def call_claude_tool(claude: Callable[[str], str]) -> Callable[..., str]:
                     param_parts.append(f"context: [{json.dumps(value)}]")
                 else:
                     param_parts.append(f"context: {json.dumps(value)}")
+            elif key == "priority_context":
+                # Ensure priority_context is passed as a list
+                if isinstance(value, str):
+                    param_parts.append(f"priority_context: [{json.dumps(value)}]")
+                else:
+                    param_parts.append(f"priority_context: {json.dumps(value)}")
             elif key == "session_id":
                 param_parts.append(f"session_id: {value}")
             elif key == "structured_output_schema":
@@ -700,17 +706,34 @@ def create_file_in_container(stack: DockerCompose) -> Callable[[str, str], None]
             ]
             stack.exec_in_container(mkdir_cmd, "test-runner")
 
-        # Write content to file using echo to avoid issues with heredocs
-        # For small files this is fine, and with CONTEXT_PERCENTAGE=0.01 we only need small files
-        write_cmd = [
-            "sh",
-            "-c",
-            f"echo {shlex.quote(content)} > {shlex.quote(file_path)} "
-            f"&& chown claude:claude {shlex.quote(file_path)} "
-            f"&& chmod 644 {shlex.quote(file_path)}",
-        ]
+        # Write content to file
+        # For very large content, write to a temp file first
+        if len(content) > 100000:  # 100KB threshold
+            # Write content via stdin to avoid command line length limits
+            write_cmd = [
+                "sh",
+                "-c",
+                f"cat > {shlex.quote(file_path)} "
+                f"&& chown claude:claude {shlex.quote(file_path)} "
+                f"&& chmod 644 {shlex.quote(file_path)}",
+            ]
+            # Pass content via stdin
+            stdout, stderr, return_code = stack.exec_in_container(
+                write_cmd, "test-runner", stdin=content.encode()
+            )
+        else:
+            # For smaller files, use printf (more reliable than echo)
+            write_cmd = [
+                "sh",
+                "-c",
+                f"printf '%s' {shlex.quote(content)} > {shlex.quote(file_path)} "
+                f"&& chown claude:claude {shlex.quote(file_path)} "
+                f"&& chmod 644 {shlex.quote(file_path)}",
+            ]
+            stdout, stderr, return_code = stack.exec_in_container(
+                write_cmd, "test-runner"
+            )
 
-        stdout, stderr, return_code = stack.exec_in_container(write_cmd, "test-runner")
         if return_code != 0:
             raise RuntimeError(f"Failed to create file {file_path}: {stderr}")
 
@@ -740,3 +763,80 @@ def parse_response() -> Callable[[str], Optional[Dict[str, Any]]]:
     from json_utils import safe_json
 
     return safe_json
+
+
+@pytest.fixture
+def setup_mcp_with_low_context(stack) -> Callable[[], None]:
+    """
+    Provides a function to reconfigure MCP with low CONTEXT_PERCENTAGE for overflow testing.
+
+    This allows specific tests to set CONTEXT_PERCENTAGE=0.01 (1%) to force overflow
+    with smaller files, without affecting other tests.
+
+    Returns:
+        A function that reconfigures MCP with CONTEXT_PERCENTAGE=0.01
+    """
+
+    def _setup_low_context():
+        # Get the resolved project values
+        stdout, _, _ = stack.exec_in_container(
+            ["bash", "-c", "echo $VERTEX_PROJECT"], "server"
+        )
+        resolved_vertex_project = stdout.strip() or os.getenv(
+            "VERTEX_PROJECT", "mcp-test-project"
+        )
+
+        stdout, _, _ = stack.exec_in_container(
+            ["bash", "-c", "echo $VERTEX_LOCATION"], "server"
+        )
+        resolved_vertex_location = stdout.strip() or os.getenv(
+            "VERTEX_LOCATION", "us-central1"
+        )
+
+        # Configure MCP server with low CONTEXT_PERCENTAGE
+        mcp_config = {
+            "command": "mcp-second-brain",
+            "args": [],
+            "env": {
+                "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY", ""),
+                "ANTHROPIC_API_KEY": os.getenv("ANTHROPIC_API_KEY", ""),
+                "VERTEX_PROJECT": resolved_vertex_project,
+                "VERTEX_LOCATION": resolved_vertex_location,
+                "GOOGLE_APPLICATION_CREDENTIALS": "/home/claude/.config/gcloud/application_default_credentials.json",
+                "LOG_LEVEL": "DEBUG",
+                "CI_E2E": "1",
+                "PYTHONPATH": "/host-project",
+                "VICTORIA_LOGS_URL": "http://host.docker.internal:9428",
+                "LOITER_KILLER_URL": "http://server:9876",
+                "LOKI_APP_TAG": os.getenv("LOKI_APP_TAG", "e2e-test-unknown"),
+                "CONTEXT_PERCENTAGE": "0.01",  # Set to 1% to force overflow with smaller files
+            },
+            "timeout": 60000,
+            "description": "MCP Second-Brain server (low context for overflow testing)",
+        }
+
+        # Reconfigure MCP server
+        config_cmd = [
+            "gosu",
+            "claude",
+            "claude",
+            "mcp",
+            "add-json",
+            "second-brain",
+            json.dumps(mcp_config),
+        ]
+
+        stdout, stderr, return_code = stack.exec_in_container(config_cmd, "test-runner")
+        if return_code != 0:
+            raise RuntimeError(
+                f"Failed to reconfigure MCP server with low context: {stderr}"
+            )
+
+        print(
+            "✅ MCP server reconfigured with CONTEXT_PERCENTAGE=0.01 for overflow testing"
+        )
+
+        # Give a moment for the configuration to take effect
+        time.sleep(1)
+
+    return _setup_low_context
