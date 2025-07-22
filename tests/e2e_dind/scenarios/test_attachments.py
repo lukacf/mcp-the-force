@@ -1,4 +1,4 @@
-"""Attachment search test - RAG workflow using attachments parameter."""
+"""Context overflow test - Verify files are split between inline context and vector store."""
 
 import os
 import json
@@ -8,8 +8,9 @@ import pytest
 # Add scenarios directory to path for imports
 sys.path.insert(0, os.path.dirname(__file__))
 
-# A unique, non-technical token guaranteed not to be in the model's training data.
-UNIQUE_TOKEN = "mcp-e2e-flibbertigibbet-772-token"
+# Unique tokens for different files to verify access from both inline and vector store
+INLINE_TOKEN = "mcp-e2e-inline-xyzzy-772"
+OVERFLOW_TOKEN = "mcp-e2e-overflow-plugh-772"
 
 
 @pytest.mark.parametrize("claude", [True, False], indirect=True)
@@ -56,7 +57,7 @@ def test_attachment_search_workflow(claude, stack):
         doc1 = os.path.join(test_dir, "doc_with_token.txt")
         doc1_content = (
             f"This document contains a highly secret value.\n"
-            f"The secret code is: {UNIQUE_TOKEN}.\n"
+            f"The secret code is: {INLINE_TOKEN}.\n"
             f"Do not share this code with anyone."
         )
         _create_file(doc1, doc1_content)
@@ -64,7 +65,7 @@ def test_attachment_search_workflow(claude, stack):
 
         # Step 2: Search for the token where it exists to confirm baseline functionality.
         args1 = {
-            "instructions": f"Quote the exact sentence from the attached document that contains the token '{UNIQUE_TOKEN}'.",
+            "instructions": f"Quote the exact sentence from the attached document that contains the token '{INLINE_TOKEN}'.",
             "output_format": "A single string containing only the quoted sentence.",
             "context": [],
             "attachments": [doc1],
@@ -75,7 +76,7 @@ def test_attachment_search_workflow(claude, stack):
         )
         print(f"✅ First response (positive match): {response1}")
         assert (
-            UNIQUE_TOKEN in response1
+            INLINE_TOKEN in response1
         ), "Model failed to find the unique token when it was present."
         # The model should include the token in its response, but may paraphrase
         print("✅ Positive match test passed!")
@@ -92,7 +93,7 @@ def test_attachment_search_workflow(claude, stack):
         # Step 4: Search for the unique token in the document where it does NOT exist.
         # This is the crucial test for the deduplication cache fix.
         args2 = {
-            "instructions": f"Search the attached document for the token '{UNIQUE_TOKEN}'. If it is not found, you must state that it was not found.",
+            "instructions": f"Search the attached document for the token '{INLINE_TOKEN}'. If it is not found, you must state that it was not found.",
             "output_format": "A single sentence explaining whether the token was found or not.",
             "context": [],
             # CRITICAL: Use the new document as the attachment.
