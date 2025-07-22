@@ -153,12 +153,12 @@ def register_all_tools(mcp: FastMCP) -> None:
 
             # Register with FastMCP under primary name
             mcp.tool(name=tool_id)(tool_func)
-            logger.info(f"Registered tool with FastMCP: {tool_id}")
+            logger.debug(f"Registered tool with FastMCP: {tool_id}")
 
             # Register aliases
             for alias in metadata.aliases:
                 mcp.tool(name=alias)(tool_func)
-                logger.info(f"Registered alias: {alias} -> {tool_id}")
+                logger.debug(f"Registered alias: {alias} -> {tool_id}")
 
         except Exception as e:
             logger.error(f"Failed to register tool {tool_id}: {e}")
@@ -183,7 +183,7 @@ def _register_developer_tools(mcp: FastMCP) -> None:
             if metadata:
                 tool_func = create_tool_function(metadata)
                 mcp.tool(name="search_mcp_debug_logs")(tool_func)
-                logger.info("Registered developer tool: search_mcp_debug_logs")
+                logger.debug("Registered developer tool: search_mcp_debug_logs")
             else:
                 logger.error("Could not find search_mcp_debug_logs tool in registry")
         except ImportError as e:

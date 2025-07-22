@@ -85,24 +85,24 @@ async def build_context_with_stable_list(
         - file_tree: ASCII tree representation with INLINE markers
     """
     # Debug logging to understand file access issues
-    logger.info(f"DEBUG: CWD inside context_builder: {os.getcwd()}")
-    logger.info(f"DEBUG: Received context_paths: {context_paths}")
+    logger.debug(f"DEBUG: CWD inside context_builder: {os.getcwd()}")
+    logger.debug(f"DEBUG: Received context_paths: {context_paths}")
 
     # Check existence of each path
     for p in context_paths:
         abs_p = os.path.abspath(p)
         exists = os.path.exists(abs_p)
-        logger.info(
+        logger.debug(
             f"DEBUG: Checking path '{p}' | abspath: '{abs_p}' | Exists? {exists}"
         )
         if exists:
             try:
                 stat = os.stat(abs_p)
-                logger.info(
+                logger.debug(
                     f"DEBUG: File stats - size: {stat.st_size}, mtime: {stat.st_mtime}"
                 )
             except Exception as e:
-                logger.info(f"DEBUG: Error statting file: {e}")
+                logger.debug(f"DEBUG: Error statting file: {e}")
 
     # Gather priority files first if provided
     priority_files = []
@@ -152,7 +152,7 @@ async def build_context_with_stable_list(
                 overflow_paths.append(file_path)
 
         # Second pass: load and tokenize only files that will be sent inline
-        logger.info(
+        logger.debug(
             f"Loading {len(inline_paths)} inline files (estimated), {len(overflow_paths)} overflow files"
         )
         file_data = await load_specific_files_async(inline_paths)

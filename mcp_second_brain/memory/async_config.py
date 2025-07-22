@@ -40,7 +40,7 @@ class AsyncMemoryConfig:
         store_id, need_create = await loop.run_in_executor(None, _check_active)
 
         if not need_create:
-            logger.info(f"[MEMORY] Using existing store: {store_id}")
+            logger.debug(f"[MEMORY] Using existing store: {store_id}")
 
             # Verify the store actually exists in OpenAI
             settings = get_settings()
@@ -51,7 +51,7 @@ class AsyncMemoryConfig:
             try:
                 # Try to retrieve the store to verify it exists
                 await client.vector_stores.retrieve(store_id)
-                logger.info(f"[MEMORY] Verified store {store_id} exists in OpenAI")
+                logger.debug(f"[MEMORY] Verified store {store_id} exists in OpenAI")
             except Exception as e:
                 # Store doesn't exist in OpenAI - mark for creation
                 logger.warning(
@@ -222,7 +222,7 @@ class AsyncMemoryConfig:
         store_id, need_create = await loop.run_in_executor(None, _check_active)
 
         if not need_create:
-            logger.info(f"[MEMORY] Using existing store: {store_id}")
+            logger.debug(f"[MEMORY] Using existing store: {store_id}")
 
             # Verify the store actually exists in OpenAI
             settings = get_settings()
@@ -233,7 +233,7 @@ class AsyncMemoryConfig:
             try:
                 # Try to retrieve the store to verify it exists
                 await client.vector_stores.retrieve(store_id)
-                logger.info(f"[MEMORY] Verified store {store_id} exists in OpenAI")
+                logger.debug(f"[MEMORY] Verified store {store_id} exists in OpenAI")
             except Exception as e:
                 # Store doesn't exist in OpenAI - mark for creation
                 logger.warning(

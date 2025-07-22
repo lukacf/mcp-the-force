@@ -67,16 +67,16 @@ def load_text_files(items: List[str]) -> List[Tuple[str, str, int]]:
     logger = logging.getLogger(__name__)
 
     # Debug: Log current working directory and user
-    logger.info(
+    logger.debug(
         f"DEBUG load_text_files: CWD={os.getcwd()}, USER={os.getenv('USER', 'unknown')}, UID={os.getuid()}"
     )
-    logger.info(f"DEBUG load_text_files: Input items={items}")
+    logger.debug(f"DEBUG load_text_files: Input items={items}")
 
     # Always use gather_file_paths to robustly handle files, directories,
     # and filtering in one place. This avoids race conditions with file
     # existence checks in Docker volume mounts.
     paths = gather_file_paths(items)
-    logger.info(
+    logger.debug(
         f"DEBUG load_text_files: gather_file_paths returned {len(paths)} paths: {paths}"
     )
 
@@ -112,7 +112,7 @@ def load_text_files(items: List[str]) -> List[Tuple[str, str, int]]:
                 if os.path.exists(parent):
                     try:
                         items_in_parent = os.listdir(parent)
-                        logger.info(
+                        logger.debug(
                             f"DEBUG load_text_files: Parent dir '{parent}' contains: {items_in_parent[:10]}..."
                         )  # First 10 items
                     except Exception as e:

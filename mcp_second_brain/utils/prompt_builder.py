@@ -43,14 +43,14 @@ def build_prompt(
         return prompt, []
 
     gather_start = time.time()
-    logger.info(f"DEBUG build_prompt: ctx={ctx}, attach={attach}")
+    logger.debug(f"DEBUG build_prompt: ctx={ctx}, attach={attach}")
     ctx_files = gather_file_paths(ctx) if ctx else []
-    logger.info(
+    logger.debug(
         f"Gathered {len(ctx_files)} context files in {time.time() - gather_start:.2f}s - files: {ctx_files}"
     )
 
     extras = gather_file_paths(attach) if attach else []
-    logger.info(f"Gathered {len(extras)} attachment files - files: {extras}")
+    logger.debug(f"Gathered {len(extras)} attachment files - files: {extras}")
 
     # Get context limit based on model and configured percentage
     model_limit = get_model_context_window(model or "")
@@ -70,19 +70,21 @@ def build_prompt(
 
     # For large context models, try to inline everything
     all_files = ctx_files + [f for f in extras if f not in ctx_files]
-    logger.info(f"[PROMPT_BUILDER] Total files to process: {len(all_files)}")
+    logger.debug(f"[PROMPT_BUILDER] Total files to process: {len(all_files)}")
 
     # Use the shared context loader to get file contents and token counts
-    logger.info(f"[PROMPT_BUILDER] Calling load_text_files with {len(all_files)} files")
+    logger.debug(
+        f"[PROMPT_BUILDER] Calling load_text_files with {len(all_files)} files"
+    )
     file_data = load_text_files(all_files)
-    logger.info(
+    logger.debug(
         f"[PROMPT_BUILDER] load_text_files returned {len(file_data)} loaded files"
     )
 
-    logger.info(f"[PROMPT_BUILDER] Processing {len(file_data)} files for inlining")
+    logger.debug(f"[PROMPT_BUILDER] Processing {len(file_data)} files for inlining")
     for i, (file_path, content, token_count) in enumerate(file_data):
         if i % 50 == 0:  # Log progress every 50 files
-            logger.info(
+            logger.debug(
                 f"[PROMPT_BUILDER] Processing file {i + 1}/{len(file_data)}: {file_path} ({token_count} tokens)"
             )
         if used + token_count <= max_tokens:
@@ -112,7 +114,7 @@ def build_prompt(
         CTX.append(elem)
 
     prompt = ET.tostring(task, encoding="unicode")
-    logger.info(f"[PROMPT_BUILDER] Final prompt built: {len(prompt)} chars")
+    logger.debug(f"[PROMPT_BUILDER] Final prompt built: {len(prompt)} chars")
     if attachments:
         prompt += "\n\nYou have additional information accessible through the file search tool."
 
