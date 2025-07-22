@@ -82,13 +82,13 @@ async def store_conversation_memory(
 
         # Get active store and upload
         config = get_async_memory_config()
-        logger.info("[MEMORY] Getting active conversation store...")
+        logger.debug("[MEMORY] Getting active conversation store...")
         store_id = await config.get_active_conversation_store()
-        logger.info(f"[MEMORY] Got store ID: {store_id}")
+        logger.debug(f"[MEMORY] Got store ID: {store_id}")
 
         # Create temporary file in thread pool to avoid blocking
         tmp_path = await loop.run_in_executor(None, _create_temp_file, doc, session_id)
-        logger.info(f"[MEMORY] Created temp file: {tmp_path}")
+        logger.debug(f"[MEMORY] Created temp file: {tmp_path}")
 
         try:
             # Upload to vector store (async)

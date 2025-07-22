@@ -34,7 +34,7 @@ def patch_grok_adapter():
 
         # Replace the method
         GrokAdapter.generate = cancellation_aware_generate
-        logger.info("Patched GrokAdapter for cancellation awareness")
+        logger.debug("Patched GrokAdapter for cancellation awareness")
 
     except Exception as e:
         logger.warning(f"Failed to patch GrokAdapter: {e}")

@@ -128,7 +128,7 @@ def tool(
 
         # Register the tool
         TOOL_REGISTRY[tool_id] = metadata
-        logger.info(f"Registered tool: {tool_id}")
+        logger.debug(f"Registered tool: {tool_id}")
 
         # Register aliases
         # Note: Aliases share the same metadata object reference as the primary tool.
@@ -136,7 +136,7 @@ def tool(
         if aliases:
             for alias in aliases:
                 TOOL_REGISTRY[alias] = metadata  # Same metadata object, not a copy
-                logger.info(f"Registered alias: {alias} -> {tool_id}")
+                logger.debug(f"Registered alias: {alias} -> {tool_id}")
 
         # Store metadata on the class for easy access
         cls._tool_metadata = metadata  # type: ignore[attr-defined]

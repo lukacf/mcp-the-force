@@ -219,21 +219,21 @@ async def add_files_to_vector_store(
         logger.warning(f"Skipping {len(unsupported)} unsupported files: {unsupported}")
         skipped_files.extend(unsupported)
 
-    logger.info(
+    logger.debug(
         f"[DEBUG] After filtering: {len(supported_new_files)} supported files out of {len(new_files)} new files"
     )
     if not supported_new_files:
-        logger.info("[DEBUG] No supported files, returning early")
+        logger.debug("[DEBUG] No supported files, returning early")
         return [], skipped_files
 
     try:
-        logger.info(
+        logger.debug(
             f"[DEBUG] Getting OpenAI client for {len(supported_new_files)} files"
         )
         client = await OpenAIClientFactory.get_instance(
             api_key=get_settings().openai_api_key
         )
-        logger.info("[DEBUG] Got OpenAI client")
+        logger.debug("[DEBUG] Got OpenAI client")
 
         # Verify and open files
         file_streams = []
@@ -257,10 +257,10 @@ async def add_files_to_vector_store(
                 skipped_files.append(path)
 
         if not file_streams:
-            logger.info("[DEBUG] No file streams to upload")
+            logger.debug("[DEBUG] No file streams to upload")
             return [], skipped_files
 
-        logger.info(f"[DEBUG] About to batch upload {len(file_streams)} files")
+        logger.debug(f"[DEBUG] About to batch upload {len(file_streams)} files")
         # Upload files to the existing vector store using batch upload
         try:
             # Decide whether to use parallel or single batch based on file count
