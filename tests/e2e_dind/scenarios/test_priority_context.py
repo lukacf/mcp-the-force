@@ -1,5 +1,6 @@
 import os
 import sys
+import json
 
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -9,16 +10,59 @@ class TestPriorityContextAndFileTree:
 
     def test_priority_context_forces_inline(
         self,
-        call_claude_tool,
         isolated_test_dir,
         create_file_in_container,
-        setup_mcp_with_low_context,
+        claude_with_low_context,
     ):
         """
         Test that priority_context forces files to be included inline even if they would normally overflow.
         """
-        # Configure MCP with low context percentage to test priority override
-        setup_mcp_with_low_context()
+
+        # We need to create a call_claude_tool function using the low context claude
+        def call_claude_tool(
+            tool_name: str, response_format: str = "", **kwargs
+        ) -> str:
+            # Convert parameters to natural language format
+            param_parts = []
+
+            for key, value in kwargs.items():
+                if key == "instructions":
+                    param_parts.append(f"instructions: {value}")
+                elif key == "output_format":
+                    param_parts.append(f"output_format: {value}")
+                elif key == "context":
+                    # Ensure context is passed as a list
+                    if isinstance(value, str):
+                        param_parts.append(f"context: [{json.dumps(value)}]")
+                    else:
+                        param_parts.append(f"context: {json.dumps(value)}")
+                elif key == "priority_context":
+                    # Ensure priority_context is passed as a list
+                    if isinstance(value, str):
+                        param_parts.append(f"priority_context: [{json.dumps(value)}]")
+                    else:
+                        param_parts.append(f"priority_context: {json.dumps(value)}")
+                elif key == "session_id":
+                    param_parts.append(f"session_id: {value}")
+                elif key == "structured_output_schema":
+                    param_parts.append(f"structured_output_schema: {json.dumps(value)}")
+                else:
+                    # For other parameters, use JSON encoding
+                    if isinstance(value, str):
+                        param_parts.append(f"{key}: {value}")
+                    else:
+                        param_parts.append(f"{key}: {json.dumps(value)}")
+
+            # Construct the natural language command
+            prompt = f"Use second-brain {tool_name} with {', '.join(param_parts)}"
+
+            # Add response format instruction if provided
+            if response_format:
+                prompt += f" and {response_format}"
+
+            # Call Claude CLI with low context
+            return claude_with_low_context(prompt)
+
         # Create a file that would trigger overflow with 1% context limit
         # With 1% of 1M tokens = 10,000 tokens, we need a file larger than that
         # Assuming ~3 chars per token, we need >30,000 characters
@@ -64,16 +108,59 @@ class TestPriorityContextAndFileTree:
 
     def test_file_tree_accuracy(
         self,
-        call_claude_tool,
         isolated_test_dir,
         create_file_in_container,
-        setup_mcp_with_low_context,
+        claude_with_low_context,
     ):
         """
         Test that the file_map accurately reflects which files are inline vs attached.
         """
-        # Configure MCP with low context percentage to test file tree accuracy
-        setup_mcp_with_low_context()
+
+        # We need to create a call_claude_tool function using the low context claude
+        def call_claude_tool(
+            tool_name: str, response_format: str = "", **kwargs
+        ) -> str:
+            # Convert parameters to natural language format
+            param_parts = []
+
+            for key, value in kwargs.items():
+                if key == "instructions":
+                    param_parts.append(f"instructions: {value}")
+                elif key == "output_format":
+                    param_parts.append(f"output_format: {value}")
+                elif key == "context":
+                    # Ensure context is passed as a list
+                    if isinstance(value, str):
+                        param_parts.append(f"context: [{json.dumps(value)}]")
+                    else:
+                        param_parts.append(f"context: {json.dumps(value)}")
+                elif key == "priority_context":
+                    # Ensure priority_context is passed as a list
+                    if isinstance(value, str):
+                        param_parts.append(f"priority_context: [{json.dumps(value)}]")
+                    else:
+                        param_parts.append(f"priority_context: {json.dumps(value)}")
+                elif key == "session_id":
+                    param_parts.append(f"session_id: {value}")
+                elif key == "structured_output_schema":
+                    param_parts.append(f"structured_output_schema: {json.dumps(value)}")
+                else:
+                    # For other parameters, use JSON encoding
+                    if isinstance(value, str):
+                        param_parts.append(f"{key}: {value}")
+                    else:
+                        param_parts.append(f"{key}: {json.dumps(value)}")
+
+            # Construct the natural language command
+            prompt = f"Use second-brain {tool_name} with {', '.join(param_parts)}"
+
+            # Add response format instruction if provided
+            if response_format:
+                prompt += f" and {response_format}"
+
+            # Call Claude CLI with low context
+            return claude_with_low_context(prompt)
+
         # Create a mix of files
         marker = "priority-test-beta-002"
 
@@ -134,16 +221,59 @@ class TestPriorityContextAndFileTree:
 
     def test_dynamic_overflow(
         self,
-        call_claude_tool,
         isolated_test_dir,
         create_file_in_container,
-        setup_mcp_with_low_context,
+        claude_with_low_context,
     ):
         """
         Test that the system handles dynamic overflow correctly across multiple calls.
         """
-        # Configure MCP with low context percentage for dynamic overflow testing
-        setup_mcp_with_low_context()
+
+        # We need to create a call_claude_tool function using the low context claude
+        def call_claude_tool(
+            tool_name: str, response_format: str = "", **kwargs
+        ) -> str:
+            # Convert parameters to natural language format
+            param_parts = []
+
+            for key, value in kwargs.items():
+                if key == "instructions":
+                    param_parts.append(f"instructions: {value}")
+                elif key == "output_format":
+                    param_parts.append(f"output_format: {value}")
+                elif key == "context":
+                    # Ensure context is passed as a list
+                    if isinstance(value, str):
+                        param_parts.append(f"context: [{json.dumps(value)}]")
+                    else:
+                        param_parts.append(f"context: {json.dumps(value)}")
+                elif key == "priority_context":
+                    # Ensure priority_context is passed as a list
+                    if isinstance(value, str):
+                        param_parts.append(f"priority_context: [{json.dumps(value)}]")
+                    else:
+                        param_parts.append(f"priority_context: {json.dumps(value)}")
+                elif key == "session_id":
+                    param_parts.append(f"session_id: {value}")
+                elif key == "structured_output_schema":
+                    param_parts.append(f"structured_output_schema: {json.dumps(value)}")
+                else:
+                    # For other parameters, use JSON encoding
+                    if isinstance(value, str):
+                        param_parts.append(f"{key}: {value}")
+                    else:
+                        param_parts.append(f"{key}: {json.dumps(value)}")
+
+            # Construct the natural language command
+            prompt = f"Use second-brain {tool_name} with {', '.join(param_parts)}"
+
+            # Add response format instruction if provided
+            if response_format:
+                prompt += f" and {response_format}"
+
+            # Call Claude CLI with low context
+            return claude_with_low_context(prompt)
+
         marker_base = "priority-test-gamma-003"
 
         # First call: only small files (should all be inline)
