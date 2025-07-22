@@ -2,6 +2,7 @@
 """MCP Second-Brain Server with dataclass-based tools."""
 
 import logging
+import sys
 from .logging.setup import setup_logging
 
 # Initialize the new logging system first
@@ -33,6 +34,8 @@ mcp = FastMCP("mcp-second-brain")
 
 # Register all dataclass-based tools
 logger.debug("Registering dataclass-based tools...")
+# Force an INFO level message to test if logging is working
+logger.info("TEST: MCP Second-Brain server starting up...")
 register_all_tools(mcp)
 
 # Register utility tools
@@ -46,7 +49,6 @@ logger.debug("MCP Second-Brain server initialized with dataclass-based tools")
 def main():
     """Main entry point."""
     import asyncio
-    import sys
     import signal
     import errno
     from typing import Iterator
