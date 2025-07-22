@@ -18,10 +18,17 @@ class TestContextOverflowAndRag:
     """Test the context overflow mechanism and RAG access to vector stores."""
 
     def test_overflow_and_rag_access(
-        self, call_claude_tool, isolated_test_dir, create_file_in_container
+        self,
+        call_claude_tool,
+        isolated_test_dir,
+        create_file_in_container,
+        setup_mcp_with_low_context,
     ):
         """Test that large files overflow to vector stores while small files remain inline."""
         print("🔍 Starting context overflow and RAG test...")
+
+        # Configure MCP with low context percentage to force overflow with smaller files
+        setup_mcp_with_low_context()
 
         # Create a small file that should fit inline
         small_file = os.path.join(isolated_test_dir, "small_inline.txt")
@@ -33,13 +40,12 @@ class TestContextOverflowAndRag:
         print(f"📄 Created small file (should be inline): {small_file}")
 
         # Create a "large" file that will overflow due to low CONTEXT_PERCENTAGE (1%)
-        # Even a small file will overflow with such a low percentage
+        # With 1% of ~1M tokens, we have ~10k tokens budget. At ~2 bytes/token, need >20KB
         large_file = os.path.join(isolated_test_dir, "large_overflow.txt")
-        # Just 1KB of content is enough to trigger overflow with 1% context limit
+        # 50KB should definitely trigger overflow
         large_content = (
             f"This file contains the overflow token: {OVERFLOW_TOKEN}\n"
-            + "Some additional content to ensure overflow with low context percentage.\n"
-            * 20
+            + "X" * 50000  # 50KB of content
         )
         create_file_in_container(large_file, large_content)
         print(
@@ -75,17 +81,24 @@ class TestContextOverflowAndRag:
         print("✅ Context overflow and RAG access test passed!")
 
     def test_priority_context_overrides_overflow(
-        self, call_claude_tool, isolated_test_dir, create_file_in_container
+        self,
+        call_claude_tool,
+        isolated_test_dir,
+        create_file_in_container,
+        setup_mcp_with_low_context,
     ):
         """Test that priority_context forces large files to be inline instead of overflowing."""
         print("🔍 Starting priority context override test...")
 
+        # Configure MCP with low context percentage to test priority override
+        setup_mcp_with_low_context()
+
         # Create a file that would overflow with 1% context limit
         large_priority_file = os.path.join(isolated_test_dir, "large_priority.txt")
-        # Just 1KB is enough with our low context percentage
+        # 50KB to ensure overflow with 1% context percentage
         large_content = (
             f"This is a priority file with the special token: {PRIORITY_TOKEN}\n"
-            + "Additional content to trigger overflow with 1% context limit.\n" * 20
+            + "Y" * 50000  # 50KB of content
         )
         create_file_in_container(large_priority_file, large_content)
         print(
@@ -96,7 +109,7 @@ class TestContextOverflowAndRag:
         large_regular_file = os.path.join(isolated_test_dir, "large_regular.txt")
         regular_content = (
             f"This is a regular file with overflow content: {OVERFLOW_TOKEN}\n"
-            + "More content to ensure overflow.\n" * 20
+            + "Z" * 50000  # 50KB of content
         )
         create_file_in_container(large_regular_file, regular_content)
         print(f"📄 Created large regular file: {large_regular_file}")
@@ -126,10 +139,17 @@ class TestContextOverflowAndRag:
         print("✅ Priority context override test passed!")
 
     def test_multiple_sessions_stable_list(
-        self, call_claude_tool, isolated_test_dir, create_file_in_container
+        self,
+        call_claude_tool,
+        isolated_test_dir,
+        create_file_in_container,
+        setup_mcp_with_low_context,
     ):
         """Test that the stable list mechanism works across multiple calls in the same session."""
         print("🔍 Starting stable list mechanism test...")
+
+        # Configure MCP with low context percentage for consistent testing
+        setup_mcp_with_low_context()
 
         session_id = f"stable-list-test-{uuid.uuid4().hex[:8]}"
 

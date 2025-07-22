@@ -34,8 +34,6 @@ services:
       LOITER_KILLER_URL: http://localhost:9876
       PYTHONPATH: /app
       CI_E2E: "1"
-      # Set very low context percentage for E2E tests to trigger overflow with small files
-      CONTEXT_PERCENTAGE: "0.01"  # 1% of context limit forces most files to overflow
     extra_hosts:
       - "host.docker.internal:host-gateway"  # For Linux compatibility
     entrypoint: ["/startup.sh"]  # Run our custom startup script
