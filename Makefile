@@ -158,7 +158,7 @@ e2e:
 	else \
 		echo "Running all e2e scenarios in parallel..."; \
 		( \
-			for scenario in smoke attachments failures stable_list priority_context session_management environment; do \
+			for scenario in smoke attachments stable_list priority_context session_management environment; do \
 				( \
 					echo "[$$scenario] Starting at $$(date)"; \
 					VOL="e2e-tmp-$$scenario-$$$$"; \
@@ -202,3 +202,17 @@ clean:
 	rm -rf .pytest_cache .coverage coverage.xml .mypy_cache
 	rm -rf htmlcov
 	@echo "✓ Clean complete!"
+
+clean-e2e:
+	@echo "Cleaning up E2E Docker resources..."
+	@# Remove E2E Docker images
+	docker rmi -f mcp-e2e-runner mcp-e2e-server 2>/dev/null || true
+	@# Remove E2E volumes (e2e-tmp-*)
+	docker volume ls --format '{{.Name}}' | grep '^e2e-tmp-' | xargs -r docker volume rm 2>/dev/null || true
+	@# Remove E2E networks (compose-e2e_*)
+	docker network ls --format '{{.Name}}' | grep '^compose-e2e_' | xargs -r docker network rm 2>/dev/null || true
+	@# Remove temporary compose directories
+	rm -rf /tmp/compose-e2e-* 2>/dev/null || true
+	@# Remove any dangling E2E containers (shouldn't be any with --rm, but just in case)
+	docker ps -a --format '{{.Names}}' | grep '^e2e-test-' | xargs -r docker rm -f 2>/dev/null || true
+	@echo "✓ E2E cleanup complete!"

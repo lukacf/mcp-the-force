@@ -148,12 +148,16 @@ class VertexAdapter(BaseAdapter):
             ),
         ]
 
-        # Setup tools - always include search_project_memory
+        # Setup tools
         function_declarations = []
 
-        # Always add search_project_memory for accessing memory
-        memory_search_decl = create_search_memory_declaration_gemini()
-        function_declarations.append(types.FunctionDeclaration(**memory_search_decl))
+        # Add search_project_memory unless explicitly disabled
+        disable_memory_search = kwargs.pop("disable_memory_search", False)
+        if not disable_memory_search:
+            memory_search_decl = create_search_memory_declaration_gemini()
+            function_declarations.append(
+                types.FunctionDeclaration(**memory_search_decl)
+            )
 
         # Add attachment search tool when vector stores are provided
         if vector_store_ids:
@@ -235,6 +239,57 @@ class VertexAdapter(BaseAdapter):
                 thinking_budget=max_reasoning_tokens if max_reasoning_tokens > 0 else -1
             )
 
+        # Convert response_schema to types.Schema if it's a dict
+        response_schema = config_kwargs.get("response_schema")
+        if response_schema and isinstance(response_schema, dict):
+            # Recursively convert dict schema to types.Schema objects
+            def dict_to_schema(d: Dict[str, Any]) -> types.Schema:
+                """Convert a dict representation to google.genai.types.Schema."""
+                schema_kwargs = {}
+
+                # Map the type to proper enum
+                if "type" in d:
+                    type_str = d["type"]
+                    # Map string types to google.genai.types.Type enum
+                    type_map = {
+                        "OBJECT": types.Type.OBJECT,
+                        "ARRAY": types.Type.ARRAY,
+                        "STRING": types.Type.STRING,
+                        "INTEGER": types.Type.INTEGER,
+                        "NUMBER": types.Type.NUMBER,
+                        "BOOLEAN": types.Type.BOOLEAN,
+                        "NULL": types.Type.NULL,
+                    }
+                    schema_kwargs["type"] = type_map.get(type_str, types.Type.STRING)
+
+                # Handle properties for OBJECT type
+                if "properties" in d and isinstance(d["properties"], dict):
+                    schema_kwargs["properties"] = {
+                        key: dict_to_schema(value) if isinstance(value, dict) else value
+                        for key, value in d["properties"].items()
+                    }
+
+                # Handle array items
+                if "items" in d and isinstance(d["items"], dict):
+                    schema_kwargs["items"] = dict_to_schema(d["items"])
+
+                # Copy other fields
+                for field in [
+                    "description",
+                    "enum",
+                    "required",
+                    "nullable",
+                    "format",
+                    "propertyOrdering",
+                ]:
+                    if field in d:
+                        schema_kwargs[field] = d[field]
+
+                return types.Schema(**schema_kwargs)
+
+            response_schema = dict_to_schema(response_schema)
+            config_kwargs["response_schema"] = response_schema
+
         # Create GenerateContentConfig with explicit parameters
         final_temperature = config_kwargs.get("temperature")
         logger.info(f"Final temperature for GenerateContentConfig: {final_temperature}")
@@ -245,7 +300,7 @@ class VertexAdapter(BaseAdapter):
             max_output_tokens=config_kwargs.get("max_output_tokens"),
             safety_settings=config_kwargs.get("safety_settings"),
             tools=config_kwargs.get("tools"),
-            response_schema=config_kwargs.get("response_schema"),
+            response_schema=response_schema,
             response_mime_type=config_kwargs.get("response_mime_type"),
             system_instruction=config_kwargs.get("system_instruction"),
             thinking_config=config_kwargs.get("thinking_config"),
@@ -320,17 +375,23 @@ class VertexAdapter(BaseAdapter):
             # No function calls, handle simple text response
             if response.candidates:
                 candidate = response.candidates[0]
-                if candidate.content and candidate.content.parts:
-                    final_response_content = self._extract_text_from_parts(
-                        candidate.content.parts
-                    )
-
-                    # Save the simple history
-                    if session_id:
-                        final_history = contents + [candidate.content]
-                        await gemini_session_cache.set_history(
-                            session_id, final_history
+                # Use the SDK's built-in text extraction which handles JSON mode properly
+                # But handle the case where response might be a mock object in tests
+                try:
+                    final_response_content = response.text or ""
+                except AttributeError:
+                    # Fallback for tests or when response doesn't have .text
+                    if candidate.content and candidate.content.parts:
+                        final_response_content = self._extract_text_from_parts(
+                            candidate.content.parts
                         )
+                    else:
+                        final_response_content = ""
+
+                # Save the simple history
+                if session_id:
+                    final_history = contents + [candidate.content]
+                    await gemini_session_cache.set_history(session_id, final_history)
 
         # Validate structured output
         if structured_output_schema:
