@@ -158,7 +158,7 @@ e2e:
 	else \
 		echo "Running all e2e scenarios in parallel..."; \
 		( \
-			for scenario in smoke memory attachments cross_model failures stable_list; do \
+			for scenario in smoke attachments failures stable_list priority_context session_management environment; do \
 				( \
 					echo "[$$scenario] Starting at $$(date)"; \
 					VOL="e2e-tmp-$$scenario-$$$$"; \
