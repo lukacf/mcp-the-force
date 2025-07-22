@@ -47,7 +47,7 @@ def get_adapter(
 
         adapter = MockAdapter(model_name)
         _ADAPTER_CACHE[cache_key] = adapter  # type: ignore[assignment]
-        logger.info(f"Created MockAdapter for {model_name} (adapter_mock=True)")
+        logger.debug(f"Created MockAdapter for {model_name} (adapter_mock=True)")
         return adapter, None
 
     # Lazy load search adapters to break circular imports
@@ -56,7 +56,7 @@ def get_adapter(
             from ..tools.search_memory import SearchMemoryAdapter
 
             register_adapter("SearchMemoryAdapter", SearchMemoryAdapter)
-            logger.info("Lazily registered SearchMemoryAdapter")
+            logger.debug("Lazily registered SearchMemoryAdapter")
         except ImportError as e:
             logger.error(f"Failed to lazy-load SearchMemoryAdapter: {e}")
             return (
@@ -68,7 +68,7 @@ def get_adapter(
             from ..tools.search_task_files import SearchTaskFilesAdapter
 
             register_adapter("SearchTaskFilesAdapter", SearchTaskFilesAdapter)
-            logger.info("Lazily registered SearchTaskFilesAdapter")
+            logger.debug("Lazily registered SearchTaskFilesAdapter")
         except ImportError as e:
             logger.error(f"Failed to lazy-load SearchTaskFilesAdapter: {e}")
             return (
@@ -80,7 +80,7 @@ def get_adapter(
             from .logging_adapter import LoggingAdapter
 
             register_adapter("LoggingAdapter", LoggingAdapter)
-            logger.info("Lazily registered LoggingAdapter")
+            logger.debug("Lazily registered LoggingAdapter")
         except ImportError as e:
             logger.error(f"Failed to lazy-load LoggingAdapter: {e}")
             return (
@@ -103,7 +103,7 @@ def get_adapter(
         # Create adapter instance
         adapter = adapter_class(model_name)  # type: ignore
         _ADAPTER_CACHE[cache_key] = adapter  # type: ignore
-        logger.info(f"Created {adapter_key} adapter for {model_name}")
+        logger.debug(f"Created {adapter_key} adapter for {model_name}")
         return adapter, None
     except Exception as e:
         logger.error(f"Failed to create {adapter_key} adapter: {e}")
@@ -118,7 +118,7 @@ def register_adapter(key: str, adapter_class: Type[BaseAdapter]):
         adapter_class: Adapter class that inherits from BaseAdapter
     """
     ADAPTER_REGISTRY[key] = adapter_class
-    logger.info(f"Registered adapter: {key}")
+    logger.debug(f"Registered adapter: {key}")
 
 
 __all__ = [

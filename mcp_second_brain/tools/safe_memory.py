@@ -30,7 +30,9 @@ async def safe_store_conversation_memory(
 
     try:
         await store_conversation_memory(session_id, tool_name, messages, response)
-        logger.info(f"[MEMORY] Successfully stored conversation memory for {tool_name}")
+        logger.debug(
+            f"[MEMORY] Successfully stored conversation memory for {tool_name}"
+        )
     except Exception as e:
         logger.warning(
             f"Failed to store conversation memory in background task: {e}",

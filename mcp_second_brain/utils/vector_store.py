@@ -33,7 +33,7 @@ async def _upload_batch(
             batch = await asyncio.wait_for(_do_upload(), timeout=15.0)
 
             elapsed = time.time() - start
-            logger.info(
+            logger.debug(
                 f"Batch {batch_num}: Completed in {elapsed:.2f}s - "
                 f"{batch.file_counts.completed}/{batch.file_counts.total} succeeded"
             )
@@ -61,7 +61,7 @@ async def _upload_batch(
                     f"Batch {batch_num}: Timed out after 15s, switching to file-by-file upload. Files: {file_names}"
                 )
                 # Instead of retrying the batch, try uploading files one by one
-                logger.info(
+                logger.debug(
                     f"Batch {batch_num}: Attempting to upload {len(files)} files individually"
                 )
 
@@ -73,7 +73,7 @@ async def _upload_batch(
                         file_name = (
                             file.name if hasattr(file, "name") else f"<file_{i}>"
                         )
-                        logger.info(
+                        logger.debug(
                             f"Batch {batch_num}: Uploading file {i + 1}/{len(files)}: {file_name}"
                         )
 
@@ -87,7 +87,7 @@ async def _upload_batch(
 
                         if single_batch.file_counts.completed > 0:
                             completed += 1
-                            logger.info(
+                            logger.debug(
                                 f"Batch {batch_num}: File {i + 1}/{len(files)} uploaded successfully: {file_name}"
                             )
                         else:
@@ -114,7 +114,7 @@ async def _upload_batch(
                         )
 
                 elapsed_total = time.time() - start
-                logger.info(
+                logger.debug(
                     f"Batch {batch_num}: File-by-file upload completed in {elapsed_total:.2f}s - {completed}/{len(files)} succeeded"
                 )
 
@@ -251,12 +251,12 @@ async def create_vector_store(paths: List[str]) -> str:
         return ""
 
     start_time = time.time()
-    logger.info(f"create_vector_store called with {len(paths)} paths")
-    logger.info(f"Input paths: {paths}")
+    logger.debug(f"create_vector_store called with {len(paths)} paths")
+    logger.debug(f"Input paths: {paths}")
 
     # Filter for supported file extensions
     supported_paths = [p for p in paths if _is_supported_for_vector_store(p)]
-    logger.info(f"Filtered to {len(supported_paths)} supported files")
+    logger.debug(f"Filtered to {len(supported_paths)} supported files")
     if len(supported_paths) < len(paths):
         unsupported = [p for p in paths if p not in supported_paths]
         logger.warning(f"Skipped {len(unsupported)} unsupported files: {unsupported}")
@@ -290,7 +290,7 @@ async def create_vector_store(paths: List[str]) -> str:
                         with open(path, "rb") as test_file:
                             test_file.read(1)  # Read one byte to verify access
                         verified_files.append(path)
-                        logger.info(f"Verified file: {path}")
+                        logger.debug(f"Verified file: {path}")
                     else:
                         logger.warning(f"Skipping empty file: {path}")
                 else:
@@ -319,7 +319,7 @@ async def create_vector_store(paths: List[str]) -> str:
             await client.vector_stores.delete(vs.id)
             return ""
 
-        logger.info(f"Starting batch upload of {len(file_streams)} files")
+        logger.debug(f"Starting batch upload of {len(file_streams)} files")
 
         try:
             # Decide whether to use parallel or single batch based on file count
@@ -330,7 +330,9 @@ async def create_vector_store(paths: List[str]) -> str:
                 )
             else:
                 # For larger uploads, use parallel batches
-                logger.info(f"Using parallel batch upload ({PARALLEL_BATCHES} batches)")
+                logger.debug(
+                    f"Using parallel batch upload ({PARALLEL_BATCHES} batches)"
+                )
 
                 # Split files into batches
                 batch_size = max(1, len(file_streams) // PARALLEL_BATCHES)
@@ -343,7 +345,7 @@ async def create_vector_store(paths: List[str]) -> str:
                     batches[-2].extend(batches[-1])
                     batches.pop()
 
-                logger.info(
+                logger.debug(
                     f"Created {len(batches)} batches with sizes: {[len(b) for b in batches]}"
                 )
 
@@ -416,7 +418,7 @@ async def create_vector_store(paths: List[str]) -> str:
 
         # Log details about each file
         if hasattr(file_batch, "file_counts"):
-            logger.info(
+            logger.debug(
                 f"Upload details - Completed: {file_batch.file_counts.completed}, "
                 f"In progress: {file_batch.file_counts.in_progress}, "
                 f"Failed: {file_batch.file_counts.failed}, "
