@@ -41,28 +41,48 @@ class AsyncMemoryConfig:
 
         if not need_create:
             logger.info(f"[MEMORY] Using existing store: {store_id}")
-            # Register existing store with LoiterKiller if not already registered
-            session_id = "project-memory-conversation"
-            logger.info(
-                f"[MEMORY] Checking if existing store {store_id} needs LoiterKiller registration..."
+
+            # Verify the store actually exists in OpenAI
+            settings = get_settings()
+            client = await OpenAIClientFactory.get_instance(
+                api_key=settings.openai_api_key
             )
+
             try:
-                registered = await self._loiter_killer.register_existing_store(
-                    session_id, store_id, protected=True
-                )
-                if registered:
-                    logger.info(
-                        f"[MEMORY] Successfully registered existing store {store_id} with LoiterKiller"
-                    )
-                else:
-                    logger.debug(
-                        f"[MEMORY] Store {store_id} already registered or LoiterKiller unavailable"
-                    )
+                # Try to retrieve the store to verify it exists
+                await client.vector_stores.retrieve(store_id)
+                logger.info(f"[MEMORY] Verified store {store_id} exists in OpenAI")
             except Exception as e:
-                logger.debug(
-                    f"[MEMORY] Could not register existing store {store_id}: {e}"
+                # Store doesn't exist in OpenAI - mark for creation
+                logger.warning(
+                    f"[MEMORY] Store {store_id} not found in OpenAI: {e}. Will create new store."
                 )
-            return str(store_id)
+                need_create = True
+                # Fall through to creation logic below
+
+            if not need_create:
+                # Store exists - register with LoiterKiller if needed
+                session_id = "project-memory-conversation"
+                logger.info(
+                    f"[MEMORY] Checking if existing store {store_id} needs LoiterKiller registration..."
+                )
+                try:
+                    registered = await self._loiter_killer.register_existing_store(
+                        session_id, store_id, protected=True
+                    )
+                    if registered:
+                        logger.info(
+                            f"[MEMORY] Successfully registered existing store {store_id} with LoiterKiller"
+                        )
+                    else:
+                        logger.debug(
+                            f"[MEMORY] Store {store_id} already registered or LoiterKiller unavailable"
+                        )
+                except Exception as e:
+                    logger.debug(
+                        f"[MEMORY] Could not register existing store {store_id}: {e}"
+                    )
+                return str(store_id)
 
         # Need to create a new store - do this async
         logger.info(f"[MEMORY] Need to create new store (current: {store_id})")
@@ -106,8 +126,8 @@ class AsyncMemoryConfig:
                     with self._sync_config._db:
                         self._sync_config._db.execute(
                             """
-                            INSERT INTO stores (store_id, store_type, store_num, is_active)
-                            VALUES (?, 'conversation', 1, 1)
+                            INSERT INTO stores (store_id, store_type, doc_count, created_at, is_active)
+                            VALUES (?, 'conversation', 0, datetime('now'), 1)
                         """,
                             (store.id,),
                         )
@@ -176,10 +196,10 @@ class AsyncMemoryConfig:
                     # Insert new active store
                     self._sync_config._db.execute(
                         """
-                        INSERT INTO stores (store_id, store_type, store_num, is_active)
-                        VALUES (?, ?, ?, 1)
+                        INSERT INTO stores (store_id, store_type, doc_count, created_at, is_active)
+                        VALUES (?, ?, 0, datetime('now'), 1)
                     """,
-                        (store.id, store_type, new_num),
+                        (store.id, store_type),
                     )
 
         await loop.run_in_executor(None, _update_db)
@@ -203,28 +223,48 @@ class AsyncMemoryConfig:
 
         if not need_create:
             logger.info(f"[MEMORY] Using existing store: {store_id}")
-            # Register existing store with LoiterKiller if not already registered
-            session_id = "project-memory-commit"
-            logger.info(
-                f"[MEMORY] Checking if existing store {store_id} needs LoiterKiller registration..."
+
+            # Verify the store actually exists in OpenAI
+            settings = get_settings()
+            client = await OpenAIClientFactory.get_instance(
+                api_key=settings.openai_api_key
             )
+
             try:
-                registered = await self._loiter_killer.register_existing_store(
-                    session_id, store_id, protected=True
-                )
-                if registered:
-                    logger.info(
-                        f"[MEMORY] Successfully registered existing store {store_id} with LoiterKiller"
-                    )
-                else:
-                    logger.debug(
-                        f"[MEMORY] Store {store_id} already registered or LoiterKiller unavailable"
-                    )
+                # Try to retrieve the store to verify it exists
+                await client.vector_stores.retrieve(store_id)
+                logger.info(f"[MEMORY] Verified store {store_id} exists in OpenAI")
             except Exception as e:
-                logger.debug(
-                    f"[MEMORY] Could not register existing store {store_id}: {e}"
+                # Store doesn't exist in OpenAI - mark for creation
+                logger.warning(
+                    f"[MEMORY] Store {store_id} not found in OpenAI: {e}. Will create new store."
                 )
-            return str(store_id)
+                need_create = True
+                # Fall through to creation logic below
+
+            if not need_create:
+                # Store exists - register with LoiterKiller if needed
+                session_id = "project-memory-commit"
+                logger.info(
+                    f"[MEMORY] Checking if existing store {store_id} needs LoiterKiller registration..."
+                )
+                try:
+                    registered = await self._loiter_killer.register_existing_store(
+                        session_id, store_id, protected=True
+                    )
+                    if registered:
+                        logger.info(
+                            f"[MEMORY] Successfully registered existing store {store_id} with LoiterKiller"
+                        )
+                    else:
+                        logger.debug(
+                            f"[MEMORY] Store {store_id} already registered or LoiterKiller unavailable"
+                        )
+                except Exception as e:
+                    logger.debug(
+                        f"[MEMORY] Could not register existing store {store_id}: {e}"
+                    )
+                return str(store_id)
 
         # Need to create a new store - do this async
         logger.info(f"[MEMORY] Need to create new store (current: {store_id})")
@@ -266,8 +306,8 @@ class AsyncMemoryConfig:
                     with self._sync_config._db:
                         self._sync_config._db.execute(
                             """
-                            INSERT INTO stores (store_id, store_type, store_num, is_active)
-                            VALUES (?, 'commit', 1, 1)
+                            INSERT INTO stores (store_id, store_type, doc_count, created_at, is_active)
+                            VALUES (?, 'commit', 0, datetime('now'), 1)
                         """,
                             (store.id,),
                         )
