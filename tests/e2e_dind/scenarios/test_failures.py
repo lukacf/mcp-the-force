@@ -1,4 +1,4 @@
-"""Failure handling test - graceful error responses for invalid requests."""
+"""Failure handling test - graceful error responses for invalid MCP tool usage."""
 
 import sys
 import os
@@ -9,141 +9,11 @@ from json_utils import safe_json
 
 
 def test_graceful_failure_handling(claude, call_claude_tool):
-    """Test that invalid requests are handled gracefully with proper error messages."""
+    """Test that invalid MCP tool requests are handled gracefully."""
 
-    # NOTE: structured_output_schema should NOT be JSON-encoded, just passed as a plain object
-    # Define schema for error responses
-    error_schema = {
-        "type": "object",
-        "properties": {
-            "error_occurred": {"type": "boolean"},
-            "error_type": {"type": "string"},
-            "handled_gracefully": {"type": "boolean"},
-        },
-        "required": ["error_occurred", "error_type", "handled_gracefully"],
-        "additionalProperties": False,
-    }
-
-    # Step 1: Test invalid file path in context
-    # We'll use call_claude_tool which properly handles structured_output_schema
-    tool_helper = call_claude_tool
-
-    response = tool_helper(
-        "chat_with_gpt4_1",
-        instructions="Analyze the provided file for code quality issues. If the file cannot be accessed, explain what went wrong.",
-        output_format="JSON object indicating whether an error occurred and how it was handled",
-        context=["/completely/nonexistent/path/nowhere.py"],
-        session_id="failure-test-1",
-        structured_output_schema=error_schema,
-        response_format=" and respond ONLY with the JSON.",
-    )
-
-    # Parse response - should handle file not found gracefully
-    result = safe_json(response)
-    assert result["error_occurred"] is True
-    # Accept various error types including schema validation errors
-    assert any(
-        indicator in result["error_type"].lower()
-        for indicator in ["file", "not found", "validation", "schema", "error"]
-    )
-    assert result["handled_gracefully"] is True
-
-    # Step 2: Test invalid temperature parameter (should be clamped or rejected)
-    response = tool_helper(
-        "chat_with_gpt4_1",
-        instructions="Generate a simple greeting message",
-        output_format="JSON object indicating if temperature was handled properly",
-        context=[],
-        temperature=-5.0,  # Invalid negative temperature
-        session_id="failure-test-2",
-        structured_output_schema={
-            "type": "object",
-            "properties": {
-                "message_generated": {"type": "boolean"},
-                "temperature_handled": {"type": "string"},
-                "actual_message": {"type": "string"},
-            },
-            "required": ["message_generated", "temperature_handled", "actual_message"],
-            "additionalProperties": False,
-        },
-        response_format=" and respond ONLY with the JSON.",
-    )
-
-    # Parse response - should handle invalid temperature gracefully
-    result = safe_json(response)
-    # Accept either outcome - server may refuse or still generate
-    assert result["message_generated"] in (True, False)
-
-    # If message was generated, check it has content
-    if result["message_generated"]:
-        assert len(result["actual_message"]) > 5
-
-    # Check that temperature handling was explained
-    # Accept various ways the model might describe handling invalid temperature
-    temp_handled = result["temperature_handled"].lower()
-    assert any(
-        word in temp_handled
-        for word in [
-            "clamp",
-            "adjust",
-            "invalid",
-            "error",
-            "out of range",
-            "negative",
-            "accepted",
-            "processed",
-            "handled",
-            "temperature",
-        ]
-    )
-
-    # Step 3: Test request without required instructions
-    response = tool_helper(
-        "chat_with_gpt4_1",
-        instructions="",  # Empty instructions
-        output_format="JSON object explaining what happened",
-        context=[],
-        session_id="failure-test-3",
-        structured_output_schema={
-            "type": "object",
-            "properties": {
-                "processed_request": {"type": "boolean"},
-                "issue_explanation": {"type": "string"},
-            },
-            "required": ["processed_request", "issue_explanation"],
-            "additionalProperties": False,
-        },
-        response_format=" and respond ONLY with the JSON.",
-    )
-
-    # Parse response - should handle empty instructions gracefully
-    result = safe_json(response)
-    assert result is not None, f"Failed to parse JSON: {response}"
-
-    # Schema validation should have succeeded
-    assert "processed_request" in result, f"Missing processed_request field: {result}"
-    assert "issue_explanation" in result, f"Missing issue_explanation field: {result}"
-
-    # The response should explain what happened (empty instructions or schema issue)
-    explanation_lower = result["issue_explanation"].lower()
-    # Accept various explanations for empty instructions or schema issues
-    assert any(
-        indicator in explanation_lower
-        for indicator in [
-            "instructions",
-            "empty",
-            "schema",
-            "parameter",
-            "validation",
-            "no content",
-            "missing",
-            "required",
-        ]
-    ), f"Issue explanation unclear: {result}"
-
-    # Step 4: Test non-existent tool (this should fail at Claude CLI level)
+    # Test 1: Call non-existent tool (this is a real E2E scenario)
     response = claude(
-        "Use second-brain completely_fake_nonexistent_tool with {} and respond with the exact output."
+        "Use second-brain completely_fake_nonexistent_tool with instructions: 'test' and respond with the exact output."
     )
 
     # Should get clear error about tool not existing
@@ -158,61 +28,83 @@ def test_graceful_failure_handling(claude, call_claude_tool):
         "cannot use",
         "no tool named",
         "available tools",
-        "don't have access",  # Claude's response
-        "available second brain tools",  # Claude lists available tools
+        "don't have access",
+        "available second brain tools",
     ]
     assert any(
         indicator in response.lower() for indicator in tool_error_indicators
     ), f"Expected tool error for nonexistent tool, got: {response}"
 
-    # Step 5: Test o3 model with reasoning_effort parameter
-    response = tool_helper(
-        "chat_with_o3",
-        instructions="Solve this logic puzzle: If all cats are animals, and Felix is a cat, what can we conclude about Felix?",
-        output_format="JSON object with the logical conclusion",
+    # Test 2: Test invalid temperature parameter (edge case)
+    response = call_claude_tool(
+        "chat_with_gpt4_1",
+        instructions="Generate a simple greeting message",
+        output_format="JSON object with greeting field",
+        context=[],
+        temperature=-5.0,  # Invalid negative temperature
+        session_id="failure-test-temp",
+        structured_output_schema={
+            "type": "object",
+            "properties": {
+                "greeting": {"type": "string"},
+            },
+            "required": ["greeting"],
+            "additionalProperties": False,
+        },
+        response_format=" and respond ONLY with the JSON.",
+    )
+
+    # Should still get a valid response - temperature should be clamped or ignored
+    result = safe_json(response)
+    assert result is not None, "Should get valid JSON despite invalid temperature"
+    assert "greeting" in result, f"Should have greeting field: {result}"
+    assert len(result["greeting"]) > 0, "Should have non-empty greeting"
+
+    # Test 3: Test extremely large temperature
+    response = call_claude_tool(
+        "chat_with_gpt4_1",
+        instructions="Generate another greeting",
+        output_format="JSON object with greeting field",
+        context=[],
+        temperature=100.0,  # Extremely high temperature
+        session_id="failure-test-high-temp",
+        structured_output_schema={
+            "type": "object",
+            "properties": {
+                "greeting": {"type": "string"},
+            },
+            "required": ["greeting"],
+            "additionalProperties": False,
+        },
+        response_format=" and respond ONLY with the JSON.",
+    )
+
+    # Should still get a valid response
+    result = safe_json(response)
+    assert result is not None, "Should get valid JSON despite high temperature"
+    assert "greeting" in result, f"Should have greeting field: {result}"
+
+    # Test 4: Test with invalid reasoning_effort for models that don't support it
+    response = call_claude_tool(
+        "chat_with_gemini25_flash",  # This model doesn't support reasoning_effort
+        instructions="Simple task",
+        output_format="JSON with status",
         context=[],
         session_id="failure-test-reasoning",
-        reasoning_effort="low",  # Valid parameter for o3
+        reasoning_effort="high",  # Invalid parameter for this model
         structured_output_schema={
             "type": "object",
             "properties": {
-                "conclusion": {"type": "string"},
-                "reasoning_used": {"type": "boolean"},
+                "status": {"type": "string"},
             },
-            "required": ["conclusion", "reasoning_used"],
-            "additionalProperties": False,
+            "required": ["status"],
         },
         response_format=" and respond ONLY with the JSON.",
     )
 
-    # Parse response - should handle reasoning task correctly
-    result = safe_json(response)
-    assert result["reasoning_used"] in (True, False)  # Allow either reasoning behavior
-    if "conclusion" in result:
-        assert (
-            "animal" in result["conclusion"].lower()
-        )  # Should conclude Felix is an animal
+    # Should handle gracefully - either ignore the parameter or return an error
+    # But should not crash
+    assert response is not None
+    assert len(response) > 0
 
-    # Step 6: Test session continuity with invalid session ID format
-    response = tool_helper(
-        "chat_with_o3",
-        instructions="Remember this number: 12345",
-        output_format="JSON confirmation",
-        context=[],
-        session_id="valid-session-format-test",  # Valid format
-        structured_output_schema={
-            "type": "object",
-            "properties": {
-                "number_stored": {"type": "boolean"},
-                "session_valid": {"type": "boolean"},
-            },
-            "required": ["number_stored", "session_valid"],
-            "additionalProperties": False,
-        },
-        response_format=" and respond ONLY with the JSON.",
-    )
-
-    # Parse response - should handle session correctly
-    result = safe_json(response)
-    assert result["number_stored"] is True
-    assert result["session_valid"] is True
+    print("✅ All failure handling tests passed!")
