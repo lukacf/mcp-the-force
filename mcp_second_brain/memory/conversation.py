@@ -14,7 +14,7 @@ from xml.etree import ElementTree as ET
 from ..adapters.openai.client import OpenAIClientFactory
 from ..config import get_settings
 from ..utils.redaction import redact_dict
-from .config import get_memory_config
+from .async_config import get_async_memory_config
 from ..tools.registry import get_tool
 
 logger = logging.getLogger(__name__)
@@ -26,8 +26,21 @@ async def store_conversation_memory(
     """Store conversation summary in vector store after tool call."""
     # Check if tool writes to memory using capability flag
     tool_metadata = get_tool(tool_name)
-    if not tool_metadata or not tool_metadata.capabilities.get("writes_memory"):
+    if not tool_metadata:
+        logger.warning(
+            f"No metadata found for tool {tool_name}, skipping memory storage"
+        )
         return
+
+    if not tool_metadata.capabilities.get("writes_memory"):
+        logger.info(
+            f"Tool {tool_name} does not have writes_memory capability, skipping memory storage"
+        )
+        return
+
+    logger.info(
+        f"Tool {tool_name} has writes_memory capability, proceeding with storage"
+    )
 
     try:
         # Get async client
@@ -68,11 +81,14 @@ async def store_conversation_memory(
         doc = redact_dict(doc)
 
         # Get active store and upload
-        config = get_memory_config()
-        store_id = config.get_active_conversation_store()
+        config = get_async_memory_config()
+        logger.info("[MEMORY] Getting active conversation store...")
+        store_id = await config.get_active_conversation_store()
+        logger.info(f"[MEMORY] Got store ID: {store_id}")
 
         # Create temporary file in thread pool to avoid blocking
         tmp_path = await loop.run_in_executor(None, _create_temp_file, doc, session_id)
+        logger.info(f"[MEMORY] Created temp file: {tmp_path}")
 
         try:
             # Upload to vector store (async)
