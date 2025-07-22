@@ -26,16 +26,14 @@ def setup_logging():
     """Initialize VictoriaLogs-based logging."""
     settings = get_settings()
 
+    # Get the root logger for the entire mcp_second_brain package
     app_logger = logging.getLogger("mcp_second_brain")
     app_logger.setLevel(settings.logging.level)
+    # Allow child loggers to use parent handlers
     app_logger.propagate = False
 
     if app_logger.hasHandlers():
         app_logger.handlers.clear()
-
-    if not settings.logging.developer_mode.enabled:
-        app_logger.addHandler(logging.NullHandler())
-        return
 
     # Check if we should disable VictoriaLogs
     if os.getenv("DISABLE_VICTORIA_LOGS", "").lower() in ("1", "true", "yes"):
@@ -105,6 +103,9 @@ def setup_logging():
             f"Warning: Could not set up VictoriaLogs queue handler: {e}",
             file=sys.stderr,
         )
+        import traceback
+
+        traceback.print_exc()
 
     # CRITICAL: Also add stderr handler for MCP servers (stdout must stay clean for JSON-RPC)
     # TESTING: Commenting out stderr handler to test if it's causing hangs
