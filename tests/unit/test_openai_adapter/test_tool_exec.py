@@ -189,7 +189,6 @@ async def test_builtin_tool_dispatcher_search_history():
             query="test query",
             max_results=10,
             store_types=["conversation", "commit"],
-            session_id="default",
         )
         assert result == {"results": ["memory1", "memory2"]}
 

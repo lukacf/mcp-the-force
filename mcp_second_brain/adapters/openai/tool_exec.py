@@ -6,6 +6,7 @@ import logging
 from typing import List, Dict, Any, Callable, Optional
 from .constants import GLOBAL_TOOL_LIMITER
 from .errors import AdapterException, ErrorCategory, ToolExecutionException
+from ...utils.scope_manager import scope_manager
 
 logger = logging.getLogger(__name__)
 
@@ -162,14 +163,17 @@ class BuiltInToolDispatcher:
             # Import and execute search
             from ...tools.search_history import SearchHistoryAdapter
 
-            adapter = SearchHistoryAdapter()
-            return await adapter.generate(
-                prompt=arguments.get("query", ""),
-                query=arguments.get("query", ""),
-                max_results=arguments.get("max_results", 40),
-                store_types=arguments.get("store_types", ["conversation", "commit"]),
-                # Prefer explicit session_id from arguments, fallback to dispatcher session_id
-                session_id=arguments.get("session_id") or self.session_id or "default",
-            )
+            # Set the scope context for built-in tool execution
+            async with scope_manager.scope(self.session_id):
+                adapter = SearchHistoryAdapter()
+                return await adapter.generate(
+                    prompt=arguments.get("query", ""),
+                    query=arguments.get("query", ""),
+                    max_results=arguments.get("max_results", 40),
+                    store_types=arguments.get(
+                        "store_types", ["conversation", "commit"]
+                    ),
+                    # No longer pass session_id as parameter
+                )
         else:
             raise ValueError(f"Unknown built-in tool: {name}")
