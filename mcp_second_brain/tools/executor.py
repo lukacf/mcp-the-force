@@ -48,69 +48,6 @@ class ToolExecutor:
         self.prompt_engine = prompt_engine
         self.vector_store_manager = vector_store_manager
 
-    def _convert_json_schema_to_vertex(
-        self, json_schema: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """Convert JSON Schema to Vertex AI Schema format.
-
-        Vertex uses uppercase type names and doesn't support additionalProperties.
-        Returns a dict that can be used with google.genai.types.Schema.
-        """
-
-        def convert_type(json_type: str) -> str:
-            """Convert JSON Schema type to Vertex type."""
-            type_map = {
-                "object": "OBJECT",
-                "array": "ARRAY",
-                "string": "STRING",
-                "integer": "INTEGER",
-                "number": "NUMBER",
-                "boolean": "BOOLEAN",
-                "null": "NULL",
-            }
-            return type_map.get(json_type, json_type.upper())
-
-        def convert_schema(schema: Any) -> Any:
-            """Recursively convert a schema object."""
-            if not isinstance(schema, dict):
-                return schema
-
-            result: Dict[str, Any] = {}
-
-            # Convert type
-            if "type" in schema:
-                result["type"] = convert_type(schema["type"])
-
-            # Convert properties recursively
-            if "properties" in schema:
-                result["properties"] = {
-                    key: convert_schema(value)
-                    for key, value in schema["properties"].items()
-                }
-
-            # Convert array items
-            if "items" in schema:
-                result["items"] = convert_schema(schema["items"])
-
-            # Copy other supported fields
-            for field in ["description", "enum", "required", "nullable", "format"]:
-                if field in schema:
-                    result[field] = schema[field]
-
-            # Add propertyOrdering if we have properties and required fields
-            if "properties" in result and "required" in result:
-                result["propertyOrdering"] = result["required"]
-
-            # Note: additionalProperties is not supported in Vertex, so we skip it
-
-            return result
-
-        # Return the converted schema dict directly
-        # The Vertex adapter can wrap it in types.Schema if needed
-        result = convert_schema(json_schema)
-        assert isinstance(result, dict)  # For mypy
-        return result
-
     async def execute(self, metadata: ToolMetadata, **kwargs) -> str:
         """Execute a tool with the given arguments.
 
@@ -438,26 +375,34 @@ class ToolExecutor:
 
             # TODO: This adapter-specific translation should be moved into each adapter's
             # generate() method for better separation of concerns
-            schema = structured_output_params.get("structured_output_schema")
-            if schema is not None:
+            schema_str = structured_output_params.get("structured_output_schema")
+            if schema_str is not None:
+                # Parse the JSON string to dict
+                try:
+                    import json
+
+                    schema = (
+                        json.loads(schema_str)
+                        if isinstance(schema_str, str)
+                        else schema_str
+                    )
+                except (json.JSONDecodeError, ValueError) as e:
+                    raise ValueError(f"Invalid JSON in structured_output_schema: {e}")
+
                 adapter_class = metadata.model_config["adapter_class"]
                 if adapter_class == "openai":
                     # OpenAI adapter handles structured_output_schema internally
-                    # Just ensure it's passed through
-                    pass
+                    # Just ensure it's passed through as dict
+                    adapter_params["structured_output_schema"] = schema
                 elif adapter_class == "vertex":
-                    # Vertex/Gemini expects these specific parameters
-                    # Convert JSON Schema to Vertex Schema format
-                    vertex_schema = self._convert_json_schema_to_vertex(schema)
-                    adapter_params["response_schema"] = vertex_schema
-                    adapter_params["response_mime_type"] = "application/json"
+                    # Pass the original JSON schema - let the adapter handle conversion
+                    adapter_params["structured_output_schema"] = schema
                 elif adapter_class == "xai":
                     # xAI/Grok format
                     adapter_params["output_schema"] = schema
                     adapter_params["format"] = "json"
-
-                # Remove the generic key to avoid passing unknown parameters
-                adapter_params.pop("structured_output_schema", None)
+                    # Remove the generic key since xAI uses different parameters
+                    adapter_params.pop("structured_output_schema", None)
 
             # Merge prompt parameters for adapters that need them (e.g., SearchMemoryAdapter)
             # Don't include 'prompt' itself as it's passed as positional arg

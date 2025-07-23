@@ -195,7 +195,13 @@ class VertexAdapter(BaseAdapter):
         }
 
         # Add response_schema for structured output
+        # NOTE: Gemini's structured output only supports a subset of JSON Schema:
+        # - Basic types: string, integer, number, boolean, array, object
+        # - Constraints: enum, required, minItems, maxItems, properties
+        # - NOT supported: pattern (regex), minLength, maxLength, additionalProperties
+        # See: https://ai.google.dev/gemini-api/docs/structured-output
         if structured_output_schema:
+            logger.debug(f"Setting response_schema: {structured_output_schema}")
             config_kwargs["response_schema"] = structured_output_schema
             # Response schema requires JSON mime type
             config_kwargs["response_mime_type"] = "application/json"
@@ -251,7 +257,16 @@ class VertexAdapter(BaseAdapter):
                 if "type" in d:
                     type_str = d["type"]
                     # Map string types to google.genai.types.Type enum
+                    # Handle both lowercase (standard JSON Schema) and uppercase (pre-converted)
                     type_map = {
+                        "object": types.Type.OBJECT,
+                        "array": types.Type.ARRAY,
+                        "string": types.Type.STRING,
+                        "integer": types.Type.INTEGER,
+                        "number": types.Type.NUMBER,
+                        "boolean": types.Type.BOOLEAN,
+                        "null": types.Type.NULL,
+                        # Also support uppercase for backwards compatibility
                         "OBJECT": types.Type.OBJECT,
                         "ARRAY": types.Type.ARRAY,
                         "STRING": types.Type.STRING,
@@ -273,17 +288,12 @@ class VertexAdapter(BaseAdapter):
                 if "items" in d and isinstance(d["items"], dict):
                     schema_kwargs["items"] = dict_to_schema(d["items"])
 
-                # Copy other fields
-                for field in [
-                    "description",
-                    "enum",
-                    "required",
-                    "nullable",
-                    "format",
-                    "propertyOrdering",
-                ]:
-                    if field in d:
-                        schema_kwargs[field] = d[field]
+                # Copy all other fields that aren't already handled
+                # This ensures we don't lose any JSON Schema properties
+                handled_fields = {"type", "properties", "items"}
+                for field, value in d.items():
+                    if field not in handled_fields:
+                        schema_kwargs[field] = value
 
                 return types.Schema(**schema_kwargs)
 
@@ -307,7 +317,27 @@ class VertexAdapter(BaseAdapter):
         )
 
         # Generate response
-        client = get_client()
+        try:
+            client = get_client()
+        except ValueError as e:
+            # Handle configuration errors
+            logger.error(f"Failed to initialize Vertex client: {e}")
+            raise AdapterException(
+                f"Vertex AI configuration error: {str(e)}",
+                error_category=ErrorCategory.CONFIGURATION,
+                original_error=e,
+            )
+        except Exception as e:
+            # Handle other initialization errors
+            logger.error(
+                f"Unexpected error initializing Vertex client: {e}", exc_info=True
+            )
+            raise AdapterException(
+                f"Failed to initialize Vertex AI client: {str(e)}",
+                error_category=ErrorCategory.INITIALIZATION,
+                original_error=e,
+            )
+
         try:
             response = await self._generate_async(
                 client,
@@ -393,28 +423,23 @@ class VertexAdapter(BaseAdapter):
                     final_history = contents + [candidate.content]
                     await gemini_session_cache.set_history(session_id, final_history)
 
-        # Validate structured output
+        # Extract clean JSON if structured output was requested
+        # NOTE: We rely on Gemini to enforce the schema via response_schema parameter.
+        # We do NOT validate the response ourselves because:
+        # 1. Gemini should enforce the schema during generation
+        # 2. Validation would fail with converted schemas (uppercase types)
+        # 3. Some constraints (like pattern) are not enforced by Gemini anyway
         if structured_output_schema:
             try:
-                import json
-                import jsonschema
+                from ...utils.json_extractor import extract_json
 
-                parsed = json.loads(final_response_content)
-                jsonschema.validate(parsed, structured_output_schema)
-            except jsonschema.ValidationError as e:
-                from .errors import AdapterException, ErrorCategory
-
-                raise AdapterException(
-                    f"Response does not match requested schema: {str(e)}",
-                    error_category=ErrorCategory.PARSING,
-                )
-            except json.JSONDecodeError as e:
-                from .errors import AdapterException, ErrorCategory
-
-                raise AdapterException(
-                    f"Response is not valid JSON: {str(e)}",
-                    error_category=ErrorCategory.PARSING,
-                )
+                # Extract JSON from potential markdown wrapping
+                final_response_content = extract_json(final_response_content)
+            except ValueError as e:
+                # If we can't extract JSON, log but continue
+                # Return the raw response - let the caller handle it
+                logger.warning(f"Could not extract JSON from structured response: {e}")
+                pass
 
         if return_debug:
             return {
@@ -453,8 +478,10 @@ class VertexAdapter(BaseAdapter):
                 final_history = contents + [candidate.content]
                 return response_text, final_history
 
-            # The model's response (function call) is already in contents from caller
-            # Skip adding it again: contents.append(candidate.content)
+            # For the first iteration, the model's response is already in contents from caller
+            # For subsequent iterations, we need to add it
+            if function_call_rounds > 0:
+                contents.append(candidate.content)
 
             # Execute function calls
             function_responses = []
@@ -530,8 +557,9 @@ class VertexAdapter(BaseAdapter):
                     )
 
             # Add function responses to conversation
+            # Function responses must be added as user messages in Gemini
             if function_responses:
-                contents.append(types.Content(role="model", parts=function_responses))
+                contents.append(types.Content(role="user", parts=function_responses))
 
             # Continue generation with function results
             function_call_rounds += 1

@@ -169,20 +169,33 @@ class BaseFlowStrategy(ABC):
             return []
         return list(response.output)
 
-    def _validate_structured_output(self, content: str) -> None:
-        """Validate structured output against schema."""
+    def _validate_structured_output(self, content: str) -> str:
+        """Validate structured output against schema and extract clean JSON.
+
+        Returns:
+            Clean JSON string if structured output is requested, otherwise original content
+        """
         if not self.context.request.structured_output_schema:
-            return
+            return content
 
         try:
-            parsed = json.loads(content)
+            # Extract JSON from potential markdown wrapping
+            from mcp_second_brain.utils.json_extractor import extract_json
+
+            clean_json = extract_json(content)
+
+            # Validate against schema
+            parsed = json.loads(clean_json)
             jsonschema.validate(parsed, self.context.request.structured_output_schema)
+
+            # Return clean JSON
+            return clean_json
         except jsonschema.ValidationError as e:
             raise AdapterException(
                 ErrorCategory.PARSING,
                 f"Response does not match requested schema: {str(e)}",
             )
-        except json.JSONDecodeError as e:
+        except (json.JSONDecodeError, ValueError) as e:
             raise AdapterException(
                 ErrorCategory.PARSING, f"Response is not valid JSON: {str(e)}"
             )
@@ -307,8 +320,8 @@ class BackgroundFlowStrategy(BaseFlowStrategy):
                     function_calls, response_id, all_output_items
                 )
 
-            # Validate structured output
-            self._validate_structured_output(content)
+            # Validate structured output and extract clean JSON if needed
+            content = self._validate_structured_output(content)
 
             immediate_result: Dict[str, Any] = {
                 "content": content,
@@ -370,8 +383,8 @@ class BackgroundFlowStrategy(BaseFlowStrategy):
                         function_calls, response_id, all_output_items
                     )
 
-                # Validate structured output
-                self._validate_structured_output(content)
+                # Validate structured output and extract clean JSON if needed
+                content = self._validate_structured_output(content)
 
                 # Return final result
                 polled_result: Dict[str, Any] = {
@@ -517,8 +530,8 @@ class StreamingFlowStrategy(BaseFlowStrategy):
                 function_calls, response_id or "", all_output_items
             )
 
-        # Validate structured output
-        self._validate_structured_output(content)
+        # Validate structured output and extract clean JSON if needed
+        content = self._validate_structured_output(content)
 
         # Return result
         logger.info(

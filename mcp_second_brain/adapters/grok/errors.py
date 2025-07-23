@@ -14,6 +14,7 @@ class ErrorCategory(Enum):
     INVALID_REQUEST = "invalid_request"
     TIMEOUT = "timeout"
     NETWORK = "network"
+    PARSING = "parsing"
 
 
 class AdapterException(Exception):
