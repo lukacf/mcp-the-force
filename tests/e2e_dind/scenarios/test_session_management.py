@@ -131,7 +131,7 @@ class TestSessionManagement:
             output_format="JSON confirming what was stored",
             context=[],
             session_id=session_id,
-            disable_memory_search="true",  # Disable project memory search
+            disable_memory_search="true",  # Disable project history search
             structured_output_schema=storage_schema,
             response_format="respond ONLY with the JSON",
         )
@@ -149,7 +149,7 @@ class TestSessionManagement:
             output_format="JSON with the recalled code",
             context=[],
             session_id=session_id,
-            disable_memory_search="true",  # Disable project memory search
+            disable_memory_search="true",  # Disable project history search
             structured_output_schema=recall_schema,
             response_format="respond ONLY with the JSON",
         )
@@ -161,3 +161,60 @@ class TestSessionManagement:
         assert (
             "ABC-123-XYZ" in result["recalled_value"]
         ), f"Wrong code recalled: {result}"
+
+    def test_cross_model_history_search(self, call_claude_tool):
+        """Test that one model can search project history to find another model's conversations."""
+
+        session_id = "cross-model-history-test"
+
+        # Define schema for search results
+        search_schema = {
+            "type": "object",
+            "properties": {
+                "found_protocol": {"type": "boolean"},
+                "protocol_name": {"type": "string"},
+                "port_number": {"type": "integer"},
+                "results_count": {"type": "integer"},
+            },
+            "required": [
+                "found_protocol",
+                "protocol_name",
+                "port_number",
+                "results_count",
+            ],
+            "additionalProperties": False,
+        }
+
+        # Step 1: Store unique information with GPT-4.1
+        response = call_claude_tool(
+            "chat_with_gpt4_1",
+            instructions="Remember this network configuration: Protocol DELTA-9 operates on port 7625",
+            output_format="Acknowledge what you've stored",
+            context=[],
+            session_id=session_id,
+        )
+
+        # Simple validation that it was stored
+        assert "DELTA-9" in response, f"Protocol not mentioned in response: {response}"
+        assert "7625" in response, f"Port not mentioned in response: {response}"
+
+        # Step 2: Use Gemini Flash to search project history for the information
+        response = call_claude_tool(
+            "chat_with_gemini25_flash",
+            instructions="Search project history for information about Protocol DELTA-9 and its port number",
+            output_format="JSON with search results",
+            context=[],
+            session_id="different-session",  # Different session to ensure it's using history search
+            structured_output_schema=search_schema,
+            response_format="respond ONLY with the JSON",
+        )
+
+        # Validate that Gemini found the information through history search
+        result = safe_json(response)
+        assert result is not None, f"Failed to parse JSON: {response}"
+        assert (
+            result["found_protocol"] is True
+        ), f"Protocol not found in history: {result}"
+        assert result["protocol_name"] == "DELTA-9", f"Wrong protocol found: {result}"
+        assert result["port_number"] == 7625, f"Wrong port found: {result}"
+        assert result["results_count"] > 0, f"No search results returned: {result}"

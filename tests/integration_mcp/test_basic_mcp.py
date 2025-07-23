@@ -150,14 +150,14 @@ class TestBasicMCP:
             assert len(data["largest_files"]) == 1
             assert any("pyproject.toml" in f["path"] for f in data["largest_files"])
 
-    async def test_search_project_memory_callable(self, mcp_server, mock_env):
-        """Test search_project_memory tool via MCP."""
+    async def test_search_project_history_callable(self, mcp_server, mock_env):
+        """Test search_project_history tool via MCP."""
         from fastmcp import Client
         from fastmcp.client import FastMCPTransport
 
         transport = FastMCPTransport(mcp_server)
         async with Client(transport) as client:
-            result = await client.call_tool("search_project_memory", {"query": "test"})
+            result = await client.call_tool("search_project_history", {"query": "test"})
 
             # Check if the tool call was successful
             assert not result.is_error, f"Tool call failed with error: {getattr(result, 'error_message', 'Unknown error')}"

@@ -1,4 +1,4 @@
-"""Configuration management for project memory system."""
+"""Configuration management for project history system."""
 
 import logging
 import sqlite3

@@ -8,7 +8,7 @@ from google.genai.types import HarmCategory, HarmBlockThreshold
 import google.api_core.exceptions
 from ...config import get_settings
 from ..base import BaseAdapter
-from ..memory_search_declaration import create_search_memory_declaration_gemini
+from ..memory_search_declaration import create_search_history_declaration_gemini
 from ..task_files_search_declaration import create_task_files_search_declaration_gemini
 from ...gemini_session_cache import gemini_session_cache
 from .errors import AdapterException, ErrorCategory
@@ -151,10 +151,10 @@ class VertexAdapter(BaseAdapter):
         # Setup tools
         function_declarations = []
 
-        # Add search_project_memory unless explicitly disabled
+        # Add search_project_history unless explicitly disabled
         disable_memory_search = kwargs.pop("disable_memory_search", False)
         if not disable_memory_search:
-            memory_search_decl = create_search_memory_declaration_gemini()
+            memory_search_decl = create_search_history_declaration_gemini()
             function_declarations.append(
                 types.FunctionDeclaration(**memory_search_decl)
             )
@@ -487,7 +487,7 @@ class VertexAdapter(BaseAdapter):
             function_responses = []
             for fc in function_calls:
                 try:
-                    if fc.function_call.name == "search_project_memory":
+                    if fc.function_call.name == "search_project_history":
                         # Extract parameters
                         query = fc.function_call.args.get("query", "")
                         max_results = fc.function_call.args.get("max_results", 40)
@@ -495,12 +495,12 @@ class VertexAdapter(BaseAdapter):
                             "store_types", ["conversation", "commit"]
                         )
 
-                        logger.info(f"Executing search_project_memory: '{query}'")
+                        logger.info(f"Executing search_project_history: '{query}'")
 
                         # Import and execute the search
-                        from ...tools.search_memory import SearchMemoryAdapter
+                        from ...tools.search_history import SearchHistoryAdapter
 
-                        memory_search = SearchMemoryAdapter()
+                        memory_search = SearchHistoryAdapter()
                         search_result_text = await memory_search.generate(
                             prompt=query,
                             query=query,

@@ -137,23 +137,23 @@ class TestSearchTaskFilesDeduplication:
         self, search_adapter
     ):
         """Task files deduplication should be independent from memory deduplication."""
-        from mcp_second_brain.tools.search_memory import SearchMemoryAdapter
+        from mcp_second_brain.tools.search_history import SearchHistoryAdapter
 
         # Clear task files cache
         await search_adapter.clear_deduplication_cache()
 
         # Create memory adapter with mocked dependencies
-        with patch("mcp_second_brain.tools.search_memory.get_settings"):
-            with patch("mcp_second_brain.tools.search_memory.get_memory_config"):
-                memory_adapter = SearchMemoryAdapter()
-                memory_adapter.client = Mock()  # Mock the OpenAI client
-                await memory_adapter.clear_deduplication_cache()
+        with patch("mcp_second_brain.tools.search_history.get_settings"):
+            with patch("mcp_second_brain.tools.search_history.get_memory_config"):
+                history_adapter = SearchHistoryAdapter()
+                history_adapter.client = Mock()  # Mock the OpenAI client
+                await history_adapter.clear_deduplication_cache()
 
                 # Verify they use different deduplicators
                 assert search_adapter._deduplicator.cache_name == "task_files"
-                assert memory_adapter._deduplicator.cache_name == "memory"
+                assert history_adapter._deduplicator.cache_name == "memory"
                 # They should have different cache instances
-                assert search_adapter._deduplicator is not memory_adapter._deduplicator
+                assert search_adapter._deduplicator is not history_adapter._deduplicator
 
     @pytest.mark.asyncio
     async def test_deduplication_with_metadata(

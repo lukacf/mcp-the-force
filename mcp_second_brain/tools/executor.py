@@ -18,7 +18,7 @@ from .parameter_router import ParameterRouter
 
 # Import debug logger
 
-# Project memory imports
+# Project history imports
 from .safe_memory import safe_store_conversation_memory
 from ..config import get_settings
 from ..utils.redaction import redact_secrets
@@ -312,7 +312,7 @@ class ToolExecutor:
                         )
 
             # Memory stores are no longer auto-attached
-            # Models should use search_project_memory function to access memory
+            # Models should use search_project_history function to access memory
 
             # 5. Get adapter
             logger.debug("[DEBUG] About to get settings")
@@ -404,7 +404,7 @@ class ToolExecutor:
                     # Remove the generic key since xAI uses different parameters
                     adapter_params.pop("structured_output_schema", None)
 
-            # Merge prompt parameters for adapters that need them (e.g., SearchMemoryAdapter)
+            # Merge prompt parameters for adapters that need them (e.g., SearchHistoryAdapter)
             # Don't include 'prompt' itself as it's passed as positional arg
             # Don't include 'messages' either if we've already set it from session handling
             prompt_params_for_adapter = {
