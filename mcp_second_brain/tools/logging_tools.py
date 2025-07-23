@@ -1,25 +1,77 @@
-"""MCP tools for searching debug logs."""
+"""MCP tool: run raw LogsQL queries against VictoriaLogs."""
 
 from typing import Any
-
 from .base import ToolSpec
 from .registry import tool
 from .descriptors import Route
 
+LOGSQL_POCKET_GUIDE = """
+LogsQL pocket guide
+───────────────────
+QUERY CORE – one-liners
+  _time:5m error                    # AND implicit, put _time first
+  _time:5m error OR warning         # use OR, NOT/-, and () for precedence
+  {app="api"} error                 # label/stream filter
+  status:error                      # field selector (default _msg)
+
+FILTER PATTERNS
+  word        : error               # matches "error" anywhere
+  phrase      : "disk full"         # exact phrase match
+  prefix      : erro*               # prefix matching
+  substring   : _msg~"fatal"        # substring search
+  exact/multi : status:=500         # exact match
+              : status:=(500,503)   # multiple values
+  range/cmp   : latency_ms:>500     # comparison operators
+  regex       : url:~"/api/.+"      # regular expression
+  empty/any   : user:_              # empty field
+              : user:*              # any value
+
+TOP PIPES (|)
+  sort by (_time desc)              # sort results
+  limit N / head N                  # limit output
+  fields f1,f2                      # select fields
+  stats count() by (endpoint)       # aggregations
+  where latency_ms > 1000           # filter after initial query
+  top 10 endpoint                   # top values
+  uniq by (user)                    # unique values
+  extract "re" as x                 # regex extraction
+  sample N                          # random sampling
+
+STATS FUNCTIONS
+  count(), sum(x), avg(x), min/max(x), quantile(0.95)(x), 
+  histogram(x,bucket), rate(x), count_uniq(x), values(x)
+
+SPEED HINTS
+  - Always start with _time:XXX to narrow time range
+  - Use {label=value} filters early in query
+  - Sort/regex only after initial filters
+  - Use sample N for large result sets
+"""
+
 
 @tool
 class SearchMCPDebugLogs(ToolSpec):
-    """Search MCP server debug logs for troubleshooting (developer mode only).
+    """Run a raw LogsQL query against VictoriaLogs debug logs (developer mode only).
 
-    All parameters are optional. Omitted parameters widen the search.
+{guide}
 
-    Examples:
-    - Recent warnings in current project: severity="warning", since="30m"
-    - Find text across all projects: text="CallToolRequest", project="all"
-    - E2E test errors: severity="error", context="e2e"
-    - Specific instance logs: instance="mcp-second-brain_dev_8747aa1d"
-    - Oldest to newest: since="24h", order="asc"
-    """
+Examples
+────────
+1. Last 20 errors
+   _time:30m error | sort by (_time desc) | head 20
+
+2. Top endpoints by slow (>1s) calls
+   _time:15m latency_ms:>1000 | stats by (endpoint) count() slow | sort by (slow desc) | head 5
+
+3. Per-minute error rate
+   _time:1h error | stats by (bucket=_time(1m)) count() errors
+
+4. Search specific app and severity
+   _time:5m {{app="mcp-second-brain"}} severity:error
+
+5. Find specific text pattern
+   _time:2h "CallToolRequest" {{project="/Users/myproject"}}
+""".format(guide=LOGSQL_POCKET_GUIDE)
 
     # This is a special utility tool that doesn't use an AI model
     model_name = "utility"
@@ -27,44 +79,7 @@ class SearchMCPDebugLogs(ToolSpec):
     context_window = 0
     timeout = 30
 
-    # Route everything to the adapter so kwargs reach LoggingAdapter.generate
-    text: Any = Route.adapter(
-        default=None,
-        description="Search for this text in log messages (case-insensitive substring)",
-    )
-
-    severity: Any = Route.adapter(
-        default=None,
-        description="Log level filter: debug|info|warning|error|critical (single or list)",
-    )
-
-    since: Any = Route.adapter(
-        default="1h",
-        description="Start time - relative (5m, 2h, 3d) or absolute (2025-07-16T12:30:00Z)",
-    )
-
-    until: Any = Route.adapter(
-        default="now", description="End time - relative or absolute timestamp"
-    )
-
-    project: Any = Route.adapter(
-        default="current",
-        description="Project filter: 'current' (default), 'all', or specific path",
-    )
-
-    context: Any = Route.adapter(
-        default="*",
-        description="Environment filter from instance_id: dev|test|e2e|* (all)",
-    )
-
-    instance: Any = Route.adapter(
-        default="*",
-        description="Instance ID filter - exact or wildcard pattern (e.g. '*_dev_*')",
-    )
-
-    limit: Any = Route.adapter(default=100, description="Maximum results (1-1000)")
-
-    order: Any = Route.adapter(
-        default="desc",
-        description="Sort order: 'desc' (newest first) or 'asc' (oldest first)",
+    # Single parameter: the raw LogsQL query
+    query: Any = Route.adapter(
+        description="Full LogsQL query string. Will be sent unmodified to VictoriaLogs.",
     )
