@@ -86,8 +86,18 @@ class SearchMemoryAdapter(BaseAdapter):
         (OpenAI or Gemini) invokes the search_project_memory function.
         """
         # Extract search parameters
-        query = kwargs.get("query", prompt)
+        query = kwargs.get("query")
+        if not query:
+            # Heuristic: treat prompt as a query only if it's short
+            # and looks like plain text (no angle-brackets XML).
+            if prompt and len(prompt) <= 256 and "<" not in prompt:
+                query = prompt
+            else:
+                query = ""
         max_results = kwargs.get("max_results", 20)
+        # Ensure max_results is an integer
+        if isinstance(max_results, str):
+            max_results = int(max_results)
         store_types = kwargs.get("store_types", ["conversation", "commit"])
         include_duplicates_metadata = kwargs.get("include_duplicates_metadata", False)
 

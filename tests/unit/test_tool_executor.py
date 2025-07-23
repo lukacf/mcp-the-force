@@ -115,47 +115,6 @@ class TestToolExecutor:
         assert mock_adapter.generate.called
 
     @pytest.mark.asyncio
-    async def test_vector_store_routing(self, executor, mock_adapter, tmp_path):
-        """Test that attachments parameter triggers vector store creation."""
-        # Create a file for attachment
-        test_file = tmp_path / "test.txt"
-        test_file.write_text("Test content")
-
-        # Mock session cache to avoid database access
-        from unittest.mock import AsyncMock
-
-        with patch(
-            "mcp_second_brain.session_cache.session_cache"
-        ) as mock_session_cache:
-            mock_session_cache.get_response_id = AsyncMock(return_value=None)
-            mock_session_cache.set_response_id = AsyncMock()
-
-            with patch("mcp_second_brain.adapters.get_adapter") as mock_get_adapter:
-                mock_get_adapter.return_value = (mock_adapter, None)
-
-                # Patch the vector store manager instance in the executor
-                with patch.object(
-                    executor.vector_store_manager, "create", new_callable=AsyncMock
-                ) as mock_create:
-                    mock_create.return_value = "vs_123"
-
-                    metadata = get_tool("chat_with_gpt4_1")
-                    await executor.execute(
-                        metadata,
-                        instructions="Analyze this",
-                        output_format="text",
-                        context=[],
-                        attachments=[str(tmp_path)],  # Pass directory
-                        session_id="test",
-                    )
-
-        # Verify vector store was created
-        mock_create.assert_called_once()
-        # The create method receives gathered file paths
-        call_args = mock_create.call_args[0][0]
-        assert any("test.txt" in f for f in call_args)
-
-    @pytest.mark.asyncio
     async def test_missing_required_parameter(self, executor):
         """Test that missing required parameter raises appropriate error."""
         with pytest.raises(fastmcp.exceptions.ToolError, match="Tool execution failed"):
@@ -198,49 +157,3 @@ class TestToolExecutor:
                     context=[],
                     session_id="adapter-error",
                 )
-
-    @pytest.mark.asyncio
-    async def test_attachment_cache_cleared_on_new_attachments(
-        self, executor, mock_adapter, tmp_path, mock_env
-    ):
-        """Test that attachment deduplication cache is cleared when new attachments are provided."""
-        # Create test files
-        test_file = tmp_path / "test.txt"
-        test_file.write_text("test content")
-
-        # Mock the search attachment adapter
-        from mcp_second_brain.tools.search_attachments import SearchAttachmentAdapter
-
-        mock_search_adapter = Mock(spec=SearchAttachmentAdapter)
-        mock_search_adapter.clear_deduplication_cache = AsyncMock()
-
-        # Clear adapter cache
-        from mcp_second_brain.adapters import _ADAPTER_CACHE
-
-        _ADAPTER_CACHE.clear()
-
-        with patch("mcp_second_brain.adapters.get_adapter") as mock_get_adapter:
-            mock_get_adapter.return_value = (mock_adapter, None)
-
-            # Patch the vector store manager
-            with patch.object(
-                executor.vector_store_manager, "create", new_callable=AsyncMock
-            ) as mock_create:
-                mock_create.return_value = "vs_123"
-
-                # Patch SearchAttachmentAdapter.clear_deduplication_cache class method
-                with patch(
-                    "mcp_second_brain.tools.search_attachments.SearchAttachmentAdapter.clear_deduplication_cache"
-                ) as mock_clear_cache:
-                    metadata = get_tool("chat_with_gpt4_1")
-                    await executor.execute(
-                        metadata,
-                        instructions="Test with attachments",
-                        output_format="text",
-                        context=[],
-                        attachments=[str(tmp_path)],
-                        session_id="test-cache-clear",
-                    )
-
-                    # Verify cache was cleared
-                    mock_clear_cache.assert_called_once()

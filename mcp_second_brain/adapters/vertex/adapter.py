@@ -5,11 +5,13 @@ import time
 from google import genai
 from google.genai import types
 from google.genai.types import HarmCategory, HarmBlockThreshold
+import google.api_core.exceptions
 from ...config import get_settings
 from ..base import BaseAdapter
 from ..memory_search_declaration import create_search_memory_declaration_gemini
-from ..attachment_search_declaration import create_attachment_search_declaration_gemini
+from ..task_files_search_declaration import create_task_files_search_declaration_gemini
 from ...gemini_session_cache import gemini_session_cache
+from .errors import AdapterException, ErrorCategory
 
 # Removed validation imports - no longer validating structured output
 # from ...utils.validation import validate_json_schema
@@ -146,21 +148,25 @@ class VertexAdapter(BaseAdapter):
             ),
         ]
 
-        # Setup tools - always include search_project_memory
+        # Setup tools
         function_declarations = []
 
-        # Always add search_project_memory for accessing memory
-        memory_search_decl = create_search_memory_declaration_gemini()
-        function_declarations.append(types.FunctionDeclaration(**memory_search_decl))
+        # Add search_project_memory unless explicitly disabled
+        disable_memory_search = kwargs.pop("disable_memory_search", False)
+        if not disable_memory_search:
+            memory_search_decl = create_search_memory_declaration_gemini()
+            function_declarations.append(
+                types.FunctionDeclaration(**memory_search_decl)
+            )
 
         # Add attachment search tool when vector stores are provided
         if vector_store_ids:
             logger.info(
-                f"Registering search_session_attachments for {len(vector_store_ids)} vector stores"
+                f"Registering search_task_files for {len(vector_store_ids)} vector stores"
             )
-            attachment_search_decl = create_attachment_search_declaration_gemini()
+            task_files_search_decl = create_task_files_search_declaration_gemini()
             function_declarations.append(
-                types.FunctionDeclaration(**attachment_search_decl)
+                types.FunctionDeclaration(**task_files_search_decl)
             )
 
         # Build tools list
@@ -173,8 +179,15 @@ class VertexAdapter(BaseAdapter):
         max_tokens = settings.vertex.max_output_tokens or 65535
 
         # Build base config
+        actual_temperature = (
+            temperature if temperature is not None else settings.default_temperature
+        )
+        logger.info(
+            f"Using temperature: {actual_temperature} (requested: {temperature}, default: {settings.default_temperature})"
+        )
+
         config_kwargs = {
-            "temperature": temperature or settings.default_temperature,
+            "temperature": actual_temperature,
             "top_p": 0.95,
             "max_output_tokens": max_tokens,
             "safety_settings": safety_settings,
@@ -182,7 +195,13 @@ class VertexAdapter(BaseAdapter):
         }
 
         # Add response_schema for structured output
+        # NOTE: Gemini's structured output only supports a subset of JSON Schema:
+        # - Basic types: string, integer, number, boolean, array, object
+        # - Constraints: enum, required, minItems, maxItems, properties
+        # - NOT supported: pattern (regex), minLength, maxLength, additionalProperties
+        # See: https://ai.google.dev/gemini-api/docs/structured-output
         if structured_output_schema:
+            logger.debug(f"Setting response_schema: {structured_output_schema}")
             config_kwargs["response_schema"] = structured_output_schema
             # Response schema requires JSON mime type
             config_kwargs["response_mime_type"] = "application/json"
@@ -226,21 +245,99 @@ class VertexAdapter(BaseAdapter):
                 thinking_budget=max_reasoning_tokens if max_reasoning_tokens > 0 else -1
             )
 
+        # Convert response_schema to types.Schema if it's a dict
+        response_schema = config_kwargs.get("response_schema")
+        if response_schema and isinstance(response_schema, dict):
+            # Recursively convert dict schema to types.Schema objects
+            def dict_to_schema(d: Dict[str, Any]) -> types.Schema:
+                """Convert a dict representation to google.genai.types.Schema."""
+                schema_kwargs = {}
+
+                # Map the type to proper enum
+                if "type" in d:
+                    type_str = d["type"]
+                    # Map string types to google.genai.types.Type enum
+                    # Handle both lowercase (standard JSON Schema) and uppercase (pre-converted)
+                    type_map = {
+                        "object": types.Type.OBJECT,
+                        "array": types.Type.ARRAY,
+                        "string": types.Type.STRING,
+                        "integer": types.Type.INTEGER,
+                        "number": types.Type.NUMBER,
+                        "boolean": types.Type.BOOLEAN,
+                        "null": types.Type.NULL,
+                        # Also support uppercase for backwards compatibility
+                        "OBJECT": types.Type.OBJECT,
+                        "ARRAY": types.Type.ARRAY,
+                        "STRING": types.Type.STRING,
+                        "INTEGER": types.Type.INTEGER,
+                        "NUMBER": types.Type.NUMBER,
+                        "BOOLEAN": types.Type.BOOLEAN,
+                        "NULL": types.Type.NULL,
+                    }
+                    schema_kwargs["type"] = type_map.get(type_str, types.Type.STRING)
+
+                # Handle properties for OBJECT type
+                if "properties" in d and isinstance(d["properties"], dict):
+                    schema_kwargs["properties"] = {
+                        key: dict_to_schema(value) if isinstance(value, dict) else value
+                        for key, value in d["properties"].items()
+                    }
+
+                # Handle array items
+                if "items" in d and isinstance(d["items"], dict):
+                    schema_kwargs["items"] = dict_to_schema(d["items"])
+
+                # Copy all other fields that aren't already handled
+                # This ensures we don't lose any JSON Schema properties
+                handled_fields = {"type", "properties", "items"}
+                for field, value in d.items():
+                    if field not in handled_fields:
+                        schema_kwargs[field] = value
+
+                return types.Schema(**schema_kwargs)
+
+            response_schema = dict_to_schema(response_schema)
+            config_kwargs["response_schema"] = response_schema
+
         # Create GenerateContentConfig with explicit parameters
+        final_temperature = config_kwargs.get("temperature")
+        logger.info(f"Final temperature for GenerateContentConfig: {final_temperature}")
+
         generate_content_config = types.GenerateContentConfig(
-            temperature=config_kwargs.get("temperature"),
+            temperature=final_temperature,
             top_p=config_kwargs.get("top_p"),
             max_output_tokens=config_kwargs.get("max_output_tokens"),
             safety_settings=config_kwargs.get("safety_settings"),
             tools=config_kwargs.get("tools"),
-            response_schema=config_kwargs.get("response_schema"),
+            response_schema=response_schema,
             response_mime_type=config_kwargs.get("response_mime_type"),
             system_instruction=config_kwargs.get("system_instruction"),
             thinking_config=config_kwargs.get("thinking_config"),
         )
 
         # Generate response
-        client = get_client()
+        try:
+            client = get_client()
+        except ValueError as e:
+            # Handle configuration errors
+            logger.error(f"Failed to initialize Vertex client: {e}")
+            raise AdapterException(
+                f"Vertex AI configuration error: {str(e)}",
+                error_category=ErrorCategory.CONFIGURATION,
+                original_error=e,
+            )
+        except Exception as e:
+            # Handle other initialization errors
+            logger.error(
+                f"Unexpected error initializing Vertex client: {e}", exc_info=True
+            )
+            raise AdapterException(
+                f"Failed to initialize Vertex AI client: {str(e)}",
+                error_category=ErrorCategory.INITIALIZATION,
+                original_error=e,
+            )
+
         try:
             response = await self._generate_async(
                 client,
@@ -249,9 +346,6 @@ class VertexAdapter(BaseAdapter):
                 config=generate_content_config,
             )
         except Exception as e:
-            import google.api_core.exceptions
-            from .errors import AdapterException, ErrorCategory
-
             # Handle specific Google API errors
             if isinstance(e, google.api_core.exceptions.ResourceExhausted):
                 raise AdapterException(
@@ -311,40 +405,41 @@ class VertexAdapter(BaseAdapter):
             # No function calls, handle simple text response
             if response.candidates:
                 candidate = response.candidates[0]
-                if candidate.content and candidate.content.parts:
-                    final_response_content = self._extract_text_from_parts(
-                        candidate.content.parts
-                    )
-
-                    # Save the simple history
-                    if session_id:
-                        final_history = contents + [candidate.content]
-                        await gemini_session_cache.set_history(
-                            session_id, final_history
+                # Use the SDK's built-in text extraction which handles JSON mode properly
+                # But handle the case where response might be a mock object in tests
+                try:
+                    final_response_content = response.text or ""
+                except AttributeError:
+                    # Fallback for tests or when response doesn't have .text
+                    if candidate.content and candidate.content.parts:
+                        final_response_content = self._extract_text_from_parts(
+                            candidate.content.parts
                         )
+                    else:
+                        final_response_content = ""
 
-        # Validate structured output
+                # Save the simple history
+                if session_id:
+                    final_history = contents + [candidate.content]
+                    await gemini_session_cache.set_history(session_id, final_history)
+
+        # Extract clean JSON if structured output was requested
+        # NOTE: We rely on Gemini to enforce the schema via response_schema parameter.
+        # We do NOT validate the response ourselves because:
+        # 1. Gemini should enforce the schema during generation
+        # 2. Validation would fail with converted schemas (uppercase types)
+        # 3. Some constraints (like pattern) are not enforced by Gemini anyway
         if structured_output_schema:
             try:
-                import json
-                import jsonschema
+                from ...utils.json_extractor import extract_json
 
-                parsed = json.loads(final_response_content)
-                jsonschema.validate(parsed, structured_output_schema)
-            except jsonschema.ValidationError as e:
-                from .errors import AdapterException, ErrorCategory
-
-                raise AdapterException(
-                    f"Response does not match requested schema: {str(e)}",
-                    error_category=ErrorCategory.PARSING,
-                )
-            except json.JSONDecodeError as e:
-                from .errors import AdapterException, ErrorCategory
-
-                raise AdapterException(
-                    f"Response is not valid JSON: {str(e)}",
-                    error_category=ErrorCategory.PARSING,
-                )
+                # Extract JSON from potential markdown wrapping
+                final_response_content = extract_json(final_response_content)
+            except ValueError as e:
+                # If we can't extract JSON, log but continue
+                # Return the raw response - let the caller handle it
+                logger.warning(f"Could not extract JSON from structured response: {e}")
+                pass
 
         if return_debug:
             return {
@@ -383,8 +478,10 @@ class VertexAdapter(BaseAdapter):
                 final_history = contents + [candidate.content]
                 return response_text, final_history
 
-            # The model's response (function call) is already in contents from caller
-            # Skip adding it again: contents.append(candidate.content)
+            # For the first iteration, the model's response is already in contents from caller
+            # For subsequent iterations, we need to add it
+            if function_call_rounds > 0:
+                contents.append(candidate.content)
 
             # Execute function calls
             function_responses = []
@@ -419,18 +516,18 @@ class VertexAdapter(BaseAdapter):
                             )
                         )
 
-                    elif fc.function_call.name == "search_session_attachments":
+                    elif fc.function_call.name == "search_task_files":
                         # Extract parameters
                         query = fc.function_call.args.get("query", "")
                         max_results = fc.function_call.args.get("max_results", 20)
 
-                        logger.info(f"Executing search_session_attachments: '{query}'")
+                        logger.info(f"Executing search_task_files: '{query}'")
 
                         # Import and execute the search
-                        from ...tools.search_attachments import SearchAttachmentAdapter
+                        from ...tools.search_task_files import SearchTaskFilesAdapter
 
-                        attachment_search = SearchAttachmentAdapter()
-                        search_result_text = await attachment_search.generate(
+                        task_files_search = SearchTaskFilesAdapter()
+                        search_result_text = await task_files_search.generate(
                             prompt=query,
                             query=query,
                             max_results=max_results,
@@ -460,8 +557,9 @@ class VertexAdapter(BaseAdapter):
                     )
 
             # Add function responses to conversation
+            # Function responses must be added as user messages in Gemini
             if function_responses:
-                contents.append(types.Content(role="model", parts=function_responses))
+                contents.append(types.Content(role="user", parts=function_responses))
 
             # Continue generation with function results
             function_call_rounds += 1

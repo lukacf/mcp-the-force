@@ -33,7 +33,7 @@ def patch_vertex_adapter():
     This file exists to maintain the pattern that ALL adapters must have
     cancel_aware_flow.py imported in their __init__.py.
     """
-    logger.info(
+    logger.debug(
         "VertexAdapter uses google-genai async client which propagates "
         "CancelledError correctly for MCP patch compatibility"
     )

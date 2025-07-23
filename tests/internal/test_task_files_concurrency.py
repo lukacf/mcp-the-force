@@ -3,21 +3,21 @@ from unittest.mock import patch
 
 import pytest
 
-from mcp_second_brain.tools.search_attachments import SearchAttachmentAdapter
+from mcp_second_brain.tools.search_task_files import SearchTaskFilesAdapter
 
 
 @pytest.mark.asyncio
-async def test_concurrent_attachment_search_isolation(monkeypatch):
-    """Ensure attachment IDs do not bleed between concurrent searches."""
+async def test_concurrent_task_files_search_isolation(monkeypatch):
+    """Ensure task file IDs do not bleed between concurrent searches."""
 
     async def fake_search(self, query: str, store_id: str, max_results: int):
         await asyncio.sleep(0.01)
         return [{"content": f"{store_id} result", "store_id": store_id, "score": 1.0}]
 
-    with patch.object(SearchAttachmentAdapter, "_search_single_store", fake_search):
+    with patch.object(SearchTaskFilesAdapter, "_search_single_store", fake_search):
         monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-        adapter1 = SearchAttachmentAdapter()
-        adapter2 = SearchAttachmentAdapter()
+        adapter1 = SearchTaskFilesAdapter()
+        adapter2 = SearchTaskFilesAdapter()
 
         async def run1():
             return await adapter1.generate(

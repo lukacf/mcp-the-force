@@ -1,10 +1,10 @@
-"""Test deduplication functionality for search attachments."""
+"""Test deduplication functionality for search task files."""
 
 import pytest
 from unittest.mock import Mock, patch
 from typing import List, Dict, Any
 
-from mcp_second_brain.tools.search_attachments import SearchAttachmentAdapter
+from mcp_second_brain.tools.search_task_files import SearchTaskFilesAdapter
 
 
 class MockSearchResult:
@@ -43,23 +43,23 @@ def mock_openai_client():
 
 @pytest.fixture
 def search_adapter(mock_openai_client):
-    """Create SearchAttachmentAdapter with mocks."""
+    """Create SearchTaskFilesAdapter with mocks."""
 
     async def mock_get_client():
         return mock_openai_client
 
     with patch(
-        "mcp_second_brain.tools.search_attachments.OpenAIClientFactory.get_instance"
+        "mcp_second_brain.tools.search_task_files.OpenAIClientFactory.get_instance"
     ) as mock_factory:
         mock_factory.return_value = mock_openai_client
-        adapter = SearchAttachmentAdapter()
+        adapter = SearchTaskFilesAdapter()
         # Override the _get_client method to return our mock directly
         adapter._get_client = mock_get_client
         return adapter
 
 
-class TestSearchAttachmentDeduplication:
-    """Test deduplication functionality for attachments."""
+class TestSearchTaskFilesDeduplication:
+    """Test deduplication functionality for task files."""
 
     @pytest.mark.asyncio
     async def test_single_search_no_deduplication(
@@ -133,13 +133,13 @@ class TestSearchAttachmentDeduplication:
         assert "Content: Document B" not in response2
 
     @pytest.mark.asyncio
-    async def test_attachment_deduplication_independent_from_memory(
+    async def test_task_files_deduplication_independent_from_memory(
         self, search_adapter
     ):
-        """Attachment deduplication should be independent from memory deduplication."""
+        """Task files deduplication should be independent from memory deduplication."""
         from mcp_second_brain.tools.search_memory import SearchMemoryAdapter
 
-        # Clear attachment cache
+        # Clear task files cache
         await search_adapter.clear_deduplication_cache()
 
         # Create memory adapter with mocked dependencies
@@ -150,7 +150,7 @@ class TestSearchAttachmentDeduplication:
                 await memory_adapter.clear_deduplication_cache()
 
                 # Verify they use different deduplicators
-                assert search_adapter._deduplicator.cache_name == "attachment"
+                assert search_adapter._deduplicator.cache_name == "task_files"
                 assert memory_adapter._deduplicator.cache_name == "memory"
                 # They should have different cache instances
                 assert search_adapter._deduplicator is not memory_adapter._deduplicator

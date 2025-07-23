@@ -38,16 +38,16 @@ All tests run concurrently with 100% pass rate. Each test validates a complete u
 - **Duration**: ~75 seconds
 - **Key Validation**: End-to-end communication pipeline works correctly
 
-### 2. Attachments/RAG Workflow (`test_attachments.py`)
-- **Purpose**: File attachment processing and vector store RAG functionality
+### 2. Context Overflow and RAG Workflow (`test_attachments.py`)
+- **Purpose**: Validates the new context overflow mechanism and vector store RAG functionality
 - **Models Used**: GPT-4.1 (large context, web search enabled)
 - **Tests**:
-  - Create test documents in project-safe directory (avoids temp path security restrictions)
-  - Automatic vector store creation from file attachments
-  - Semantic search and content retrieval from attached documents
-  - File access validation across Docker container boundaries
+  - Small files are included inline in the prompt
+  - Large files (>250KB) automatically overflow to vector store
+  - Model can seamlessly access both inline and vector store content
+  - Stable list mechanism across multiple sessions
 - **Duration**: ~89 seconds
-- **Key Innovation**: Uses `/host-project/tests/e2e_dind/test_attachments_data/` to bypass MCP server security restrictions on temp directories
+- **Key Validation**: Context intelligently splits between inline and RAG based on size
 
 ### 3. Graceful Failure Handling (`test_failures.py`)
 - **Purpose**: Error handling and graceful degradation validation
@@ -60,30 +60,39 @@ All tests run concurrently with 100% pass rate. Each test validates a complete u
 - **Duration**: ~129 seconds
 - **Key Validation**: System fails safely with helpful error messages
 
-### 4. Session Isolation and Continuity (`test_cross_model.py`)
-- **Purpose**: Validates session state persistence within models and isolation between models
-- **Models Used**: o3 (session continuity testing), Gemini 2.5 Pro (isolation testing)
+### 4. Stable List Context Management (`test_stable_list.py`)
+- **Purpose**: Validates the stable-inline list feature for predictable context across sessions
+- **Models Used**: GPT-4.1 (best for multi-turn context management)
 - **Tests**:
-  - Store information using o3 with specific session_id
-  - Retrieve stored information using same o3 session_id (validates OpenAI session continuity)
-  - Test session isolation using Gemini with different session_id (should not access o3 data)
-  - Validate reasoning_effort parameter routing
-  - Verify session persistence across multiple operations
-- **Duration**: ~170 seconds
-- **Key Validation**: Session isolation works correctly - no cross-provider session sharing
+  - Initial context split between inline and vector store based on token budget
+  - Context deduplication - unchanged files not resent in subsequent calls
+  - Changed file detection - modified files are detected and resent
+  - Model can access both directly provided and previously sent content
+- **Duration**: ~180 seconds
+- **Key Validation**: Stable list ensures consistent context handling across multi-turn conversations
 
-### 5. Session Management and Parameter Routing (`test_memory.py`)
-- **Purpose**: Comprehensive session state management and parameter validation across models
-- **Models Used**: Gemini 2.5 Pro (primary session), o3 (isolation testing), GPT-4.1 (parameter testing)
+### 5. Priority Context Override (`test_priority_context.py`)
+- **Purpose**: Validates priority_context forces files inline regardless of size
+- **Models Used**: GPT-4.1 (for testing context limits)
 - **Tests**:
-  - Store information in Gemini session and validate recall within same session
-  - Test session isolation between Gemini and o3 (different providers)
-  - Test session isolation within same provider (different session_ids)
-  - Validate reasoning_effort parameter with o3
-  - Validate temperature parameter with GPT-4.1
-  - Verify session persistence across multiple operations and models
-- **Duration**: ~281 seconds (longest due to multiple model interactions)
-- **Key Validation**: Session state is properly isolated between providers and session IDs
+  - Large files in priority_context are forced inline (not sent to vector store)
+  - File tree accurately reflects inline vs attached files
+  - Dynamic overflow when context grows across multiple calls
+  - Priority overrides normal token budget calculations
+- **Duration**: ~150 seconds
+- **Key Validation**: Priority context gives users explicit control over file placement
+
+### 6. Session Management and Isolation (`test_session_management.py`)
+- **Purpose**: Comprehensive session state management across models (consolidated from test_memory.py and test_cross_model.py)
+- **Models Used**: Gemini 2.5 Pro, o3, GPT-4.1 (testing cross-model behavior)
+- **Tests**:
+  - Session persistence within same session_id
+  - Session isolation between different session_ids
+  - Cross-model memory sharing within same session
+  - Parameter validation (reasoning_effort, temperature)
+  - Multi-turn conversation context accumulation
+- **Duration**: ~250 seconds
+- **Key Validation**: Sessions are properly isolated and state persists correctly
 
 ## Running Tests
 
@@ -130,18 +139,19 @@ Each scenario runs as a separate GitHub Actions job for maximum parallelism and 
 
 ```
 tests/e2e_dind/
-├── README.md                    # This file  
-├── Dockerfile.runner            # Test runner image
-├── Dockerfile.server           # MCP server image
-├── conftest.py                 # pytest fixtures and Docker setup
+├── README.md                        # This file  
+├── Dockerfile.runner                # Test runner image
+├── Dockerfile.server               # MCP server image
+├── conftest.py                     # pytest fixtures and Docker setup
 ├── compose/
-│   └── stack.yml              # Docker compose template with shared volumes
+│   └── stack.yml                  # Docker compose template with shared volumes
 └── scenarios/
-    ├── test_smoke.py          # Basic health check and simple chat
-    ├── test_attachments.py    # RAG workflow with file attachments
-    ├── test_failures.py       # Graceful error handling
-    ├── test_cross_model.py    # Multi-model session continuity
-    └── test_memory.py         # Project memory lifecycle
+    ├── test_smoke.py              # Basic health check and simple chat
+    ├── test_attachments.py        # Context overflow and RAG workflow
+    ├── test_failures.py           # Graceful error handling
+    ├── test_stable_list.py        # Stable list context management
+    ├── test_priority_context.py   # Priority context override testing
+    └── test_session_management.py # Session isolation and persistence
 ```
 
 ## Migration from Old E2E Tests
@@ -154,17 +164,18 @@ The old `tests/e2e/` approach had fundamental issues:
 - Inconsistent pass rates and flaky results
 
 This new approach achieves:
-- **5 comprehensive system validation tests** covering all critical functionality:
+- **6 comprehensive system validation tests** covering all critical functionality:
   * Core system health and basic model functionality
-  * RAG workflow with file attachments and vector store creation
+  * Context overflow with automatic split between inline and vector store
   * Error handling and graceful failure scenarios
-  * Session state isolation and parameter routing validation
-  * Multi-model session management and provider isolation
+  * Stable list feature for predictable multi-turn context management
+  * Priority context override for explicit file placement control
+  * Session isolation and cross-model state management
 - **Complete isolation** via Docker-in-Docker with fresh containers per test
 - **100% pass rate** with parallel execution at the job level
 - **Robust communication** via Docker networks instead of pipes
 - **Real E2E validation** from Claude CLI → MCP server → AI models
-- **Security-aware file handling** using project-safe paths for attachments
+- **Intelligent context handling** with automatic overflow to vector stores
 
 ## Troubleshooting
 

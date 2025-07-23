@@ -1,5 +1,6 @@
 """Parameter validation for tools."""
 
+import os
 import logging
 from typing import Dict, Any, Union, Optional, get_origin, get_args
 from .registry import ToolMetadata
@@ -36,6 +37,14 @@ class ParameterValidator:
         Raises:
             ValueError: If required parameter missing or unknown parameter in strict mode
         """
+        # Debug logging for E2E tests
+        if os.getenv("CI_E2E") == "1":
+            logger.info(f"Validating parameters for {tool_instance.__class__.__name__}")
+            logger.info(f"Received kwargs: {kwargs}")
+            logger.info(
+                f"Kwargs types: {[(k, type(v).__name__) for k, v in kwargs.items()]}"
+            )
+
         validated = {}
 
         # Check required parameters
@@ -159,6 +168,22 @@ class ParameterValidator:
                     return coerced
             return None
 
+        # Handle List types
+        if origin is list or expected_type is list:
+            if isinstance(value, list):
+                return value
+            if isinstance(value, str):
+                # Try to parse JSON string
+                try:
+                    import json
+
+                    parsed = json.loads(value)
+                    if isinstance(parsed, list):
+                        return parsed
+                except (json.JSONDecodeError, ValueError):
+                    pass
+            return None
+
         # Handle basic bool coercion
         if expected_type is bool:
             if isinstance(value, bool):
@@ -173,6 +198,18 @@ class ParameterValidator:
             if isinstance(value, (int, float)):
                 # Handle numeric to bool conversion
                 return bool(value)
+
+        # Handle float coercion
+        if expected_type is float:
+            if isinstance(value, float):
+                return value
+            if isinstance(value, str):
+                try:
+                    return float(value)
+                except ValueError:
+                    pass
+            if isinstance(value, int):
+                return float(value)
 
         # No coercion performed
         return None

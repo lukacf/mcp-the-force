@@ -15,14 +15,6 @@ class TestThreadPoolSingleton:
         """Clear any existing instance before each test."""
         tp._shared_executor = None
 
-    def test_singleton_pattern(self):
-        """Test that get_shared_executor returns the same instance."""
-        executor1 = get_shared_executor()
-        executor2 = get_shared_executor()
-
-        assert executor1 is executor2
-        assert executor1 is not None
-
     @pytest.mark.asyncio
     async def test_thread_pool_singleton_safety(self):
         """Test thread pool is created only once under concurrent access."""
