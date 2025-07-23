@@ -109,10 +109,10 @@ Tools follow the naming patterns:
 Utility tools:
 - `create_vector_store_tool`: Create vector stores for RAG workflows
 - `list_models`: Show all available models and capabilities
-- `search_project_memory`: Search past conversations and git commits
+- `search_project_history`: Search past conversations and git commits
 - `search_session_attachments`: Search temporary vector stores created from attachments
 
-Use `search_project_memory` whenever you need to recall prior AI decisions or
+Use `search_project_history` whenever you need to recall prior AI decisions or
 code history. After uploading files with `create_vector_store_tool`, search them
 using `search_session_attachments`.
 

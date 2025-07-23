@@ -118,7 +118,7 @@ class TestGeminiSerialization:
     def test_serialize_function_call(self):
         """Test serialization of function call content."""
         function_call = types.FunctionCall(
-            name="search_project_memory",
+            name="search_project_history",
             args={"query": "Python programming", "max_results": 10},
         )
         content = types.Content(
@@ -131,7 +131,7 @@ class TestGeminiSerialization:
             "parts": [
                 {
                     "function_call": {
-                        "name": "search_project_memory",
+                        "name": "search_project_history",
                         "args": {"query": "Python programming", "max_results": 10},
                     }
                 }

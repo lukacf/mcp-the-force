@@ -52,6 +52,21 @@ def store_commit_memory(commit_sha: Optional[str] = None) -> None:
         timestamp_str = _git_command(["show", "-s", "--format=%ct", commit_sha])
         timestamp = int(timestamp_str) if timestamp_str else int(time.time())
 
+        # Check if this is a merge commit
+        parent_count_str = _git_command(
+            ["rev-list", "--parents", "-n", "1", commit_sha]
+        )
+        is_merge_commit = (
+            len(parent_count_str.split()) > 2 if parent_count_str else False
+        )
+
+        # Count commits since main/master
+        commits_since_main = 0
+        if branch != "main" and branch != "master":
+            count_str = _git_command(["rev-list", "--count", "origin/main..HEAD"])
+            if count_str and count_str.isdigit():
+                commits_since_main = int(count_str)
+
         # Try to find associated session_id from recent session cache
         from ..config import get_settings
 
@@ -70,6 +85,8 @@ def store_commit_memory(commit_sha: Optional[str] = None) -> None:
                 "commit_sha": commit_sha,
                 "parent_sha": parent_sha,
                 "branch": branch,
+                "is_merge_commit": is_merge_commit,
+                "commits_since_main": commits_since_main,
                 "timestamp": timestamp,
                 "datetime": datetime.fromtimestamp(timestamp).isoformat(),
                 "files_changed": changed_files[: settings.memory_max_files_per_commit],
@@ -105,7 +122,7 @@ def store_commit_memory(commit_sha: Optional[str] = None) -> None:
             # Increment count
             config.increment_commit_count()
 
-            logger.info(f"Stored commit {commit_sha[:8]} in project memory")
+            logger.info(f"Stored commit {commit_sha[:8]} in project history")
 
         finally:
             # Clean up temp file

@@ -22,7 +22,7 @@ from .constants import (
     MAX_POLL_INTERVAL_SEC,
     STREAM_TIMEOUT_THRESHOLD,
 )
-from ..memory_search_declaration import create_search_memory_declaration_openai
+from ..memory_search_declaration import create_search_history_declaration_openai
 import json
 import jsonschema
 
@@ -69,9 +69,9 @@ class BaseFlowStrategy(ABC):
 
         # Only add custom tools if the model supports them
         if capability is None or capability.supports_custom_tools:
-            # Add search_project_memory tool unless disabled
+            # Add search_project_history tool unless disabled
             if not self.context.request.disable_memory_search:
-                tools.append(create_search_memory_declaration_openai())
+                tools.append(create_search_history_declaration_openai())
 
             # Add native OpenAI file search if vector stores provided
             logger.info(

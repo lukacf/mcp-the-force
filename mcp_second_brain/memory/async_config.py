@@ -98,7 +98,7 @@ class AsyncMemoryConfig:
             )
             logger.info(f"[MEMORY] Created conversation store: {store.id}")
 
-            # Register with LoiterKiller as protected project memory
+            # Register with LoiterKiller as protected project history
             session_id = "project-memory-conversation"
             logger.info(
                 f"[MEMORY] Attempting to register store {store.id} with LoiterKiller..."
@@ -162,7 +162,7 @@ class AsyncMemoryConfig:
             name=name, expires_after={"anchor": "last_active_at", "days": 365}
         )
 
-        # Register with LoiterKiller as protected project memory
+        # Register with LoiterKiller as protected project history
         session_id = f"project-memory-{store_type}"
         logger.info(
             f"[MEMORY] Attempting to register store {store.id} with LoiterKiller..."
@@ -278,7 +278,7 @@ class AsyncMemoryConfig:
                 name=name, expires_after={"anchor": "last_active_at", "days": 365}
             )
 
-            # Register with LoiterKiller as protected project memory
+            # Register with LoiterKiller as protected project history
             session_id = "project-memory-commit"
             logger.info(
                 f"[MEMORY] Attempting to register store {store.id} with LoiterKiller..."

@@ -63,7 +63,7 @@ logger = setup_logging()
 
 # Request models
 class AcquireRequest(BaseModel):
-    protected: bool = False  # Whether this is a protected store (e.g., project memory)
+    protected: bool = False  # Whether this is a protected store (e.g., project history)
 
 
 # Response models
@@ -98,7 +98,7 @@ class NukeResponse(BaseModel):
 
 class RegisterRequest(BaseModel):
     vector_store_id: str
-    protected: bool = True  # Default to protected for project memory
+    protected: bool = True  # Default to protected for project history
 
 
 # Database setup
@@ -290,7 +290,7 @@ async def acquire_session(session_id: str, request: AcquireRequest = AcquireRequ
 
 @app.post("/session/{session_id}/register")
 async def register_existing_store(session_id: str, request: RegisterRequest):
-    """Register an existing vector store with LoiterKiller (for project memory)."""
+    """Register an existing vector store with LoiterKiller (for project history)."""
     logger.info(
         f"Register request for session {session_id}, store {request.vector_store_id} (protected={request.protected})"
     )

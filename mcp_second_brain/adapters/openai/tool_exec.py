@@ -129,7 +129,7 @@ class ToolExecutor:
 
 
 class BuiltInToolDispatcher:
-    """Handles execution of OpenAI's built-in tools (search_memory only).
+    """Handles execution of OpenAI's built-in tools (search_history only).
 
     File search is now handled natively by OpenAI through the file_search tool.
     """
@@ -147,17 +147,17 @@ class BuiltInToolDispatcher:
         """Dispatch to the appropriate built-in tool.
 
         Args:
-            name: Tool name (e.g., "search_project_memory")
+            name: Tool name (e.g., "search_project_history")
             arguments: Parsed arguments for the tool
 
         Returns:
             Tool execution result
         """
-        if name == "search_project_memory":
+        if name == "search_project_history":
             # Import and execute search
-            from ...tools.search_memory import SearchMemoryAdapter
+            from ...tools.search_history import SearchHistoryAdapter
 
-            adapter = SearchMemoryAdapter()
+            adapter = SearchHistoryAdapter()
             return await adapter.generate(
                 prompt=arguments.get("query", ""),
                 query=arguments.get("query", ""),

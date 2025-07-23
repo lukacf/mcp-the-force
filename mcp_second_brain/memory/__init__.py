@@ -1,4 +1,4 @@
-"""Project memory system for capturing AI consultations and git commits."""
+"""Project history system for capturing AI consultations and git commits."""
 
 from .config import MemoryConfig, get_memory_config
 from .conversation import store_conversation_memory

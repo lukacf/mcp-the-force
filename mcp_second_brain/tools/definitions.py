@@ -7,7 +7,7 @@ from .descriptors import Route
 from .registry import tool
 
 # Import tools to ensure registration
-from . import search_memory  # noqa: F401
+from . import search_history  # noqa: F401
 # Note: search_attachments is not imported here to prevent MCP exposure
 # It remains available for internal model function calling
 # Note: logging_tools is imported conditionally in integration.py when developer mode is enabled
@@ -72,7 +72,7 @@ class ChatWithGemini25Pro(ToolSpec):
     )
     disable_memory_search: Optional[bool] = Route.adapter(
         default=False,
-        description="Disable search_project_memory tool to prevent access to past conversations",
+        description="Disable search_project_history tool to prevent access to past conversations",
     )
 
 
@@ -121,7 +121,7 @@ class ChatWithGemini25Flash(ToolSpec):
     )
     disable_memory_search: Optional[bool] = Route.adapter(
         default=False,
-        description="Disable search_project_memory tool to prevent access to past conversations",
+        description="Disable search_project_history tool to prevent access to past conversations",
     )
 
 
@@ -179,7 +179,7 @@ Please approach this task step-by-step, showing your reasoning process."""
     )
     disable_memory_search: Optional[bool] = Route.adapter(
         default=False,
-        description="Disable search_project_memory tool to prevent access to past conversations",
+        description="Disable search_project_history tool to prevent access to past conversations",
     )
 
 
@@ -230,7 +230,7 @@ class ChatWithO3Pro(ToolSpec):
     )
     disable_memory_search: Optional[bool] = Route.adapter(
         default=False,
-        description="Disable search_project_memory tool to prevent access to past conversations",
+        description="Disable search_project_history tool to prevent access to past conversations",
     )
 
 
@@ -277,7 +277,7 @@ class ChatWithGPT4_1(ToolSpec):
     )
     disable_memory_search: Optional[bool] = Route.adapter(
         default=False,
-        description="Disable search_project_memory tool to prevent access to past conversations",
+        description="Disable search_project_history tool to prevent access to past conversations",
     )
 
 
@@ -467,7 +467,7 @@ class ChatWithGrok4(ToolSpec):
     )
     disable_memory_search: Optional[bool] = Route.adapter(
         default=False,
-        description="Disable search_project_memory tool to force use of attachments",
+        description="Disable search_project_history tool to force use of attachments",
     )
 
 
@@ -524,7 +524,7 @@ class ChatWithGrok3Reasoning(ToolSpec):
     )
     disable_memory_search: Optional[bool] = Route.adapter(
         default=False,
-        description="Disable search_project_memory tool to force use of attachments",
+        description="Disable search_project_history tool to force use of attachments",
     )
 
 

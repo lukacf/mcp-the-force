@@ -150,7 +150,7 @@ async def test_flow_handles_function_calls_with_follow_up():
         follow_up_tools = follow_up_call.kwargs["tools"]
         assert (
             len(follow_up_tools) == 3
-        )  # search_project_memory + web_search + get_weather
+        )  # search_project_history + web_search + get_weather
 
         # Extract tool names from different structures
         tool_names = []
@@ -167,7 +167,7 @@ async def test_flow_handles_function_calls_with_follow_up():
 
         # Verify all expected tools are present
         assert "get_weather" in tool_names
-        assert "search_project_memory" in tool_names
+        assert "search_project_history" in tool_names
         assert "web_search" in tool_names
 
         assert result["content"] == "The weather is 72F and sunny."
@@ -420,7 +420,7 @@ async def test_flow_deduplicates_function_calls():
         calls_seen.append(name)
 
         # Handle built-in tools
-        if name == "search_project_memory":
+        if name == "search_project_history":
             return {"results": []}
 
         return f"Result for {name}"

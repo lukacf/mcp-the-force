@@ -1,4 +1,4 @@
-"""Function declaration for search_project_memory tool.
+"""Function declaration for search_project_history tool.
 
 This provides the function declaration that both OpenAI and Gemini
 models can use to call our unified memory search.
@@ -7,14 +7,16 @@ models can use to call our unified memory search.
 from typing import Dict, Any
 
 
-def create_search_memory_declaration_openai() -> Dict[str, Any]:
+def create_search_history_declaration_openai() -> Dict[str, Any]:
     """Create the function declaration for OpenAI Responses API."""
     return {
         "type": "function",
-        "name": "search_project_memory",
+        "name": "search_project_history",
         "description": (
-            "Search project memory for past decisions, conversations, and commits. "
-            "Use this to find relevant context from previous AI consultations or git history."
+            "Search project history for past decisions, conversations, and commits. "
+            "⚠️ IMPORTANT: Returns HISTORICAL data that may be OUTDATED. "
+            "Do NOT use to understand current code state. "
+            "Best for finding past design decisions and understanding project evolution."
         ),
         "parameters": {
             "type": "object",
@@ -40,13 +42,15 @@ def create_search_memory_declaration_openai() -> Dict[str, Any]:
     }
 
 
-def create_search_memory_declaration_gemini() -> Dict[str, Any]:
+def create_search_history_declaration_gemini() -> Dict[str, Any]:
     """Create the function declaration for Gemini native function calling."""
     return {
-        "name": "search_project_memory",
+        "name": "search_project_history",
         "description": (
-            "Search project memory for past decisions, conversations, and commits. "
-            "Use this to find relevant context from previous AI consultations or git history."
+            "Search project history for past decisions, conversations, and commits. "
+            "⚠️ IMPORTANT: Returns HISTORICAL data that may be OUTDATED. "
+            "Do NOT use to understand current code state. "
+            "Best for finding past design decisions and understanding project evolution."
         ),
         "parameters": {
             "type": "object",

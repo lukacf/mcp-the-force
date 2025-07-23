@@ -4,7 +4,7 @@ import pytest
 from unittest.mock import Mock, patch
 from typing import List, Dict, Any
 
-from mcp_second_brain.tools.search_memory import SearchMemoryAdapter
+from mcp_second_brain.tools.search_history import SearchHistoryAdapter
 
 
 class MockSearchResult:
@@ -48,18 +48,18 @@ def mock_memory_config():
 
 @pytest.fixture
 def search_adapter(mock_openai_client, mock_memory_config):
-    """Create SearchMemoryAdapter with mocks."""
-    with patch("mcp_second_brain.tools.search_memory.get_settings"):
+    """Create SearchHistoryAdapter with mocks."""
+    with patch("mcp_second_brain.tools.search_history.get_settings"):
         with patch(
-            "mcp_second_brain.tools.search_memory.get_memory_config",
+            "mcp_second_brain.tools.search_history.get_memory_config",
             return_value=mock_memory_config,
         ):
-            adapter = SearchMemoryAdapter()
+            adapter = SearchHistoryAdapter()
             adapter.client = mock_openai_client
             return adapter
 
 
-class TestSearchMemoryDeduplication:
+class TestSearchHistoryDeduplication:
     """Test deduplication functionality."""
 
     @pytest.mark.asyncio

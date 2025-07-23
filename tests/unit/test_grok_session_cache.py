@@ -71,7 +71,7 @@ class TestSQLiteGrokSessionCache:
                         "id": "call_123",
                         "type": "function",
                         "function": {
-                            "name": "search_project_memory",
+                            "name": "search_project_history",
                             "arguments": '{"query": "Python", "max_results": 10}',
                         },
                     }
@@ -80,7 +80,7 @@ class TestSQLiteGrokSessionCache:
             {
                 "tool_call_id": "call_123",
                 "role": "tool",
-                "name": "search_project_memory",
+                "name": "search_project_history",
                 "content": "Found 5 results about Python programming...",
             },
             {
@@ -303,7 +303,7 @@ class TestGrokSessionCacheIntegration:
                         "id": "call_search_1",
                         "type": "function",
                         "function": {
-                            "name": "search_project_memory",
+                            "name": "search_project_history",
                             "arguments": '{"query": "codebase overview", "max_results": 5}',
                         },
                     }
@@ -318,12 +318,12 @@ class TestGrokSessionCacheIntegration:
                 {
                     "tool_call_id": "call_search_1",
                     "role": "tool",
-                    "name": "search_project_memory",
+                    "name": "search_project_history",
                     "content": "Found documentation about MCP Second-Brain server architecture...",
                 },
                 {
                     "role": "assistant",
-                    "content": "Based on the project memory, this is an MCP server that provides access to multiple AI models...",
+                    "content": "Based on the project history, this is an MCP server that provides access to multiple AI models...",
                 },
             ]
         )
