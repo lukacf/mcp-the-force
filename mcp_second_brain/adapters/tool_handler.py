@@ -38,6 +38,7 @@ class ToolHandler:
         tool_name: str,
         tool_args: Dict[str, Any],
         vector_store_ids: Optional[List[str]] = None,
+        session_id: Optional[str] = None,
     ) -> str:
         """
         Execute a single built-in tool call and return the result.
@@ -49,6 +50,7 @@ class ToolHandler:
             tool_name: Name of the tool to execute
             tool_args: Arguments for the tool
             vector_store_ids: Vector store IDs for attachment search
+            session_id: Session ID for deduplication scope
 
         Returns:
             Tool execution result as string
@@ -57,20 +59,29 @@ class ToolHandler:
             Exception: Re-raises exceptions from tool execution for proper
                       adapter-specific error categorization
         """
-        try:
-            if tool_name == "search_project_history":
-                return await self._execute_memory_search(tool_args)
-            elif tool_name == "search_task_files":
-                return await self._execute_task_files_search(
-                    tool_args, vector_store_ids
-                )
-            else:
-                logger.warning(f"Unknown built-in tool: {tool_name}")
-                return f"Error: Unknown tool '{tool_name}'"
-        except Exception as e:
-            # Re-raise exceptions to preserve adapter-specific error handling
-            logger.error(f"Tool '{tool_name}' execution failed: {e}", exc_info=True)
-            raise
+        # Establish the scope for the tool call
+        from ..logging.setup import get_instance_id
+        from ..utils.scope_manager import scope_manager
+
+        scope_id = session_id or get_instance_id()
+        if scope_id and not session_id:
+            scope_id = f"instance_{scope_id}"
+
+        async with scope_manager.scope(scope_id):
+            try:
+                if tool_name == "search_project_history":
+                    return await self._execute_memory_search(tool_args)
+                elif tool_name == "search_task_files":
+                    return await self._execute_task_files_search(
+                        tool_args, vector_store_ids
+                    )
+                else:
+                    logger.warning(f"Unknown built-in tool: {tool_name}")
+                    return f"Error: Unknown tool '{tool_name}'"
+            except Exception as e:
+                # Re-raise exceptions to preserve adapter-specific error handling
+                logger.error(f"Tool '{tool_name}' execution failed: {e}", exc_info=True)
+                raise
 
     async def _execute_memory_search(self, tool_args: Dict[str, Any]) -> str:
         """Execute project history search tool."""
