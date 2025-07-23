@@ -496,6 +496,8 @@ class VertexAdapter(BaseAdapter):
                         store_types = fc.function_call.args.get(
                             "store_types", ["conversation", "commit"]
                         )
+                        # Extract session_id from function args if provided
+                        func_session_id = fc.function_call.args.get("session_id")
 
                         logger.info(f"Executing search_project_history: '{query}'")
 
@@ -503,13 +505,13 @@ class VertexAdapter(BaseAdapter):
                         from ...tools.search_history import SearchHistoryAdapter
 
                         memory_search = SearchHistoryAdapter()
-                        # Use session_id from generate method or default
+                        # Prefer explicit session_id from function args, then method session_id
                         search_result_text = await memory_search.generate(
                             prompt=query,
                             query=query,
                             max_results=max_results,
                             store_types=store_types,
-                            session_id=session_id or "default",
+                            session_id=func_session_id or session_id or "default",
                         )
 
                         # Create function response
