@@ -79,6 +79,9 @@ class SearchProjectHistory(ToolSpec):
         description="Types of stores to search (default: ['conversation', 'commit'])",
         default_factory=lambda: ["conversation", "commit"],
     )
+    session_id = Route.session(
+        description="Session ID for deduplication scope (optional, defaults to 'default')"
+    )
 
 
 class SearchHistoryAdapter(BaseAdapter):
