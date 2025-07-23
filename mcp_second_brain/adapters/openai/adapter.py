@@ -90,6 +90,15 @@ class OpenAIAdapter(BaseAdapter):
             AdapterException: If the request fails
         """
         try:
+            # Debug log all kwargs
+            logger.debug(
+                f"[ADAPTER] OpenAI adapter received kwargs keys: {list(kwargs.keys())}"
+            )
+            if "session_id" in kwargs:
+                logger.info(
+                    f"[ADAPTER] Found session_id in kwargs: {kwargs.get('session_id')}"
+                )
+
             # Extract parameters from kwargs
             messages = kwargs.pop("messages", None)
             if messages is None:
@@ -119,10 +128,16 @@ class OpenAIAdapter(BaseAdapter):
             # Create request object (validates and applies defaults)
             request = OpenAIRequest(**request_params)
 
+            # Preserve caller-supplied session_id (if any) – it is *not* part of
+            # the OpenAIRequest schema, so we must attach it manually.
+            request_data = request.model_dump(exclude_none=True)
+            if "session_id" in kwargs:
+                request_data["session_id"] = kwargs["session_id"]
+
             # Create and run flow orchestrator
             orchestrator = FlowOrchestrator(tool_dispatcher=tool_dispatcher)
 
-            return await orchestrator.run(request.model_dump(exclude_none=True))
+            return await orchestrator.run(request_data)
 
         except AdapterException:
             # Re-raise our own errors
