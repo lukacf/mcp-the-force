@@ -576,12 +576,6 @@ class FlowOrchestrator:
             # 0. Extract a caller-supplied session_id *before* we build
             #    the OpenAIRequest; it is not part of that model schema.
             explicit_session_id = request_data.pop("session_id", None)
-            if explicit_session_id:
-                logger.info(
-                    f"[FLOW] Extracted explicit session_id: {explicit_session_id}"
-                )
-            else:
-                logger.info("[FLOW] No explicit session_id found in request_data")
 
             # 1. Pre-process request to handle model capabilities
             request_data = self._preprocess_request(request_data)
@@ -626,9 +620,6 @@ class FlowOrchestrator:
                 #  2) new random UUID (if no session_id provided)
                 # Never use previous_response_id as it changes every turn
                 dedup_session_id = explicit_session_id or f"sess_{uuid4().hex}"
-                logger.info(
-                    f"[FLOW] Setting dedup_session_id for BuiltInToolDispatcher: {dedup_session_id}"
-                )
 
                 dispatcher_candidate.vector_store_ids = request.vector_store_ids
                 dispatcher_candidate.session_id = dedup_session_id
