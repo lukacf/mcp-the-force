@@ -2,6 +2,7 @@
 """MCP Second-Brain Server with dataclass-based tools."""
 
 import logging
+import sys
 from .logging.setup import setup_logging
 
 # Initialize the new logging system first
@@ -32,7 +33,9 @@ logger = logging.getLogger(__name__)
 mcp = FastMCP("mcp-second-brain")
 
 # Register all dataclass-based tools
-logger.info("Registering dataclass-based tools...")
+logger.debug("Registering dataclass-based tools...")
+# Force an INFO level message to test if logging is working
+logger.info("TEST: MCP Second-Brain server starting up...")
 register_all_tools(mcp)
 
 # Register utility tools
@@ -40,13 +43,12 @@ create_list_models_tool(mcp)
 create_count_project_tokens_tool(mcp)
 # Note: create_vector_store_tool is intentionally not registered to hide it from MCP clients
 
-logger.info("MCP Second-Brain server initialized with dataclass-based tools")
+logger.debug("MCP Second-Brain server initialized with dataclass-based tools")
 
 
 def main():
     """Main entry point."""
     import asyncio
-    import sys
     import signal
     import errno
     from typing import Iterator
@@ -139,7 +141,7 @@ def main():
     def setup_exception_handler():
         loop = asyncio.get_event_loop()
         loop.set_exception_handler(ignore_broken_pipe)
-        logger.info("Installed custom event loop exception handler")
+        logger.debug("Installed custom event loop exception handler")
 
     # No loop for stdio transport - run once and exit on disconnection
     # Claude spawns a new server process for each session

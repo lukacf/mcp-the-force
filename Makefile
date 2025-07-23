@@ -17,7 +17,7 @@ help:
 	@echo "  test             Run fast unit tests (for pre-commit)."
 	@echo "  test-unit        Run the full unit test suite with coverage."
 	@echo "  test-integration Run integration tests (uses mock adapters)."
-	@echo "  e2e              Run end-to-end tests using Docker-in-Docker."
+	@echo "  e2e              Run e2e tests (all or specific: make e2e TEST=scenarios/test_smoke.py)."
 	@echo "  test-all         Run all tests (unit, integration, e2e)."
 	@echo "  ci               Run the main CI suite (lint, unit, integration)."
 	@echo "  clean            Remove temporary files and caches."
@@ -69,6 +69,7 @@ e2e-setup:
 		exit 1; \
 	fi; \
 	docker build -f tests/e2e_dind/Dockerfile.runner -t mcp-e2e-runner .; \
+	docker build -f tests/e2e_dind/Dockerfile.server -t mcp-e2e-server .; \
 	echo "Testing Claude MCP configuration in parallel..."; \
 	( \
 		for scenario in smoke memory attachments cross_model failures stable_list; do \
@@ -81,7 +82,7 @@ e2e-setup:
 					-w /host-project \
 					-e OPENAI_API_KEY="$${OPENAI_API_KEY}" \
 					-e ANTHROPIC_API_KEY="$${ANTHROPIC_API_KEY}" \
-					-e VERTEX_PROJECT="$${VERTEX_PROJECT:-mcp-test-project}" \
+					-e VERTEX_PROJECT="$${VERTEX_PROJECT}" \
 					-e VERTEX_LOCATION="$${VERTEX_LOCATION:-us-central1}" \
 					-e GOOGLE_APPLICATION_CREDENTIALS="/home/claude/.config/gcloud/application_default_credentials.json" \
 					--entrypoint=/bin/bash \
@@ -132,39 +133,63 @@ e2e:
 		exit 1; \
 	fi; \
 	docker build -f tests/e2e_dind/Dockerfile.runner -t mcp-e2e-runner .; \
-	echo "Running all e2e scenarios in parallel..."; \
-	( \
-		for scenario in smoke memory attachments cross_model failures stable_list; do \
-			( \
-				echo "[$$scenario] Starting at $$(date)"; \
-				VOL="e2e-tmp-$$scenario-$$$$"; \
-				docker volume create "$$VOL" >/dev/null; \
-				docker run --rm \
-					--name "e2e-test-$$scenario-$$$$" \
-					-v /var/run/docker.sock:/var/run/docker.sock \
-					-v "$$VOL":/tmp \
-					-v "$$ADC_PATH:/home/claude/.config/gcloud/application_default_credentials.json:ro" \
-					-w /host-project/tests/e2e_dind \
-					-e OPENAI_API_KEY="$${OPENAI_API_KEY}" \
-					-e ANTHROPIC_API_KEY="$${ANTHROPIC_API_KEY}" \
-					-e VERTEX_PROJECT="$${VERTEX_PROJECT:-mcp-test-project}" \
-					-e VERTEX_LOCATION="$${VERTEX_LOCATION:-us-central1}" \
-					-e GOOGLE_APPLICATION_CREDENTIALS="/home/claude/.config/gcloud/application_default_credentials.json" \
-					-e SHARED_TMP_VOLUME="$$VOL" \
-					mcp-e2e-runner scenarios/test_$$scenario.py -v --tb=short; \
-				EXIT_CODE=$$?; \
-				docker volume rm "$$VOL" >/dev/null 2>&1 || true; \
-				if [ $$EXIT_CODE -eq 0 ]; then \
-					echo "[$$scenario] ✓ PASSED at $$(date)"; \
-				else \
-					echo "[$$scenario] ✗ FAILED at $$(date)"; \
-				fi \
-			) & \
-		done; \
-		echo "All scenarios launched, waiting for completion..."; \
-		wait \
-	); \
-	echo "✓ All e2e scenarios completed!"
+	docker build -f tests/e2e_dind/Dockerfile.server -t mcp-e2e-server .; \
+	if [ -n "$(TEST)" ]; then \
+		echo "Running specific e2e test: $(TEST)"; \
+		TEST_NAME=$$(basename $(TEST) .py); \
+		VOL="e2e-tmp-$$TEST_NAME-$$$$"; \
+		docker volume create "$$VOL" >/dev/null; \
+		docker run --rm \
+			--name "e2e-test-$$TEST_NAME-$$$$" \
+			-v /var/run/docker.sock:/var/run/docker.sock \
+			-v "$$VOL":/tmp \
+			-v "$$ADC_PATH:/home/claude/.config/gcloud/application_default_credentials.json:ro" \
+			-w /host-project/tests/e2e_dind \
+			-e OPENAI_API_KEY="$${OPENAI_API_KEY}" \
+			-e ANTHROPIC_API_KEY="$${ANTHROPIC_API_KEY}" \
+			-e VERTEX_PROJECT="$${VERTEX_PROJECT}" \
+			-e VERTEX_LOCATION="$${VERTEX_LOCATION:-us-central1}" \
+			-e GOOGLE_APPLICATION_CREDENTIALS="/home/claude/.config/gcloud/application_default_credentials.json" \
+			-e SHARED_TMP_VOLUME="$$VOL" \
+			mcp-e2e-runner $(TEST) -v -s --tb=short; \
+		EXIT_CODE=$$?; \
+		docker volume rm "$$VOL" >/dev/null 2>&1 || true; \
+		exit $$EXIT_CODE; \
+	else \
+		echo "Running all e2e scenarios in parallel..."; \
+		( \
+			for scenario in smoke attachments stable_list priority_context session_management environment; do \
+				( \
+					echo "[$$scenario] Starting at $$(date)"; \
+					VOL="e2e-tmp-$$scenario-$$$$"; \
+					docker volume create "$$VOL" >/dev/null; \
+					docker run --rm \
+						--name "e2e-test-$$scenario-$$$$" \
+						-v /var/run/docker.sock:/var/run/docker.sock \
+						-v "$$VOL":/tmp \
+						-v "$$ADC_PATH:/home/claude/.config/gcloud/application_default_credentials.json:ro" \
+						-w /host-project/tests/e2e_dind \
+						-e OPENAI_API_KEY="$${OPENAI_API_KEY}" \
+						-e ANTHROPIC_API_KEY="$${ANTHROPIC_API_KEY}" \
+						-e VERTEX_PROJECT="$${VERTEX_PROJECT}" \
+						-e VERTEX_LOCATION="$${VERTEX_LOCATION:-us-central1}" \
+						-e GOOGLE_APPLICATION_CREDENTIALS="/home/claude/.config/gcloud/application_default_credentials.json" \
+						-e SHARED_TMP_VOLUME="$$VOL" \
+						mcp-e2e-runner scenarios/test_$$scenario.py -v --tb=short; \
+					EXIT_CODE=$$?; \
+					docker volume rm "$$VOL" >/dev/null 2>&1 || true; \
+					if [ $$EXIT_CODE -eq 0 ]; then \
+						echo "[$$scenario] ✓ PASSED at $$(date)"; \
+					else \
+						echo "[$$scenario] ✗ FAILED at $$(date)"; \
+					fi \
+				) & \
+			done; \
+			echo "All scenarios launched, waiting for completion..."; \
+			wait \
+		); \
+		echo "✓ All e2e scenarios completed!"; \
+	fi
 
 ci: lint test-unit test-integration
 	@echo "✓ Main CI checks passed!"
@@ -177,3 +202,17 @@ clean:
 	rm -rf .pytest_cache .coverage coverage.xml .mypy_cache
 	rm -rf htmlcov
 	@echo "✓ Clean complete!"
+
+clean-e2e:
+	@echo "Cleaning up E2E Docker resources..."
+	@# Remove E2E Docker images
+	docker rmi -f mcp-e2e-runner mcp-e2e-server 2>/dev/null || true
+	@# Remove E2E volumes (e2e-tmp-*)
+	docker volume ls --format '{{.Name}}' | grep '^e2e-tmp-' | xargs -r docker volume rm 2>/dev/null || true
+	@# Remove E2E networks (compose-e2e_*)
+	docker network ls --format '{{.Name}}' | grep '^compose-e2e_' | xargs -r docker network rm 2>/dev/null || true
+	@# Remove temporary compose directories
+	rm -rf /tmp/compose-e2e-* 2>/dev/null || true
+	@# Remove any dangling E2E containers (shouldn't be any with --rm, but just in case)
+	docker ps -a --format '{{.Names}}' | grep '^e2e-test-' | xargs -r docker rm -f 2>/dev/null || true
+	@echo "✓ E2E cleanup complete!"

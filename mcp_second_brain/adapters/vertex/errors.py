@@ -14,6 +14,8 @@ class ErrorCategory(Enum):
     TOOL_EXECUTION = auto()  # An error occurred within a local tool call.
     PARSING = auto()  # Error parsing API responses
     INVALID_REQUEST = auto()  # Invalid request parameters
+    CONFIGURATION = auto()  # Missing or invalid configuration
+    INITIALIZATION = auto()  # Failed to initialize adapter or client
 
 
 class AdapterException(Exception):

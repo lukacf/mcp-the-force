@@ -28,7 +28,7 @@ def patch_background_flow():
 
         # Replace the method
         BackgroundFlowStrategy.execute = cancellation_aware_execute
-        logger.info("Patched BackgroundFlowStrategy for cancellation awareness")
+        logger.debug("Patched BackgroundFlowStrategy for cancellation awareness")
 
     except Exception as e:
         logger.warning(f"Failed to patch BackgroundFlowStrategy: {e}")

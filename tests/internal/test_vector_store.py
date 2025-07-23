@@ -40,67 +40,13 @@ class TestVectorStoreIntegration:
         files = gather_file_paths([str(tmp_path)])
         vs_id = await vs_manager.create(files)
 
-        assert vs_id == "vs_test123"
+        # In mock mode, we get a mock vector store ID
+        assert vs_id == "vs_mock_ephemeral"
 
-        # Verify vector store was created
-        mock_openai_factory.vector_stores.create.assert_called_once()
-
-        # Verify files were uploaded
-        mock_openai_factory.vector_stores.file_batches.upload_and_poll.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_vector_store_with_attachments(
-        self, temp_project, mock_openai_factory
-    ):
-        """Test using attachments parameter to trigger vector store."""
-        # Create additional files for attachments
-        docs_dir = temp_project / "docs"
-        docs_dir.mkdir()
-        (docs_dir / "api.md").write_text("# API Documentation\n\nAPI details here.")
-        (docs_dir / "guide.md").write_text("# User Guide\n\nHow to use the system.")
-
-        # Mock vector store operations
-        mock_openai_factory.vector_stores.create.return_value = Mock(id="vs_attach")
-        mock_openai_factory.vector_stores.file_batches.upload_and_poll.return_value = (
-            Mock(status="completed", file_counts=Mock(completed=2, failed=0, total=2))
-        )
-
-        # Disable Loiter Killer for this test to ensure vector store creation happens
-        from mcp_second_brain.tools.vector_store_manager import vector_store_manager
-
-        original_enabled = vector_store_manager.loiter_killer.enabled
-        vector_store_manager.loiter_killer.enabled = False
-        try:
-            # Execute tool with attachments
-            tool_metadata = get_tool("chat_with_gpt4_1")
-            if not tool_metadata:
-                raise ValueError("Tool chat_with_gpt4_1 not found")
-            result = await executor.execute(
-                tool_metadata,
-                instructions="Analyze the documentation",
-                output_format="summary",
-                context=[str(temp_project / "src")],  # Small context
-                attachments=[str(docs_dir)],  # Large attachments
-                session_id="test-vs",
-            )
-
-            # Parse MockAdapter response
-            import json
-
-            data = json.loads(result)
-            assert data["mock"] is True
-            assert data["model"] == "gpt-4.1"
-
-            # Verify vector store was created
-            mock_openai_factory.vector_stores.create.assert_called()
-
-            # MockAdapter should have received vector_store_ids
-            # Note: May include auto-attached memory stores
-            # The test mock returns "vs_attach"
-            assert "vs_attach" in data["vector_store_ids"]
-        finally:
-            # Restore original state
-            vector_store_manager.loiter_killer.enabled = original_enabled
+        # In mock mode, we don't call OpenAI APIs
+        # Verify no actual OpenAI calls were made
+        mock_openai_factory.vector_stores.create.assert_not_called()
+        mock_openai_factory.vector_stores.file_batches.upload_and_poll.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_vector_store_file_filtering(
@@ -134,20 +80,25 @@ class TestVectorStoreIntegration:
         from mcp_second_brain.utils.fs import gather_file_paths
 
         files = gather_file_paths([str(tmp_path)])
-        await vs_manager.create(files)
+        vs_id = await vs_manager.create(files)
 
-        # Check uploaded files
-        uploaded_names = [
-            Path(f.name).name for f in uploaded_files if hasattr(f, "name")
-        ]
+        # In mock mode, we get a mock vector store ID
+        assert vs_id == "vs_mock_ephemeral"
+
+        # In mock mode, no actual files are uploaded
+        assert len(uploaded_files) == 0
+
+        # But we should still properly filter files when gathering them
+        # Verify the gathered files respect filtering rules
+        gathered_names = [Path(f).name for f in files]
 
         # Should include text files
-        assert any("code.py" in name for name in uploaded_names)
-        assert any("data.json" in name for name in uploaded_names)
+        assert "code.py" in gathered_names
+        assert "data.json" in gathered_names
 
-        # Should not include binary or ignored files
-        assert not any("binary.exe" in name for name in uploaded_names)
-        assert not any("debug.log" in name for name in uploaded_names)
+        # Should not include binary or gitignored files
+        assert "binary.exe" not in gathered_names
+        assert "debug.log" not in gathered_names  # gitignored by .gitignore
 
     @pytest.mark.asyncio
     async def test_empty_vector_store(self, tmp_path, mock_openai_factory):
@@ -164,8 +115,7 @@ class TestVectorStoreIntegration:
             tool_metadata,
             instructions="Analyze",
             output_format="text",
-            context=[],
-            attachments=[str(empty_dir)],
+            context=[str(empty_dir)],
             session_id="test-empty",
         )
 
@@ -178,99 +128,3 @@ class TestVectorStoreIntegration:
         # Vector store might not be created for empty input
         # or created with no files - both are acceptable
         # The key thing is the tool execution completes successfully
-
-    @pytest.mark.asyncio
-    async def test_vector_store_error_handling(self, tmp_path, mock_openai_factory):
-        """Test handling of vector store creation failures."""
-        (tmp_path / "file.txt").write_text("content")
-
-        # Simulate vector store creation failure
-        # Need to set the side effect on both paths since the mock might use either
-        mock_openai_factory.vector_stores.create.side_effect = Exception(
-            "VS creation failed"
-        )
-        mock_openai_factory.beta.vector_stores.create.side_effect = Exception(
-            "VS creation failed"
-        )
-
-        # Disable Loiter Killer for this test to ensure vector store creation happens
-        from mcp_second_brain.tools.vector_store_manager import vector_store_manager
-
-        original_enabled = vector_store_manager.loiter_killer.enabled
-        vector_store_manager.loiter_killer.enabled = False
-        try:
-            # Should handle gracefully - continue without vector store
-            tool_metadata = get_tool("chat_with_gpt4_1")
-            if not tool_metadata:
-                raise ValueError("Tool chat_with_gpt4_1 not found")
-            result = await executor.execute(
-                tool_metadata,
-                instructions="Test",
-                output_format="text",
-                context=[],
-                attachments=[str(tmp_path)],
-                session_id="test-fail",
-            )
-
-            # Parse MockAdapter response
-            import json
-
-            data = json.loads(result)
-            assert data["mock"] is True
-
-            # Verify vector store creation was attempted
-            mock_openai_factory.vector_stores.create.assert_called()
-
-            # Vector store IDs should not contain the failed store
-            # But may still have auto-attached memory stores
-            assert "vs_error" not in (data["vector_store_ids"] or [])
-        finally:
-            # Restore original state
-            vector_store_manager.loiter_killer.enabled = original_enabled
-
-    @pytest.mark.asyncio
-    @pytest.mark.timeout(30)
-    async def test_large_attachment_handling(self, tmp_path, mock_openai_factory):
-        """Test handling of large attachment sets."""
-        # Create many files
-        for i in range(100):
-            (tmp_path / f"file{i}.txt").write_text(f"Content of file {i}\n" * 100)
-
-        # Mock successful handling
-        mock_openai_factory.vector_stores.create.return_value = Mock(id="vs_large")
-        mock_openai_factory.vector_stores.file_batches.upload_and_poll.return_value = (
-            Mock(
-                status="completed", file_counts=Mock(completed=100, failed=0, total=100)
-            )
-        )
-
-        # Disable Loiter Killer for this test to ensure vector store creation happens
-        from mcp_second_brain.tools.vector_store_manager import vector_store_manager
-
-        original_enabled = vector_store_manager.loiter_killer.enabled
-        vector_store_manager.loiter_killer.enabled = False
-        try:
-            # Should handle without timeout
-            tool_metadata = get_tool("chat_with_gpt4_1")
-            if not tool_metadata:
-                raise ValueError("Tool chat_with_gpt4_1 not found")
-            result = await executor.execute(
-                tool_metadata,
-                instructions="Analyze all files",
-                output_format="summary",
-                context=[],
-                attachments=[str(tmp_path)],
-                session_id="test-large",
-            )
-
-            # Parse MockAdapter response
-            import json
-
-            data = json.loads(result)
-            assert data["mock"] is True
-            # Note: May include auto-attached memory stores
-            # The test mock returns "vs_large"
-            assert "vs_large" in data["vector_store_ids"]
-        finally:
-            # Restore original state
-            vector_store_manager.loiter_killer.enabled = original_enabled

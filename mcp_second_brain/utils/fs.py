@@ -316,10 +316,10 @@ def gather_file_paths(items: List[str], skip_safety_check: bool = False) -> List
         return []
 
     start_time = time.time()
-    logger.info(f"gather_file_paths called with {len(items)} items: {items}")
+    logger.debug(f"gather_file_paths called with {len(items)} items: {items}")
 
     project_root = Path.cwd()
-    logger.info(
+    logger.debug(
         f"DEBUG gather_file_paths: CWD/project_root={project_root}, UID={os.getuid()}, USER={os.getenv('USER', 'unknown')}, EUID={os.geteuid()}"
     )
 
@@ -338,18 +338,18 @@ def gather_file_paths(items: List[str], skip_safety_check: bool = False) -> List
             pass
 
         raw_path = Path(item).expanduser()
-        logger.info(
+        logger.debug(
             f"DEBUG gather_file_paths: Processing item '{item}' -> raw_path='{raw_path}'"
         )
 
         if skip_safety_check:
             is_safe = True
-            logger.info(
+            logger.debug(
                 f"DEBUG gather_file_paths: Skipping safety check for attachment: {raw_path}"
             )
         else:
             is_safe = _is_safe_path(project_root, raw_path)
-            logger.info(
+            logger.debug(
                 f"DEBUG gather_file_paths: _is_safe_path returned {is_safe} for {raw_path}"
             )
 
@@ -365,7 +365,7 @@ def gather_file_paths(items: List[str], skip_safety_check: bool = False) -> List
             )
             continue
 
-        logger.info(
+        logger.debug(
             f"DEBUG gather_file_paths: Resolved path='{path}', exists={path.exists()}"
         )
 
@@ -386,7 +386,7 @@ def gather_file_paths(items: List[str], skip_safety_check: bool = False) -> List
                     if path_str not in seen:
                         seen.add(path_str)
                         out.append(path_str)
-                        logger.info(
+                        logger.debug(
                             f"DEBUG gather_file_paths: Added file {path_str} to output"
                         )
                         try:

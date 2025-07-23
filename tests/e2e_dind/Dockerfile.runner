@@ -17,7 +17,8 @@ RUN mkdir -p /usr/local/lib/docker/cli-plugins && \
 RUN npm install -g @anthropic-ai/claude-code
 RUN pip install --no-cache-dir \
       pytest pytest-timeout testcontainers[compose] \
-      anyio pytest-asyncio rich uv uvicorn httpx
+      anyio pytest-asyncio rich uv uvicorn httpx \
+      python-logging-loki
 
 # Copy project under /host-project where inner compose stack expects it
 WORKDIR /host-project
@@ -26,6 +27,15 @@ COPY . /host-project
 # Install the MCP server dependencies
 RUN uv pip install --system .
 ENV PYTHONPATH=/host-project
+
+# Initialize git repo for E2E tests (prevents git command failures)
+RUN cd /host-project && \
+    git init -q && \
+    git config user.email "e2e@test.local" && \
+    git config user.name "E2E Test" && \
+    git add -A && \
+    git commit -q -m "Initial commit for E2E tests" && \
+    git branch -M main
 
 # Copy fixed compose files to a safe location that won't be overridden by volume mounts
 COPY tests/e2e_dind/compose/ /compose-template/

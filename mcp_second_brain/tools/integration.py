@@ -87,23 +87,48 @@ def create_tool_function(metadata: ToolMetadata):
     for sig_param in sig_params:
         original_annotation = sig_param.annotation
 
-        # Fix for FastMCP's strict boolean validation
-        # Check if the original type hint is a boolean or Optional[bool]
+        # Fix for FastMCP's strict validation
+        # Check if the original type hint is a boolean, float, or Optional[bool/float]
         is_bool_type = False
+        is_float_type = False
+        is_list_str_type = False
         origin = get_origin(original_annotation)
-        if origin is Union:  # Handles Optional[bool] and bool | None
+
+        if (
+            origin is Union
+        ):  # Handles Optional[bool], Optional[float], and Optional[List[str]]
             args = get_args(original_annotation)
             if bool in args:
                 is_bool_type = True
+            elif float in args:
+                is_float_type = True
+            # Check for List[str] in Optional
+            for arg in args:
+                if get_origin(arg) is list:
+                    list_args = get_args(arg)
+                    if list_args and list_args[0] is str:
+                        is_list_str_type = True
+                        break
         elif original_annotation is bool:
             is_bool_type = True
+        elif original_annotation is float:
+            is_float_type = True
+        elif origin is list:
+            # Direct List[str]
+            list_args = get_args(original_annotation)
+            if list_args and list_args[0] is str:
+                is_list_str_type = True
 
-        if is_bool_type:
-            # If it's a boolean, tell FastMCP to expect Optional[str]
-            # This allows string values "true" and "false" to pass its
-            # Pydantic validation layer. Our internal ParameterValidator
-            # will then correctly coerce the string to a boolean value.
+        if is_bool_type or is_float_type:
+            # If it's a boolean or float, tell FastMCP to expect Optional[str]
+            # This allows string values "true"/"false" or numeric strings like "0.5"
+            # to pass Pydantic validation.
+            # Our internal ParameterValidator will then correctly coerce the string to the expected type.
             annotations[sig_param.name] = Optional[str]
+        elif is_list_str_type:
+            # Keep List[str] as-is - don't convert to Optional[str]
+            # MCP clients should pass lists correctly
+            annotations[sig_param.name] = original_annotation
         else:
             # For all other types, use the original annotation
             annotations[sig_param.name] = original_annotation
@@ -128,12 +153,12 @@ def register_all_tools(mcp: FastMCP) -> None:
 
             # Register with FastMCP under primary name
             mcp.tool(name=tool_id)(tool_func)
-            logger.info(f"Registered tool with FastMCP: {tool_id}")
+            logger.debug(f"Registered tool with FastMCP: {tool_id}")
 
             # Register aliases
             for alias in metadata.aliases:
                 mcp.tool(name=alias)(tool_func)
-                logger.info(f"Registered alias: {alias} -> {tool_id}")
+                logger.debug(f"Registered alias: {alias} -> {tool_id}")
 
         except Exception as e:
             logger.error(f"Failed to register tool {tool_id}: {e}")
@@ -158,7 +183,7 @@ def _register_developer_tools(mcp: FastMCP) -> None:
             if metadata:
                 tool_func = create_tool_function(metadata)
                 mcp.tool(name="search_mcp_debug_logs")(tool_func)
-                logger.info("Registered developer tool: search_mcp_debug_logs")
+                logger.debug("Registered developer tool: search_mcp_debug_logs")
             else:
                 logger.error("Could not find search_mcp_debug_logs tool in registry")
         except ImportError as e:
