@@ -134,7 +134,7 @@ class TestSearchTaskFilesDeduplication:
 
     @pytest.mark.asyncio
     async def test_task_files_deduplication_independent_from_memory(
-        self, search_adapter
+        self, search_adapter, tmp_path
     ):
         """Task files deduplication should be independent from memory deduplication."""
         from mcp_second_brain.tools.search_history import SearchHistoryAdapter
@@ -143,17 +143,49 @@ class TestSearchTaskFilesDeduplication:
         await search_adapter.clear_deduplication_cache()
 
         # Create memory adapter with mocked dependencies
-        with patch("mcp_second_brain.tools.search_history.get_settings"):
+        mock_settings = Mock()
+        mock_settings.openai_api_key = "test-key"
+
+        with patch(
+            "mcp_second_brain.tools.search_history.get_settings",
+            return_value=mock_settings,
+        ):
             with patch("mcp_second_brain.tools.search_history.get_memory_config"):
-                history_adapter = SearchHistoryAdapter()
-                history_adapter.client = Mock()  # Mock the OpenAI client
-                await history_adapter.clear_deduplication_cache()
+                # Patch OpenAI client creation
+                with patch(
+                    "mcp_second_brain.tools.search_history.OpenAI", return_value=Mock()
+                ):
+                    # Create test database path
+                    test_db_path = (
+                        tmp_path / ".cache" / "mcp-second-brain" / "session_cache.db"
+                    )
+                    test_db_path.parent.mkdir(parents=True, exist_ok=True)
+
+                    history_adapter = SearchHistoryAdapter()
+                    # Force reinitialize deduplicator with test path
+                    from mcp_second_brain.tools.search_dedup_sqlite import (
+                        SQLiteSearchDeduplicator,
+                    )
+                    from mcp_second_brain.tools.search_history import (
+                        SearchHistoryAdapter as SHA,
+                    )
+
+                    SHA._deduplicator = SQLiteSearchDeduplicator(
+                        db_path=test_db_path, ttl_hours=24
+                    )
+                    await history_adapter.clear_deduplication_cache("default")
 
                 # Verify they use different deduplicators
+                # Task files uses in-memory deduplicator with cache_name
+                assert hasattr(search_adapter._deduplicator, "cache_name")
                 assert search_adapter._deduplicator.cache_name == "task_files"
-                assert history_adapter._deduplicator.cache_name == "memory"
-                # They should have different cache instances
-                assert search_adapter._deduplicator is not history_adapter._deduplicator
+                # History uses SQLite deduplicator without cache_name
+                assert not hasattr(history_adapter._deduplicator, "cache_name")
+                # They should have different deduplicator types
+                assert (
+                    type(search_adapter._deduplicator).__name__
+                    != type(history_adapter._deduplicator).__name__
+                )
 
     @pytest.mark.asyncio
     async def test_deduplication_with_metadata(

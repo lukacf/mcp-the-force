@@ -134,14 +134,19 @@ class BuiltInToolDispatcher:
     File search is now handled natively by OpenAI through the file_search tool.
     """
 
-    def __init__(self, vector_store_ids: Optional[List[str]] = None):
+    def __init__(
+        self,
+        vector_store_ids: Optional[List[str]] = None,
+        session_id: Optional[str] = None,
+    ):
         """Initialize the dispatcher.
 
         Args:
             vector_store_ids: No longer used - kept for backward compatibility.
+            session_id: Session ID for deduplication scoping.
         """
         # vector_store_ids is now handled by OpenAI's native file_search
-        pass
+        self.session_id = session_id
 
     async def dispatch(self, name: str, arguments: Dict[str, Any]) -> Any:
         """Dispatch to the appropriate built-in tool.
@@ -163,6 +168,7 @@ class BuiltInToolDispatcher:
                 query=arguments.get("query", ""),
                 max_results=arguments.get("max_results", 40),
                 store_types=arguments.get("store_types", ["conversation", "commit"]),
+                session_id=self.session_id or "default",
             )
         else:
             raise ValueError(f"Unknown built-in tool: {name}")

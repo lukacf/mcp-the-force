@@ -396,6 +396,7 @@ class VertexAdapter(BaseAdapter):
                 history_with_tool_calls,
                 generate_content_config,
                 vector_store_ids,
+                session_id,
             )
 
             # Save the final, complete history
@@ -454,6 +455,7 @@ class VertexAdapter(BaseAdapter):
         contents: List[types.Content],  # Now receives the full history so far
         config: types.GenerateContentConfig,
         vector_store_ids: Optional[List[str]] = None,
+        session_id: Optional[str] = None,
     ) -> tuple[str, list[types.Content]]:  # Return final text AND final history
         """Handle function calls in the response."""
         client = get_client()
@@ -501,11 +503,13 @@ class VertexAdapter(BaseAdapter):
                         from ...tools.search_history import SearchHistoryAdapter
 
                         memory_search = SearchHistoryAdapter()
+                        # Use session_id from generate method or default
                         search_result_text = await memory_search.generate(
                             prompt=query,
                             query=query,
                             max_results=max_results,
                             store_types=store_types,
+                            session_id=session_id or "default",
                         )
 
                         # Create function response

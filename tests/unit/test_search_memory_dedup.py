@@ -47,16 +47,40 @@ def mock_memory_config():
 
 
 @pytest.fixture
-def search_adapter(mock_openai_client, mock_memory_config):
+def search_adapter(mock_openai_client, mock_memory_config, tmp_path):
     """Create SearchHistoryAdapter with mocks."""
-    with patch("mcp_second_brain.tools.search_history.get_settings"):
+    mock_settings = Mock()
+    mock_settings.openai_api_key = "test-key"
+
+    with patch(
+        "mcp_second_brain.tools.search_history.get_settings", return_value=mock_settings
+    ):
         with patch(
             "mcp_second_brain.tools.search_history.get_memory_config",
             return_value=mock_memory_config,
         ):
-            adapter = SearchHistoryAdapter()
-            adapter.client = mock_openai_client
-            return adapter
+            # Patch OpenAI client creation
+            with patch(
+                "mcp_second_brain.tools.search_history.OpenAI",
+                return_value=mock_openai_client,
+            ):
+                # Create test database path
+                test_db_path = (
+                    tmp_path / ".cache" / "mcp-second-brain" / "session_cache.db"
+                )
+                test_db_path.parent.mkdir(parents=True, exist_ok=True)
+
+                # Initialize adapter with test database
+                adapter = SearchHistoryAdapter()
+                # Force reinitialize deduplicator with test path
+                from mcp_second_brain.tools.search_dedup_sqlite import (
+                    SQLiteSearchDeduplicator,
+                )
+
+                SearchHistoryAdapter._deduplicator = SQLiteSearchDeduplicator(
+                    db_path=test_db_path, ttl_hours=24
+                )
+                return adapter
 
 
 class TestSearchHistoryDeduplication:
@@ -67,8 +91,8 @@ class TestSearchHistoryDeduplication:
         self, search_adapter, mock_openai_client
     ):
         """First search should return all results without deduplication."""
-        # Clear any existing dedup cache
-        await search_adapter.clear_deduplication_cache()
+        # Clear any existing dedup cache for the default session
+        await search_adapter.clear_deduplication_cache("default")
 
         # Setup mock results
         results = [
@@ -92,8 +116,8 @@ class TestSearchHistoryDeduplication:
     @pytest.mark.asyncio
     async def test_duplicate_results_filtered(self, search_adapter, mock_openai_client):
         """Duplicate results should be filtered out in subsequent searches."""
-        # Clear any existing dedup cache
-        await search_adapter.clear_deduplication_cache()
+        # Clear any existing dedup cache for the default session
+        await search_adapter.clear_deduplication_cache("default")
 
         # First search
         results1 = [
@@ -130,8 +154,8 @@ class TestSearchHistoryDeduplication:
         self, search_adapter, mock_openai_client
     ):
         """Deduplication should track by content hash, not just file_id."""
-        # Clear any existing dedup cache
-        await search_adapter.clear_deduplication_cache()
+        # Clear any existing dedup cache for the default session
+        await search_adapter.clear_deduplication_cache("default")
 
         # First search
         results1 = [
@@ -172,8 +196,8 @@ class TestSearchHistoryDeduplication:
         self, search_adapter, mock_openai_client
     ):
         """Deduplication should note when content was seen before."""
-        # Clear any existing dedup cache
-        await search_adapter.clear_deduplication_cache()
+        # Clear any existing dedup cache for the default session
+        await search_adapter.clear_deduplication_cache("default")
 
         # First search
         results1 = [
@@ -218,8 +242,8 @@ class TestSearchHistoryDeduplication:
     @pytest.mark.asyncio
     async def test_max_results_reduced_to_20(self, search_adapter, mock_openai_client):
         """Default max_results should be 20, not 40."""
-        # Clear any existing dedup cache
-        await search_adapter.clear_deduplication_cache()
+        # Clear any existing dedup cache for the default session
+        await search_adapter.clear_deduplication_cache("default")
 
         # Create 25 results
         results = [
@@ -243,8 +267,8 @@ class TestSearchHistoryDeduplication:
         self, search_adapter, mock_openai_client
     ):
         """Deduplication should work across different memory stores."""
-        # Clear any existing dedup cache
-        await search_adapter.clear_deduplication_cache()
+        # Clear any existing dedup cache for the default session
+        await search_adapter.clear_deduplication_cache("default")
 
         # Setup to return different results per store
         call_count = 0
@@ -277,12 +301,16 @@ class TestSearchHistoryDeduplication:
             results
         )
 
-        await search_adapter.generate("query 1", max_results=20)
+        await search_adapter.generate(
+            "query 1", max_results=20, session_id="test-session"
+        )
 
-        # Clear deduplication cache
-        await search_adapter.clear_deduplication_cache()
+        # Clear deduplication cache for the session
+        await search_adapter.clear_deduplication_cache("test-session")
 
-        # Same search should now return the result again
-        response = await search_adapter.generate("query 2", max_results=20)
+        # Same search in same session should now return the result again
+        response = await search_adapter.generate(
+            "query 2", max_results=20, session_id="test-session"
+        )
         assert "Found 1 result" in response
         assert "Content: Content 1" in response
