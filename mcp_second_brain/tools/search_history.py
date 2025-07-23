@@ -127,12 +127,22 @@ class SearchHistoryAdapter(BaseAdapter):
         store_types = kwargs.get("store_types", ["conversation", "commit"])
         include_duplicates_metadata = kwargs.get("include_duplicates_metadata", False)
 
+        # Debug logging
+        logger.info(f"[SEARCH_HISTORY] Input query: '{query}'")
+        logger.info(
+            f"[SEARCH_HISTORY] Max results: {max_results}, Store types: {store_types}"
+        )
+
         if not query:
             raise fastmcp.exceptions.ToolError("Search query is required")
 
         try:
             # Get memory store IDs filtered by type
             stores_to_search = self.memory_config.get_store_ids_by_type(store_types)
+
+            logger.info(
+                f"[SEARCH_HISTORY] Found {len(stores_to_search)} stores to search: {stores_to_search}"
+            )
 
             if not stores_to_search:
                 return f"No {', '.join(store_types)} stores found"
@@ -176,6 +186,8 @@ class SearchHistoryAdapter(BaseAdapter):
                 elif isinstance(result, list):
                     all_results.extend(result)
 
+            logger.info(f"[SEARCH_HISTORY] Raw results: {len(all_results)} items found")
+
             # Sort by relevance score
             all_results.sort(key=lambda x: x.get("score", 0), reverse=True)
 
@@ -185,8 +197,13 @@ class SearchHistoryAdapter(BaseAdapter):
                 duplicate_count,
             ) = await self._deduplicator.deduplicate_results(all_results, max_results)
 
+            logger.info(
+                f"[SEARCH_HISTORY] After deduplication: {len(deduplicated_results)} results, {duplicate_count} duplicates removed"
+            )
+
             # Format response
             if not deduplicated_results:
+                logger.info(f"[SEARCH_HISTORY] No results found for query: '{query}'")
                 return f"No results found for query: '{query}'"
 
             # Build formatted response with metadata
@@ -248,7 +265,9 @@ class SearchHistoryAdapter(BaseAdapter):
             if errors > 0:
                 response_parts.append(f"\nNote: {errors} searches failed")
 
-            return "\n".join(response_parts)
+            response = "\n".join(response_parts)
+            logger.info(f"[SEARCH_HISTORY] Returning {len(response)} chars of results")
+            return response
 
         except Exception as e:
             logger.error(f"Memory search failed: {e}")
@@ -304,6 +323,9 @@ class SearchHistoryAdapter(BaseAdapter):
 
                     results.append(result)
 
+                logger.debug(
+                    f"[SEARCH_HISTORY] Store {store_id} returned {len(results)} results for query '{query}'"
+                )
                 return results
 
             except Exception as e:
