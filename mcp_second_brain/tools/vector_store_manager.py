@@ -81,6 +81,17 @@ class VectorStoreManager:
         if not files:
             return None
 
+        # Check if we're in mock mode
+        from ..config import get_settings
+
+        if get_settings().adapter_mock:
+            # Return a mock vector store ID
+            mock_vs_id = f"vs_mock_{session_id or 'ephemeral'}"
+            logger.info(
+                f"[MOCK] Created mock vector store: {mock_vs_id} with {len(files)} files"
+            )
+            return mock_vs_id
+
         # Try Loiter Killer first if session_id is available
         if session_id and self.loiter_killer.enabled:
             logger.info(f"Attempting to use Loiter Killer for session {session_id}")
@@ -147,6 +158,13 @@ class VectorStoreManager:
             vs_id: Vector store ID to delete
         """
         if not vs_id:
+            return
+
+        # Check if we're in mock mode
+        from ..config import get_settings
+
+        if get_settings().adapter_mock:
+            logger.info(f"[MOCK] Deleted mock vector store: {vs_id}")
             return
 
         # Don't delete Loiter Killer managed stores - they handle their own lifecycle
