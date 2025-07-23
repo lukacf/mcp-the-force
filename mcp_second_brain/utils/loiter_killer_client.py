@@ -15,7 +15,16 @@ class LoiterKillerClient:
         # Allow overriding the URL for E2E tests
         self.base_url = os.getenv("LOITER_KILLER_URL", "http://localhost:9876")
         self.enabled = False
-        self._check_availability()
+
+        # Check if we're in mock mode
+        from ..config import get_settings
+
+        if get_settings().adapter_mock:
+            # In mock mode, pretend loiter killer is not available
+            logger.info("[LOITER_KILLER] Mock mode - service disabled")
+            self.enabled = False
+        else:
+            self._check_availability()
 
     def _check_availability(self) -> bool:
         """Check if loiter killer is available."""

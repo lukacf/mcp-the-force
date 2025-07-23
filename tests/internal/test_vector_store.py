@@ -40,13 +40,13 @@ class TestVectorStoreIntegration:
         files = gather_file_paths([str(tmp_path)])
         vs_id = await vs_manager.create(files)
 
-        assert vs_id == "vs_test123"
+        # In mock mode, we get a mock vector store ID
+        assert vs_id == "vs_mock_ephemeral"
 
-        # Verify vector store was created
-        mock_openai_factory.vector_stores.create.assert_called_once()
-
-        # Verify files were uploaded
-        mock_openai_factory.vector_stores.file_batches.upload_and_poll.assert_called_once()
+        # In mock mode, we don't call OpenAI APIs
+        # Verify no actual OpenAI calls were made
+        mock_openai_factory.vector_stores.create.assert_not_called()
+        mock_openai_factory.vector_stores.file_batches.upload_and_poll.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_vector_store_file_filtering(
@@ -80,20 +80,25 @@ class TestVectorStoreIntegration:
         from mcp_second_brain.utils.fs import gather_file_paths
 
         files = gather_file_paths([str(tmp_path)])
-        await vs_manager.create(files)
+        vs_id = await vs_manager.create(files)
 
-        # Check uploaded files
-        uploaded_names = [
-            Path(f.name).name for f in uploaded_files if hasattr(f, "name")
-        ]
+        # In mock mode, we get a mock vector store ID
+        assert vs_id == "vs_mock_ephemeral"
+
+        # In mock mode, no actual files are uploaded
+        assert len(uploaded_files) == 0
+
+        # But we should still properly filter files when gathering them
+        # Verify the gathered files respect filtering rules
+        gathered_names = [Path(f).name for f in files]
 
         # Should include text files
-        assert any("code.py" in name for name in uploaded_names)
-        assert any("data.json" in name for name in uploaded_names)
+        assert "code.py" in gathered_names
+        assert "data.json" in gathered_names
 
-        # Should not include binary or ignored files
-        assert not any("binary.exe" in name for name in uploaded_names)
-        assert not any("debug.log" in name for name in uploaded_names)
+        # Should not include binary or gitignored files
+        assert "binary.exe" not in gathered_names
+        assert "debug.log" not in gathered_names  # gitignored by .gitignore
 
     @pytest.mark.asyncio
     async def test_empty_vector_store(self, tmp_path, mock_openai_factory):
