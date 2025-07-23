@@ -250,6 +250,19 @@ class GrokAdapter(BaseAdapter):
                 "stream": stream,
             }
 
+            # Handle structured output
+            structured_output_schema = kwargs.get("structured_output_schema")
+            if structured_output_schema:
+                # Grok uses response_format similar to OpenAI
+                request_params["response_format"] = {
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "structured_response",
+                        "schema": structured_output_schema,
+                        "strict": True,
+                    },
+                }
+
             # Add search parameters via extra_body to bypass OpenAI SDK validation
             if search_params:
                 search_params_snake = self._snake_case_params(search_params)
@@ -374,6 +387,29 @@ class GrokAdapter(BaseAdapter):
 
             final_message = messages[-1]
             content = final_message.get("content") or ""
+
+            # Extract clean JSON if structured output was requested
+            if structured_output_schema:
+                try:
+                    from ..utils.json_extractor import extract_json
+                    import jsonschema
+
+                    # Extract JSON from potential markdown wrapping
+                    content = extract_json(content)
+
+                    # Validate against schema
+                    parsed = json.loads(content)
+                    jsonschema.validate(parsed, structured_output_schema)
+                except jsonschema.ValidationError as e:
+                    raise AdapterException(
+                        f"Response does not match requested schema: {str(e)}",
+                        error_category=ErrorCategory.PARSING,
+                    )
+                except (json.JSONDecodeError, ValueError) as e:
+                    raise AdapterException(
+                        f"Response is not valid JSON: {str(e)}",
+                        error_category=ErrorCategory.PARSING,
+                    )
 
             # Extract and normalize sources/citations from Live Search
             sources = self._extract_sources(response)
