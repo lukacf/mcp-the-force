@@ -141,7 +141,7 @@ class TestGeminiMechanics:
             "FIRST: Always check the current conversation history" in system_instruction
         )
         assert (
-            "LAST: Use search_project_memory only when you need historical information"
+            "LAST: Use search_project_history only when you need historical information"
             in system_instruction
         )
 

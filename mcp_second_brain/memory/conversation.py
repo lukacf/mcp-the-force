@@ -58,6 +58,23 @@ async def store_conversation_memory(
             or "initial"
         )
 
+        # Get additional git metadata
+        # Count commits since main/master
+        commits_since_main = 0
+        if branch != "main" and branch != "master":
+            # Try to get commits ahead of main
+            count_str = await loop.run_in_executor(
+                None, _git_command, ["rev-list", "--count", "origin/main..HEAD"]
+            )
+            if count_str and count_str.isdigit():
+                commits_since_main = int(count_str)
+
+        # Check if there are uncommitted changes
+        status_output = await loop.run_in_executor(
+            None, _git_command, ["status", "--porcelain"]
+        )
+        has_uncommitted_changes = bool(status_output and status_output.strip())
+
         # Create summary using Gemini Flash (or fallback)
         summary = await create_conversation_summary(messages, response, tool_name)
 
@@ -70,6 +87,8 @@ async def store_conversation_memory(
                 "tool": tool_name,
                 "branch": branch,
                 "prev_commit_sha": prev_commit_sha,
+                "commits_since_main": commits_since_main,
+                "has_uncommitted_changes": has_uncommitted_changes,
                 "timestamp": int(time.time()),
                 "datetime": datetime.now(timezone.utc).isoformat(),
                 "message_count": len(messages),
@@ -219,7 +238,7 @@ Vector Store Attachments: {"Yes" if user_components["has_attachments"] else "No"
 """
 
         # Use Gemini Flash to create summary
-        summarization_prompt = f"""You are generating a knowledge base entry for Claude's project memory.
+        summarization_prompt = f"""You are generating a knowledge base entry for Claude's project history.
 Summaries must be dense with technical detail so future searches can locate this session.
 Focus on:
 1. The user's explicit request or question.

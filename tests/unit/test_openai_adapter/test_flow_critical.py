@@ -366,7 +366,7 @@ async def test_flow_return_debug_includes_tools():
 
             assert "test_tool" in tool_names
             assert "web_search" in tool_names
-            assert "search_project_memory" in tool_names  # Built-in tool
+            assert "search_project_history" in tool_names  # Built-in tool
 
 
 @pytest.mark.unit

@@ -168,20 +168,20 @@ async def test_tool_executor_handles_object_like_calls():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_builtin_tool_dispatcher_search_memory():
-    """Test the built-in tool dispatcher for search_project_memory."""
+async def test_builtin_tool_dispatcher_search_history():
+    """Test the built-in tool dispatcher for search_project_history."""
 
     dispatcher = BuiltInToolDispatcher()
 
     with patch(
-        "mcp_second_brain.tools.search_memory.SearchMemoryAdapter"
+        "mcp_second_brain.tools.search_history.SearchHistoryAdapter"
     ) as mock_adapter:
         mock_instance = AsyncMock()
         mock_instance.generate.return_value = {"results": ["memory1", "memory2"]}
         mock_adapter.return_value = mock_instance
 
         result = await dispatcher.dispatch(
-            "search_project_memory", {"query": "test query", "max_results": 10}
+            "search_project_history", {"query": "test query", "max_results": 10}
         )
 
         mock_instance.generate.assert_called_once_with(

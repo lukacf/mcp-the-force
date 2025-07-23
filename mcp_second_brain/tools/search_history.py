@@ -1,12 +1,13 @@
-"""Search project memory tool implementation.
+"""Search project history tool implementation.
 
 This provides a unified way for all models (OpenAI and Gemini) to search
-across project memory stores without the 2-store limitation.
+across project history stores without the 2-store limitation.
 """
 
 from typing import List, Dict, Any, TYPE_CHECKING
 import logging
 import asyncio
+from datetime import datetime, timezone
 from ..utils.thread_pool import get_shared_executor
 
 from openai import OpenAI
@@ -33,12 +34,37 @@ executor = get_shared_executor()
 search_semaphore = asyncio.Semaphore(5)
 
 
-@tool
-class SearchProjectMemory(ToolSpec):
-    """Search across all project memory stores."""
+def _calculate_relative_time(timestamp: int) -> str:
+    """Calculate human-readable relative time from timestamp."""
+    now = datetime.now(timezone.utc)
+    then = datetime.fromtimestamp(timestamp, tz=timezone.utc)
+    delta = now - then
 
-    model_name = "memory_search"
-    adapter_class = "SearchMemoryAdapter"
+    # Calculate relative time
+    if delta.days > 365:
+        years = delta.days // 365
+        return f"{years} year{'s' if years != 1 else ''} ago"
+    elif delta.days > 30:
+        months = delta.days // 30
+        return f"{months} month{'s' if months != 1 else ''} ago"
+    elif delta.days > 0:
+        return f"{delta.days} day{'s' if delta.days != 1 else ''} ago"
+    elif delta.seconds > 3600:
+        hours = delta.seconds // 3600
+        return f"{hours} hour{'s' if hours != 1 else ''} ago"
+    elif delta.seconds > 60:
+        minutes = delta.seconds // 60
+        return f"{minutes} minute{'s' if minutes != 1 else ''} ago"
+    else:
+        return "just now"
+
+
+@tool
+class SearchProjectHistory(ToolSpec):
+    """Search across all project history stores."""
+
+    model_name = "history_search"
+    adapter_class = "SearchHistoryAdapter"
     context_window = 0  # Not applicable for search
     timeout = 30  # 30 second timeout for searches
 
@@ -54,17 +80,17 @@ class SearchProjectMemory(ToolSpec):
     )
 
 
-class SearchMemoryAdapter(BaseAdapter):
-    """Adapter for searching project memory stores."""
+class SearchHistoryAdapter(BaseAdapter):
+    """Adapter for searching project history stores."""
 
-    model_name = "memory_search"
+    model_name = "history_search"
     context_window = 0  # Not applicable
-    description_snippet = "Search project memory stores"
+    description_snippet = "Search project history stores"
 
     # Class-level deduplicator shared across instances
     _deduplicator = SearchDeduplicator("memory")
 
-    def __init__(self, model_name: str = "memory_search"):
+    def __init__(self, model_name: str = "history_search"):
         self.model_name = model_name
         settings = get_settings()
         self.client = OpenAI(api_key=settings.openai_api_key)
@@ -83,7 +109,7 @@ class SearchMemoryAdapter(BaseAdapter):
         """Search memory stores and return formatted results.
 
         This method is called by the ToolExecutor when any model
-        (OpenAI or Gemini) invokes the search_project_memory function.
+        (OpenAI or Gemini) invokes the search_project_history function.
         """
         # Extract search parameters
         query = kwargs.get("query")
@@ -165,7 +191,7 @@ class SearchMemoryAdapter(BaseAdapter):
 
             # Build formatted response with metadata
             response_parts = [
-                f"Found {len(deduplicated_results)} results across {len(stores_to_search)} memory stores:"
+                f"Found {len(deduplicated_results)} results in project HISTORY (⚠️ May be outdated):"
             ]
 
             if include_duplicates_metadata and duplicate_count > 0:
@@ -180,12 +206,35 @@ class SearchMemoryAdapter(BaseAdapter):
                 metadata = search_result.get("metadata", {})
                 if metadata.get("type"):
                     response_parts.append(f"Type: {metadata['type']}")
-                if metadata.get("datetime"):
+
+                # Add relative time if timestamp is available
+                if metadata.get("timestamp"):
+                    relative_time = _calculate_relative_time(int(metadata["timestamp"]))
+                    if metadata.get("datetime"):
+                        response_parts.append(
+                            f"Date: {metadata['datetime']} ({relative_time})"
+                        )
+                    else:
+                        response_parts.append(f"Date: {relative_time}")
+                elif metadata.get("datetime"):
                     response_parts.append(f"Date: {metadata['datetime']}")
+
                 if metadata.get("session_id"):
                     response_parts.append(f"Session: {metadata['session_id']}")
                 if metadata.get("branch"):
-                    response_parts.append(f"Branch: {metadata['branch']}")
+                    branch_info = f"Branch: {metadata['branch']}"
+                    # Add commits behind info if available
+                    if metadata.get("commits_since_main"):
+                        branch_info += (
+                            f" ({metadata['commits_since_main']} commits ahead)"
+                        )
+                    response_parts.append(branch_info)
+
+                # Add additional git metadata
+                if metadata.get("has_uncommitted_changes"):
+                    response_parts.append("⚠️ Had uncommitted changes")
+                if metadata.get("is_merge_commit"):
+                    response_parts.append("Type: Merge commit")
 
                 response_parts.append(f"Score: {search_result.get('score', 'N/A')}")
 

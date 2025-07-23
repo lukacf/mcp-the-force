@@ -58,7 +58,7 @@ class ToolHandler:
                       adapter-specific error categorization
         """
         try:
-            if tool_name == "search_project_memory":
+            if tool_name == "search_project_history":
                 return await self._execute_memory_search(tool_args)
             elif tool_name == "search_task_files":
                 return await self._execute_task_files_search(
@@ -73,11 +73,11 @@ class ToolHandler:
             raise
 
     async def _execute_memory_search(self, tool_args: Dict[str, Any]) -> str:
-        """Execute project memory search tool."""
-        from ..tools.search_memory import SearchMemoryAdapter
+        """Execute project history search tool."""
+        from ..tools.search_history import SearchHistoryAdapter
 
-        memory_adapter = SearchMemoryAdapter()
-        return await memory_adapter.generate(
+        history_adapter = SearchHistoryAdapter()
+        return await history_adapter.generate(
             prompt=tool_args.get("query", ""), **tool_args
         )
 
@@ -110,7 +110,7 @@ class ToolHandler:
             adapter_type: Type of adapter (openai, vertex, grok)
             vector_store_ids: Vector store IDs that determine if attachment
                             search tool should be included
-            disable_memory_search: If True, skip declaring search_project_memory tool
+            disable_memory_search: If True, skip declaring search_project_history tool
 
         Returns:
             List of tool declarations in the correct format for the adapter
@@ -123,7 +123,7 @@ class ToolHandler:
 
         declarations = []
 
-        # All adapters get the project memory search tool unless disabled
+        # All adapters get the project history search tool unless disabled
         if not disable_memory_search:
             if adapter_type in {"openai", "grok"}:
                 declarations.append(self._get_memory_declaration_openai())
@@ -146,15 +146,15 @@ class ToolHandler:
 
     def _get_memory_declaration_openai(self) -> Dict[str, Any]:
         """Get memory search tool declaration for OpenAI-compatible APIs."""
-        from .memory_search_declaration import create_search_memory_declaration_openai
+        from .memory_search_declaration import create_search_history_declaration_openai
 
-        return create_search_memory_declaration_openai()
+        return create_search_history_declaration_openai()
 
     def _get_memory_declaration_vertex(self) -> Dict[str, Any]:
         """Get memory search tool declaration for Vertex AI."""
-        from .memory_search_declaration import create_search_memory_declaration_gemini
+        from .memory_search_declaration import create_search_history_declaration_gemini
 
-        return create_search_memory_declaration_gemini()
+        return create_search_history_declaration_gemini()
 
     def _get_task_files_declaration_openai(self) -> Dict[str, Any]:
         """Get task files search tool declaration for OpenAI-compatible APIs (Grok)."""

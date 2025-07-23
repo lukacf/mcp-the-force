@@ -53,7 +53,7 @@ class LoiterKillerClient:
 
         Args:
             session_id: The session ID
-            protected: Whether this is a protected store (e.g., project memory)
+            protected: Whether this is a protected store (e.g., project history)
 
         Returns:
             Tuple of (vector_store_id, existing_file_paths)
@@ -100,7 +100,7 @@ class LoiterKillerClient:
         Args:
             session_id: The session ID to use for tracking
             vector_store_id: The existing OpenAI vector store ID
-            protected: Whether this is a protected store (default True for project memory)
+            protected: Whether this is a protected store (default True for project history)
 
         Returns:
             True if successfully registered, False otherwise

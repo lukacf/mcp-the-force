@@ -176,7 +176,7 @@ class ChatWithGPT4(ToolSpec):
 2. **Git Commit Memory**: Commit messages and diffs for institutional memory
 
 **Search Architecture:**
-- `search_project_memory`: Searches permanent knowledge (conversations, commits)
+- `search_project_history`: Searches permanent knowledge (conversations, commits)
 - `search_session_attachments`: Searches ephemeral attachment stores
 - Automatic deduplication and relevance ranking
 
@@ -288,7 +288,7 @@ To add new memory sources (beyond conversations and git commits):
 
 1. Create storage function in `mcp_second_brain/memory/`
 2. Implement search integration in memory adapters
-3. Add to unified search in `search_project_memory`
+3. Add to unified search in `search_project_history`
 
 Example:
 ```python

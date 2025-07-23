@@ -169,7 +169,7 @@ class OpenAICleanupManager:
         # Sort by created_at (oldest first)
         vector_stores.sort(key=lambda x: x.created_at)
 
-        # Filter out permanent project memory stores
+        # Filter out permanent project history stores
         deletable_stores = []
         for vs in vector_stores:
             # Skip permanent project memories (they have no expiry and

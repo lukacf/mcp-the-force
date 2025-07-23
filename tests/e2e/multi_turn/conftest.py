@@ -44,14 +44,14 @@ def track_tool_calls():
     allowing us to verify models use conversation history instead of tools.
     """
     tool_calls: Dict[str, List[Dict]] = {
-        "search_project_memory": [],
+        "search_project_history": [],
         "search_task_files": [],
     }
 
-    async def mock_search_memory(*args, **kwargs):
-        tool_calls["search_project_memory"].append({"args": args, "kwargs": kwargs})
+    async def mock_search_history(*args, **kwargs):
+        tool_calls["search_project_history"].append({"args": args, "kwargs": kwargs})
         # Return a marker that we can detect in responses
-        return "E2E_TEST_TOOL_MARKER: search_project_memory was called"
+        return "E2E_TEST_TOOL_MARKER: search_project_history was called"
 
     async def mock_search_task_files(*args, **kwargs):
         tool_calls["search_task_files"].append({"args": args, "kwargs": kwargs})
@@ -59,8 +59,8 @@ def track_tool_calls():
 
     with (
         patch(
-            "mcp_second_brain.tools.search_memory.SearchMemoryAdapter.generate",
-            mock_search_memory,
+            "mcp_second_brain.tools.search_history.SearchHistoryAdapter.generate",
+            mock_search_history,
         ),
         patch(
             "mcp_second_brain.tools.search_task_files.SearchTaskFilesAdapter.generate",
@@ -72,7 +72,7 @@ def track_tool_calls():
 
 @pytest.fixture
 def unique_marker_generator():
-    """Generate unique markers for e2e tests that won't exist in project memory."""
+    """Generate unique markers for e2e tests that won't exist in project history."""
     import uuid
     import time
 
