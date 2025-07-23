@@ -12,6 +12,7 @@ from ..memory_search_declaration import create_search_history_declaration_gemini
 from ..task_files_search_declaration import create_task_files_search_declaration_gemini
 from ...gemini_session_cache import gemini_session_cache
 from .errors import AdapterException, ErrorCategory
+from ...utils.scope_manager import scope_manager
 
 # Removed validation imports - no longer validating structured output
 # from ...utils.validation import validate_json_schema
@@ -496,23 +497,22 @@ class VertexAdapter(BaseAdapter):
                         store_types = fc.function_call.args.get(
                             "store_types", ["conversation", "commit"]
                         )
-                        # Extract session_id from function args if provided
-                        func_session_id = fc.function_call.args.get("session_id")
 
                         logger.info(f"Executing search_project_history: '{query}'")
 
                         # Import and execute the search
                         from ...tools.search_history import SearchHistoryAdapter
 
-                        memory_search = SearchHistoryAdapter()
-                        # Prefer explicit session_id from function args, then method session_id
-                        search_result_text = await memory_search.generate(
-                            prompt=query,
-                            query=query,
-                            max_results=max_results,
-                            store_types=store_types,
-                            session_id=func_session_id or session_id or "default",
-                        )
+                        # Set the scope context for built-in tool execution
+                        async with scope_manager.scope(session_id):
+                            memory_search = SearchHistoryAdapter()
+                            search_result_text = await memory_search.generate(
+                                prompt=query,
+                                query=query,
+                                max_results=max_results,
+                                store_types=store_types,
+                                # No longer pass session_id as parameter
+                            )
 
                         # Create function response
                         function_responses.append(

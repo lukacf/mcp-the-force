@@ -36,10 +36,6 @@ def create_search_history_declaration_openai() -> Dict[str, Any]:
                     "description": "Types of stores to search: ['conversation', 'commit']",
                     "default": ["conversation", "commit"],
                 },
-                "session_id": {
-                    "type": "string",
-                    "description": "Session ID for deduplication scope (optional, defaults to 'default')",
-                },
             },
             "required": ["query"],
         },
@@ -73,10 +69,6 @@ def create_search_history_declaration_gemini() -> Dict[str, Any]:
                     "items": {"type": "string"},
                     "description": "Types of stores to search",
                     "default": ["conversation", "commit"],
-                },
-                "session_id": {
-                    "type": "string",
-                    "description": "Session ID for deduplication scope (optional, defaults to 'default')",
                 },
             },
             "required": ["query"],

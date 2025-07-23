@@ -15,6 +15,7 @@ from .vector_store_manager import vector_store_manager
 from .prompt_engine import prompt_engine
 from .parameter_validator import ParameterValidator
 from .parameter_router import ParameterRouter
+from ..utils.scope_manager import scope_manager
 
 # Import debug logger
 
@@ -434,67 +435,69 @@ class ToolExecutor:
                 await self.vector_store_manager.loiter_killer.renew_lease(session_id)
                 logger.debug(f"Renewed Loiter Killer lease for session {session_id}")
 
-            try:
-                result = await operation_manager.run_with_timeout(
-                    operation_id,
-                    adapter.generate(
-                        prompt=final_prompt,
-                        vector_store_ids=vector_store_ids,
+            # Set the scope context for this request
+            async with scope_manager.scope(session_id):
+                try:
+                    result = await operation_manager.run_with_timeout(
+                        operation_id,
+                        adapter.generate(
+                            prompt=final_prompt,
+                            vector_store_ids=vector_store_ids,
+                            timeout=timeout_seconds,
+                            **adapter_params,
+                        ),
                         timeout=timeout_seconds,
-                        **adapter_params,
-                    ),
-                    timeout=timeout_seconds,
-                )
-
-                end_time = time.time()
-                duration = end_time - adapter_start_time
-                logger.debug(
-                    f"[STEP 16] adapter.generate completed in {duration:.2f}s, result type: {type(result)}, length: {len(str(result)) if result else 0}"
-                )
-                logger.debug(
-                    f"[TIMING] Completed adapter.generate at {time.strftime('%H:%M:%S')}"
-                )
-
-                # E2E verbose logging - log model response when DEBUG is enabled
-                if logger.isEnabledFor(logging.DEBUG):
-                    # Truncate very long responses for logging
-                    response_str = str(result)
-                    if len(response_str) > 1000:
-                        response_preview = (
-                            response_str[:500] + "..." + response_str[-500:]
-                        )
-                    else:
-                        response_preview = response_str
-                    logger.debug(
-                        f"[{operation_id}] Model response preview: {response_preview}"
                     )
-            except asyncio.TimeoutError:
-                timeout_time = time.time()
-                partial_duration = timeout_time - adapter_start_time
-                logger.error(
-                    f"[{operation_id}] [CRITICAL] Adapter timeout after {timeout_seconds}s for {tool_id} (actual duration: {partial_duration:.2f}s)"
-                )
-                raise fastmcp.exceptions.ToolError(
-                    f"Tool execution timed out after {timeout_seconds} seconds"
-                )
-            except asyncio.CancelledError:
-                was_cancelled = True
-                logger.warning(
-                    f"[{operation_id}] [CANCEL] {tool_id} received CancelledError in executor"
-                )
-                logger.debug(
-                    f"[CANCEL] Active tasks in executor: {len(asyncio.all_tasks())}"
-                )
-                logger.debug(f"[CANCEL] Vector store IDs were: {vector_store_ids}")
-                logger.debug(f"[CANCEL] Session ID was: {session_id}")
-                logger.debug(f"[CANCEL] Adapter was: {adapter_class}")
-                logger.debug("[CANCEL] Re-raising CancelledError from executor")
-                raise  # Important: do NOT convert or return
-            except Exception as e:
-                logger.error(
-                    f"[{operation_id}] [CRITICAL] Adapter generate failed for {tool_id}: {e}"
-                )
-                raise
+
+                    end_time = time.time()
+                    duration = end_time - adapter_start_time
+                    logger.debug(
+                        f"[STEP 16] adapter.generate completed in {duration:.2f}s, result type: {type(result)}, length: {len(str(result)) if result else 0}"
+                    )
+                    logger.debug(
+                        f"[TIMING] Completed adapter.generate at {time.strftime('%H:%M:%S')}"
+                    )
+
+                    # E2E verbose logging - log model response when DEBUG is enabled
+                    if logger.isEnabledFor(logging.DEBUG):
+                        # Truncate very long responses for logging
+                        response_str = str(result)
+                        if len(response_str) > 1000:
+                            response_preview = (
+                                response_str[:500] + "..." + response_str[-500:]
+                            )
+                        else:
+                            response_preview = response_str
+                        logger.debug(
+                            f"[{operation_id}] Model response preview: {response_preview}"
+                        )
+                except asyncio.TimeoutError:
+                    timeout_time = time.time()
+                    partial_duration = timeout_time - adapter_start_time
+                    logger.error(
+                        f"[{operation_id}] [CRITICAL] Adapter timeout after {timeout_seconds}s for {tool_id} (actual duration: {partial_duration:.2f}s)"
+                    )
+                    raise fastmcp.exceptions.ToolError(
+                        f"Tool execution timed out after {timeout_seconds} seconds"
+                    )
+                except asyncio.CancelledError:
+                    was_cancelled = True
+                    logger.warning(
+                        f"[{operation_id}] [CANCEL] {tool_id} received CancelledError in executor"
+                    )
+                    logger.debug(
+                        f"[CANCEL] Active tasks in executor: {len(asyncio.all_tasks())}"
+                    )
+                    logger.debug(f"[CANCEL] Vector store IDs were: {vector_store_ids}")
+                    logger.debug(f"[CANCEL] Session ID was: {session_id}")
+                    logger.debug(f"[CANCEL] Adapter was: {adapter_class}")
+                    logger.debug("[CANCEL] Re-raising CancelledError from executor")
+                    raise  # Important: do NOT convert or return
+                except Exception as e:
+                    logger.error(
+                        f"[{operation_id}] [CRITICAL] Adapter generate failed for {tool_id}: {e}"
+                    )
+                    raise
 
             # 8. Handle response
             logger.debug("[STEP 17] Handling response")
