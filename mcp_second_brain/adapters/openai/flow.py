@@ -617,9 +617,18 @@ class FlowOrchestrator:
             else:  # Built-in dispatcher
                 # Stable scope rules:
                 #  1) caller-supplied session_id
-                #  2) new random UUID (if no session_id provided)
+                #  2) instance_id (for consistent deduplication)
+                #  3) new random UUID (if no instance_id available)
                 # Never use previous_response_id as it changes every turn
-                dedup_session_id = explicit_session_id or f"sess_{uuid4().hex}"
+                from ...logging.setup import get_instance_id
+
+                dedup_session_id = explicit_session_id
+                if not dedup_session_id:
+                    instance_id = get_instance_id()
+                    if instance_id:
+                        dedup_session_id = f"instance_{instance_id}"
+                    else:
+                        dedup_session_id = f"sess_{uuid4().hex}"
 
                 dispatcher_candidate.vector_store_ids = request.vector_store_ids
                 dispatcher_candidate.session_id = dedup_session_id
