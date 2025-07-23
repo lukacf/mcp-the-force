@@ -90,15 +90,6 @@ class OpenAIAdapter(BaseAdapter):
             AdapterException: If the request fails
         """
         try:
-            # Debug log all kwargs
-            logger.debug(
-                f"[ADAPTER] OpenAI adapter received kwargs keys: {list(kwargs.keys())}"
-            )
-            if "session_id" in kwargs:
-                logger.info(
-                    f"[ADAPTER] Found session_id in kwargs: {kwargs.get('session_id')}"
-                )
-
             # Extract parameters from kwargs
             messages = kwargs.pop("messages", None)
             if messages is None:
