@@ -33,12 +33,24 @@ class ScopeManager:
 
     def get_scope_id(self) -> str:
         """
-        Gets the current scope ID. If no scope is set, it generates a new,
-        single-use UUID to guarantee isolation and prevent use of a shared cache.
+        Gets the current scope ID. If no scope is set, it falls back to:
+        1. The instance_id (for Claude direct tool calls)
+        2. A new unique UUID (for other isolated cases)
         """
         scope_id = _current_scope_id.get()
         if scope_id:
             return scope_id
+
+        # Try to use instance_id for Claude direct tool calls
+        try:
+            from ..logging.setup import get_instance_id
+
+            instance_id = get_instance_id()
+            if instance_id:
+                return f"instance_{instance_id}"
+        except ImportError:
+            pass
+
         # Fallback to a new, unique scope if none is set in the context.
         return f"isolated_{uuid.uuid4().hex}"
 
