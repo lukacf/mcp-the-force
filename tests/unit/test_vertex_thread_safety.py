@@ -14,7 +14,7 @@ def create_mock_response(with_function_call=False, text="Test response"):
     mock_part = Mock()
     mock_part.text = text
     mock_part.function_call = (
-        Mock(name="search_project_memory", args={"query": "test"})
+        Mock(name="search_project_history", args={"query": "test"})
         if with_function_call
         else None
     )
@@ -127,7 +127,7 @@ class TestVertexThreadSafety:
             vertex_module._client = None
 
             with patch(
-                "mcp_second_brain.tools.search_memory.SearchMemoryAdapter",
+                "mcp_second_brain.tools.search_history.SearchHistoryAdapter",
                 return_value=mock_search,
             ):
                 monkeypatch.setenv("VERTEX_PROJECT", "test-project")
@@ -223,7 +223,7 @@ class TestVertexThreadSafety:
             vertex_module._client = None
 
             with patch(
-                "mcp_second_brain.tools.search_memory.SearchMemoryAdapter",
+                "mcp_second_brain.tools.search_history.SearchHistoryAdapter",
                 return_value=mock_search,
             ):
                 monkeypatch.setenv("VERTEX_PROJECT", "test-project")

@@ -7,6 +7,8 @@ import fastmcp.exceptions
 import logging
 from .registry import list_tools, ToolMetadata
 from .executor import executor
+from ..utils.scope_manager import scope_manager
+from ..logging.setup import get_instance_id
 
 logger = logging.getLogger(__name__)
 
@@ -53,23 +55,30 @@ def create_tool_function(metadata: ToolMetadata):
             bound = signature.bind(*args, **kwargs)
             bound.apply_defaults()
 
-            # DISABLED: State reset causing server crashes
-            # # Wrap execution with state reset
-            # async def execute_with_reset():
-            #     result = await executor.execute(metadata, **bound.arguments)
-            #     logger.info(f"[INTEGRATION] Tool {metadata.id} completed, returning result")
-            #     return result
-            #
-            # # Use state reset manager to ensure clean state after execution
-            # result = await state_reset_manager.wrap_tool_execution(
-            #     execute_with_reset
-            # )
-            # return result
+            # Decide what we want to use as the scope id.
+            # 1. Prefer an explicit session_id if the caller supplied one
+            # 2. Otherwise fall back to the instance_id set by setup_logging()
+            scope_id: Optional[str] = (
+                bound.arguments.get("session_id") or get_instance_id()
+            )
 
-            # Direct execution without state reset
-            result = await executor.execute(metadata, **bound.arguments)
-            logger.info(f"[INTEGRATION] Tool {metadata.id} completed, returning result")
-            return result
+            # Debug logging
+            logger.debug(
+                f"[INTEGRATION] Tool {metadata.id} - session_id: {bound.arguments.get('session_id')}, instance_id: {get_instance_id()}, final scope_id: {scope_id}"
+            )
+
+            # If we have an instance_id, prepend "instance_" to distinguish from session IDs
+            if scope_id and not bound.arguments.get("session_id"):
+                scope_id = f"instance_{scope_id}"
+                logger.debug(f"[INTEGRATION] Using instance-based scope: {scope_id}")
+
+            # Make the whole execution run inside that scope
+            async with scope_manager.scope(scope_id):
+                result = await executor.execute(metadata, **bound.arguments)
+                logger.info(
+                    f"[INTEGRATION] Tool {metadata.id} completed, returning result"
+                )
+                return result
         except TypeError as e:
             # Provide helpful error message via MCP error mechanism
             raise fastmcp.exceptions.ToolError(f"Invalid arguments: {e}")

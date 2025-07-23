@@ -103,7 +103,7 @@ class TestMultiTurnErrors:
     ):
         """Test that models use search if system prompt doesn't guide them.
 
-        This simulates the bug where models used search_project_memory
+        This simulates the bug where models used search_project_history
         instead of conversation history.
         """
         metadata = get_tool("chat_with_gemini25_pro")

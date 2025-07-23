@@ -6,6 +6,7 @@ import logging
 from typing import List, Dict, Any, Callable, Optional
 from .constants import GLOBAL_TOOL_LIMITER
 from .errors import AdapterException, ErrorCategory, ToolExecutionException
+from ...utils.scope_manager import scope_manager
 
 logger = logging.getLogger(__name__)
 
@@ -129,40 +130,50 @@ class ToolExecutor:
 
 
 class BuiltInToolDispatcher:
-    """Handles execution of OpenAI's built-in tools (search_memory only).
+    """Handles execution of OpenAI's built-in tools (search_history only).
 
     File search is now handled natively by OpenAI through the file_search tool.
     """
 
-    def __init__(self, vector_store_ids: Optional[List[str]] = None):
+    def __init__(
+        self,
+        vector_store_ids: Optional[List[str]] = None,
+        session_id: Optional[str] = None,
+    ):
         """Initialize the dispatcher.
 
         Args:
             vector_store_ids: No longer used - kept for backward compatibility.
+            session_id: Session ID for deduplication scoping.
         """
         # vector_store_ids is now handled by OpenAI's native file_search
-        pass
+        self.session_id = session_id
 
     async def dispatch(self, name: str, arguments: Dict[str, Any]) -> Any:
         """Dispatch to the appropriate built-in tool.
 
         Args:
-            name: Tool name (e.g., "search_project_memory")
+            name: Tool name (e.g., "search_project_history")
             arguments: Parsed arguments for the tool
 
         Returns:
             Tool execution result
         """
-        if name == "search_project_memory":
+        if name == "search_project_history":
             # Import and execute search
-            from ...tools.search_memory import SearchMemoryAdapter
+            from ...tools.search_history import SearchHistoryAdapter
 
-            adapter = SearchMemoryAdapter()
-            return await adapter.generate(
-                prompt=arguments.get("query", ""),
-                query=arguments.get("query", ""),
-                max_results=arguments.get("max_results", 40),
-                store_types=arguments.get("store_types", ["conversation", "commit"]),
-            )
+            # Set the scope context for built-in tool execution
+            async with scope_manager.scope(self.session_id):
+                adapter = SearchHistoryAdapter()
+                return await adapter.generate(
+                    prompt=arguments.get("query", ""),
+                    query=arguments.get("query", ""),
+                    max_results=arguments.get("max_results", 40),
+                    store_types=arguments.get(
+                        "store_types", ["conversation", "commit"]
+                    ),
+                    # No longer pass session_id as parameter
+                )
         else:
             raise ValueError(f"Unknown built-in tool: {name}")

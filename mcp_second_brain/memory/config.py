@@ -1,4 +1,4 @@
-"""Configuration management for project memory system."""
+"""Configuration management for project history system."""
 
 import logging
 import sqlite3
@@ -205,12 +205,13 @@ class MemoryConfig:
             return [row["store_id"] for row in rows]
 
     def get_store_ids_by_type(self, store_types: List[str]) -> List[str]:
-        """Get store IDs filtered by type."""
+        """Get ACTIVE store IDs filtered by type."""
         with self._lock:
             if not store_types:
                 return []
             placeholders = ",".join("?" for _ in store_types)
-            query = f"SELECT store_id FROM stores WHERE store_type IN ({placeholders})"
+            # Only return ACTIVE stores to avoid searching deleted vector stores
+            query = f"SELECT store_id FROM stores WHERE store_type IN ({placeholders}) AND is_active = 1"
             rows = self._db.execute(query, store_types).fetchall()
             return [row["store_id"] for row in rows]
 
