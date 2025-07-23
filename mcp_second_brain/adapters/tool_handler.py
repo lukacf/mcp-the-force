@@ -60,8 +60,8 @@ class ToolHandler:
         try:
             if tool_name == "search_project_memory":
                 return await self._execute_memory_search(tool_args)
-            elif tool_name == "search_session_attachments":
-                return await self._execute_attachment_search(
+            elif tool_name == "search_task_files":
+                return await self._execute_task_files_search(
                     tool_args, vector_store_ids
                 )
             else:
@@ -81,14 +81,14 @@ class ToolHandler:
             prompt=tool_args.get("query", ""), **tool_args
         )
 
-    async def _execute_attachment_search(
+    async def _execute_task_files_search(
         self, tool_args: Dict[str, Any], vector_store_ids: Optional[List[str]]
     ) -> str:
-        """Execute session attachment search tool."""
-        from ..tools.search_attachments import SearchAttachmentAdapter
+        """Execute task files search tool."""
+        from ..tools.search_task_files import SearchTaskFilesAdapter
 
-        attachment_adapter = SearchAttachmentAdapter()
-        return await attachment_adapter.generate(
+        task_files_adapter = SearchTaskFilesAdapter()
+        return await task_files_adapter.generate(
             prompt=tool_args.get("query", ""),
             vector_store_ids=vector_store_ids,
             **tool_args,
@@ -130,16 +130,17 @@ class ToolHandler:
             elif adapter_type == "vertex":
                 declarations.append(self._get_memory_declaration_vertex())
 
-        # Add attachment search tool when vector stores are provided
-        if vector_store_ids:
+        # Add task files search tool when vector stores are provided
+        # Only for non-OpenAI models (Gemini/Grok)
+        if vector_store_ids and adapter_type in {"vertex", "grok"}:
             logger.info(
-                f"Adding attachment search tool for {adapter_type} adapter "
+                f"Adding task files search tool for {adapter_type} adapter "
                 f"with {len(vector_store_ids)} vector stores"
             )
-            if adapter_type in {"openai", "grok"}:
-                declarations.append(self._get_attachment_declaration_openai())
+            if adapter_type == "grok":
+                declarations.append(self._get_task_files_declaration_openai())
             elif adapter_type == "vertex":
-                declarations.append(self._get_attachment_declaration_vertex())
+                declarations.append(self._get_task_files_declaration_vertex())
 
         return declarations
 
@@ -155,21 +156,21 @@ class ToolHandler:
 
         return create_search_memory_declaration_gemini()
 
-    def _get_attachment_declaration_openai(self) -> Dict[str, Any]:
-        """Get attachment search tool declaration for OpenAI-compatible APIs."""
-        from .attachment_search_declaration import (
-            create_attachment_search_declaration_openai,
+    def _get_task_files_declaration_openai(self) -> Dict[str, Any]:
+        """Get task files search tool declaration for OpenAI-compatible APIs (Grok)."""
+        from .task_files_search_declaration import (
+            create_task_files_search_declaration_openai,
         )
 
-        return create_attachment_search_declaration_openai()
+        return create_task_files_search_declaration_openai()
 
-    def _get_attachment_declaration_vertex(self) -> Dict[str, Any]:
-        """Get attachment search tool declaration for Vertex AI."""
-        from .attachment_search_declaration import (
-            create_attachment_search_declaration_gemini,
+    def _get_task_files_declaration_vertex(self) -> Dict[str, Any]:
+        """Get task files search tool declaration for Vertex AI."""
+        from .task_files_search_declaration import (
+            create_task_files_search_declaration_gemini,
         )
 
-        return create_attachment_search_declaration_gemini()
+        return create_task_files_search_declaration_gemini()
 
 
 # Future Strategy pattern interface (not implemented yet, but designed for migration)

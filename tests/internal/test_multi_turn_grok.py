@@ -151,46 +151,6 @@ class TestGrokMultiTurn:
         assert "Current conversation" in system_message
 
     @pytest.mark.asyncio
-    async def test_grok_multi_turn_with_attachments(
-        self,
-        clean_session_caches,
-        session_id_generator,
-        mock_vector_store,
-    ):
-        """Test Grok conversation with vector store attachments."""
-        metadata = get_tool("chat_with_grok4")
-        session_id = session_id_generator()
-
-        # First turn with attachments
-        result1 = await executor.execute(
-            metadata,
-            instructions="Analyze these files",
-            output_format="Summary",
-            context=[],
-            attachments=["tests/fixtures/large_file.py"],
-            session_id=session_id,
-        )
-
-        data1 = json.loads(result1)
-        # Should have vector store ID
-        assert data1["vector_store_ids"] is not None
-
-        # Second turn - should remember context
-        result2 = await executor.execute(
-            metadata,
-            instructions="What patterns did you find in the files?",
-            output_format="List patterns",
-            context=[],
-            session_id=session_id,
-        )
-
-        data2 = json.loads(result2)
-        # Should have conversation history
-        assert "Analyze these files" in data2["prompt"]
-
-        # Verify the model has access to conversation history
-
-    @pytest.mark.asyncio
     async def test_grok_session_isolation(
         self, clean_session_caches, session_id_generator
     ):

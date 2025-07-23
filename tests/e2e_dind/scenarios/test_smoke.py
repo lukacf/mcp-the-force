@@ -1,114 +1,96 @@
-"""Smoke test - basic health check and simple chat."""
+"""Smoke test - basic health check for all adapters."""
 
-import json
-import sys
-import os
-import uuid
+import logging
 
-# Add scenarios directory to path for imports
-sys.path.insert(0, os.path.dirname(__file__))
-from json_utils import safe_json
+logger = logging.getLogger(__name__)
 
 
-def test_smoke_health_and_simple_chat(claude):
-    """Test server health, model listing, and structured outputs."""
+def test_smoke_all_models(claude, call_claude_tool, parse_response):
+    """Test that all models respond to basic queries with structured output."""
+
+    logger.info("=== SMOKE TEST: Basic adapter functionality ===")
 
     # Test 1: List available models
+    logger.info("1. Testing list_models...")
     response = claude(
-        "Use second-brain list_models and respond with the exact output you receive."
+        "Use second-brain list_models and return ONLY a JSON array of tool IDs (the 'id' field). "
+        'Schema: {"tool_ids": ["string"]}. '
+        'Example: {"tool_ids": ["chat_with_o3", "chat_with_gemini25_flash"]}'
     )
 
-    # Should contain at least some of our models
-    assert "chat_with_gpt4_1" in response
-    assert "chat_with_gemini25_flash" in response
-    assert "chat_with_o3" in response
+    # Parse the JSON response
+    result = parse_response(response)
+    assert result is not None, f"Failed to parse JSON from list_models: {response}"
+    tool_ids = result.get("tool_ids", [])
 
-    # Test 2: Simple mathematical reasoning with structured output
+    # Check that expected tools are present
+    assert "chat_with_gpt4_1" in tool_ids, f"Missing chat_with_gpt4_1 in: {tool_ids}"
+    assert (
+        "chat_with_gemini25_flash" in tool_ids
+    ), f"Missing chat_with_gemini25_flash in: {tool_ids}"
+    assert "chat_with_o3" in tool_ids, f"Missing chat_with_o3 in: {tool_ids}"
+    logger.info(f"✓ Model listing works, found {len(tool_ids)} tools")
+
+    # Test all models with structured output
     math_schema = {
         "type": "object",
-        "properties": {
-            "calculation": {"type": "string"},
-            "result": {"type": "integer"},
-            "method": {"type": "string"},
-        },
-        "required": ["calculation", "result", "method"],
+        "properties": {"result": {"type": "integer"}},
+        "required": ["result"],
         "additionalProperties": False,
     }
 
-    args = {
-        "instructions": "Calculate 12 + 15 and explain your method",
-        "output_format": "JSON object matching the provided schema",
-        "context": [],
-        "session_id": "smoke-math",
-        "structured_output_schema": math_schema,
-    }
+    models_to_test = [
+        ("chat_with_o3", "O3"),
+        ("chat_with_gemini25_flash", "Gemini Flash"),
+        ("chat_with_gemini25_pro", "Gemini Pro"),
+        ("chat_with_gpt4_1", "GPT-4.1"),
+        ("chat_with_grok4", "Grok"),
+    ]
 
-    response = claude(
-        f"Use second-brain chat_with_o3 with {json.dumps(args)} and respond ONLY with the JSON."
+    for model_name, display_name in models_to_test:
+        logger.info(f"Testing {display_name} with structured output...")
+        response = call_claude_tool(
+            model_name,
+            response_format="respond with JSON only",
+            instructions="What is 2 + 2?",
+            output_format="JSON with result field containing the answer",
+            context=[],
+            session_id=f"smoke-{model_name}",
+            structured_output_schema=math_schema,
+        )
+
+        # Parse and validate JSON response
+        result = parse_response(response)
+        assert (
+            result is not None
+        ), f"{display_name} didn't return valid JSON: {response}"
+        assert result["result"] == 4, f"{display_name} gave wrong answer: {result}"
+        logger.info(f"✓ {display_name} works with structured output")
+
+    logger.info("=== All adapters working with structured output! ===")
+
+
+def test_smoke_file_context(
+    call_claude_tool, isolated_test_dir, create_file_in_container
+):
+    """Test that file context works with a simple unambiguous file."""
+
+    logger.info("=== SMOKE TEST: File context ===")
+
+    # Create a simple test file with unambiguous content
+    test_file = f"{isolated_test_dir}/color.txt"
+    file_content = "The color is RED."
+    create_file_in_container(test_file, file_content)
+    logger.info(f"Created test file: {test_file}")
+
+    # Ask a simple question about the file
+    response = call_claude_tool(
+        "chat_with_gemini25_flash",
+        instructions="What color is mentioned in the file?",
+        output_format="Just the color name",
+        context=[test_file],
+        session_id="smoke-context",
     )
 
-    # Parse and validate structured response
-    result = safe_json(response)
-    assert result["result"] == 27
-    assert "12" in result["calculation"] and "15" in result["calculation"]
-    assert len(result["method"]) > 0
-
-    # Test 3: Fast summarization task
-    summary_schema = {
-        "type": "object",
-        "properties": {
-            "main_topic": {"type": "string"},
-            "key_points": {"type": "array", "items": {"type": "string"}},
-            "word_count": {"type": "integer"},
-        },
-        "required": ["main_topic", "key_points", "word_count"],
-        "additionalProperties": False,
-    }
-
-    args = {
-        "instructions": "Summarize this text: Python is a high-level programming language. It was created by Guido van Rossum. Python emphasizes code readability with its use of significant whitespace.",
-        "output_format": "JSON object matching the provided schema",
-        "context": [],
-        "session_id": "smoke-summary",
-        "structured_output_schema": summary_schema,
-    }
-
-    response = claude(
-        f"Use second-brain chat_with_gemini25_flash with {json.dumps(args)} and respond ONLY with the JSON."
-    )
-
-    # Parse and validate structured response
-    result = safe_json(response)
-    assert "python" in result["main_topic"].lower()
-    assert len(result["key_points"]) >= 2
-    assert result["word_count"] > 0
-
-    # Test 4: Grok simple reasoning with structured output
-    grok_schema = {
-        "type": "object",
-        "properties": {
-            "is_possible": {"type": "boolean"},
-            "reasoning": {"type": "string"},
-        },
-        "required": ["is_possible", "reasoning"],
-        "additionalProperties": False,
-    }
-
-    args = {
-        "instructions": "A man is on an island with a fox, a chicken, and a bag of grain. He has a boat that can only carry himself and one other item. The fox cannot be left with the chicken, and the chicken cannot be left with the grain. Can the man get everything to the other side? Explain your reasoning.",
-        "output_format": "JSON object matching the provided schema",
-        "context": [],
-        "session_id": f"smoke-grok-{uuid.uuid4()}",
-        "structured_output_schema": grok_schema,
-    }
-
-    response = claude(
-        f"Use second-brain chat_with_grok4 with {json.dumps(args)} and respond ONLY with the JSON."
-    )
-
-    # Parse and validate the structured response from Grok
-    result = safe_json(response)
-    assert result["is_possible"] is True
-    assert len(result["reasoning"]) > 20
-    assert "fox" in result["reasoning"].lower()
-    assert "chicken" in result["reasoning"].lower()
+    assert "red" in response.lower()
+    logger.info("✓ File context works")

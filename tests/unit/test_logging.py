@@ -66,24 +66,29 @@ class TestLoggingSecurity:
         # Use a properly formatted OpenAI key (sk- followed by 16+ chars)
         test_key = "sk-1234567890abcdef1234567890abcdef"
         monkeypatch.setenv("OPENAI_API_KEY", test_key)
-        caplog.set_level(logging.DEBUG)
+
+        # Create a new logger for this test to avoid interference
+        test_logger = logging.getLogger("test_redaction")
+        test_logger.setLevel(logging.DEBUG)
+
+        # Clear any existing handlers
+        test_logger.handlers.clear()
+
+        # Set up caplog for this specific logger
+        caplog.set_level(logging.DEBUG, logger="test_redaction")
 
         # Apply the redaction filter to the caplog handler
-        logger = logging.getLogger("mcp_second_brain")
         redaction_filter = RedactionFilter()
-        caplog.handler.addFilter(redaction_filter)
+        for handler in (
+            caplog.handler.handlers
+            if hasattr(caplog.handler, "handlers")
+            else [caplog.handler]
+        ):
+            handler.addFilter(redaction_filter)
 
-        # Temporarily enable propagation for this test to capture logs
-        original_propagate = logger.propagate
-        logger.propagate = True
+        # Even if someone accidentally logs the key
+        test_logger.info(f"Using key: {os.environ['OPENAI_API_KEY']}")
 
-        try:
-            # Even if someone accidentally logs the key
-            logger.info(f"Using key: {os.environ['OPENAI_API_KEY']}")
-
-            # It should be automatically redacted
-            assert test_key not in caplog.text
-            assert "***" in caplog.text
-        finally:
-            # Restore original propagation setting
-            logger.propagate = original_propagate
+        # It should be automatically redacted
+        assert test_key not in caplog.text
+        assert "***" in caplog.text

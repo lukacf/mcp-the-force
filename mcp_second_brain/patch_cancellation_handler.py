@@ -109,7 +109,7 @@ def apply_patch():
     # Replace with our patched version
     Server._handle_request = patched_handle_request
 
-    logger.info("Applied cancellation handler patch to prevent double responses")
+    logger.debug("Applied cancellation handler patch to prevent double responses")
 
 
 # Apply the patch when this module is imported

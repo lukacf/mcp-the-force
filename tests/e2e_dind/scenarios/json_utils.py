@@ -23,8 +23,8 @@ def safe_json(response: str) -> dict:
     except json.JSONDecodeError:
         pass
 
-    # Look for JSON in code blocks
-    json_pattern = r"```(?:json)?\s*(\{.*?\})\s*```"
+    # Look for JSON in code blocks (objects or arrays)
+    json_pattern = r"```(?:json)?\s*([\[\{].*?[\]\}])\s*```"
     match = re.search(json_pattern, response, re.DOTALL)
     if match:
         try:

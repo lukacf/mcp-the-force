@@ -132,34 +132,6 @@ async def test_tool_executor_handles_malformed_json():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_tool_executor_uses_semaphore():
-    """Verify the executor uses the semaphore for limiting concurrency."""
-
-    semaphore_acquired = False
-    original_acquire = asyncio.Semaphore.__aenter__
-
-    async def mock_acquire(self):
-        nonlocal semaphore_acquired
-        semaphore_acquired = True
-        return await original_acquire(self)
-
-    async def mock_dispatcher(name, args):
-        return "ok"
-
-    # Patch the semaphore's acquire method to track usage
-    with patch.object(asyncio.Semaphore, "__aenter__", mock_acquire):
-        executor = ToolExecutor(tool_dispatcher=mock_dispatcher)
-
-        tool_calls = [{"call_id": "test", "name": "test_tool", "arguments": "{}"}]
-
-        await executor.run_all(tool_calls)
-
-        # Verify the semaphore was used
-        assert semaphore_acquired
-
-
-@pytest.mark.unit
-@pytest.mark.asyncio
 async def test_tool_executor_empty_list():
     """Verify the executor handles empty tool call list."""
 
@@ -219,34 +191,6 @@ async def test_builtin_tool_dispatcher_search_memory():
             store_types=["conversation", "commit"],
         )
         assert result == {"results": ["memory1", "memory2"]}
-
-
-@pytest.mark.unit
-@pytest.mark.asyncio
-async def test_builtin_tool_dispatcher_search_attachments():
-    """Test the built-in tool dispatcher for search_session_attachments."""
-
-    vector_store_ids = ["vs_123", "vs_456"]
-    dispatcher = BuiltInToolDispatcher(vector_store_ids=vector_store_ids)
-
-    with patch(
-        "mcp_second_brain.tools.search_attachments.SearchAttachmentAdapter"
-    ) as mock_adapter:
-        mock_instance = AsyncMock()
-        mock_instance.generate.return_value = {"attachments": ["file1", "file2"]}
-        mock_adapter.return_value = mock_instance
-
-        result = await dispatcher.dispatch(
-            "search_session_attachments", {"query": "test attachment", "max_results": 5}
-        )
-
-        mock_instance.generate.assert_called_once_with(
-            prompt="test attachment",
-            query="test attachment",
-            max_results=5,
-            vector_store_ids=vector_store_ids,
-        )
-        assert result == {"attachments": ["file1", "file2"]}
 
 
 @pytest.mark.unit

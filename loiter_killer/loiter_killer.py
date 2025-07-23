@@ -61,6 +61,11 @@ def setup_logging():
 logger = setup_logging()
 
 
+# Request models
+class AcquireRequest(BaseModel):
+    protected: bool = False  # Whether this is a protected store (e.g., project memory)
+
+
 # Response models
 class AcquireResponse(BaseModel):
     vector_store_id: str
@@ -85,6 +90,17 @@ class CleanupResponse(BaseModel):
     cleaned: int
 
 
+class NukeResponse(BaseModel):
+    sessions_deleted: int
+    vector_stores_deleted: int
+    message: str
+
+
+class RegisterRequest(BaseModel):
+    vector_store_id: str
+    protected: bool = True  # Default to protected for project memory
+
+
 # Database setup
 def init_db():
     """Initialize SQLite database."""
@@ -93,7 +109,8 @@ def init_db():
         CREATE TABLE IF NOT EXISTS sessions (
             session_id TEXT PRIMARY KEY,
             vector_store_id TEXT NOT NULL,
-            expires_at INTEGER NOT NULL
+            expires_at INTEGER NOT NULL,
+            protected INTEGER DEFAULT 0
         )
     """)
     # New schema: track by file path, not file ID
@@ -116,6 +133,13 @@ def init_db():
             SELECT session_id, file_path FROM files
         """)
         conn.execute("DROP TABLE files")
+
+    # Add protected column if it doesn't exist
+    cursor = conn.execute("PRAGMA table_info(sessions)")
+    columns = [row[1] for row in cursor.fetchall()]
+    if "protected" not in columns:
+        conn.execute("ALTER TABLE sessions ADD COLUMN protected INTEGER DEFAULT 0")
+
     conn.commit()
     return conn
 
@@ -195,24 +219,28 @@ async def health_check():
 
 
 @app.post("/session/{session_id}/acquire", response_model=AcquireResponse)
-async def acquire_session(session_id: str):
+async def acquire_session(session_id: str, request: AcquireRequest = AcquireRequest()):
     """Acquire or create a vector store for a session."""
-    logger.info(f"Acquire request for session {session_id}")
+    logger.info(
+        f"Acquire request for session {session_id} (protected={request.protected})"
+    )
 
     # Check if session exists
     cursor = db.execute(
-        "SELECT vector_store_id FROM sessions WHERE session_id = ?", (session_id,)
+        "SELECT vector_store_id, protected FROM sessions WHERE session_id = ?",
+        (session_id,),
     )
     row = cursor.fetchone()
 
     if row:
-        # Update expiration
-        expires_at = int(time.time()) + 3600  # 1 hour from now
-        db.execute(
-            "UPDATE sessions SET expires_at = ? WHERE session_id = ?",
-            (expires_at, session_id),
-        )
-        db.commit()
+        # Update expiration (unless it's protected)
+        if not row[1]:  # not protected
+            expires_at = int(time.time()) + 3600  # 1 hour from now
+            db.execute(
+                "UPDATE sessions SET expires_at = ? WHERE session_id = ?",
+                (expires_at, session_id),
+            )
+            db.commit()
 
         # Get file paths
         cursor = db.execute(
@@ -239,18 +267,66 @@ async def acquire_session(session_id: str):
     )
 
     # Save to database
-    expires_at = int(time.time()) + 3600  # 1 hour from now
+    # Protected stores get very far future expiration
+    expires_at = (
+        int(time.time()) + (365 * 24 * 3600)
+        if request.protected
+        else int(time.time()) + 3600
+    )
     db.execute(
-        "INSERT INTO sessions (session_id, vector_store_id, expires_at) VALUES (?, ?, ?)",
-        (session_id, vector_store.id, expires_at),
+        "INSERT INTO sessions (session_id, vector_store_id, expires_at, protected) VALUES (?, ?, ?, ?)",
+        (session_id, vector_store.id, expires_at, 1 if request.protected else 0),
     )
     db.commit()
 
-    logger.info(f"Created new vector store {vector_store.id} for session {session_id}")
+    logger.info(
+        f"Created new vector store {vector_store.id} for session {session_id} (protected={request.protected})"
+    )
 
     return AcquireResponse(
         vector_store_id=vector_store.id, reused=False, files=[], file_paths=[]
     )
+
+
+@app.post("/session/{session_id}/register")
+async def register_existing_store(session_id: str, request: RegisterRequest):
+    """Register an existing vector store with LoiterKiller (for project memory)."""
+    logger.info(
+        f"Register request for session {session_id}, store {request.vector_store_id} (protected={request.protected})"
+    )
+
+    # Check if session already exists
+    cursor = db.execute(
+        "SELECT vector_store_id FROM sessions WHERE session_id = ?", (session_id,)
+    )
+    row = cursor.fetchone()
+
+    if row:
+        logger.info(f"Session {session_id} already registered with store {row[0]}")
+        return {"status": "already_registered", "existing_store_id": row[0]}
+
+    # Register the new store
+    # Protected stores get very far future expiration
+    expires_at = (
+        int(time.time()) + (365 * 24 * 3600)
+        if request.protected
+        else int(time.time()) + 3600
+    )
+    db.execute(
+        "INSERT INTO sessions (session_id, vector_store_id, expires_at, protected) VALUES (?, ?, ?, ?)",
+        (
+            session_id,
+            request.vector_store_id,
+            expires_at,
+            1 if request.protected else 0,
+        ),
+    )
+    db.commit()
+
+    logger.info(
+        f"Registered existing store {request.vector_store_id} for session {session_id} (protected={request.protected})"
+    )
+    return {"status": "registered"}
 
 
 @app.post("/session/{session_id}/files", response_model=TrackFilesResponse)
@@ -314,10 +390,10 @@ async def cleanup_expired_sessions():
     """Clean up expired sessions and their resources."""
     global db, client
 
-    # Find expired sessions
+    # Find expired sessions (excluding protected ones)
     cutoff = int(time.time())
     cursor = db.execute(
-        "SELECT session_id, vector_store_id FROM sessions WHERE expires_at < ?",
+        "SELECT session_id, vector_store_id FROM sessions WHERE expires_at < ? AND protected = 0",
         (cutoff,),
     )
     expired_sessions = cursor.fetchall()
@@ -358,6 +434,62 @@ async def trigger_cleanup():
     """Manually trigger cleanup of expired sessions."""
     cleaned = await cleanup_expired_sessions()
     return CleanupResponse(cleaned=cleaned)
+
+
+@app.post("/nuke", response_model=NukeResponse)
+async def nuke_everything():
+    """DELETE EVERYTHING - all sessions, vector stores, and files. For E2E test cleanup only!"""
+    logger.warning(
+        "NUKE EVERYTHING requested - deleting all vector stores and sessions!"
+    )
+
+    # Get all sessions (expired and active)
+    cursor = db.execute("SELECT session_id, vector_store_id, protected FROM sessions")
+    all_sessions = cursor.fetchall()
+
+    logger.info(f"[NUKE] Found {len(all_sessions)} sessions in database")
+    for session_id, vector_store_id, protected in all_sessions:
+        logger.info(
+            f"[NUKE] Session: {session_id}, Store: {vector_store_id}, Protected: {protected}"
+        )
+
+    sessions_deleted = 0
+    vector_stores_deleted = 0
+
+    for session_id, vector_store_id, protected in all_sessions:
+        try:
+            # Delete vector store (this also deletes all its files)
+            if os.getenv("TEST_MODE") == "true":
+                logger.info(f"TEST MODE: Would delete vector store {vector_store_id}")
+            else:
+                try:
+                    await client.vector_stores.delete(vector_store_id)
+                    logger.info(
+                        f"NUKED vector store {vector_store_id} and all its files"
+                    )
+                    vector_stores_deleted += 1
+                except Exception as e:
+                    logger.error(f"Failed to nuke vector store {vector_store_id}: {e}")
+
+            sessions_deleted += 1
+
+        except Exception as e:
+            logger.error(f"Error nuking session {session_id}: {e}")
+
+    # Clear all database tables
+    db.execute("DELETE FROM file_paths")
+    db.execute("DELETE FROM sessions")
+    db.commit()
+
+    logger.warning(
+        f"NUKE COMPLETE: Deleted {sessions_deleted} sessions and {vector_stores_deleted} vector stores"
+    )
+
+    return NukeResponse(
+        sessions_deleted=sessions_deleted,
+        vector_stores_deleted=vector_stores_deleted,
+        message=f"Successfully nuked {sessions_deleted} sessions and {vector_stores_deleted} vector stores with all their files",
+    )
 
 
 if __name__ == "__main__":

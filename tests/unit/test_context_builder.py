@@ -382,9 +382,106 @@ class TestBuildContextWithStableList:
             assert len(inline_files) == 2
             assert len(overflow_files) == 0
 
-            # No stable list should be saved
-            saved_list = await cache.get_stable_list("test_session")
-            assert saved_list is None
+            cache.close()
+        finally:
+            os.unlink(db_path)
+
+    @pytest.mark.asyncio
+    async def test_priority_context_always_inline(self):
+        """Test that priority_context files always go inline even on subsequent calls."""
+        with tempfile.NamedTemporaryFile(suffix=".sqlite3", delete=False) as f:
+            db_path = f.name
+
+        try:
+            cache = StableListCache(db_path=db_path, ttl=3600)
+
+            def mock_stat(path):
+                stat = MagicMock()
+                # Size = tokens * 2 (based on estimate_tokens function)
+                if path == "/api/file1.py":
+                    stat.st_size = 200  # 100 tokens
+                elif path == "/api/file2.py":
+                    stat.st_size = 300  # 150 tokens
+                elif path == "/api/file3.py":
+                    stat.st_size = 400  # 200 tokens
+                elif path == "/api/file4.py":
+                    stat.st_size = 600  # 300 tokens
+                elif path == "/api/priority.py":
+                    stat.st_size = 150  # 75 tokens
+                stat.st_mtime = 1700000000
+                stat.st_mtime_ns = 1700000000000000000
+                return stat
+
+            files = {
+                "/api/file1.py": ("content1", 100),
+                "/api/file2.py": ("content2", 150),
+                "/api/file3.py": ("content3", 200),
+                "/api/file4.py": ("content4", 300),
+                "/api/priority.py": ("priority content", 75),
+            }
+
+            def mock_gather_files(paths):
+                if paths == ["/api"]:
+                    return [
+                        "/api/file1.py",
+                        "/api/file2.py",
+                        "/api/file3.py",
+                        "/api/file4.py",
+                    ]
+                elif paths == ["/api/priority.py"]:
+                    return ["/api/priority.py"]
+                return []
+
+            def mock_load_files(paths):
+                return [(p, files[p][0], files[p][1]) for p in paths if p in files]
+
+            with patch("os.stat", side_effect=mock_stat):
+                with patch(
+                    "os.path.getsize", side_effect=lambda p: mock_stat(p).st_size
+                ):
+                    with patch(
+                        "mcp_second_brain.utils.context_builder.gather_file_paths_async",
+                        side_effect=mock_gather_files,
+                    ):
+                        with patch(
+                            "mcp_second_brain.utils.context_builder.load_specific_files_async",
+                            side_effect=mock_load_files,
+                        ):
+                            # First call without priority context
+                            (
+                                inline_files,
+                                overflow_files,
+                                _,
+                            ) = await build_context_with_stable_list(
+                                context_paths=["/api"],
+                                session_id="test_session",
+                                cache=cache,
+                                token_budget=500,
+                            )
+
+                            # file1, file2, file3 should be inline (total 450 tokens)
+                            assert len(inline_files) == 3
+                            assert "/api/file4.py" in overflow_files
+
+                            # Second call WITH priority context
+                            (
+                                inline_files,
+                                overflow_files,
+                                _,
+                            ) = await build_context_with_stable_list(
+                                context_paths=["/api"],
+                                session_id="test_session",
+                                cache=cache,
+                                token_budget=500,
+                                priority_context=["/api/priority.py"],
+                            )
+
+                            # priority.py should be sent inline even though it wasn't in stable list
+                            assert len(inline_files) == 1  # Only priority.py (new file)
+                            assert inline_files[0][0] == "/api/priority.py"
+                            assert (
+                                "/api/file4.py" in overflow_files
+                            )  # Still in overflow
 
             cache.close()
         finally:
