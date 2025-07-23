@@ -168,7 +168,8 @@ class BuiltInToolDispatcher:
                 query=arguments.get("query", ""),
                 max_results=arguments.get("max_results", 40),
                 store_types=arguments.get("store_types", ["conversation", "commit"]),
-                session_id=self.session_id or "default",
+                # Prefer explicit session_id from arguments, fallback to dispatcher session_id
+                session_id=arguments.get("session_id") or self.session_id or "default",
             )
         else:
             raise ValueError(f"Unknown built-in tool: {name}")
