@@ -7,6 +7,7 @@ import time
 from abc import ABC, abstractmethod
 from typing import Dict, Any, List, Set
 from dataclasses import dataclass
+from uuid import uuid4
 
 from .client import OpenAIClientFactory
 from .models import OpenAIRequest, model_capabilities
@@ -22,7 +23,7 @@ from .constants import (
     MAX_POLL_INTERVAL_SEC,
     STREAM_TIMEOUT_THRESHOLD,
 )
-from ..memory_search_declaration import create_search_memory_declaration_openai
+from ..memory_search_declaration import create_search_history_declaration_openai
 import json
 import jsonschema
 
@@ -69,9 +70,9 @@ class BaseFlowStrategy(ABC):
 
         # Only add custom tools if the model supports them
         if capability is None or capability.supports_custom_tools:
-            # Add search_project_memory tool unless disabled
+            # Add search_project_history tool unless disabled
             if not self.context.request.disable_memory_search:
-                tools.append(create_search_memory_declaration_openai())
+                tools.append(create_search_history_declaration_openai())
 
             # Add native OpenAI file search if vector stores provided
             logger.info(
@@ -572,6 +573,10 @@ class FlowOrchestrator:
             Response dictionary with content and metadata.
         """
         try:
+            # 0. Extract a caller-supplied session_id *before* we build
+            #    the OpenAIRequest; it is not part of that model schema.
+            explicit_session_id = request_data.pop("session_id", None)
+
             # 1. Pre-process request to handle model capabilities
             request_data = self._preprocess_request(request_data)
 
@@ -604,15 +609,31 @@ class FlowOrchestrator:
             # 4. Create context
             start_time = asyncio.get_event_loop().time()
 
-            # Initialize tool executor with dispatcher
-            if hasattr(self.tool_dispatcher(), "__call__"):
-                # It's a function dispatcher
-                tool_executor = ToolExecutor(self.tool_dispatcher())
-            else:
-                # It's a BuiltInToolDispatcher instance
-                dispatcher_instance = self.tool_dispatcher()
-                dispatcher_instance.vector_store_ids = request.vector_store_ids
-                tool_executor = ToolExecutor(dispatcher_instance.dispatch)
+            # Build or fetch the dispatcher *once*
+            dispatcher_candidate = self.tool_dispatcher()
+
+            if callable(dispatcher_candidate):  # custom dispatcher
+                tool_executor = ToolExecutor(dispatcher_candidate)
+            else:  # Built-in dispatcher
+                # Stable scope rules:
+                #  1) caller-supplied session_id
+                #  2) instance_id (for consistent deduplication)
+                #  3) new random UUID (if no instance_id available)
+                # Never use previous_response_id as it changes every turn
+                from ...logging.setup import get_instance_id
+
+                dedup_session_id = explicit_session_id
+                if not dedup_session_id:
+                    instance_id = get_instance_id()
+                    if instance_id:
+                        dedup_session_id = f"instance_{instance_id}"
+                    else:
+                        dedup_session_id = f"sess_{uuid4().hex}"
+
+                dispatcher_candidate.vector_store_ids = request.vector_store_ids
+                dispatcher_candidate.session_id = dedup_session_id
+
+                tool_executor = ToolExecutor(dispatcher_candidate.dispatch)
 
             context = FlowContext(
                 request=request,

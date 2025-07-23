@@ -11,6 +11,9 @@ from pathlib import Path
 from ..config import get_settings
 from .handlers import TimeoutLokiHandler
 
+# Global instance ID - set once during logging setup
+_INSTANCE_ID: str | None = None
+
 
 def generate_instance_id() -> str:
     """Generate semantic instance ID based on runtime context."""
@@ -20,6 +23,14 @@ def generate_instance_id() -> str:
     session = str(uuid.uuid4())[:8]  # Unique session identifier
 
     return f"{project}_{context}_{session}"
+
+
+def get_instance_id() -> str | None:
+    """Get the current instance ID.
+
+    Returns None if logging hasn't been set up yet.
+    """
+    return _INSTANCE_ID
 
 
 def setup_logging():
@@ -48,7 +59,9 @@ def setup_logging():
         return
 
     # Generate instance ID once for this session
-    instance_id = generate_instance_id()
+    global _INSTANCE_ID
+    _INSTANCE_ID = generate_instance_id()
+    instance_id = _INSTANCE_ID
 
     # Set up non-blocking VictoriaLogs handler using queue with timeout protection
     try:

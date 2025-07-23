@@ -258,7 +258,7 @@ gcloud iam service-accounts add-iam-policy-binding \
 ### Utility Tools
 
 - `list_models` - List all available models and their capabilities
-- `search_project_memory` - Search past conversations and git commits
+- `search_project_history` - Search past conversations and git commits
 - `search_session_attachments` - Search files attached to current session
 - `search_mcp_debug_logs` - Search debug logs (requires developer mode enabled)
 
@@ -388,16 +388,16 @@ Use second-brain chat_with_gemini25_flash with {"instructions": "What are the ma
 Use second-brain chat_with_o3_pro with {"instructions": "Analyze the authentication system for subtle security vulnerabilities", "output_format": "Detailed security analysis with remediation steps", "context": ["/src/auth/"], "session_id": "security-review-deep"}
 ```
 
-## 🧠 Project Memory
+## 🧠 Project History
 
 The server automatically captures and indexes:
 - **Conversation History**: All AI interactions with context and decisions
 - **Git Commits**: Commit messages, diffs, and metadata for institutional memory
 
-Search across project memory:
+Search across project history:
 ```
 # Search past decisions and commit history
-Use second-brain search_project_memory with {"query": "authentication implementation decisions", "max_results": 10}
+Use second-brain search_project_history with {"query": "authentication implementation decisions", "max_results": 10}
 ```
 
 ## 🔍 Developer Logging System

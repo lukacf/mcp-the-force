@@ -15,10 +15,11 @@ from .vector_store_manager import vector_store_manager
 from .prompt_engine import prompt_engine
 from .parameter_validator import ParameterValidator
 from .parameter_router import ParameterRouter
+# Scope management is now handled at the integration layer
 
 # Import debug logger
 
-# Project memory imports
+# Project history imports
 from .safe_memory import safe_store_conversation_memory
 from ..config import get_settings
 from ..utils.redaction import redact_secrets
@@ -312,7 +313,7 @@ class ToolExecutor:
                         )
 
             # Memory stores are no longer auto-attached
-            # Models should use search_project_memory function to access memory
+            # Models should use search_project_history function to access memory
 
             # 5. Get adapter
             logger.debug("[DEBUG] About to get settings")
@@ -404,7 +405,7 @@ class ToolExecutor:
                     # Remove the generic key since xAI uses different parameters
                     adapter_params.pop("structured_output_schema", None)
 
-            # Merge prompt parameters for adapters that need them (e.g., SearchMemoryAdapter)
+            # Merge prompt parameters for adapters that need them (e.g., SearchHistoryAdapter)
             # Don't include 'prompt' itself as it's passed as positional arg
             # Don't include 'messages' either if we've already set it from session handling
             prompt_params_for_adapter = {
@@ -414,6 +415,10 @@ class ToolExecutor:
                 and (k != "messages" or "messages" not in adapter_params)
             }
             adapter_params.update(prompt_params_for_adapter)
+
+            # Pass session_id to the adapter so it can propagate to built-in tools
+            if session_id:
+                adapter_params["session_id"] = session_id
 
             explicit_vs_ids = routed_params.get("vector_store_ids")
             assert isinstance(explicit_vs_ids, list)
@@ -434,6 +439,7 @@ class ToolExecutor:
                 await self.vector_store_manager.loiter_killer.renew_lease(session_id)
                 logger.debug(f"Renewed Loiter Killer lease for session {session_id}")
 
+            # Scope context is now set by the integration layer, so we don't need to set it here
             try:
                 result = await operation_manager.run_with_timeout(
                     operation_id,

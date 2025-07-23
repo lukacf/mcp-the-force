@@ -20,7 +20,7 @@ from fastmcp import FastMCP  # noqa: E402
 
 # Import all tool definitions to register them
 from .tools import definitions  # noqa: F401, E402 # This import triggers the @tool decorators
-from .tools import search_memory  # noqa: F401, E402 # Import search_project_memory tool
+from .tools import search_history  # noqa: F401, E402 # Import search_project_history tool
 from .tools.integration import (  # noqa: E402
     register_all_tools,
     create_list_models_tool,
