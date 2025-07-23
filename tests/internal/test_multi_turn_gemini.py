@@ -4,7 +4,7 @@ These tests verify that session management works correctly and would have caught
 the bugs where:
 1. session_id wasn't passed to adapters
 2. system_instruction wasn't sent on subsequent turns
-3. Models used search_project_memory instead of conversation history
+3. Models used search_project_history instead of conversation history
 """
 
 import pytest
@@ -127,7 +127,7 @@ class TestGeminiMultiTurn:
             "FIRST: Always check the current conversation history" in system_instruction
         )
         assert (
-            "LAST: Use search_project_memory only when you need historical information"
+            "LAST: Use search_project_history only when you need historical information"
             in system_instruction
         )
 

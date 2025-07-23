@@ -36,7 +36,7 @@ class TestGrokToolHandlerIntegration:
         """Test tool declarations when no vector stores are provided."""
         adapter = GrokAdapter("grok-4")
 
-        # Should only declare search_project_memory
+        # Should only declare search_project_history
         tools = adapter.tool_handler.prepare_tool_declarations(
             adapter_type="grok", vector_store_ids=None
         )
@@ -45,7 +45,7 @@ class TestGrokToolHandlerIntegration:
         # Check the actual structure - OpenAI tool format
         tool = tools[0]
         assert tool["type"] == "function"
-        assert tool["name"] == "search_project_memory"
+        assert tool["name"] == "search_project_history"
         assert "description" in tool
         assert "parameters" in tool
 
@@ -53,17 +53,17 @@ class TestGrokToolHandlerIntegration:
         """Test tool declarations when vector stores are provided - this is the bug fix."""
         adapter = GrokAdapter("grok-4")
 
-        # Should declare both search_project_memory and search_session_attachments
+        # Should declare both search_project_history and search_session_attachments
         tools = adapter.tool_handler.prepare_tool_declarations(
             adapter_type="grok", vector_store_ids=["vs-123", "vs-456"]
         )
 
         assert len(tools) == 2
 
-        # Check first tool (search_project_memory)
+        # Check first tool (search_project_history)
         memory_tool = tools[0]
         assert memory_tool["type"] == "function"
-        assert memory_tool["name"] == "search_project_memory"
+        assert memory_tool["name"] == "search_project_history"
         assert "description" in memory_tool
         assert "parameters" in memory_tool
 
@@ -74,13 +74,13 @@ class TestGrokToolHandlerIntegration:
         assert "description" in attachment_tool
         assert "parameters" in attachment_tool
 
-    def test_tool_execution_search_project_memory(self, mock_grok_settings):
-        """Test that tool execution works for search_project_memory."""
+    def test_tool_execution_search_project_history(self, mock_grok_settings):
+        """Test that tool execution works for search_project_history."""
         adapter = GrokAdapter("grok-4")
 
-        # Mock the SearchMemoryAdapter
+        # Mock the SearchHistoryAdapter
         with patch(
-            "mcp_second_brain.tools.search_memory.SearchMemoryAdapter"
+            "mcp_second_brain.tools.search_history.SearchHistoryAdapter"
         ) as mock_adapter:
             mock_instance = mock_adapter.return_value
 
@@ -92,7 +92,7 @@ class TestGrokToolHandlerIntegration:
 
             # Execute the tool
             result = adapter.tool_handler.execute_tool_call(
-                tool_name="search_project_memory",
+                tool_name="search_project_history",
                 tool_args={"query": "test query"},
                 vector_store_ids=None,
             )
@@ -155,9 +155,9 @@ class TestGrokToolHandlerIntegration:
         """Test that tool execution errors are properly handled."""
         adapter = GrokAdapter("grok-4")
 
-        # Mock the SearchMemoryAdapter to raise an exception
+        # Mock the SearchHistoryAdapter to raise an exception
         with patch(
-            "mcp_second_brain.tools.search_memory.SearchMemoryAdapter"
+            "mcp_second_brain.tools.search_history.SearchHistoryAdapter"
         ) as mock_adapter:
             mock_instance = mock_adapter.return_value
 
@@ -170,7 +170,7 @@ class TestGrokToolHandlerIntegration:
             # Execute the tool - should raise the exception
             with pytest.raises(Exception, match="Test error"):
                 result = adapter.tool_handler.execute_tool_call(
-                    tool_name="search_project_memory",
+                    tool_name="search_project_history",
                     tool_args={"query": "test query"},
                     vector_store_ids=None,
                 )

@@ -8,10 +8,12 @@ import asyncio
 import os
 import sys
 import time
+import sqlite3
 from datetime import datetime
 from openai import AsyncOpenAI
 from dotenv import load_dotenv
-from typing import Tuple
+from typing import Tuple, Optional, List
+from pathlib import Path
 
 # ANSI color codes
 GREEN = "\033[92m"
@@ -23,13 +25,24 @@ RESET = "\033[0m"
 
 
 class OpenAICleanupManager:
-    def __init__(self):
+    def __init__(self, db_path: Optional[str] = None):
         load_dotenv()
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
             print(f"{RED}Error: OPENAI_API_KEY not set{RESET}")
             sys.exit(1)
         self.client = AsyncOpenAI(api_key=api_key)
+
+        # SQLite database path for MCP memory stores
+        if db_path:
+            self.db_path = Path(db_path)
+        else:
+            # Try to find the MCP session database
+            home = Path.home()
+            cache_dir = home / ".cache" / "mcp-second-brain"
+            self.db_path = (
+                cache_dir / "session_cache.db" if cache_dir.exists() else None
+            )
 
     async def get_stats(self) -> Tuple[int, int]:
         """Get current counts of vector stores and files."""
@@ -145,10 +158,22 @@ class OpenAICleanupManager:
                 print(f"\n{RED}Error: {e}{RESET}")
                 await asyncio.sleep(5)
 
-    async def cleanup_vector_stores(self, target_count: int = 50):
-        """Clean up vector stores to reach target count."""
+    async def cleanup_vector_stores(
+        self, target_count: int = 50, update_sqlite: bool = True
+    ):
+        """Clean up vector stores to reach target count.
+
+        Args:
+            target_count: Target number of vector stores to keep
+            update_sqlite: If True, also update SQLite database to mark deleted stores as inactive
+        """
         print(f"{BOLD}Vector Store Cleanup{RESET}")
         print("=" * 50)
+
+        if update_sqlite and self.db_path and self.db_path.exists():
+            print(f"📂 SQLite database: {self.db_path}")
+        elif update_sqlite:
+            print(f"{YELLOW}⚠️  SQLite update requested but database not found{RESET}")
 
         # Get all vector stores
         print("📊 Fetching vector store list...")
@@ -169,15 +194,25 @@ class OpenAICleanupManager:
         # Sort by created_at (oldest first)
         vector_stores.sort(key=lambda x: x.created_at)
 
-        # Filter out permanent project memory stores
+        # Filter out permanent project history stores
         deletable_stores = []
+        protected_stores = []
         for vs in vector_stores:
             # Skip permanent project memories (they have no expiry and
             # their names always start with "project-").
-            if vs.name and vs.name.startswith("project-"):
+            # This includes both conversation and commit stores
+            if vs.name and (
+                vs.name.startswith("project-conversations-")
+                or vs.name.startswith("project-commits-")
+                or vs.name.startswith("project-")
+            ):
                 print(f"{BLUE}⚡ Skipping permanent store: {vs.name}{RESET}")
+                protected_stores.append(vs)
                 continue
             deletable_stores.append(vs)
+
+        if protected_stores:
+            print(f"\n{BLUE}Protected stores: {len(protected_stores)}{RESET}")
 
         # Check if we have enough deletable stores
         if len(deletable_stores) < to_delete:
@@ -195,6 +230,7 @@ class OpenAICleanupManager:
         # Process in batches of 20 for parallel deletion
         batch_size = 20
         stores_to_delete = deletable_stores[:to_delete]
+        all_deleted_ids = []  # Track all successfully deleted IDs
 
         for batch_start in range(0, len(stores_to_delete), batch_size):
             batch_end = min(batch_start + batch_size, len(stores_to_delete))
@@ -211,7 +247,7 @@ class OpenAICleanupManager:
             )
             results = await asyncio.gather(*delete_tasks, return_exceptions=True)
 
-            # Count results
+            # Count results and collect successfully deleted IDs
             for i, result in enumerate(results):
                 if isinstance(result, Exception):
                     failed += 1
@@ -220,6 +256,7 @@ class OpenAICleanupManager:
                     )
                 else:
                     deleted += 1
+                    all_deleted_ids.append(batch[i].id)
                     print(f"{GREEN}✓ Deleted {batch[i].id[:16]}{RESET}")
 
             # Progress update
@@ -234,6 +271,18 @@ class OpenAICleanupManager:
         print(f"\n\n{GREEN}✓ Cleanup complete!{RESET}")
         print(f"Deleted: {deleted}")
         print(f"Failed: {failed}")
+
+        # Update SQLite database if requested
+        if update_sqlite and all_deleted_ids and self.db_path and self.db_path.exists():
+            updated_count = self._update_sqlite_stores(all_deleted_ids)
+            if updated_count > 0:
+                print(
+                    f"{GREEN}✓ Updated {updated_count} stores in SQLite database{RESET}"
+                )
+            else:
+                print(
+                    f"{YELLOW}⚠️  No stores updated in SQLite (may already be inactive){RESET}"
+                )
 
         # Show new count
         new_response = await self.client.vector_stores.list(limit=100)
@@ -370,6 +419,39 @@ class OpenAICleanupManager:
         except Exception as e:
             raise e
 
+    def _update_sqlite_stores(self, deleted_ids: List[str]) -> int:
+        """Update SQLite database to mark deleted stores as inactive.
+
+        Args:
+            deleted_ids: List of vector store IDs that were deleted
+
+        Returns:
+            Number of rows updated
+        """
+        if not self.db_path or not self.db_path.exists():
+            return 0
+
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+
+            # Update stores to mark as inactive
+            placeholders = ",".join("?" for _ in deleted_ids)
+            query = (
+                f"UPDATE stores SET is_active = 0 WHERE store_id IN ({placeholders})"
+            )
+
+            cursor.execute(query, deleted_ids)
+            updated = cursor.rowcount
+
+            conn.commit()
+            conn.close()
+
+            return updated
+        except Exception as e:
+            print(f"{RED}Error updating SQLite: {e}{RESET}")
+            return 0
+
     async def interactive_menu(self):
         """Interactive cleanup menu."""
         while True:
@@ -399,7 +481,9 @@ class OpenAICleanupManager:
             elif choice == "2":
                 target = input("Target vector store count (default 50): ")
                 target = int(target) if target else 50
-                await self.cleanup_vector_stores(target)
+                update_sql = input("Update SQLite database? (yes/no, default yes): ")
+                update_sql = update_sql.lower() != "no"
+                await self.cleanup_vector_stores(target, update_sqlite=update_sql)
             elif choice == "3":
                 max_files = input("Maximum files to keep (default 1000): ")
                 max_files = int(max_files) if max_files else 1000
@@ -410,7 +494,7 @@ class OpenAICleanupManager:
                 )
                 confirm = input("Are you sure? (yes/no): ")
                 if confirm.lower() == "yes":
-                    await self.cleanup_vector_stores(50)
+                    await self.cleanup_vector_stores(50, update_sqlite=True)
             elif choice == "5":
                 continue
             elif choice == "0":
@@ -421,28 +505,44 @@ class OpenAICleanupManager:
 
 
 async def main():
-    manager = OpenAICleanupManager()
+    # Check for database path argument
+    db_path = None
+    args = [arg for arg in sys.argv[1:] if not arg.startswith("--db=")]
+    for arg in sys.argv[1:]:
+        if arg.startswith("--db="):
+            db_path = arg[5:]
+            break
+
+    manager = OpenAICleanupManager(db_path=db_path)
 
     # Parse command line arguments
-    if len(sys.argv) > 1:
-        if sys.argv[1] == "monitor":
+    if len(args) > 0:
+        if args[0] == "monitor":
             await manager.monitor_mode()
-        elif sys.argv[1] == "cleanup-vs":
-            target = int(sys.argv[2]) if len(sys.argv) > 2 else 50
-            await manager.cleanup_vector_stores(target)
-        elif sys.argv[1] == "cleanup-files":
-            max_files = int(sys.argv[2]) if len(sys.argv) > 2 else 1000
-            batch_size = int(sys.argv[3]) if len(sys.argv) > 3 else 100
+        elif args[0] == "cleanup-vs":
+            target = int(args[1]) if len(args) > 1 else 50
+            await manager.cleanup_vector_stores(target, update_sqlite=True)
+        elif args[0] == "cleanup-files":
+            max_files = int(args[1]) if len(args) > 1 else 1000
+            batch_size = int(args[2]) if len(args) > 2 else 100
             await manager.cleanup_files(max_files, batch_size)
         else:
             print("Usage:")
-            print("  python openai_cleanup_manager.py          # Interactive mode")
-            print("  python openai_cleanup_manager.py monitor  # Monitor mode")
             print(
-                "  python openai_cleanup_manager.py cleanup-vs [target]  # Cleanup vector stores"
+                "  python openai_cleanup_manager.py [--db=path]          # Interactive mode"
             )
             print(
-                "  python openai_cleanup_manager.py cleanup-files [max] [batch_size]  # Cleanup files"
+                "  python openai_cleanup_manager.py [--db=path] monitor  # Monitor mode"
+            )
+            print(
+                "  python openai_cleanup_manager.py [--db=path] cleanup-vs [target]  # Cleanup vector stores"
+            )
+            print(
+                "  python openai_cleanup_manager.py [--db=path] cleanup-files [max] [batch_size]  # Cleanup files"
+            )
+            print("\nOptions:")
+            print(
+                "  --db=path  Path to SQLite database (default: ~/.cache/mcp-second-brain/session_cache.db)"
             )
             print("\nExamples:")
             print(

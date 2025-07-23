@@ -154,7 +154,7 @@ class TestOpenAIMultiTurn:
         assert "Information priority:" in dev_msg["content"]
         assert "Current conversation" in dev_msg["content"]
         assert (
-            "search_project_memory - for historical project information"
+            "search_project_history - for historical project information"
             in dev_msg["content"]
         )
 

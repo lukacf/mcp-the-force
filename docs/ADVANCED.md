@@ -323,4 +323,4 @@ def diagnose_error(error_msg):
 7. **Synthesize Results**: Use fast models to reconcile multiple analyses
 8. **Profile Performance**: Measure and optimize model selection
 9. **Handle Failures Gracefully**: Expect rate limits and context overflows
-10. **Document Decisions**: Use project memory to capture reasoning patterns
+10. **Document Decisions**: Use project history to capture reasoning patterns

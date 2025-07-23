@@ -1,12 +1,12 @@
 #!/bin/bash
-# Install git post-commit hook for project memory
+# Install git post-commit hook for project history
 
 HOOK_PATH=".git/hooks/post-commit"
 
 # Create the hook
 cat > "$HOOK_PATH" << 'EOF'
 #!/bin/sh
-# Project memory post-commit hook
+# Project history post-commit hook
 
 # Run in background to not block git
 (
@@ -22,4 +22,4 @@ EOF
 chmod +x "$HOOK_PATH"
 
 echo "Git post-commit hook installed at $HOOK_PATH"
-echo "Project memory will now capture commits automatically."
+echo "Project history will now capture commits automatically."

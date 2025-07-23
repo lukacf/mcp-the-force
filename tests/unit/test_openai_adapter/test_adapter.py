@@ -251,4 +251,4 @@ async def test_adapter_debug_mode():
 
             assert "custom_tool" in tool_names
             assert "web_search" in tool_names  # gpt-4.1 should have web search
-            assert "search_project_memory" in tool_names  # Built-in tool
+            assert "search_project_history" in tool_names  # Built-in tool

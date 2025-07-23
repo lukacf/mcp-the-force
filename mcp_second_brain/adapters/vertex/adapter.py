@@ -8,10 +8,11 @@ from google.genai.types import HarmCategory, HarmBlockThreshold
 import google.api_core.exceptions
 from ...config import get_settings
 from ..base import BaseAdapter
-from ..memory_search_declaration import create_search_memory_declaration_gemini
+from ..memory_search_declaration import create_search_history_declaration_gemini
 from ..task_files_search_declaration import create_task_files_search_declaration_gemini
 from ...gemini_session_cache import gemini_session_cache
 from .errors import AdapterException, ErrorCategory
+from ...utils.scope_manager import scope_manager
 
 # Removed validation imports - no longer validating structured output
 # from ...utils.validation import validate_json_schema
@@ -151,10 +152,10 @@ class VertexAdapter(BaseAdapter):
         # Setup tools
         function_declarations = []
 
-        # Add search_project_memory unless explicitly disabled
+        # Add search_project_history unless explicitly disabled
         disable_memory_search = kwargs.pop("disable_memory_search", False)
         if not disable_memory_search:
-            memory_search_decl = create_search_memory_declaration_gemini()
+            memory_search_decl = create_search_history_declaration_gemini()
             function_declarations.append(
                 types.FunctionDeclaration(**memory_search_decl)
             )
@@ -396,6 +397,7 @@ class VertexAdapter(BaseAdapter):
                 history_with_tool_calls,
                 generate_content_config,
                 vector_store_ids,
+                session_id,
             )
 
             # Save the final, complete history
@@ -454,6 +456,7 @@ class VertexAdapter(BaseAdapter):
         contents: List[types.Content],  # Now receives the full history so far
         config: types.GenerateContentConfig,
         vector_store_ids: Optional[List[str]] = None,
+        session_id: Optional[str] = None,
     ) -> tuple[str, list[types.Content]]:  # Return final text AND final history
         """Handle function calls in the response."""
         client = get_client()
@@ -485,9 +488,21 @@ class VertexAdapter(BaseAdapter):
 
             # Execute function calls
             function_responses = []
+
+            # Decide the scope once for all built-in tools, preferring session_id but falling back to instance_id
+            final_scope_id = session_id
+            if not final_scope_id:
+                from ...logging.setup import get_instance_id
+
+                instance_id = get_instance_id()
+                if instance_id:
+                    final_scope_id = f"instance_{instance_id}"
+
+            logger.info(f"Using scope for built-in tools: {final_scope_id}")
+
             for fc in function_calls:
                 try:
-                    if fc.function_call.name == "search_project_memory":
+                    if fc.function_call.name == "search_project_history":
                         # Extract parameters
                         query = fc.function_call.args.get("query", "")
                         max_results = fc.function_call.args.get("max_results", 40)
@@ -495,18 +510,21 @@ class VertexAdapter(BaseAdapter):
                             "store_types", ["conversation", "commit"]
                         )
 
-                        logger.info(f"Executing search_project_memory: '{query}'")
+                        logger.info(f"Executing search_project_history: '{query}'")
 
                         # Import and execute the search
-                        from ...tools.search_memory import SearchMemoryAdapter
+                        from ...tools.search_history import SearchHistoryAdapter
 
-                        memory_search = SearchMemoryAdapter()
-                        search_result_text = await memory_search.generate(
-                            prompt=query,
-                            query=query,
-                            max_results=max_results,
-                            store_types=store_types,
-                        )
+                        # Set the scope context for built-in tool execution
+                        async with scope_manager.scope(final_scope_id):
+                            memory_search = SearchHistoryAdapter()
+                            search_result_text = await memory_search.generate(
+                                prompt=query,
+                                query=query,
+                                max_results=max_results,
+                                store_types=store_types,
+                                # No longer pass session_id as parameter
+                            )
 
                         # Create function response
                         function_responses.append(
@@ -526,13 +544,15 @@ class VertexAdapter(BaseAdapter):
                         # Import and execute the search
                         from ...tools.search_task_files import SearchTaskFilesAdapter
 
-                        task_files_search = SearchTaskFilesAdapter()
-                        search_result_text = await task_files_search.generate(
-                            prompt=query,
-                            query=query,
-                            max_results=max_results,
-                            vector_store_ids=vector_store_ids,
-                        )
+                        # Use the same scope as search_project_history
+                        async with scope_manager.scope(final_scope_id):
+                            task_files_search = SearchTaskFilesAdapter()
+                            search_result_text = await task_files_search.generate(
+                                prompt=query,
+                                query=query,
+                                max_results=max_results,
+                                vector_store_ids=vector_store_ids,
+                            )
 
                         # Create function response
                         function_responses.append(
