@@ -610,8 +610,11 @@ class FlowOrchestrator:
                 tool_executor = ToolExecutor(self.tool_dispatcher())
             else:
                 # It's a BuiltInToolDispatcher instance
+                # Derive session_id from previous_response_id or use default
+                session_id = request.previous_response_id or "default"
                 dispatcher_instance = self.tool_dispatcher()
                 dispatcher_instance.vector_store_ids = request.vector_store_ids
+                dispatcher_instance.session_id = session_id
                 tool_executor = ToolExecutor(dispatcher_instance.dispatch)
 
             context = FlowContext(
