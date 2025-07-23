@@ -5,6 +5,7 @@ from unittest.mock import Mock, patch
 from typing import List, Dict, Any
 
 from mcp_second_brain.tools.search_history import SearchHistoryAdapter
+from mcp_second_brain.utils.scope_manager import scope_manager
 
 
 class MockSearchResult:
@@ -116,8 +117,11 @@ class TestSearchHistoryDeduplication:
     @pytest.mark.asyncio
     async def test_duplicate_results_filtered(self, search_adapter, mock_openai_client):
         """Duplicate results should be filtered out in subsequent searches."""
-        # Clear any existing dedup cache for the default session
-        await search_adapter.clear_deduplication_cache("default")
+        # Use a specific session for this test
+        test_session = "test-dedup-session"
+
+        # Clear any existing dedup cache for the test session
+        await search_adapter.clear_deduplication_cache(test_session)
 
         # First search
         results1 = [
@@ -128,7 +132,8 @@ class TestSearchHistoryDeduplication:
             results1
         )
 
-        response1 = await search_adapter.generate("query 1", max_results=20)
+        async with scope_manager.scope(test_session):
+            response1 = await search_adapter.generate("query 1", max_results=20)
         assert "Found 2 results" in response1
 
         # Second search with overlapping results
@@ -141,7 +146,8 @@ class TestSearchHistoryDeduplication:
             results2
         )
 
-        response2 = await search_adapter.generate("query 2", max_results=20)
+        async with scope_manager.scope(test_session):
+            response2 = await search_adapter.generate("query 2", max_results=20)
 
         # Should only see the new result
         assert "Found 1 result" in response2
@@ -154,8 +160,11 @@ class TestSearchHistoryDeduplication:
         self, search_adapter, mock_openai_client
     ):
         """Deduplication should track by content hash, not just file_id."""
-        # Clear any existing dedup cache for the default session
-        await search_adapter.clear_deduplication_cache("default")
+        # Use a specific session for this test
+        test_session = "test-content-hash-session"
+
+        # Clear any existing dedup cache for the test session
+        await search_adapter.clear_deduplication_cache(test_session)
 
         # First search
         results1 = [
@@ -168,7 +177,8 @@ class TestSearchHistoryDeduplication:
             results1
         )
 
-        response1 = await search_adapter.generate("query 1", max_results=20)
+        async with scope_manager.scope(test_session):
+            response1 = await search_adapter.generate("query 1", max_results=20)
         assert "Found 2 results" in response1
 
         # Second search
@@ -184,7 +194,8 @@ class TestSearchHistoryDeduplication:
             results2
         )
 
-        response2 = await search_adapter.generate("query 2", max_results=20)
+        async with scope_manager.scope(test_session):
+            response2 = await search_adapter.generate("query 2", max_results=20)
 
         # Should only see the new chunk
         assert "Found 1 result" in response2
@@ -196,8 +207,11 @@ class TestSearchHistoryDeduplication:
         self, search_adapter, mock_openai_client
     ):
         """Deduplication should note when content was seen before."""
-        # Clear any existing dedup cache for the default session
-        await search_adapter.clear_deduplication_cache("default")
+        # Use a specific session for this test
+        test_session = "test-metadata-session"
+
+        # Clear any existing dedup cache for the test session
+        await search_adapter.clear_deduplication_cache(test_session)
 
         # First search
         results1 = [
@@ -209,7 +223,8 @@ class TestSearchHistoryDeduplication:
             results1
         )
 
-        await search_adapter.generate("query 1", max_results=20)
+        async with scope_manager.scope(test_session):
+            await search_adapter.generate("query 1", max_results=20)
 
         # Second search with same content
         results2 = [
@@ -224,9 +239,10 @@ class TestSearchHistoryDeduplication:
             results2
         )
 
-        response2 = await search_adapter.generate(
-            "query 2", max_results=20, include_duplicates_metadata=True
-        )
+        async with scope_manager.scope(test_session):
+            response2 = await search_adapter.generate(
+                "query 2", max_results=20, include_duplicates_metadata=True
+            )
 
         # Should see new content and metadata about duplicate
         assert "Found 1 result" in response2
@@ -242,8 +258,11 @@ class TestSearchHistoryDeduplication:
     @pytest.mark.asyncio
     async def test_max_results_reduced_to_20(self, search_adapter, mock_openai_client):
         """Default max_results should be 20, not 40."""
-        # Clear any existing dedup cache for the default session
-        await search_adapter.clear_deduplication_cache("default")
+        # Use a specific session for this test
+        test_session = "test-max-results-session"
+
+        # Clear any existing dedup cache for the test session
+        await search_adapter.clear_deduplication_cache(test_session)
 
         # Create 25 results
         results = [
@@ -255,7 +274,8 @@ class TestSearchHistoryDeduplication:
         )
 
         # Search without specifying max_results (should use default of 20)
-        response = await search_adapter.generate("test query")
+        async with scope_manager.scope(test_session):
+            response = await search_adapter.generate("test query")
 
         # Should only see 20 results
         assert "Found 20 results" in response
@@ -267,8 +287,11 @@ class TestSearchHistoryDeduplication:
         self, search_adapter, mock_openai_client
     ):
         """Deduplication should work across different memory stores."""
-        # Clear any existing dedup cache for the default session
-        await search_adapter.clear_deduplication_cache("default")
+        # Use a specific session for this test
+        test_session = "test-multi-store-session"
+
+        # Clear any existing dedup cache for the test session
+        await search_adapter.clear_deduplication_cache(test_session)
 
         # Setup to return different results per store
         call_count = 0
@@ -284,7 +307,8 @@ class TestSearchHistoryDeduplication:
 
         mock_openai_client.vector_stores.search.side_effect = search_side_effect
 
-        response = await search_adapter.generate("test query", max_results=20)
+        async with scope_manager.scope(test_session):
+            response = await search_adapter.generate("test query", max_results=20)
 
         # Should only see the content once (from higher scoring result)
         assert "Found 1 result" in response
@@ -295,22 +319,23 @@ class TestSearchHistoryDeduplication:
         self, search_adapter, mock_openai_client
     ):
         """Deduplication cache can be cleared to start fresh."""
+        # Use a specific session for this test
+        test_session = "test-clear-session"
+
         # First search
         results = [MockSearchResult("Content 1", 0.9, file_id="file1")]
         mock_openai_client.vector_stores.search.return_value = MockSearchResponse(
             results
         )
 
-        await search_adapter.generate(
-            "query 1", max_results=20, session_id="test-session"
-        )
+        async with scope_manager.scope(test_session):
+            await search_adapter.generate("query 1", max_results=20)
 
         # Clear deduplication cache for the session
-        await search_adapter.clear_deduplication_cache("test-session")
+        await search_adapter.clear_deduplication_cache(test_session)
 
         # Same search in same session should now return the result again
-        response = await search_adapter.generate(
-            "query 2", max_results=20, session_id="test-session"
-        )
+        async with scope_manager.scope(test_session):
+            response = await search_adapter.generate("query 2", max_results=20)
         assert "Found 1 result" in response
         assert "Content: Content 1" in response

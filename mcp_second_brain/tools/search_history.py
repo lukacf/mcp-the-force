@@ -25,6 +25,7 @@ from .descriptors import Route
 from .registry import tool
 from .search_dedup_sqlite import SQLiteSearchDeduplicator
 from pathlib import Path
+from ..utils.scope_manager import scope_manager
 
 logger = logging.getLogger(__name__)
 
@@ -78,9 +79,6 @@ class SearchProjectHistory(ToolSpec):
     store_types = Route.prompt(
         description="Types of stores to search (default: ['conversation', 'commit'])",
         default_factory=lambda: ["conversation", "commit"],
-    )
-    session_id = Route.session(
-        description="Session ID for deduplication scope (optional, defaults to 'default')"
     )
 
 
@@ -157,14 +155,15 @@ class SearchHistoryAdapter(BaseAdapter):
         store_types = kwargs.get("store_types", ["conversation", "commit"])
         include_duplicates_metadata = kwargs.get("include_duplicates_metadata", False)
 
-        # Extract session_id if provided
-        session_id = kwargs.get("session_id", "default")
+        # Get session_id from scope context
+        session_id = scope_manager.get_scope_id()
 
         # Debug logging
         logger.info(f"[SEARCH_HISTORY] Input query: '{query}'")
         logger.info(
             f"[SEARCH_HISTORY] Max results: {max_results}, Store types: {store_types}, Session: {session_id}"
         )
+        logger.info(f"[SEARCH_HISTORY] DEDUPLICATION SCOPE: {session_id}")
 
         if not query:
             raise fastmcp.exceptions.ToolError("Search query is required")
