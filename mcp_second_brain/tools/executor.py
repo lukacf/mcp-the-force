@@ -416,6 +416,10 @@ class ToolExecutor:
             }
             adapter_params.update(prompt_params_for_adapter)
 
+            # Pass session_id to the adapter so it can propagate to built-in tools
+            if session_id:
+                adapter_params["session_id"] = session_id
+
             explicit_vs_ids = routed_params.get("vector_store_ids")
             assert isinstance(explicit_vs_ids, list)
             if explicit_vs_ids:
