@@ -62,9 +62,15 @@ def create_tool_function(metadata: ToolMetadata):
                 bound.arguments.get("session_id") or get_instance_id()
             )
 
+            # Debug logging
+            logger.debug(
+                f"[INTEGRATION] Tool {metadata.id} - session_id: {bound.arguments.get('session_id')}, instance_id: {get_instance_id()}, final scope_id: {scope_id}"
+            )
+
             # If we have an instance_id, prepend "instance_" to distinguish from session IDs
             if scope_id and not bound.arguments.get("session_id"):
                 scope_id = f"instance_{scope_id}"
+                logger.debug(f"[INTEGRATION] Using instance-based scope: {scope_id}")
 
             # Make the whole execution run inside that scope
             async with scope_manager.scope(scope_id):
