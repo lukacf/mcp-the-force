@@ -60,7 +60,7 @@ class ChatWithGemini25Pro(ToolSpec):
     priority_context: Optional[List[str]] = Route.prompt(
         description="Files/directories to prioritize for inline inclusion"
     )
-    structured_output_schema: Optional[Dict[str, Any]] = Route.structured_output(
+    structured_output_schema: Optional[str] = Route.structured_output(
         description="JSON schema for structured output validation. For OpenAI models: requires strict validation with 'additionalProperties: false' at every object level and all properties with constraints (minimum, maximum, enum, pattern) must be listed in 'required'"
     )
     temperature: Optional[float] = Route.adapter(
@@ -109,7 +109,7 @@ class ChatWithGemini25Flash(ToolSpec):
     priority_context: Optional[List[str]] = Route.prompt(
         description="Files/directories to prioritize for inline inclusion"
     )
-    structured_output_schema: Optional[Dict[str, Any]] = Route.structured_output(
+    structured_output_schema: Optional[str] = Route.structured_output(
         description="JSON schema for structured output validation. For OpenAI models: requires strict validation with 'additionalProperties: false' at every object level and all properties with constraints (minimum, maximum, enum, pattern) must be listed in 'required'"
     )
     temperature: Optional[float] = Route.adapter(
@@ -171,7 +171,7 @@ Please approach this task step-by-step, showing your reasoning process."""
     priority_context: Optional[List[str]] = Route.prompt(
         description="Files/directories to prioritize for inline inclusion"
     )
-    structured_output_schema: Optional[Dict[str, Any]] = Route.structured_output(
+    structured_output_schema: Optional[str] = Route.structured_output(
         description="JSON schema for structured output validation. For OpenAI models: requires strict validation with 'additionalProperties: false' at every object level and all properties with constraints (minimum, maximum, enum, pattern) must be listed in 'required'"
     )
     reasoning_effort: Optional[str] = Route.adapter(
@@ -222,7 +222,7 @@ class ChatWithO3Pro(ToolSpec):
     max_reasoning_tokens: Optional[int] = Route.adapter(
         default=None, description="Maximum reasoning tokens"
     )
-    structured_output_schema: Optional[Dict[str, Any]] = Route.structured_output(  # type: ignore[misc]
+    structured_output_schema: Optional[str] = Route.structured_output(  # type: ignore[misc]
         description="JSON schema for structured output validation. For OpenAI models: requires strict validation with 'additionalProperties: false' at every object level and all properties with constraints (minimum, maximum, enum, pattern) must be listed in 'required'"
     )
     reasoning_effort: Optional[str] = Route.adapter(
@@ -269,7 +269,7 @@ class ChatWithGPT4_1(ToolSpec):
     priority_context: Optional[List[str]] = Route.prompt(
         description="Files/directories to prioritize for inline inclusion"
     )
-    structured_output_schema: Optional[Dict[str, Any]] = Route.structured_output(
+    structured_output_schema: Optional[str] = Route.structured_output(
         description="JSON schema for structured output validation. For OpenAI models: requires strict validation with 'additionalProperties: false' at every object level and all properties with constraints (minimum, maximum, enum, pattern) must be listed in 'required'"
     )
     temperature: Optional[float] = Route.adapter(
@@ -402,7 +402,7 @@ class ResearchWithO4MiniDeepResearch(ToolSpec):
 #     attachments: Optional[List[str]] = Route.vector_store(
 #         description="Additional files for RAG"
 #     )
-#     structured_output_schema: Optional[Dict[str, Any]] = Route.structured_output(
+#     structured_output_schema: Optional[str] = Route.structured_output(
 #         description="JSON Schema for structured output (optional)"
 #     )
 #     temperature: Optional[float] = Route.adapter(
@@ -448,7 +448,7 @@ class ChatWithGrok4(ToolSpec):
     priority_context: Optional[List[str]] = Route.prompt(
         description="Files/directories to prioritize for inline inclusion"
     )
-    structured_output_schema: Optional[Dict[str, Any]] = Route.structured_output(
+    structured_output_schema: Optional[str] = Route.structured_output(
         description="JSON Schema for structured output (optional)"
     )
     search_parameters: Optional[Dict[str, Any]] = Route.adapter(
@@ -505,7 +505,7 @@ class ChatWithGrok3Reasoning(ToolSpec):
     priority_context: Optional[List[str]] = Route.prompt(
         description="Files/directories to prioritize for inline inclusion"
     )
-    structured_output_schema: Optional[Dict[str, Any]] = Route.structured_output(
+    structured_output_schema: Optional[str] = Route.structured_output(
         description="JSON Schema for structured output (optional)"
     )
     search_parameters: Optional[Dict[str, Any]] = Route.adapter(
@@ -563,7 +563,7 @@ class ChatWithGrok3Reasoning(ToolSpec):
 #     attachments: Optional[List[str]] = Route.vector_store(
 #         description="Additional files for RAG"
 #     )
-#     structured_output_schema: Optional[Dict[str, Any]] = Route.structured_output(
+#     structured_output_schema: Optional[str] = Route.structured_output(
 #         description="JSON Schema for structured output (optional)"
 #     )
 #     temperature: Optional[float] = Route.adapter(
