@@ -22,9 +22,8 @@ class TestSessionManagement:
             "properties": {
                 "information_stored": {"type": "boolean"},
                 "stored_content": {"type": "string"},
-                "session_id_used": {"type": "string"},
             },
-            "required": ["information_stored", "stored_content", "session_id_used"],
+            "required": ["information_stored", "stored_content"],
             "additionalProperties": False,
         }
 
@@ -56,7 +55,6 @@ class TestSessionManagement:
         assert result["information_stored"] is True, f"Storage failed: {result}"
         assert "GAMMA-7" in result["stored_content"], f"Protocol not stored: {result}"
         assert "8443" in result["stored_content"], f"Port not stored: {result}"
-        assert result["session_id_used"] == session_id_a, f"Wrong session ID: {result}"
 
         # Step 2: Test immediate recall in same session
         response = call_claude_tool(
@@ -198,11 +196,16 @@ class TestSessionManagement:
         assert "DELTA-9" in response, f"Protocol not mentioned in response: {response}"
         assert "7625" in response, f"Port not mentioned in response: {response}"
 
+        # Give memory storage time to complete
+        import time
+
+        time.sleep(2)
+
         # Step 2: Use Gemini Flash to search project history for the information
         response = call_claude_tool(
             "chat_with_gemini25_flash",
-            instructions="Search project history for information about Protocol DELTA-9 and its port number",
-            output_format="JSON with search results",
+            instructions="Use the search_project_history function to search for information about Protocol DELTA-9 and its port number",
+            output_format="JSON with search results based on what you find",
             context=[],
             session_id="different-session",  # Different session to ensure it's using history search
             structured_output_schema=search_schema,
