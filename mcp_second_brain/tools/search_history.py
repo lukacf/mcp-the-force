@@ -4,7 +4,7 @@ This provides a unified way for all models (OpenAI and Gemini) to search
 across project history stores without the 2-store limitation.
 """
 
-from typing import List, Dict, Any, TYPE_CHECKING
+from typing import List, Dict, Any, TYPE_CHECKING, Optional
 import logging
 import asyncio
 from datetime import datetime, timezone
@@ -23,7 +23,8 @@ from ..adapters.base import BaseAdapter
 from .base import ToolSpec
 from .descriptors import Route
 from .registry import tool
-from .search_dedup import SearchDeduplicator
+from .search_dedup_sqlite import SQLiteSearchDeduplicator
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -87,18 +88,44 @@ class SearchHistoryAdapter(BaseAdapter):
     context_window = 0  # Not applicable
     description_snippet = "Search project history stores"
 
-    # Class-level deduplicator shared across instances
-    _deduplicator = SearchDeduplicator("memory")
+    # Class-level SQLite deduplicator (singleton)
+    _deduplicator = None
+    _deduplicator_lock = asyncio.Lock()
 
     def __init__(self, model_name: str = "history_search"):
         self.model_name = model_name
         settings = get_settings()
         self.client = OpenAI(api_key=settings.openai_api_key)
         self.memory_config = get_memory_config()
+        self._ensure_deduplicator()
 
-    async def clear_deduplication_cache(self):
-        """Clear the deduplication cache."""
-        await self._deduplicator.clear_cache()
+    def _ensure_deduplicator(self):
+        """Ensure the SQLite deduplicator is initialized."""
+        if SearchHistoryAdapter._deduplicator is None:
+            # Use the same database as memory config
+            home = Path.home()
+            cache_dir = home / ".cache" / "mcp-second-brain"
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            db_path = cache_dir / "session_cache.db"
+
+            SearchHistoryAdapter._deduplicator = SQLiteSearchDeduplicator(
+                db_path=db_path,
+                ttl_hours=24,  # 24 hour TTL for search deduplication
+            )
+            logger.info(
+                f"[SEARCH_HISTORY] Initialized SQLite deduplicator at {db_path}"
+            )
+
+    async def clear_deduplication_cache(self, session_id: Optional[str] = None):
+        """Clear the deduplication cache.
+
+        Args:
+            session_id: If provided, only clear cache for this session.
+                       If None, this is a no-op (we don't clear all sessions).
+        """
+        if session_id and self._deduplicator:
+            self._deduplicator.clear_session_cache(session_id)
+            logger.info(f"[SEARCH_HISTORY] Cleared cache for session {session_id}")
 
     async def generate(
         self,
@@ -127,10 +154,13 @@ class SearchHistoryAdapter(BaseAdapter):
         store_types = kwargs.get("store_types", ["conversation", "commit"])
         include_duplicates_metadata = kwargs.get("include_duplicates_metadata", False)
 
+        # Extract session_id if provided
+        session_id = kwargs.get("session_id", "default")
+
         # Debug logging
         logger.info(f"[SEARCH_HISTORY] Input query: '{query}'")
         logger.info(
-            f"[SEARCH_HISTORY] Max results: {max_results}, Store types: {store_types}"
+            f"[SEARCH_HISTORY] Max results: {max_results}, Store types: {store_types}, Session: {session_id}"
         )
 
         if not query:
@@ -191,11 +221,17 @@ class SearchHistoryAdapter(BaseAdapter):
             # Sort by relevance score
             all_results.sort(key=lambda x: x.get("score", 0), reverse=True)
 
-            # Apply deduplication
+            # Apply deduplication using SQLite deduplicator
+            if not self._deduplicator:
+                # This should never happen, but satisfies mypy
+                raise RuntimeError("Deduplicator not initialized")
+
             (
                 deduplicated_results,
                 duplicate_count,
-            ) = await self._deduplicator.deduplicate_results(all_results, max_results)
+            ) = self._deduplicator.deduplicate_results(
+                all_results, max_results, session_id=session_id, query=query
+            )
 
             logger.info(
                 f"[SEARCH_HISTORY] After deduplication: {len(deduplicated_results)} results, {duplicate_count} duplicates removed"
