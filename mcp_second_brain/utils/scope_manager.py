@@ -44,18 +44,11 @@ class ScopeManager:
         # Try to use instance_id for Claude direct tool calls
         try:
             from ..logging.setup import get_instance_id
-            import logging
 
-            logger = logging.getLogger(__name__)
             instance_id = get_instance_id()
-            logger.debug(f"Attempting instance_id fallback: instance_id={instance_id}")
             if instance_id:
                 return f"instance_{instance_id}"
-        except ImportError as e:
-            import logging
-
-            logger = logging.getLogger(__name__)
-            logger.debug(f"ImportError when getting instance_id: {e}")
+        except ImportError:
             pass
 
         # Fallback to a new, unique scope if none is set in the context.
