@@ -364,6 +364,7 @@ class GrokAdapter(BaseAdapter):
                             tool_name=tool_name,
                             tool_args=tool_args,
                             vector_store_ids=vector_store_ids,
+                            session_id=session_id,
                         )
                     except Exception as e:
                         output = f"Error executing tool '{tool_name}': {e}"

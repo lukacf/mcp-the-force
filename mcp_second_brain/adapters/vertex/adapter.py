@@ -488,6 +488,18 @@ class VertexAdapter(BaseAdapter):
 
             # Execute function calls
             function_responses = []
+
+            # Decide the scope once for all built-in tools, preferring session_id but falling back to instance_id
+            final_scope_id = session_id
+            if not final_scope_id:
+                from ...logging.setup import get_instance_id
+
+                instance_id = get_instance_id()
+                if instance_id:
+                    final_scope_id = f"instance_{instance_id}"
+
+            logger.info(f"Using scope for built-in tools: {final_scope_id}")
+
             for fc in function_calls:
                 try:
                     if fc.function_call.name == "search_project_history":
@@ -504,7 +516,7 @@ class VertexAdapter(BaseAdapter):
                         from ...tools.search_history import SearchHistoryAdapter
 
                         # Set the scope context for built-in tool execution
-                        async with scope_manager.scope(session_id):
+                        async with scope_manager.scope(final_scope_id):
                             memory_search = SearchHistoryAdapter()
                             search_result_text = await memory_search.generate(
                                 prompt=query,
@@ -532,13 +544,15 @@ class VertexAdapter(BaseAdapter):
                         # Import and execute the search
                         from ...tools.search_task_files import SearchTaskFilesAdapter
 
-                        task_files_search = SearchTaskFilesAdapter()
-                        search_result_text = await task_files_search.generate(
-                            prompt=query,
-                            query=query,
-                            max_results=max_results,
-                            vector_store_ids=vector_store_ids,
-                        )
+                        # Use the same scope as search_project_history
+                        async with scope_manager.scope(final_scope_id):
+                            task_files_search = SearchTaskFilesAdapter()
+                            search_result_text = await task_files_search.generate(
+                                prompt=query,
+                                query=query,
+                                max_results=max_results,
+                                vector_store_ids=vector_store_ids,
+                            )
 
                         # Create function response
                         function_responses.append(
