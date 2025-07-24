@@ -34,7 +34,7 @@ lint:
 	@echo "Running linting and static analysis..."
 	ruff check .
 	ruff format . --check
-	mypy --install-types --non-interactive mcp_second_brain
+	mypy --install-types --non-interactive mcp_the_force
 
 test:
 	@echo "Running fast unit tests..."
@@ -42,7 +42,7 @@ test:
 
 test-unit:
 	@echo "Running all unit tests with coverage..."
-	$(PYTEST) tests/unit -v --cov=mcp_second_brain --cov-report=xml --cov-report=term
+	$(PYTEST) tests/unit -v --cov=mcp_the_force --cov-report=xml --cov-report=term
 
 test-integration:
 	@echo "Running integration tests with mock adapters..."
@@ -68,8 +68,8 @@ e2e-setup:
 		echo "Run 'gcloud auth application-default login' first"; \
 		exit 1; \
 	fi; \
-	docker build -f tests/e2e_dind/Dockerfile.runner -t mcp-e2e-runner .; \
-	docker build -f tests/e2e_dind/Dockerfile.server -t mcp-e2e-server .; \
+	docker build -f tests/e2e_dind/Dockerfile.runner -t the-force-e2e-runner .; \
+	docker build -f tests/e2e_dind/Dockerfile.server -t the-force-e2e-server .; \
 	echo "Testing Claude MCP configuration in parallel..."; \
 	( \
 		for scenario in smoke memory attachments cross_model failures stable_list; do \
@@ -86,10 +86,10 @@ e2e-setup:
 					-e VERTEX_LOCATION="$${VERTEX_LOCATION:-us-central1}" \
 					-e GOOGLE_APPLICATION_CREDENTIALS="/home/claude/.config/gcloud/application_default_credentials.json" \
 					--entrypoint=/bin/bash \
-					mcp-e2e-runner -c " \
+					the-force-e2e-runner -c " \
 						echo '=== Testing $$scenario ===' && \
-						gosu claude claude mcp add-json second-brain '{ \
-							\"command\": \"mcp-second-brain\", \
+						gosu claude claude mcp add-json the-force '{ \
+							\"command\": \"mcp-the-force\", \
 							\"args\": [], \
 							\"env\": { \
 								\"OPENAI_API_KEY\": \"$$OPENAI_API_KEY\", \
@@ -102,7 +102,7 @@ e2e-setup:
 								\"PYTHONPATH\": \"/host-project\" \
 							}, \
 							\"timeout\": 60000, \
-							\"description\": \"MCP Second-Brain server\" \
+							\"description\": \"MCP The-Force server\" \
 						}' && \
 						echo 'MCP server configured for $$scenario' && \
 						gosu claude claude mcp list && \
@@ -132,8 +132,8 @@ e2e:
 		echo "Run 'gcloud auth application-default login' first"; \
 		exit 1; \
 	fi; \
-	docker build -f tests/e2e_dind/Dockerfile.runner -t mcp-e2e-runner .; \
-	docker build -f tests/e2e_dind/Dockerfile.server -t mcp-e2e-server .; \
+	docker build -f tests/e2e_dind/Dockerfile.runner -t the-force-e2e-runner .; \
+	docker build -f tests/e2e_dind/Dockerfile.server -t the-force-e2e-server .; \
 	if [ -n "$(TEST)" ]; then \
 		echo "Running specific e2e test: $(TEST)"; \
 		TEST_NAME=$$(basename $(TEST) .py); \
@@ -151,7 +151,7 @@ e2e:
 			-e VERTEX_LOCATION="$${VERTEX_LOCATION:-us-central1}" \
 			-e GOOGLE_APPLICATION_CREDENTIALS="/home/claude/.config/gcloud/application_default_credentials.json" \
 			-e SHARED_TMP_VOLUME="$$VOL" \
-			mcp-e2e-runner $(TEST) -v -s --tb=short; \
+			the-force-e2e-runner $(TEST) -v -s --tb=short; \
 		EXIT_CODE=$$?; \
 		docker volume rm "$$VOL" >/dev/null 2>&1 || true; \
 		exit $$EXIT_CODE; \
@@ -175,7 +175,7 @@ e2e:
 						-e VERTEX_LOCATION="$${VERTEX_LOCATION:-us-central1}" \
 						-e GOOGLE_APPLICATION_CREDENTIALS="/home/claude/.config/gcloud/application_default_credentials.json" \
 						-e SHARED_TMP_VOLUME="$$VOL" \
-						mcp-e2e-runner scenarios/test_$$scenario.py -v --tb=short; \
+						the-force-e2e-runner scenarios/test_$$scenario.py -v --tb=short; \
 					EXIT_CODE=$$?; \
 					docker volume rm "$$VOL" >/dev/null 2>&1 || true; \
 					if [ $$EXIT_CODE -eq 0 ]; then \
@@ -206,7 +206,7 @@ clean:
 clean-e2e:
 	@echo "Cleaning up E2E Docker resources..."
 	@# Remove E2E Docker images
-	docker rmi -f mcp-e2e-runner mcp-e2e-server 2>/dev/null || true
+	docker rmi -f the-force-e2e-runner the-force-e2e-server 2>/dev/null || true
 	@# Remove E2E volumes (e2e-tmp-*)
 	docker volume ls --format '{{.Name}}' | grep '^e2e-tmp-' | xargs -r docker volume rm 2>/dev/null || true
 	@# Remove E2E networks (compose-e2e_*)

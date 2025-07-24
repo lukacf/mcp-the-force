@@ -1,10 +1,10 @@
 """Unit tests for structured output parameter routing."""
 
 from typing import Dict, Any
-from mcp_second_brain.tools.parameter_router import ParameterRouter
-from mcp_second_brain.tools.registry import ToolMetadata, ParameterInfo, tool
-from mcp_second_brain.tools.descriptors import Route, RouteType, RouteDescriptor
-from mcp_second_brain.tools.base import ToolSpec
+from mcp_the_force.tools.parameter_router import ParameterRouter
+from mcp_the_force.tools.registry import ToolMetadata, ParameterInfo, tool
+from mcp_the_force.tools.descriptors import Route, RouteType, RouteDescriptor
+from mcp_the_force.tools.base import ToolSpec
 
 
 class TestStructuredOutputRouting:

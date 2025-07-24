@@ -3,7 +3,7 @@ Unit tests for token counting functionality.
 """
 
 from unittest.mock import patch, Mock
-from mcp_second_brain.utils.token_counter import count_tokens
+from mcp_the_force.utils.token_counter import count_tokens
 
 
 class TestTokenCounter:
@@ -48,7 +48,7 @@ class TestTokenCounter:
     def test_count_with_fallback(self):
         """Test token counting when tiktoken is not available."""
         # Mock tiktoken not being available
-        with patch("mcp_second_brain.utils.token_counter._enc", None):
+        with patch("mcp_the_force.utils.token_counter._enc", None):
             texts = ["Hello world this is a test"]
             count = count_tokens(texts)
 
@@ -62,7 +62,7 @@ class TestTokenCounter:
         mock_enc = Mock()
         mock_enc.encode.return_value = [1, 2, 3]  # 3 tokens
 
-        with patch("mcp_second_brain.utils.token_counter._enc", mock_enc):
+        with patch("mcp_the_force.utils.token_counter._enc", mock_enc):
             texts = ["test text"]
             count = count_tokens(texts)
 

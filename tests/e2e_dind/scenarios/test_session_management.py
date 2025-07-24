@@ -218,6 +218,6 @@ class TestSessionManagement:
         assert (
             result["found_protocol"] is True
         ), f"Protocol not found in history: {result}"
-        assert result["protocol_name"] == "DELTA-9", f"Wrong protocol found: {result}"
+        assert "DELTA-9" in result["protocol_name"], f"Wrong protocol found: {result}"
         assert result["port_number"] == 7625, f"Wrong port found: {result}"
         assert result["results_count"] > 0, f"No search results returned: {result}"

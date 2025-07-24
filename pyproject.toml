@@ -1,7 +1,7 @@
 [project]
-name = "mcp_second_brain"
+name = "mcp_the_force"
 version = "0.3.2"
-description = "Local MCP \"Second-Brain\" server with prompt-safe file inlining and vector-store attachments."
+description = "Local MCP \"The-Force\" server with prompt-safe file inlining and vector-store attachments."
 authors = [{name = "Your Name"}]
 readme = "README.md"
 requires-python = ">=3.13"
@@ -27,8 +27,8 @@ dependencies = [
 ]
 
 [project.scripts]
-mcp-second-brain = "mcp_second_brain.server:main"
-mcp-config = "mcp_second_brain.cli.config_cli:main"
+mcp-the-force = "mcp_the_force.server:main"
+mcp-config = "mcp_the_force.cli.config_cli:main"
 
 [project.optional-dependencies]
 test = [
@@ -50,7 +50,7 @@ dev = [
 ]
 
 [tool.setuptools]
-packages = ["mcp_second_brain"]
+packages = ["mcp_the_force"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -75,7 +75,7 @@ markers = [
 # Note: plugins loading moved to conftest.py for better compatibility
 
 [tool.coverage.run]
-source = ["mcp_second_brain"]
+source = ["mcp_the_force"]
 omit = ["*/tests/*", "*/main.py"]
 
 [tool.coverage.report]
@@ -92,7 +92,7 @@ ignore_missing_imports = true
 
 # Ignore descriptor-related type errors in definitions.py
 [[tool.mypy.overrides]]
-module = "mcp_second_brain.tools.definitions"
+module = "mcp_the_force.tools.definitions"
 disable_error_code = ["assignment"]
 
 [tool.ruff]

@@ -6,8 +6,8 @@ from pathlib import Path
 from unittest.mock import MagicMock, AsyncMock, patch
 from lxml import etree as ET
 
-from mcp_second_brain.tools.executor import ToolExecutor
-from mcp_second_brain.tools.registry import ToolMetadata
+from mcp_the_force.tools.executor import ToolExecutor
+from mcp_the_force.tools.registry import ToolMetadata
 
 
 @pytest.mark.asyncio
@@ -44,18 +44,18 @@ async def test_file_tree_in_prompt():
         with (
             patch.object(executor.validator, "validate") as mock_validate,
             patch.object(executor.router, "route") as mock_route,
-            patch("mcp_second_brain.config.get_settings") as mock_settings,
+            patch("mcp_the_force.config.get_settings") as mock_settings,
             patch(
-                "mcp_second_brain.utils.thread_pool.get_settings"
+                "mcp_the_force.utils.thread_pool.get_settings"
             ) as mock_thread_settings,
-            patch("mcp_second_brain.adapters.get_adapter") as mock_get_adapter,
+            patch("mcp_the_force.adapters.get_adapter") as mock_get_adapter,
             patch(
-                "mcp_second_brain.adapters.model_registry.get_model_context_window",
+                "mcp_the_force.adapters.model_registry.get_model_context_window",
                 return_value=100000,
             ),
-            patch("mcp_second_brain.utils.fs.gather_file_paths_async") as mock_gather,
+            patch("mcp_the_force.utils.fs.gather_file_paths_async") as mock_gather,
             patch(
-                "mcp_second_brain.utils.context_loader.load_specific_files_async"
+                "mcp_the_force.utils.context_loader.load_specific_files_async"
             ) as mock_load,
         ):
             # Setup mocks

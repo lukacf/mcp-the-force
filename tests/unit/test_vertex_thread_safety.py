@@ -5,8 +5,8 @@ import asyncio
 import threading
 from unittest.mock import Mock, patch, AsyncMock
 from google.genai import types
-from mcp_second_brain.adapters.vertex.adapter import VertexAdapter, get_client
-import mcp_second_brain.adapters.vertex.adapter as vertex_module
+from mcp_the_force.adapters.vertex.adapter import VertexAdapter, get_client
+import mcp_the_force.adapters.vertex.adapter as vertex_module
 
 
 def create_mock_response(with_function_call=False, text="Test response"):
@@ -48,7 +48,7 @@ class TestVertexThreadSafety:
         mock_client.aio.models.generate_content = mock_generate
 
         with patch(
-            "mcp_second_brain.adapters.vertex.adapter.genai.Client",
+            "mcp_the_force.adapters.vertex.adapter.genai.Client",
             return_value=mock_client,
         ):
             # Clear the cached singleton client
@@ -58,7 +58,7 @@ class TestVertexThreadSafety:
             monkeypatch.setenv("VERTEX_LOCATION", "us-central1")
 
             # Clear settings cache
-            from mcp_second_brain.config import get_settings
+            from mcp_the_force.config import get_settings
 
             get_settings.cache_clear()
 
@@ -83,7 +83,7 @@ class TestVertexThreadSafety:
         mock_client.aio.models.generate_content = slow_generate
 
         with patch(
-            "mcp_second_brain.adapters.vertex.adapter.genai.Client",
+            "mcp_the_force.adapters.vertex.adapter.genai.Client",
             return_value=mock_client,
         ):
             # Clear the cached singleton client
@@ -120,21 +120,21 @@ class TestVertexThreadSafety:
         mock_search.generate = AsyncMock(return_value="search results")
 
         with patch(
-            "mcp_second_brain.adapters.vertex.adapter.genai.Client",
+            "mcp_the_force.adapters.vertex.adapter.genai.Client",
             return_value=mock_client,
         ):
             # Clear the cached singleton client
             vertex_module._client = None
 
             with patch(
-                "mcp_second_brain.tools.search_history.SearchHistoryAdapter",
+                "mcp_the_force.tools.search_history.SearchHistoryAdapter",
                 return_value=mock_search,
             ):
                 monkeypatch.setenv("VERTEX_PROJECT", "test-project")
                 monkeypatch.setenv("VERTEX_LOCATION", "us-central1")
                 monkeypatch.setenv("VERTEX__MAX_FUNCTION_CALLS", "3")
 
-                from mcp_second_brain.config import get_settings
+                from mcp_the_force.config import get_settings
 
                 get_settings.cache_clear()
 
@@ -175,7 +175,7 @@ class TestVertexThreadSafety:
         mock_client.aio.models.generate_content = capture_config
 
         with patch(
-            "mcp_second_brain.adapters.vertex.adapter.genai.Client",
+            "mcp_the_force.adapters.vertex.adapter.genai.Client",
             return_value=mock_client,
         ):
             # Clear the cached singleton client
@@ -185,7 +185,7 @@ class TestVertexThreadSafety:
             monkeypatch.setenv("VERTEX_LOCATION", "us-central1")
             monkeypatch.setenv("VERTEX__MAX_OUTPUT_TOKENS", "4096")
 
-            from mcp_second_brain.config import get_settings
+            from mcp_the_force.config import get_settings
 
             get_settings.cache_clear()
 
@@ -216,14 +216,14 @@ class TestVertexThreadSafety:
         mock_search.generate = AsyncMock(side_effect=Exception("Database error"))
 
         with patch(
-            "mcp_second_brain.adapters.vertex.adapter.genai.Client",
+            "mcp_the_force.adapters.vertex.adapter.genai.Client",
             return_value=mock_client,
         ):
             # Clear the cached singleton client
             vertex_module._client = None
 
             with patch(
-                "mcp_second_brain.tools.search_history.SearchHistoryAdapter",
+                "mcp_the_force.tools.search_history.SearchHistoryAdapter",
                 return_value=mock_search,
             ):
                 monkeypatch.setenv("VERTEX_PROJECT", "test-project")
@@ -256,11 +256,11 @@ class TestVertexThreadSafety:
             clients.append(get_client())
 
         with patch(
-            "mcp_second_brain.adapters.vertex.adapter.genai.Client"
+            "mcp_the_force.adapters.vertex.adapter.genai.Client"
         ) as mock_client_class:
             mock_client_class.return_value = Mock()
 
-            with patch("mcp_second_brain.config.get_settings") as mock_settings:
+            with patch("mcp_the_force.config.get_settings") as mock_settings:
                 mock_settings.return_value.vertex_project = "test-project"
                 mock_settings.return_value.vertex_location = "us-central1"
 

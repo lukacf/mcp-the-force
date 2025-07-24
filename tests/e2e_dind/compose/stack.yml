@@ -1,6 +1,6 @@
 services:
   test-runner:
-    image: mcp-e2e-runner:latest
+    image: the-force-e2e-runner:latest
     environment:
       PYTHONPATH: /host-project
       OPENAI_API_KEY: ${OPENAI_API_KEY}
@@ -19,7 +19,7 @@ services:
       - shared-tmp:/tmp  # Share temp directory with server
 
   server:
-    image: mcp-e2e-server:latest
+    image: the-force-e2e-server:latest
     environment:
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}

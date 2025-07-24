@@ -7,7 +7,7 @@ import yaml
 import pytest
 from unittest.mock import patch
 from concurrent.futures import ThreadPoolExecutor
-from mcp_second_brain.config import Settings, get_settings, _deep_merge
+from mcp_the_force.config import Settings, get_settings, _deep_merge
 
 
 class TestConfigurationEdgeCases:
@@ -15,7 +15,7 @@ class TestConfigurationEdgeCases:
 
     def setup_method(self):
         """Clear settings cache and environment before each test."""
-        from mcp_second_brain.config import get_settings
+        from mcp_the_force.config import get_settings
 
         get_settings.cache_clear()
 
@@ -231,7 +231,7 @@ class TestConfigurationIntegration:
 
     def setup_method(self):
         """Clear settings cache and environment before each test."""
-        from mcp_second_brain.config import get_settings
+        from mcp_the_force.config import get_settings
 
         get_settings.cache_clear()
 
@@ -484,4 +484,4 @@ providers:
             assert env_vars["SESSION_DB_PATH"] == "/var/lib/mcp/sessions.db"
 
             mcp_config = settings.export_mcp_config()
-            assert mcp_config["mcpServers"]["second-brain"]["env"]["PORT"] == "8080"
+            assert mcp_config["mcpServers"]["the-force"]["env"]["PORT"] == "8080"

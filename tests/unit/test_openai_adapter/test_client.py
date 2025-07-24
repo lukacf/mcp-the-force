@@ -3,7 +3,7 @@
 import pytest
 import asyncio
 from unittest.mock import patch, MagicMock
-from mcp_second_brain.adapters.openai.client import OpenAIClientFactory
+from mcp_the_force.adapters.openai.client import OpenAIClientFactory
 
 
 @pytest.mark.unit
@@ -14,7 +14,7 @@ async def test_get_instance_returns_same_for_same_loop():
     await OpenAIClientFactory.close_all()
 
     # Mock the OpenAI client to avoid actual API calls
-    with patch("mcp_second_brain.adapters.openai.client.AsyncOpenAI") as mock_openai:
+    with patch("mcp_the_force.adapters.openai.client.AsyncOpenAI") as mock_openai:
         mock_client = MagicMock()
         mock_openai.return_value = mock_client
 
@@ -39,7 +39,7 @@ async def test_different_loops_get_different_instances():
     # Clean up any existing instances
     await OpenAIClientFactory.close_all()
 
-    with patch("mcp_second_brain.adapters.openai.client.AsyncOpenAI") as mock_openai:
+    with patch("mcp_the_force.adapters.openai.client.AsyncOpenAI") as mock_openai:
         # Create distinct mock clients
         mock_client1 = MagicMock(name="client1")
         mock_client2 = MagicMock(name="client2")
@@ -83,9 +83,9 @@ async def test_client_configuration():
     # Clean up any existing instances
     await OpenAIClientFactory.close_all()
 
-    with patch("mcp_second_brain.adapters.openai.client.AsyncOpenAI") as mock_openai:
+    with patch("mcp_the_force.adapters.openai.client.AsyncOpenAI") as mock_openai:
         with patch(
-            "mcp_second_brain.adapters.openai.client.httpx.AsyncClient"
+            "mcp_the_force.adapters.openai.client.httpx.AsyncClient"
         ) as mock_http_client:
             await OpenAIClientFactory.get_instance(api_key="test-key")
 
@@ -120,7 +120,7 @@ async def test_concurrent_access_same_loop():
     # Clean up any existing instances
     await OpenAIClientFactory.close_all()
 
-    with patch("mcp_second_brain.adapters.openai.client.AsyncOpenAI") as mock_openai:
+    with patch("mcp_the_force.adapters.openai.client.AsyncOpenAI") as mock_openai:
         mock_client = MagicMock()
         mock_openai.return_value = mock_client
 
@@ -148,7 +148,7 @@ async def test_close_all():
     # Clean up any existing instances
     await OpenAIClientFactory.close_all()
 
-    with patch("mcp_second_brain.adapters.openai.client.AsyncOpenAI") as mock_openai:
+    with patch("mcp_the_force.adapters.openai.client.AsyncOpenAI") as mock_openai:
         mock_client = MagicMock()
         mock_http_client = MagicMock()
         mock_http_client.aclose = MagicMock(return_value=asyncio.Future())

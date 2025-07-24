@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document outlines the plan to add xAI's Grok models (Grok 3 and Grok 4) as first-class citizens in MCP Second-Brain. The integration leverages Grok's OpenAI-compatible API, allowing us to reuse much of our existing infrastructure.
+This document outlines the plan to add xAI's Grok models (Grok 3 and Grok 4) as first-class citizens in MCP The-Force. The integration leverages Grok's OpenAI-compatible API, allowing us to reuse much of our existing infrastructure.
 
 ## Research Findings
 
@@ -72,7 +72,7 @@ dependencies = [
 
 #### 1.2 Configuration Updates
 
-**Add to `mcp_second_brain/config.py`**:
+**Add to `mcp_the_force/config.py`**:
 ```python
 class Settings(BaseSettings):
     # ... existing fields ...
@@ -105,7 +105,7 @@ providers:
 
 #### 2.1 GrokAdapter Class
 
-Create `mcp_second_brain/adapters/grok/adapter.py`:
+Create `mcp_the_force/adapters/grok/adapter.py`:
 
 ```python
 from typing import Optional, AsyncIterator, Any, Dict
@@ -261,7 +261,7 @@ class GrokAdapter(BaseAdapter):
 
 #### 3.1 Update Model Registry
 
-In `mcp_second_brain/adapters/model_registry.py`:
+In `mcp_the_force/adapters/model_registry.py`:
 
 ```python
 from .grok import GROK_CAPABILITIES
@@ -281,7 +281,7 @@ def get_model_context_window(model: str) -> int:
 
 #### 3.2 Update Adapter Factory
 
-In `mcp_second_brain/adapters/__init__.py`:
+In `mcp_the_force/adapters/__init__.py`:
 
 ```python
 def get_adapter(adapter_class: str, mock: bool = False) -> Tuple[BaseAdapter, Optional[str]]:
@@ -298,7 +298,7 @@ def get_adapter(adapter_class: str, mock: bool = False) -> Tuple[BaseAdapter, Op
 
 #### 3.3 Create Tool Definitions
 
-In `mcp_second_brain/tools/definitions.py`:
+In `mcp_the_force/tools/definitions.py`:
 
 ```python
 @tool

@@ -3,7 +3,7 @@ Unit tests for .gitignore functionality.
 Tests the patterns that our implementation supports.
 """
 
-from mcp_second_brain.utils.fs import _parse_gitignore, _is_ignored
+from mcp_the_force.utils.fs import _parse_gitignore, _is_ignored
 
 
 class TestGitignorePatterns:

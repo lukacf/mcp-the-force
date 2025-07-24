@@ -2,7 +2,7 @@
 
 import pytest
 
-from mcp_second_brain.tools.definitions import (
+from mcp_the_force.tools.definitions import (
     ChatWithGemini25Pro,
     ChatWithGemini25Flash,
     ChatWithO3,
@@ -11,7 +11,7 @@ from mcp_second_brain.tools.definitions import (
     ChatWithGrok4,
     ChatWithGrok3Reasoning,
 )
-from mcp_second_brain.tools.descriptors import RouteDescriptor, RouteType
+from mcp_the_force.tools.descriptors import RouteDescriptor, RouteType
 
 
 # Define expected features for each model category

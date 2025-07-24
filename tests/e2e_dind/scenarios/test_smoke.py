@@ -13,7 +13,7 @@ def test_smoke_all_models(claude, call_claude_tool, parse_response):
     # Test 1: List available models
     logger.info("1. Testing list_models...")
     response = claude(
-        "Use second-brain list_models and return ONLY a JSON array of tool IDs (the 'id' field). "
+        "Use the-force list_models and return ONLY a JSON array of tool IDs (the 'id' field). "
         'Schema: {"tool_ids": ["string"]}. '
         'Example: {"tool_ids": ["chat_with_o3", "chat_with_gemini25_flash"]}'
     )
