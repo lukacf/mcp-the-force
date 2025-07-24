@@ -24,6 +24,7 @@ dependencies = [
     "pyzmq>=25.0.0",
     "orjson>=3.9.0",
     "python-logging-loki>=0.3.1",
+    "litellm>=1.74.8",
 ]
 
 [project.scripts]
