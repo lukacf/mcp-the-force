@@ -39,7 +39,7 @@ class OpenAICleanupManager:
         else:
             # Try to find the MCP session database
             home = Path.home()
-            cache_dir = home / ".cache" / "mcp-second-brain"
+            cache_dir = home / ".cache" / "mcp-the-force"
             self.db_path = (
                 cache_dir / "session_cache.db" if cache_dir.exists() else None
             )
@@ -542,7 +542,7 @@ async def main():
             )
             print("\nOptions:")
             print(
-                "  --db=path  Path to SQLite database (default: ~/.cache/mcp-second-brain/session_cache.db)"
+                "  --db=path  Path to SQLite database (default: ~/.cache/mcp-the-force/session_cache.db)"
             )
             print("\nExamples:")
             print(

@@ -6,11 +6,11 @@ import pytest
 import json
 from unittest.mock import patch
 import fastmcp.exceptions
-from mcp_second_brain.tools.executor import executor
-from mcp_second_brain.tools.registry import get_tool
+from mcp_the_force.tools.executor import executor
+from mcp_the_force.tools.registry import get_tool
 
 # Import definitions to ensure tools are registered
-import mcp_second_brain.tools.definitions  # noqa: F401
+import mcp_the_force.tools.definitions  # noqa: F401
 
 
 class TestErrorHandlingIntegration:
@@ -19,7 +19,7 @@ class TestErrorHandlingIntegration:
     @pytest.mark.asyncio
     async def test_missing_api_key_error(self):
         """Test error when API key is missing."""
-        from mcp_second_brain.config import get_settings
+        from mcp_the_force.config import get_settings
 
         # Clear the settings cache
         get_settings.cache_clear()
@@ -215,7 +215,7 @@ class TestErrorHandlingIntegration:
     async def test_adapter_initialization_failure(self):
         """Test handling of adapter initialization failures."""
         # Patch get_adapter to return an error
-        with patch("mcp_second_brain.adapters.get_adapter") as mock_get_adapter:
+        with patch("mcp_the_force.adapters.get_adapter") as mock_get_adapter:
             mock_get_adapter.return_value = (
                 None,
                 "Failed to initialize adapter: Test error",
@@ -278,9 +278,7 @@ class TestErrorHandlingIntegration:
                 return gemini_mock, None
             return None, f"Unknown adapter: {adapter_key}"
 
-        with patch(
-            "mcp_second_brain.adapters.get_adapter", side_effect=mock_get_adapter
-        ):
+        with patch("mcp_the_force.adapters.get_adapter", side_effect=mock_get_adapter):
             tasks = [
                 executor.execute(
                     o3_metadata,

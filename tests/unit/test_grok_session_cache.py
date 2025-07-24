@@ -7,7 +7,7 @@ import tempfile
 import os
 from unittest.mock import patch
 
-from mcp_second_brain.grok_session_cache import (
+from mcp_the_force.grok_session_cache import (
     _SQLiteGrokSessionCache,
     GrokSessionCache,
     grok_session_cache,
@@ -252,7 +252,7 @@ class TestGrokSessionCacheProxy:
         """Test that proxy methods work correctly."""
         # Mock the singleton to use our test database
         with patch(
-            "mcp_second_brain.grok_session_cache._get_instance"
+            "mcp_the_force.grok_session_cache._get_instance"
         ) as mock_get_instance:
             test_cache = _SQLiteGrokSessionCache(db_path=temp_db, ttl=3600)
             mock_get_instance.return_value = test_cache
@@ -319,7 +319,7 @@ class TestGrokSessionCacheIntegration:
                     "tool_call_id": "call_search_1",
                     "role": "tool",
                     "name": "search_project_history",
-                    "content": "Found documentation about MCP Second-Brain server architecture...",
+                    "content": "Found documentation about MCP The-Force server architecture...",
                 },
                 {
                     "role": "assistant",

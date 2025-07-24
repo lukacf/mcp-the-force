@@ -10,10 +10,10 @@ import os
 from pathlib import Path
 from unittest.mock import patch
 
-from mcp_second_brain.logging.server import ZMQLogServer
-from mcp_second_brain.logging.handler import ZMQLogHandler
-from mcp_second_brain.logging.setup import setup_logging, shutdown_logging
-from mcp_second_brain.tools.logging_tools import SearchMCPDebugLogsToolSpec
+from mcp_the_force.logging.server import ZMQLogServer
+from mcp_the_force.logging.handler import ZMQLogHandler
+from mcp_the_force.logging.setup import setup_logging, shutdown_logging
+from mcp_the_force.tools.logging_tools import SearchMCPDebugLogsToolSpec
 
 
 @pytest.mark.integration
@@ -147,7 +147,7 @@ class TestLoggingSystemIntegration:
             tool = SearchMCPDebugLogsToolSpec()
 
             with patch(
-                "mcp_second_brain.adapters.logging_adapter.get_settings",
+                "mcp_the_force.adapters.logging_adapter.get_settings",
                 return_value=mock_settings,
             ):
                 with patch.dict("os.environ", {"MCP_PROJECT_PATH": os.getcwd()}):
@@ -175,7 +175,7 @@ class TestLoggingSystemIntegration:
     def test_setup_logging_integration(self, mock_settings):
         """Test the complete setup_logging integration."""
         with patch(
-            "mcp_second_brain.logging.setup.get_settings", return_value=mock_settings
+            "mcp_the_force.logging.setup.get_settings", return_value=mock_settings
         ):
             # Setup logging
             setup_logging()

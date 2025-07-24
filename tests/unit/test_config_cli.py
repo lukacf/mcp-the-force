@@ -7,8 +7,8 @@ import json
 import yaml
 from unittest.mock import patch
 from typer.testing import CliRunner
-from mcp_second_brain.cli.config_cli import app
-from mcp_second_brain.config import get_settings
+from mcp_the_force.cli.config_cli import app
+from mcp_the_force.config import get_settings
 
 
 runner = CliRunner()
@@ -203,10 +203,10 @@ providers:
             with open(tmp_path / "mcp-config.json") as f:
                 mcp_config = json.load(f)
                 assert "mcpServers" in mcp_config
-                assert "second-brain" in mcp_config["mcpServers"]
-                server = mcp_config["mcpServers"]["second-brain"]
+                assert "the-force" in mcp_config["mcpServers"]
+                server = mcp_config["mcpServers"]["the-force"]
                 assert server["command"] == "uv"
-                assert server["args"] == ["run", "--", "mcp-second-brain"]
+                assert server["args"] == ["run", "--", "mcp-the-force"]
                 assert server["env"]["PORT"] == "8080"
                 assert server["env"]["OPENAI_API_KEY"] == "test-key"
                 assert server["timeout"] == 3600000
@@ -289,7 +289,7 @@ MEMORY_ENABLED=false
             json.dumps(
                 {
                     "mcpServers": {
-                        "second-brain": {"env": {"ADDITIONAL_KEY": "from-mcp-config"}}
+                        "the-force": {"env": {"ADDITIONAL_KEY": "from-mcp-config"}}
                     }
                 }
             )
@@ -366,7 +366,7 @@ class TestCLIHelpers:
 
     def test_mask_sensitive_values(self):
         """Test sensitive value masking."""
-        from mcp_second_brain.cli.config_cli import _mask_sensitive
+        from mcp_the_force.cli.config_cli import _mask_sensitive
 
         # Test various sensitive keys
         data = {
@@ -392,7 +392,7 @@ class TestCLIHelpers:
 
     def test_flatten_dict(self):
         """Test dictionary flattening for key access."""
-        from mcp_second_brain.cli.config_cli import _flatten_dict
+        from mcp_the_force.cli.config_cli import _flatten_dict
 
         nested = {
             "mcp": {"host": "localhost", "port": 8000},
@@ -408,7 +408,7 @@ class TestCLIHelpers:
 
     def test_get_config_value(self):
         """Test getting specific config values."""
-        from mcp_second_brain.cli.config_cli import _get_config_value
+        from mcp_the_force.cli.config_cli import _get_config_value
 
         config = {"mcp": {"port": 8000}, "providers": {"openai": {"api_key": "test"}}}
 
@@ -471,7 +471,7 @@ class TestCLIIntegration:
             assert result.exit_code == 0
             with open(tmp_path / "mcp-config.json") as f:
                 mcp_config = json.load(f)
-                assert mcp_config["mcpServers"]["second-brain"]["env"]["PORT"] == "9999"
+                assert mcp_config["mcpServers"]["the-force"]["env"]["PORT"] == "9999"
 
             # 6. Show configuration
             get_settings.cache_clear()

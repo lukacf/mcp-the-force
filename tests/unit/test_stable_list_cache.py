@@ -5,7 +5,7 @@ import tempfile
 import os
 from unittest.mock import patch, MagicMock
 
-from mcp_second_brain.utils.stable_list_cache import StableListCache
+from mcp_the_force.utils.stable_list_cache import StableListCache
 
 
 @pytest.mark.asyncio

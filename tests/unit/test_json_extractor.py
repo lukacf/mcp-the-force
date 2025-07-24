@@ -1,7 +1,7 @@
 """Unit tests for JSON extraction utility."""
 
 import pytest
-from mcp_second_brain.utils.json_extractor import extract_json, parse_json_response
+from mcp_the_force.utils.json_extractor import extract_json, parse_json_response
 
 
 class TestJsonExtractor:

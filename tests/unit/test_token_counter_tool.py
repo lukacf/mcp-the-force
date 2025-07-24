@@ -7,7 +7,7 @@ from pathlib import Path
 import tempfile
 from unittest.mock import patch
 
-from mcp_second_brain.tools.token_count import CountProjectTokens
+from mcp_the_force.tools.token_count import CountProjectTokens
 
 
 @pytest.fixture
@@ -173,7 +173,7 @@ class TestCountProjectTokens:
         # But not file2.py since we didn't include parent dir
         assert not any("file2.py" in path for path in file_paths)
 
-    @patch("mcp_second_brain.utils.token_counter.tiktoken")
+    @patch("mcp_the_force.utils.token_counter.tiktoken")
     async def test_fallback_when_tiktoken_missing(
         self, mock_tiktoken, temp_project_dir
     ):

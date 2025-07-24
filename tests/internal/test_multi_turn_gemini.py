@@ -9,8 +9,8 @@ the bugs where:
 
 import pytest
 import json
-from mcp_second_brain.tools.executor import executor
-from mcp_second_brain.tools.registry import get_tool
+from mcp_the_force.tools.executor import executor
+from mcp_the_force.tools.registry import get_tool
 
 
 class TestGeminiMultiTurn:
@@ -238,13 +238,11 @@ class TestGeminiMultiTurn:
         from unittest.mock import patch
 
         # Patch to simulate the bug where session params aren't merged
-        with patch(
-            "mcp_second_brain.tools.executor.ToolExecutor.execute"
-        ) as mock_execute:
+        with patch("mcp_the_force.tools.executor.ToolExecutor.execute") as mock_execute:
 
             async def buggy_execute(self, metadata, **kwargs):
                 # Simulate bug: don't merge session params
-                from mcp_second_brain.tools.parameter_router import ParameterRouter
+                from mcp_the_force.tools.parameter_router import ParameterRouter
 
                 router = ParameterRouter()
                 routed = router.route(metadata, kwargs)

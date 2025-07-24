@@ -8,8 +8,8 @@ properly declared when vector_store_ids are provided.
 
 import pytest
 from unittest.mock import patch, MagicMock
-from mcp_second_brain.adapters.grok.adapter import GrokAdapter
-from mcp_second_brain.adapters.tool_handler import ToolHandler
+from mcp_the_force.adapters.grok.adapter import GrokAdapter
+from mcp_the_force.adapters.tool_handler import ToolHandler
 
 
 class TestGrokToolHandlerIntegration:
@@ -18,9 +18,7 @@ class TestGrokToolHandlerIntegration:
     @pytest.fixture
     def mock_grok_settings(self):
         """Mock the settings to provide a fake API key."""
-        with patch(
-            "mcp_second_brain.adapters.grok.adapter.get_settings"
-        ) as mock_settings:
+        with patch("mcp_the_force.adapters.grok.adapter.get_settings") as mock_settings:
             mock_config = MagicMock()
             mock_config.xai.api_key = "fake-api-key"
             mock_settings.return_value = mock_config
@@ -80,7 +78,7 @@ class TestGrokToolHandlerIntegration:
 
         # Mock the SearchHistoryAdapter
         with patch(
-            "mcp_second_brain.tools.search_history.SearchHistoryAdapter"
+            "mcp_the_force.tools.search_history.SearchHistoryAdapter"
         ) as mock_adapter:
             mock_instance = mock_adapter.return_value
 
@@ -111,7 +109,7 @@ class TestGrokToolHandlerIntegration:
 
         # Mock the SearchTaskFilesAdapter
         with patch(
-            "mcp_second_brain.tools.search_task_files.SearchTaskFilesAdapter"
+            "mcp_the_force.tools.search_task_files.SearchTaskFilesAdapter"
         ) as mock_adapter:
             mock_instance = mock_adapter.return_value
 
@@ -157,7 +155,7 @@ class TestGrokToolHandlerIntegration:
 
         # Mock the SearchHistoryAdapter to raise an exception
         with patch(
-            "mcp_second_brain.tools.search_history.SearchHistoryAdapter"
+            "mcp_the_force.tools.search_history.SearchHistoryAdapter"
         ) as mock_adapter:
             mock_instance = mock_adapter.return_value
 

@@ -5,12 +5,12 @@ Unit tests for ToolExecutor orchestration.
 import pytest
 from unittest.mock import Mock, patch, AsyncMock
 import fastmcp.exceptions
-from mcp_second_brain.tools.executor import ToolExecutor
-from mcp_second_brain.tools.registry import get_tool
+from mcp_the_force.tools.executor import ToolExecutor
+from mcp_the_force.tools.registry import get_tool
 
 # Import definitions to ensure tools are registered
-from mcp_second_brain.tools import definitions  # noqa: F401
-from mcp_second_brain.adapters.base import BaseAdapter
+from mcp_the_force.tools import definitions  # noqa: F401
+from mcp_the_force.adapters.base import BaseAdapter
 
 
 class TestToolExecutor:
@@ -38,17 +38,17 @@ class TestToolExecutor:
         test_file.write_text("print('hello')")
 
         # Clear adapter cache first
-        from mcp_second_brain.adapters import _ADAPTER_CACHE
+        from mcp_the_force.adapters import _ADAPTER_CACHE
 
         _ADAPTER_CACHE.clear()
 
         # Mock the adapter creation
-        with patch("mcp_second_brain.adapters.get_adapter") as mock_get_adapter:
+        with patch("mcp_the_force.adapters.get_adapter") as mock_get_adapter:
             mock_get_adapter.return_value = (mock_adapter, None)
 
             # Also ensure the vertex client is mocked
             with patch(
-                "mcp_second_brain.adapters.vertex.adapter.get_client"
+                "mcp_the_force.adapters.vertex.adapter.get_client"
             ) as mock_get_client:
                 mock_get_client.return_value = (
                     Mock()
@@ -86,13 +86,13 @@ class TestToolExecutor:
     @pytest.mark.asyncio
     async def test_execute_openai_tool_with_session(self, executor, mock_adapter):
         """Test executing an OpenAI tool with session support."""
-        with patch("mcp_second_brain.adapters.get_adapter") as mock_get_adapter:
+        with patch("mcp_the_force.adapters.get_adapter") as mock_get_adapter:
             mock_get_adapter.return_value = (mock_adapter, None)
 
             # Mock session cache
             from unittest.mock import AsyncMock
 
-            with patch("mcp_second_brain.session_cache.session_cache") as mock_cache:
+            with patch("mcp_the_force.session_cache.session_cache") as mock_cache:
                 mock_cache.get_response_id = AsyncMock(
                     return_value="previous_response_id"
                 )
@@ -141,7 +141,7 @@ class TestToolExecutor:
     @pytest.mark.asyncio
     async def test_adapter_error_handling(self, executor):
         """Test that adapter errors are handled gracefully."""
-        with patch("mcp_second_brain.adapters.get_adapter") as mock_get_adapter:
+        with patch("mcp_the_force.adapters.get_adapter") as mock_get_adapter:
             # Simulate adapter creation failure
             mock_get_adapter.return_value = (
                 None,

@@ -4,8 +4,8 @@ import pytest
 from unittest.mock import Mock, patch
 from typing import List, Dict, Any
 
-from mcp_second_brain.tools.search_history import SearchHistoryAdapter
-from mcp_second_brain.utils.scope_manager import scope_manager
+from mcp_the_force.tools.search_history import SearchHistoryAdapter
+from mcp_the_force.utils.scope_manager import scope_manager
 
 
 class MockSearchResult:
@@ -54,27 +54,27 @@ def search_adapter(mock_openai_client, mock_memory_config, tmp_path):
     mock_settings.openai_api_key = "test-key"
 
     with patch(
-        "mcp_second_brain.tools.search_history.get_settings", return_value=mock_settings
+        "mcp_the_force.tools.search_history.get_settings", return_value=mock_settings
     ):
         with patch(
-            "mcp_second_brain.tools.search_history.get_memory_config",
+            "mcp_the_force.tools.search_history.get_memory_config",
             return_value=mock_memory_config,
         ):
             # Patch OpenAI client creation
             with patch(
-                "mcp_second_brain.tools.search_history.OpenAI",
+                "mcp_the_force.tools.search_history.OpenAI",
                 return_value=mock_openai_client,
             ):
                 # Create test database path
                 test_db_path = (
-                    tmp_path / ".cache" / "mcp-second-brain" / "session_cache.db"
+                    tmp_path / ".cache" / "mcp-the-force" / "session_cache.db"
                 )
                 test_db_path.parent.mkdir(parents=True, exist_ok=True)
 
                 # Initialize adapter with test database
                 adapter = SearchHistoryAdapter()
                 # Force reinitialize deduplicator with test path
-                from mcp_second_brain.tools.search_dedup_sqlite import (
+                from mcp_the_force.tools.search_dedup_sqlite import (
                     SQLiteSearchDeduplicator,
                 )
 

@@ -5,8 +5,8 @@ Unit tests for file utilities including .gitignore handling and file filtering.
 import os
 from pathlib import Path
 import pytest
-from mcp_second_brain.utils import fs
-from mcp_second_brain.utils.fs import (
+from mcp_the_force.utils import fs
+from mcp_the_force.utils.fs import (
     gather_file_paths,
     _is_text_file,
     _is_ignored,

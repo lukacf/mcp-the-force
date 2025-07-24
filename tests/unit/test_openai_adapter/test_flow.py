@@ -2,7 +2,7 @@
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from mcp_second_brain.adapters.openai.errors import TimeoutException
+from mcp_the_force.adapters.openai.errors import TimeoutException
 
 
 # Note: These tests are written BEFORE the implementation (TDD approach)
@@ -14,7 +14,7 @@ from mcp_second_brain.adapters.openai.errors import TimeoutException
 async def test_flow_selects_background_for_o3_pro():
     """Verify o3-pro always uses background mode regardless of request."""
     # This test will fail until we implement the FlowOrchestrator
-    from mcp_second_brain.adapters.openai.flow import FlowOrchestrator
+    from mcp_the_force.adapters.openai.flow import FlowOrchestrator
 
     mock_tool_dispatcher = AsyncMock()
     orchestrator = FlowOrchestrator(tool_dispatcher=mock_tool_dispatcher)
@@ -27,7 +27,7 @@ async def test_flow_selects_background_for_o3_pro():
     }
 
     with patch(
-        "mcp_second_brain.adapters.openai.client.OpenAIClientFactory.get_instance"
+        "mcp_the_force.adapters.openai.client.OpenAIClientFactory.get_instance"
     ) as mock_factory:
         mock_client = AsyncMock()
         mock_factory.return_value = mock_client
@@ -49,7 +49,7 @@ async def test_flow_selects_background_for_o3_pro():
 @pytest.mark.asyncio
 async def test_flow_selects_streaming_for_supported_model():
     """Verify streaming is used when model supports it and timeout allows."""
-    from mcp_second_brain.adapters.openai.flow import FlowOrchestrator
+    from mcp_the_force.adapters.openai.flow import FlowOrchestrator
 
     mock_tool_dispatcher = AsyncMock()
     orchestrator = FlowOrchestrator(tool_dispatcher=mock_tool_dispatcher)
@@ -62,7 +62,7 @@ async def test_flow_selects_streaming_for_supported_model():
     }
 
     with patch(
-        "mcp_second_brain.adapters.openai.client.OpenAIClientFactory.get_instance"
+        "mcp_the_force.adapters.openai.client.OpenAIClientFactory.get_instance"
     ) as mock_factory:
         mock_client = AsyncMock()
         mock_factory.return_value = mock_client
@@ -89,7 +89,7 @@ async def test_flow_selects_streaming_for_supported_model():
 @pytest.mark.asyncio
 async def test_flow_handles_function_calls_with_follow_up():
     """Verify the critical follow-up request logic after function calls."""
-    from mcp_second_brain.adapters.openai.flow import FlowOrchestrator
+    from mcp_the_force.adapters.openai.flow import FlowOrchestrator
 
     # Mock tool execution
     async def mock_tool_dispatcher(name, args):
@@ -106,7 +106,7 @@ async def test_flow_handles_function_calls_with_follow_up():
     }
 
     with patch(
-        "mcp_second_brain.adapters.openai.client.OpenAIClientFactory.get_instance"
+        "mcp_the_force.adapters.openai.client.OpenAIClientFactory.get_instance"
     ) as mock_factory:
         mock_client = AsyncMock()
         mock_factory.return_value = mock_client
@@ -177,7 +177,7 @@ async def test_flow_handles_function_calls_with_follow_up():
 @pytest.mark.asyncio
 async def test_flow_handles_multiple_function_calls():
     """Verify parallel function calls are executed correctly."""
-    from mcp_second_brain.adapters.openai.flow import FlowOrchestrator
+    from mcp_the_force.adapters.openai.flow import FlowOrchestrator
 
     call_count = 0
 
@@ -195,7 +195,7 @@ async def test_flow_handles_multiple_function_calls():
     }
 
     with patch(
-        "mcp_second_brain.adapters.openai.client.OpenAIClientFactory.get_instance"
+        "mcp_the_force.adapters.openai.client.OpenAIClientFactory.get_instance"
     ) as mock_factory:
         mock_client = AsyncMock()
         mock_factory.return_value = mock_client
@@ -243,7 +243,7 @@ async def test_flow_handles_multiple_function_calls():
 @pytest.mark.asyncio
 async def test_flow_handles_reasoning_models():
     """Verify reasoning parameters are handled correctly."""
-    from mcp_second_brain.adapters.openai.flow import FlowOrchestrator
+    from mcp_the_force.adapters.openai.flow import FlowOrchestrator
 
     orchestrator = FlowOrchestrator(tool_dispatcher=AsyncMock())
 
@@ -255,7 +255,7 @@ async def test_flow_handles_reasoning_models():
     }
 
     with patch(
-        "mcp_second_brain.adapters.openai.client.OpenAIClientFactory.get_instance"
+        "mcp_the_force.adapters.openai.client.OpenAIClientFactory.get_instance"
     ) as mock_factory:
         mock_client = AsyncMock()
         mock_factory.return_value = mock_client
@@ -292,7 +292,7 @@ async def test_flow_handles_reasoning_models():
 @pytest.mark.asyncio
 async def test_flow_background_polling_with_exponential_backoff():
     """Verify background polling uses exponential backoff."""
-    from mcp_second_brain.adapters.openai.flow import FlowOrchestrator
+    from mcp_the_force.adapters.openai.flow import FlowOrchestrator
 
     orchestrator = FlowOrchestrator(tool_dispatcher=AsyncMock())
 
@@ -307,7 +307,7 @@ async def test_flow_background_polling_with_exponential_backoff():
         sleep_calls.append(seconds)
 
     with patch(
-        "mcp_second_brain.adapters.openai.client.OpenAIClientFactory.get_instance"
+        "mcp_the_force.adapters.openai.client.OpenAIClientFactory.get_instance"
     ) as mock_factory:
         with patch("asyncio.sleep", side_effect=mock_sleep):
             mock_client = AsyncMock()
@@ -341,7 +341,7 @@ async def test_flow_background_polling_with_exponential_backoff():
 @pytest.mark.asyncio
 async def test_flow_handles_timeout():
     """Verify timeout is handled properly."""
-    from mcp_second_brain.adapters.openai.flow import FlowOrchestrator
+    from mcp_the_force.adapters.openai.flow import FlowOrchestrator
 
     orchestrator = FlowOrchestrator(tool_dispatcher=AsyncMock())
 
@@ -353,7 +353,7 @@ async def test_flow_handles_timeout():
     }
 
     with patch(
-        "mcp_second_brain.adapters.openai.client.OpenAIClientFactory.get_instance"
+        "mcp_the_force.adapters.openai.client.OpenAIClientFactory.get_instance"
     ) as mock_factory:
         mock_client = AsyncMock()
         mock_factory.return_value = mock_client
@@ -373,7 +373,7 @@ async def test_flow_handles_timeout():
 @pytest.mark.asyncio
 async def test_flow_preserves_response_id():
     """Verify response_id is captured and returned correctly."""
-    from mcp_second_brain.adapters.openai.flow import FlowOrchestrator
+    from mcp_the_force.adapters.openai.flow import FlowOrchestrator
 
     orchestrator = FlowOrchestrator(tool_dispatcher=AsyncMock())
 
@@ -385,7 +385,7 @@ async def test_flow_preserves_response_id():
     }
 
     with patch(
-        "mcp_second_brain.adapters.openai.client.OpenAIClientFactory.get_instance"
+        "mcp_the_force.adapters.openai.client.OpenAIClientFactory.get_instance"
     ) as mock_factory:
         mock_client = AsyncMock()
         mock_factory.return_value = mock_client
@@ -408,7 +408,7 @@ async def test_flow_preserves_response_id():
 @pytest.mark.asyncio
 async def test_flow_deduplicates_function_calls():
     """Verify function calls are deduplicated by call_id."""
-    from mcp_second_brain.adapters.openai.flow import FlowOrchestrator
+    from mcp_the_force.adapters.openai.flow import FlowOrchestrator
 
     call_count = 0
     calls_seen = []
@@ -428,7 +428,7 @@ async def test_flow_deduplicates_function_calls():
     orchestrator = FlowOrchestrator(tool_dispatcher=mock_tool_dispatcher)
 
     with patch(
-        "mcp_second_brain.adapters.openai.client.OpenAIClientFactory.get_instance"
+        "mcp_the_force.adapters.openai.client.OpenAIClientFactory.get_instance"
     ) as mock_factory:
         mock_client = AsyncMock()
         mock_factory.return_value = mock_client
@@ -492,15 +492,15 @@ async def test_flow_deduplicates_function_calls():
 @pytest.mark.asyncio
 async def test_flow_handles_gateway_timeout():
     """Verify gateway timeout errors are handled with proper error message."""
-    from mcp_second_brain.adapters.openai.flow import FlowOrchestrator
-    from mcp_second_brain.adapters.openai.errors import GatewayTimeoutException
+    from mcp_the_force.adapters.openai.flow import FlowOrchestrator
+    from mcp_the_force.adapters.openai.errors import GatewayTimeoutException
 
     orchestrator = FlowOrchestrator(tool_dispatcher=AsyncMock())
 
     request_data = {"model": "o3", "messages": [{"role": "user", "content": "Test"}]}
 
     with patch(
-        "mcp_second_brain.adapters.openai.client.OpenAIClientFactory.get_instance"
+        "mcp_the_force.adapters.openai.client.OpenAIClientFactory.get_instance"
     ) as mock_factory:
         mock_client = AsyncMock()
         mock_factory.return_value = mock_client

@@ -3,7 +3,7 @@ Integration test for vector store retrieval functionality.
 """
 
 # Import definitions to ensure tools are registered
-import mcp_second_brain.tools.definitions  # noqa: F401
+import mcp_the_force.tools.definitions  # noqa: F401
 
 
 class TestVectorStoreRetrieval:
