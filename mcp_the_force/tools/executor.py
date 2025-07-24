@@ -240,6 +240,17 @@ class ToolExecutor:
                 adapter_params["messages"] = messages
                 # Store messages for conversation memory
                 prompt_params["messages"] = messages
+            elif adapter_class == "litellm":
+                # LiteLLM adapter - use developer role like OpenAI Responses API
+                messages = [
+                    {"role": "developer", "content": developer_prompt},
+                    {"role": "user", "content": prompt},
+                ]
+                adapter_params = routed_params["adapter"]
+                assert isinstance(adapter_params, dict)  # Type hint for mypy
+                adapter_params["messages"] = messages
+                # Store messages for conversation memory
+                prompt_params["messages"] = messages
             else:
                 # Unknown adapter - use safe default of prepending
                 final_prompt = f"{developer_prompt}\n\n{prompt}"
@@ -336,7 +347,7 @@ class ToolExecutor:
             assert isinstance(session_params, dict)  # Type hint for mypy
             session_id = session_params.get("session_id")
             if session_id:
-                if metadata.model_config["adapter_class"] == "openai":
+                if metadata.model_config["adapter_class"] in ["openai", "litellm"]:
                     previous_response_id = (
                         await session_cache_module.session_cache.get_response_id(
                             session_id
@@ -510,7 +521,7 @@ class ToolExecutor:
                 logger.debug(f"[STEP 17.2] Got content, length: {len(str(content))}")
                 if (
                     session_id
-                    and metadata.model_config["adapter_class"] == "openai"
+                    and metadata.model_config["adapter_class"] in ["openai", "litellm"]
                     and "response_id" in result
                 ):
                     logger.debug(
