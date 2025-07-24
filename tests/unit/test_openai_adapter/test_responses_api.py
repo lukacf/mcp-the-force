@@ -2,7 +2,7 @@
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from mcp_second_brain.adapters.openai.client import OpenAIClientFactory
+from mcp_the_force.adapters.openai.client import OpenAIClientFactory
 
 
 @pytest.mark.asyncio
@@ -12,7 +12,7 @@ async def test_client_initialization():
     await OpenAIClientFactory.close_all()
 
     # Mock AsyncOpenAI to capture initialization parameters
-    with patch("mcp_second_brain.adapters.openai.client.AsyncOpenAI") as mock_openai:
+    with patch("mcp_the_force.adapters.openai.client.AsyncOpenAI") as mock_openai:
         mock_client = AsyncMock()
         mock_openai.return_value = mock_client
 
@@ -35,12 +35,12 @@ async def test_client_initialization():
 @pytest.mark.asyncio
 async def test_responses_create_is_used():
     """Verify that flow strategies use client.responses.create()."""
-    from mcp_second_brain.adapters.openai.flow import (
+    from mcp_the_force.adapters.openai.flow import (
         BackgroundFlowStrategy,
         FlowContext,
     )
-    from mcp_second_brain.adapters.openai.models import OpenAIRequest
-    from mcp_second_brain.adapters.openai.tool_exec import ToolExecutor
+    from mcp_the_force.adapters.openai.models import OpenAIRequest
+    from mcp_the_force.adapters.openai.tool_exec import ToolExecutor
 
     # Create mock client with responses.create
     mock_client = AsyncMock()
@@ -90,9 +90,9 @@ async def test_responses_create_is_used():
 @pytest.mark.asyncio
 async def test_reasoning_effort_format():
     """Verify reasoning_effort is passed as nested dict."""
-    from mcp_second_brain.adapters.openai.flow import StreamingFlowStrategy, FlowContext
-    from mcp_second_brain.adapters.openai.models import OpenAIRequest
-    from mcp_second_brain.adapters.openai.tool_exec import ToolExecutor
+    from mcp_the_force.adapters.openai.flow import StreamingFlowStrategy, FlowContext
+    from mcp_the_force.adapters.openai.models import OpenAIRequest
+    from mcp_the_force.adapters.openai.tool_exec import ToolExecutor
 
     # Create mock client
     mock_client = AsyncMock()

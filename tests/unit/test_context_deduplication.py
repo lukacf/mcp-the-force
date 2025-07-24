@@ -5,8 +5,8 @@ import tempfile
 import pytest
 from unittest.mock import AsyncMock
 
-from mcp_second_brain.utils.context_builder import build_context_with_stable_list
-from mcp_second_brain.utils.stable_list_cache import StableListCache
+from mcp_the_force.utils.context_builder import build_context_with_stable_list
+from mcp_the_force.utils.stable_list_cache import StableListCache
 
 
 @pytest.mark.asyncio

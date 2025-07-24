@@ -269,7 +269,7 @@ services:
 
 #### 2. Create LoiterKillerClient
 
-`mcp_second_brain/utils/loiter_killer_client.py`:
+`mcp_the_force/utils/loiter_killer_client.py`:
 ```python
 class LoiterKillerClient:
     def __init__(self):
@@ -403,7 +403,7 @@ docker-compose up -d
 
 # Or manually:
 docker-compose up -d loiter-killer
-uv run -- mcp-second-brain
+uv run -- mcp-the-force
 
 # Check status
 docker-compose ps

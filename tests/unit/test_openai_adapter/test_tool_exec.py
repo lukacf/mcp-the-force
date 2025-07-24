@@ -4,7 +4,7 @@ import pytest
 import asyncio
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
-from mcp_second_brain.adapters.openai.tool_exec import (
+from mcp_the_force.adapters.openai.tool_exec import (
     ToolExecutor,
     BuiltInToolDispatcher,
 )
@@ -174,7 +174,7 @@ async def test_builtin_tool_dispatcher_search_history():
     dispatcher = BuiltInToolDispatcher()
 
     with patch(
-        "mcp_second_brain.tools.search_history.SearchHistoryAdapter"
+        "mcp_the_force.tools.search_history.SearchHistoryAdapter"
     ) as mock_adapter:
         mock_instance = AsyncMock()
         mock_instance.generate.return_value = {"results": ["memory1", "memory2"]}

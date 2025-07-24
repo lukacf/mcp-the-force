@@ -1,5 +1,5 @@
 """
-Shared test fixtures and configuration for MCP Second-Brain tests.
+Shared test fixtures and configuration for MCP The-Force tests.
 """
 
 # Note: Test isolation is now handled automatically in config.py
@@ -51,7 +51,7 @@ def verify_mock_adapter_for_integration():
 
         # Clear instance cache to prevent state leakage between tests
         try:
-            from mcp_second_brain.adapters import _ADAPTER_CACHE
+            from mcp_the_force.adapters import _ADAPTER_CACHE
 
             _ADAPTER_CACHE.clear()
             # Use print since logger might not be configured yet in test setup
@@ -64,7 +64,7 @@ def verify_mock_adapter_for_integration():
 def mock_env(monkeypatch):
     """Set up test environment variables."""
     # Clear the cached settings first
-    from mcp_second_brain.config import get_settings
+    from mcp_the_force.config import get_settings
 
     get_settings.cache_clear()
 
@@ -155,15 +155,15 @@ def mock_openai_factory(mock_openai_client):
 
     with (
         patch(
-            "mcp_second_brain.utils.vector_store.OpenAIClientFactory.get_instance",
+            "mcp_the_force.utils.vector_store.OpenAIClientFactory.get_instance",
             new=mock_get_instance,
         ),
         patch(
-            "mcp_second_brain.utils.vector_store_files.OpenAIClientFactory.get_instance",
+            "mcp_the_force.utils.vector_store_files.OpenAIClientFactory.get_instance",
             new=mock_get_instance,
         ),
         patch(
-            "mcp_second_brain.adapters.openai.client.OpenAIClientFactory.get_instance",
+            "mcp_the_force.adapters.openai.client.OpenAIClientFactory.get_instance",
             new=mock_get_instance,
         ),
     ):
@@ -203,7 +203,7 @@ def sample_tool_params():
 @pytest_asyncio.fixture
 async def mock_tool_executor():
     """Mock ToolExecutor for integration tests."""
-    from mcp_second_brain.tools.executor import ToolExecutor
+    from mcp_the_force.tools.executor import ToolExecutor
 
     executor = ToolExecutor()
     # We'll patch the adapters in individual tests
@@ -248,7 +248,7 @@ def mock_adapter_error():
 
     def _factory(exc: Exception):
         return patch(
-            "mcp_second_brain.adapters.mock_adapter.MockAdapter.generate",
+            "mcp_the_force.adapters.mock_adapter.MockAdapter.generate",
             side_effect=exc if isinstance(exc, Exception) else exc(),
         )
 
@@ -260,7 +260,7 @@ def mock_adapter_error():
 def mock_vector_store_client(monkeypatch, mock_openai_client):
     """Mock vector store client to prevent real API calls."""
     # This mock handles vector stores created for ad-hoc 'attachments'.
-    import mcp_second_brain.utils.vector_store as vs_utils
+    import mcp_the_force.utils.vector_store as vs_utils
 
     monkeypatch.setattr(vs_utils, "get_client", Mock(return_value=mock_openai_client))
 
@@ -269,13 +269,13 @@ def mock_vector_store_client(monkeypatch, mock_openai_client):
     # the function from running at all, thus avoiding any real API calls for
     # conversation memory.
     monkeypatch.setattr(
-        "mcp_second_brain.memory.conversation.store_conversation_memory",
+        "mcp_the_force.memory.conversation.store_conversation_memory",
         AsyncMock(return_value=None),
     )
 
     # (Optional but good practice) You can also mock where the client is created
     # for the memory system itself, though the patch above is sufficient.
-    import mcp_second_brain.memory.config as memory_config
+    import mcp_the_force.memory.config as memory_config
 
     monkeypatch.setattr(
         memory_config, "get_client", Mock(return_value=mock_openai_client)
@@ -285,8 +285,8 @@ def mock_vector_store_client(monkeypatch, mock_openai_client):
 @pytest_asyncio.fixture
 async def run_tool():
     """Convenience helper that executes a tool by name using the real executor."""
-    from mcp_second_brain.tools.executor import executor
-    from mcp_second_brain.tools.registry import list_tools
+    from mcp_the_force.tools.executor import executor
+    from mcp_the_force.tools.registry import list_tools
 
     async def _inner(tool_name: str, **kwargs):
         metadata = list_tools()[tool_name]
@@ -299,7 +299,7 @@ async def run_tool():
 async def mcp_server():
     """Create MCP server instance for testing."""
     # Import here to ensure MCP_ADAPTER_MOCK is set first
-    from mcp_second_brain.server import mcp
+    from mcp_the_force.server import mcp
 
     # Return the server instance
     return mcp

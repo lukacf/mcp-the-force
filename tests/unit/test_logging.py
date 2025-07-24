@@ -4,8 +4,8 @@ Unit tests for logging security - ensuring API keys don't appear in logs.
 
 import logging
 import os
-from mcp_second_brain.config import Settings
-from mcp_second_brain.utils.logging_filter import RedactionFilter
+from mcp_the_force.config import Settings
+from mcp_the_force.utils.logging_filter import RedactionFilter
 
 
 class TestLoggingSecurity:
@@ -20,7 +20,7 @@ class TestLoggingSecurity:
         _ = Settings()
 
         # Simulate some operations that might log
-        logger = logging.getLogger("mcp_second_brain")
+        logger = logging.getLogger("mcp_the_force")
         logger.debug("Settings loaded")
         logger.info("Server starting")
 
@@ -36,7 +36,7 @@ class TestLoggingSecurity:
     def test_error_messages_sanitized(self, caplog):
         """Test that error messages don't leak sensitive info."""
         caplog.set_level(logging.DEBUG)
-        logger = logging.getLogger("mcp_second_brain")
+        logger = logging.getLogger("mcp_the_force")
 
         # Temporarily enable propagation for this test to capture logs
         original_propagate = logger.propagate

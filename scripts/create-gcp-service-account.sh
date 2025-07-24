@@ -2,7 +2,7 @@
 # Script to create a GCP service account for E2E testing
 
 PROJECT_ID="${1:-$(gcloud config get-value project)}"
-SERVICE_ACCOUNT_NAME="mcp-second-brain-e2e"
+SERVICE_ACCOUNT_NAME="mcp-the-force-e2e"
 SERVICE_ACCOUNT_EMAIL="${SERVICE_ACCOUNT_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
 KEY_FILE="gcp-service-account-key.json"
 
@@ -11,8 +11,8 @@ echo "Creating service account for project: $PROJECT_ID"
 # Create service account
 echo "Creating service account: $SERVICE_ACCOUNT_NAME"
 gcloud iam service-accounts create $SERVICE_ACCOUNT_NAME \
-    --display-name="MCP Second Brain E2E Testing" \
-    --description="Service account for MCP Second Brain E2E tests" \
+    --display-name="MCP The Force E2E Testing" \
+    --description="Service account for MCP The Force E2E tests" \
     --project=$PROJECT_ID || echo "Service account might already exist"
 
 # Grant necessary roles

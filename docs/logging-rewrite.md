@@ -1,4 +1,4 @@
-# MCP Second Brain: VictoriaLogs Migration & System Fixes
+# MCP The Force: VictoriaLogs Migration & System Fixes
 
 ## Overview
 
@@ -23,10 +23,10 @@ VictoriaLogs provides:
 
 ```bash
 # Create volume and run container
-docker volume create mcp-logs-data
+docker volume create the-force-logs-data
 docker run -d --name victorialogs \
   -p 9428:9428 \
-  -v mcp-logs-data:/var/lib/victorialogs \
+  -v the-force-logs-data:/var/lib/victorialogs \
   victoriametrics/victoria-logs:v1.17.0 \
   -retentionPeriod=7d
 ```
@@ -34,13 +34,13 @@ docker run -d --name victorialogs \
 ### Replace Custom Logging Code
 
 **Delete these files:**
-- `mcp_second_brain/logging/daemon.py`
-- `mcp_second_brain/logging/daemon_manager.py`
-- `mcp_second_brain/logging/push_handler.py`
-- `mcp_second_brain/logging/schema.sql`
-- `mcp_second_brain/logging/__main__.py`
+- `mcp_the_force/logging/daemon.py`
+- `mcp_the_force/logging/daemon_manager.py`
+- `mcp_the_force/logging/push_handler.py`
+- `mcp_the_force/logging/schema.sql`
+- `mcp_the_force/logging/__main__.py`
 
-**Update `mcp_second_brain/logging/setup.py`:**
+**Update `mcp_the_force/logging/setup.py`:**
 
 ```python
 import logging
@@ -52,7 +52,7 @@ def setup_logging():
     """Initialize VictoriaLogs-based logging."""
     settings = get_settings()
     
-    app_logger = logging.getLogger("mcp_second_brain")
+    app_logger = logging.getLogger("mcp_the_force")
     app_logger.setLevel(settings.logging.level)
     app_logger.propagate = False
     
@@ -67,7 +67,7 @@ def setup_logging():
     loki_handler = LokiHandler(
         url="http://localhost:9428/insert/loki/api/v1/push?_stream_fields=app,instance_id",
         tags={
-            "app": "mcp-second-brain",
+            "app": "mcp-the-force",
             "instance_id": settings.instance_id,
             "project": os.getenv("MCP_PROJECT_PATH", os.getcwd())
         },
@@ -78,7 +78,7 @@ def setup_logging():
     app_logger.info("Logging initialized with VictoriaLogs")
 ```
 
-**Update `mcp_second_brain/adapters/logging_adapter.py`:**
+**Update `mcp_the_force/adapters/logging_adapter.py`:**
 
 ```python
 import httpx
@@ -136,7 +136,7 @@ class LoggingAdapter:
 
 ### 1. Restore Structured Output Validation
 
-**Fix in `mcp_second_brain/adapters/openai/flow.py`:**
+**Fix in `mcp_the_force/adapters/openai/flow.py`:**
 
 ```python
 def _validate_structured_output(self, response_content: str) -> None:
@@ -160,11 +160,11 @@ def _validate_structured_output(self, response_content: str) -> None:
         )
 ```
 
-**Similar fix for `mcp_second_brain/adapters/vertex/adapter.py`**
+**Similar fix for `mcp_the_force/adapters/vertex/adapter.py`**
 
 ### 2. Restore Memory Storage Timeout
 
-**Fix in `mcp_second_brain/tools/executor.py`:**
+**Fix in `mcp_the_force/tools/executor.py`:**
 
 ```python
 # Restore original 120-second timeout for vector store operations
@@ -188,7 +188,7 @@ if self._background_tasks is not None:
 
 ### 3. Restore Specific Error Handling in Vertex Adapter
 
-**Fix in `mcp_second_brain/adapters/vertex/adapter.py`:**
+**Fix in `mcp_the_force/adapters/vertex/adapter.py`:**
 
 ```python
 try:
@@ -218,7 +218,7 @@ except Exception as e:
 
 ### 4. Restore File Verification in Vector Store
 
-**Fix in `mcp_second_brain/utils/vector_store.py`:**
+**Fix in `mcp_the_force/utils/vector_store.py`:**
 
 ```python
 async def create_vector_store(paths: List[str], ...) -> VectorStoreInfo:

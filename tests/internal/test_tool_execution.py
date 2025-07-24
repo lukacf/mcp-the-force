@@ -84,7 +84,7 @@ class TestToolExecutionIntegration:
 
         # Mock the context builder to simulate overflow
         with patch(
-            "mcp_second_brain.tools.executor.build_context_with_stable_list"
+            "mcp_the_force.tools.executor.build_context_with_stable_list"
         ) as mock_builder:
             # Simulate that files overflow to vector store
             mock_builder.return_value = (
@@ -99,12 +99,12 @@ class TestToolExecutionIntegration:
 
             # Also mock memory storage to prevent real async calls
             # Import the executor to patch its vector_store_manager
-            from mcp_second_brain.tools.executor import executor
+            from mcp_the_force.tools.executor import executor
 
             with (
                 patch.object(executor, "vector_store_manager", mock_vs_manager),
                 patch(
-                    "mcp_second_brain.tools.safe_memory.safe_store_conversation_memory",
+                    "mcp_the_force.tools.safe_memory.safe_store_conversation_memory",
                     new_callable=AsyncMock,
                 ),
             ):
