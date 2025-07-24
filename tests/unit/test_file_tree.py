@@ -3,7 +3,7 @@
 from pathlib import Path
 import tempfile
 
-from mcp_second_brain.utils.file_tree import (
+from mcp_the_force.utils.file_tree import (
     build_file_tree_from_paths,
 )
 

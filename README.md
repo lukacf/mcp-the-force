@@ -1,4 +1,4 @@
-# MCP Second‑Brain Server
+# MCP The‑Force Server
 
 An intelligent Model Context Protocol (MCP) server that orchestrates multiple AI models with advanced context management for large codebases. Built with a sophisticated descriptor-based tool system, it supports both OpenAI (o3, o3-pro, gpt-4.1) and Google Gemini (2.5-pro, 2.5-flash) models with smart file inlining and vector store integration.
 
@@ -21,7 +21,7 @@ gcloud auth application-default login
 mcp-config validate
 
 # 6. Run the server
-uv run -- mcp-second-brain
+uv run -- mcp-the-force
 ```
 
 ## 🤖 Claude Desktop Integration
@@ -33,9 +33,9 @@ Add the following to your Claude Desktop configuration file (`~/Library/Applicat
 ```json
 {
   "mcpServers": {
-    "second-brain": {
+    "the-force": {
       "command": "uv",
-      "args": ["--directory", "/path/to/mcp-second-brain", "run", "mcp-second-brain"]
+      "args": ["--directory", "/path/to/mcp-the-force", "run", "mcp-the-force"]
     }
   }
 }
@@ -48,9 +48,9 @@ To enable the developer logging system for debugging MCP operations:
 ```json
 {
   "mcpServers": {
-    "second-brain": {
+    "the-force": {
       "command": "uv",
-      "args": ["--directory", "/path/to/mcp-second-brain", "run", "mcp-second-brain"],
+      "args": ["--directory", "/path/to/mcp-the-force", "run", "mcp-the-force"],
       "env": {
         "LOGGING__DEVELOPER_MODE__ENABLED": "true",
         "LOGGING__DEVELOPER_MODE__PORT": "4711",
@@ -79,7 +79,7 @@ Any configuration setting can be overridden via environment variables in the MCP
 
 ## 🔧 Configuration
 
-MCP Second-Brain uses a unified YAML-based configuration system with environment variable overlay support.
+MCP The-Force uses a unified YAML-based configuration system with environment variable overlay support.
 
 ### Configuration Sources
 
@@ -189,16 +189,16 @@ gcloud config set project your-project-id
 #### Option 1: Service Account (Traditional)
 ```bash
 # Create service account
-gcloud iam service-accounts create mcp-second-brain
+gcloud iam service-accounts create mcp-the-force
 
 # Grant necessary permissions
 gcloud projects add-iam-policy-binding YOUR_PROJECT \
-  --member="serviceAccount:mcp-second-brain@YOUR_PROJECT.iam.gserviceaccount.com" \
+  --member="serviceAccount:mcp-the-force@YOUR_PROJECT.iam.gserviceaccount.com" \
   --role="roles/aiplatform.user"
 
 # Create and download key
 gcloud iam service-accounts keys create service-account-key.json \
-  --iam-account=mcp-second-brain@YOUR_PROJECT.iam.gserviceaccount.com
+  --iam-account=mcp-the-force@YOUR_PROJECT.iam.gserviceaccount.com
 
 # Set environment variable
 export GOOGLE_APPLICATION_CREDENTIALS="./service-account-key.json"
@@ -226,13 +226,13 @@ gcloud iam service-accounts add-iam-policy-binding \
   --project="$PROJECT_ID" \
   --role="roles/iam.workloadIdentityUser" \
   --member="principalSet://iam.googleapis.com/projects/$PROJECT_NUMBER/locations/global/workloadIdentityPools/github-actions/attribute.repository/$REPO" \
-  mcp-second-brain@$PROJECT_ID.iam.gserviceaccount.com
+  mcp-the-force@$PROJECT_ID.iam.gserviceaccount.com
 ```
 
 **GitHub Secrets Setup:**
 - `GCP_PROJECT_ID`: Your Google Cloud project ID
 - `GCP_WORKLOAD_IDENTITY_PROVIDER`: `projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/github-actions/providers/github`
-- `GCP_SERVICE_ACCOUNT`: `mcp-second-brain@PROJECT_ID.iam.gserviceaccount.com`
+- `GCP_SERVICE_ACCOUNT`: `mcp-the-force@PROJECT_ID.iam.gserviceaccount.com`
 
 ## 🛠️ Available Tools
 
@@ -354,38 +354,38 @@ result = await mcp.call_tool(
 
 ```
 # Simple code review
-Use second-brain chat_with_gemini25_flash with {"instructions": "Review this function for potential improvements", "output_format": "Bullet points with specific suggestions", "context": ["/src/utils.py"], "session_id": "code-review-session"}
+Use the-force chat_with_gemini25_flash with {"instructions": "Review this function for potential improvements", "output_format": "Bullet points with specific suggestions", "context": ["/src/utils.py"], "session_id": "code-review-session"}
 ```
 
 ### Large Codebase Analysis with RAG
 
 ```
 # Analyze large codebase using attachments for RAG
-Use second-brain chat_with_gpt4_1 with {"instructions": "Analyze this codebase for architectural patterns and potential improvements", "output_format": "Structured analysis with specific recommendations", "context": [], "attachments": ["/path/to/docs/", "/path/to/src/"], "session_id": "architecture-analysis"}
+Use the-force chat_with_gpt4_1 with {"instructions": "Analyze this codebase for architectural patterns and potential improvements", "output_format": "Structured analysis with specific recommendations", "context": [], "attachments": ["/path/to/docs/", "/path/to/src/"], "session_id": "architecture-analysis"}
 ```
 
 ### Structured Output for Reliable Results
 
 ```
 # Get structured JSON output for programmatic use
-Use second-brain chat_with_o3 with {"instructions": "Calculate the complexity and provide metrics for this codebase", "output_format": "JSON object with metrics", "context": ["/src"], "session_id": "complexity-analysis", "structured_output_schema": {"type": "object", "properties": {"cyclomatic_complexity": {"type": "integer"}, "lines_of_code": {"type": "integer"}, "maintainability_score": {"type": "string"}}, "required": ["cyclomatic_complexity", "lines_of_code", "maintainability_score"]}}
+Use the-force chat_with_o3 with {"instructions": "Calculate the complexity and provide metrics for this codebase", "output_format": "JSON object with metrics", "context": ["/src"], "session_id": "complexity-analysis", "structured_output_schema": {"type": "object", "properties": {"cyclomatic_complexity": {"type": "integer"}, "lines_of_code": {"type": "integer"}, "maintainability_score": {"type": "string"}}, "required": ["cyclomatic_complexity", "lines_of_code", "maintainability_score"]}}
 ```
 
 ### Research with Web Search
 
 ```
 # Deep research with autonomous web search
-Use second-brain research_with_o3_deep_research with {"instructions": "Research the latest advances in vector databases and their applications in RAG", "output_format": "Comprehensive report with recent developments and practical applications", "context": [], "session_id": "vector-db-research"}
+Use the-force research_with_o3_deep_research with {"instructions": "Research the latest advances in vector databases and their applications in RAG", "output_format": "Comprehensive report with recent developments and practical applications", "context": [], "session_id": "vector-db-research"}
 ```
 
 ### Cross-Model Collaboration
 
 ```
 # Use multiple models for comprehensive analysis
-Use second-brain chat_with_gemini25_flash with {"instructions": "What are the main security concerns in this authentication system?", "output_format": "List of potential security issues", "context": ["/src/auth/"], "session_id": "security-review-quick"}
+Use the-force chat_with_gemini25_flash with {"instructions": "What are the main security concerns in this authentication system?", "output_format": "List of potential security issues", "context": ["/src/auth/"], "session_id": "security-review-quick"}
 
 # Then deep dive with reasoning model
-Use second-brain chat_with_o3_pro with {"instructions": "Analyze the authentication system for subtle security vulnerabilities", "output_format": "Detailed security analysis with remediation steps", "context": ["/src/auth/"], "session_id": "security-review-deep"}
+Use the-force chat_with_o3_pro with {"instructions": "Analyze the authentication system for subtle security vulnerabilities", "output_format": "Detailed security analysis with remediation steps", "context": ["/src/auth/"], "session_id": "security-review-deep"}
 ```
 
 ## 🧠 Project History
@@ -397,7 +397,7 @@ The server automatically captures and indexes:
 Search across project history:
 ```
 # Search past decisions and commit history
-Use second-brain search_project_history with {"query": "authentication implementation decisions", "max_results": 10}
+Use the-force search_project_history with {"query": "authentication implementation decisions", "max_results": 10}
 ```
 
 ## 🔍 Developer Logging System
@@ -440,7 +440,7 @@ search_mcp_debug_logs(text="CallToolRequest", project="all")
 search_mcp_debug_logs(severity="error", context="e2e")
 
 # Specific instance logs
-search_mcp_debug_logs(instance="mcp-second-brain_dev_8747aa1d")
+search_mcp_debug_logs(instance="mcp-the-force_dev_8747aa1d")
 
 # Oldest to newest with time range
 search_mcp_debug_logs(since="24h", order="asc")

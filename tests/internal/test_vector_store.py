@@ -5,12 +5,12 @@ Integration tests for vector store functionality.
 import pytest
 from pathlib import Path
 from unittest.mock import Mock
-from mcp_second_brain.tools.vector_store_manager import VectorStoreManager
-from mcp_second_brain.tools.executor import executor
-from mcp_second_brain.tools.registry import get_tool
+from mcp_the_force.tools.vector_store_manager import VectorStoreManager
+from mcp_the_force.tools.executor import executor
+from mcp_the_force.tools.registry import get_tool
 
 # Import definitions to ensure tools are registered
-import mcp_second_brain.tools.definitions  # noqa: F401
+import mcp_the_force.tools.definitions  # noqa: F401
 
 
 class TestVectorStoreIntegration:
@@ -35,7 +35,7 @@ class TestVectorStoreIntegration:
         # Create vector store
         vs_manager = VectorStoreManager()
         # Gather files from the directory
-        from mcp_second_brain.utils.fs import gather_file_paths
+        from mcp_the_force.utils.fs import gather_file_paths
 
         files = gather_file_paths([str(tmp_path)])
         vs_id = await vs_manager.create(files)
@@ -77,7 +77,7 @@ class TestVectorStoreIntegration:
 
         # Process attachments
         vs_manager = VectorStoreManager()
-        from mcp_second_brain.utils.fs import gather_file_paths
+        from mcp_the_force.utils.fs import gather_file_paths
 
         files = gather_file_paths([str(tmp_path)])
         vs_id = await vs_manager.create(files)

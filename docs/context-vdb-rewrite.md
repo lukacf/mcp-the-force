@@ -12,11 +12,11 @@
 
 ## Background
 
-MCP Second-Brain is a Model Context Protocol (MCP) server that provides Claude (and other AI assistants) with access to multiple AI models (OpenAI o3/o3-pro, Google Gemini, GPT-4.1) for collaborative problem-solving. 
+MCP The-Force is a Model Context Protocol (MCP) server that provides Claude (and other AI assistants) with access to multiple AI models (OpenAI o3/o3-pro, Google Gemini, GPT-4.1) for collaborative problem-solving. 
 
 ### Critical Architecture Understanding
 
-- **Claude**: The USER of the MCP Second-Brain system - calls tools to consult other models
+- **Claude**: The USER of the MCP The-Force system - calls tools to consult other models
 - **O3, Gemini, etc**: The ASSISTANTS that receive context and answer questions
 - **Session**: A conversation thread with a specific assistant, identified by `session_id`
 - **Context**: Files that should be available throughout the conversation with an assistant
@@ -56,8 +56,8 @@ MCP Second-Brain is a Model Context Protocol (MCP) server that provides Claude (
 ```
 ┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
 │                 │     │                  │     │                 │
-│  Claude (User)  │────▶│  MCP Second-     │────▶│  AI Assistants  │
-│                 │     │  Brain Server    │     │  (o3, Gemini)   │
+│  Claude (User)  │────▶│  MCP The-        │────▶│  AI Assistants  │
+│                 │     │  Force Server    │     │  (o3, Gemini)   │
 └─────────────────┘     └──────────────────┘     └─────────────────┘
                                │
                                ▼
@@ -395,24 +395,24 @@ def reset_stable_list(session_id: str):
 
 ### Completed Components
 
-1. **StableListCache** (`mcp_second_brain/utils/stable_list_cache.py`)
+1. **StableListCache** (`mcp_the_force/utils/stable_list_cache.py`)
    - SQLite-backed cache for stable lists and sent file tracking
    - Implements file change detection via size/mtime comparison
    - Supports batch updates and session reset
    - Uses nanosecond precision for mtime to detect rapid changes
 
-2. **Context Builder** (`mcp_second_brain/utils/context_builder.py`)
+2. **Context Builder** (`mcp_the_force/utils/context_builder.py`)
    - `build_context_with_stable_list()` function implements the algorithm
    - Deterministic sorting by token count then path
    - Handles both overflow and no-overflow scenarios
    - Records baseline file info for all sent files
 
-3. **Tool Executor Integration** (`mcp_second_brain/tools/executor.py`)
+3. **Tool Executor Integration** (`mcp_the_force/tools/executor.py`)
    - Stable list is always used when session_id is present
    - Calculates token budget based on model context window
    - Properly routes attachments to vector store
 
-4. **Configuration** (`mcp_second_brain/config.py`)
+4. **Configuration** (`mcp_the_force/config.py`)
    - Stable list functionality is now always enabled
    - No feature flag needed - provides consistent behavior
 

@@ -3,7 +3,7 @@
 import pytest
 from unittest.mock import patch
 from pydantic import ValidationError
-from mcp_second_brain.adapters.openai.models import (
+from mcp_the_force.adapters.openai.models import (
     ModelCapability,
     OpenAIRequest,
     model_capabilities,
@@ -136,7 +136,7 @@ def test_openai_request_with_mocked_capabilities():
         )
     }
 
-    with patch("mcp_second_brain.adapters.openai.models.model_capabilities", mock_caps):
+    with patch("mcp_the_force.adapters.openai.models.model_capabilities", mock_caps):
         # Valid request for test model
         req = OpenAIRequest(
             model="test-model",

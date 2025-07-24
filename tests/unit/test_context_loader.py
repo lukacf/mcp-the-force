@@ -7,7 +7,7 @@ from pathlib import Path
 import tempfile
 from unittest.mock import patch
 
-from mcp_second_brain.utils.context_loader import load_text_files
+from mcp_the_force.utils.context_loader import load_text_files
 
 
 @pytest.fixture
@@ -134,7 +134,7 @@ class TestContextLoader:
         assert content == "HelloWorld"  # Null byte removed
         assert "\x00" not in content
 
-    @patch("mcp_second_brain.utils.context_loader.count_tokens")
+    @patch("mcp_the_force.utils.context_loader.count_tokens")
     def test_uses_token_counter(self, mock_count_tokens, temp_files):
         """Should use the token counter utility."""
         mock_count_tokens.return_value = 42

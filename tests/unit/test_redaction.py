@@ -1,6 +1,6 @@
 """Tests for secret redaction functionality."""
 
-from mcp_second_brain.utils.redaction import redact_secrets, redact_dict
+from mcp_the_force.utils.redaction import redact_secrets, redact_dict
 
 
 class TestRedaction:

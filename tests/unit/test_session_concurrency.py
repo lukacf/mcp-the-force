@@ -6,8 +6,8 @@ import tempfile
 import os
 from typing import List
 
-from mcp_second_brain.session_cache import _SQLiteSessionCache
-from mcp_second_brain.gemini_session_cache import _SQLiteGeminiSessionCache
+from mcp_the_force.session_cache import _SQLiteSessionCache
+from mcp_the_force.gemini_session_cache import _SQLiteGeminiSessionCache
 
 
 @pytest.mark.asyncio

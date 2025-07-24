@@ -1,10 +1,10 @@
 """Unit tests for ParameterRouter routing logic."""
 
 from typing import List
-from mcp_second_brain.tools.parameter_router import ParameterRouter
-from mcp_second_brain.tools.descriptors import Route, RouteType
-from mcp_second_brain.tools.base import ToolSpec
-from mcp_second_brain.tools.registry import ToolMetadata, ParameterInfo
+from mcp_the_force.tools.parameter_router import ParameterRouter
+from mcp_the_force.tools.descriptors import Route, RouteType
+from mcp_the_force.tools.base import ToolSpec
+from mcp_the_force.tools.registry import ToolMetadata, ParameterInfo
 
 
 class TestParameterRouter:

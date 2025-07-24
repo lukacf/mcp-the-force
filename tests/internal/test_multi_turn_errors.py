@@ -6,8 +6,8 @@ These tests verify error handling and catch regression of the bugs we fixed.
 import pytest
 import json
 from unittest.mock import patch
-from mcp_second_brain.tools.executor import executor
-from mcp_second_brain.tools.registry import get_tool
+from mcp_the_force.tools.executor import executor
+from mcp_the_force.tools.registry import get_tool
 
 
 class TestMultiTurnErrors:
@@ -113,7 +113,7 @@ class TestMultiTurnErrors:
         old_prompt = "Use the available tools whenever you need additional context"
 
         with patch(
-            "mcp_second_brain.prompts.get_developer_prompt", return_value=old_prompt
+            "mcp_the_force.prompts.get_developer_prompt", return_value=old_prompt
         ):
             # First turn
             await executor.execute(

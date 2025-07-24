@@ -5,11 +5,11 @@ Integration tests for multi-turn session management.
 import pytest
 import asyncio
 from unittest.mock import Mock
-from mcp_second_brain.tools.executor import executor
-from mcp_second_brain.tools.registry import get_tool
+from mcp_the_force.tools.executor import executor
+from mcp_the_force.tools.registry import get_tool
 
 # Import definitions to ensure tools are registered
-import mcp_second_brain.tools.definitions  # noqa: F401
+import mcp_the_force.tools.definitions  # noqa: F401
 
 
 class TestSessionManagement:
@@ -180,7 +180,7 @@ class TestSessionManagement:
     @pytest.mark.asyncio
     async def test_session_expiration(self, parse_response, mock_openai_client):
         """Test that sessions expire after TTL."""
-        from mcp_second_brain.session_cache import _SQLiteSessionCache
+        from mcp_the_force.session_cache import _SQLiteSessionCache
         from unittest.mock import patch
         import tempfile
 
@@ -188,7 +188,7 @@ class TestSessionManagement:
         db_path = tempfile.mktemp(suffix=".db")
         cache = _SQLiteSessionCache(db_path=db_path, ttl=0.1)  # 100ms TTL
 
-        with patch("mcp_second_brain.session_cache.session_cache", cache):
+        with patch("mcp_the_force.session_cache.session_cache", cache):
             response = Mock(id="resp_expire", output_text="Initial response")
             mock_openai_client.responses.create.return_value = response
 

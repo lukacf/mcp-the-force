@@ -3,7 +3,7 @@
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
 
-from mcp_second_brain.adapters.openai import (
+from mcp_the_force.adapters.openai import (
     OpenAIAdapter,
     AdapterException,
     ErrorCategory,
@@ -14,12 +14,12 @@ from mcp_second_brain.adapters.openai import (
 @pytest.mark.asyncio
 async def test_adapter_simple_completion():
     """Test simple completion without tools."""
-    with patch("mcp_second_brain.config.get_settings") as mock_settings:
+    with patch("mcp_the_force.config.get_settings") as mock_settings:
         mock_settings.return_value.openai_api_key = "test-key"
         adapter = OpenAIAdapter(model="gpt-4.1")
 
     with patch(
-        "mcp_second_brain.adapters.openai.client.OpenAIClientFactory.get_instance"
+        "mcp_the_force.adapters.openai.client.OpenAIClientFactory.get_instance"
     ) as mock_factory:
         with patch("asyncio.sleep", return_value=None):
             mock_client = AsyncMock()
@@ -50,7 +50,7 @@ async def test_adapter_simple_completion():
 @pytest.mark.asyncio
 async def test_adapter_with_tools():
     """Test completion with tool usage."""
-    with patch("mcp_second_brain.config.get_settings") as mock_settings:
+    with patch("mcp_the_force.config.get_settings") as mock_settings:
         mock_settings.return_value.openai_api_key = "test-key"
         adapter = OpenAIAdapter(model="gpt-4.1")
 
@@ -60,7 +60,7 @@ async def test_adapter_with_tools():
         return None
 
     with patch(
-        "mcp_second_brain.adapters.openai.client.OpenAIClientFactory.get_instance"
+        "mcp_the_force.adapters.openai.client.OpenAIClientFactory.get_instance"
     ) as mock_factory:
         with patch("asyncio.sleep", return_value=None):
             mock_client = AsyncMock()
@@ -108,7 +108,7 @@ async def test_adapter_with_tools():
 @pytest.mark.asyncio
 async def test_adapter_o3_reasoning():
     """Test o3 model with reasoning preservation."""
-    with patch("mcp_second_brain.config.get_settings") as mock_settings:
+    with patch("mcp_the_force.config.get_settings") as mock_settings:
         mock_settings.return_value.openai_api_key = "test-key"
         adapter = OpenAIAdapter(model="gpt-4.1")
 
@@ -116,7 +116,7 @@ async def test_adapter_o3_reasoning():
         return {"result": "calculated"}
 
     with patch(
-        "mcp_second_brain.adapters.openai.client.OpenAIClientFactory.get_instance"
+        "mcp_the_force.adapters.openai.client.OpenAIClientFactory.get_instance"
     ) as mock_factory:
         with patch("asyncio.sleep", return_value=None):
             mock_client = AsyncMock()
@@ -181,12 +181,12 @@ async def test_adapter_o3_reasoning():
 @pytest.mark.asyncio
 async def test_adapter_error_handling():
     """Test error handling and categorization."""
-    with patch("mcp_second_brain.config.get_settings") as mock_settings:
+    with patch("mcp_the_force.config.get_settings") as mock_settings:
         mock_settings.return_value.openai_api_key = "test-key"
         adapter = OpenAIAdapter(model="gpt-4.1")
 
     with patch(
-        "mcp_second_brain.adapters.openai.client.OpenAIClientFactory.get_instance"
+        "mcp_the_force.adapters.openai.client.OpenAIClientFactory.get_instance"
     ) as mock_factory:
         mock_client = AsyncMock()
         mock_factory.return_value = mock_client
@@ -209,12 +209,12 @@ async def test_adapter_error_handling():
 @pytest.mark.asyncio
 async def test_adapter_debug_mode():
     """Test return_debug includes tool information."""
-    with patch("mcp_second_brain.config.get_settings") as mock_settings:
+    with patch("mcp_the_force.config.get_settings") as mock_settings:
         mock_settings.return_value.openai_api_key = "test-key"
         adapter = OpenAIAdapter(model="gpt-4.1")
 
     with patch(
-        "mcp_second_brain.adapters.openai.client.OpenAIClientFactory.get_instance"
+        "mcp_the_force.adapters.openai.client.OpenAIClientFactory.get_instance"
     ) as mock_factory:
         with patch("asyncio.sleep", return_value=None):
             mock_client = AsyncMock()

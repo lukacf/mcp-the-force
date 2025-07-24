@@ -12,8 +12,8 @@ import pytest
 @pytest.mark.unit
 def test_grok_adapter_structure():
     """Verify that Grok adapter can be imported and has required methods."""
-    from mcp_second_brain.adapters.grok import GrokAdapter
-    from mcp_second_brain.adapters.base import BaseAdapter
+    from mcp_the_force.adapters.grok import GrokAdapter
+    from mcp_the_force.adapters.base import BaseAdapter
 
     # Verify it's properly structured
     assert issubclass(GrokAdapter, BaseAdapter)
@@ -24,8 +24,8 @@ def test_grok_adapter_structure():
 @pytest.mark.unit
 def test_openai_adapter_structure():
     """Verify that OpenAI adapter can be imported and has required methods."""
-    from mcp_second_brain.adapters.openai import OpenAIAdapter
-    from mcp_second_brain.adapters.base import BaseAdapter
+    from mcp_the_force.adapters.openai import OpenAIAdapter
+    from mcp_the_force.adapters.base import BaseAdapter
 
     # Verify it's properly structured
     assert issubclass(OpenAIAdapter, BaseAdapter)
@@ -36,8 +36,8 @@ def test_openai_adapter_structure():
 @pytest.mark.unit
 def test_vertex_adapter_structure():
     """Verify that Vertex adapter can be imported and has required methods."""
-    from mcp_second_brain.adapters.vertex import VertexAdapter
-    from mcp_second_brain.adapters.base import BaseAdapter
+    from mcp_the_force.adapters.vertex import VertexAdapter
+    from mcp_the_force.adapters.base import BaseAdapter
 
     # Verify it's properly structured
     assert issubclass(VertexAdapter, BaseAdapter)
@@ -48,10 +48,10 @@ def test_vertex_adapter_structure():
 @pytest.mark.unit
 def test_all_adapters_follow_base_adapter_contract():
     """Verify all adapters properly implement BaseAdapter interface."""
-    from mcp_second_brain.adapters.base import BaseAdapter
-    from mcp_second_brain.adapters.grok import GrokAdapter
-    from mcp_second_brain.adapters.openai import OpenAIAdapter
-    from mcp_second_brain.adapters.vertex import VertexAdapter
+    from mcp_the_force.adapters.base import BaseAdapter
+    from mcp_the_force.adapters.grok import GrokAdapter
+    from mcp_the_force.adapters.openai import OpenAIAdapter
+    from mcp_the_force.adapters.vertex import VertexAdapter
 
     adapters = [GrokAdapter, OpenAIAdapter, VertexAdapter]
 

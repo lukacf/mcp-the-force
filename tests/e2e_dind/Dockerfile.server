@@ -17,7 +17,7 @@ WORKDIR /app
 
 # Copy project files
 COPY pyproject.toml README.md ./
-COPY mcp_second_brain ./mcp_second_brain
+COPY mcp_the_force ./mcp_the_force
 COPY *.md *.py ./
 
 # Install the package and dependencies

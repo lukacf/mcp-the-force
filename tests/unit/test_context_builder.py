@@ -5,11 +5,11 @@ import tempfile
 import os
 from unittest.mock import patch, MagicMock
 
-from mcp_second_brain.utils.context_builder import (
+from mcp_the_force.utils.context_builder import (
     sort_files_for_stable_list,
     build_context_with_stable_list,
 )
-from mcp_second_brain.utils.stable_list_cache import StableListCache
+from mcp_the_force.utils.stable_list_cache import StableListCache
 
 
 class TestDeterministicSorting:
@@ -37,7 +37,7 @@ class TestDeterministicSorting:
 
         with patch("os.path.getsize", side_effect=mock_getsize):
             with patch(
-                "mcp_second_brain.utils.context_builder.estimate_tokens",
+                "mcp_the_force.utils.context_builder.estimate_tokens",
                 side_effect=mock_estimate_tokens,
             ):
                 sorted_files = sort_files_for_stable_list(list(file_info.keys()))
@@ -67,7 +67,7 @@ class TestDeterministicSorting:
 
         with patch("os.path.getsize", side_effect=mock_getsize):
             with patch(
-                "mcp_second_brain.utils.context_builder.estimate_tokens",
+                "mcp_the_force.utils.context_builder.estimate_tokens",
                 side_effect=mock_estimate_tokens,
             ):
                 sorted_files = sort_files_for_stable_list(list(file_info.keys()))
@@ -91,7 +91,7 @@ class TestDeterministicSorting:
 
         with patch("os.path.getsize", side_effect=mock_getsize):
             with patch(
-                "mcp_second_brain.utils.context_builder.estimate_tokens",
+                "mcp_the_force.utils.context_builder.estimate_tokens",
                 return_value=250,
             ):
                 sorted_files = sort_files_for_stable_list(files)
@@ -134,11 +134,11 @@ class TestBuildContextWithStableList:
                 raise FileNotFoundError()
 
             with patch(
-                "mcp_second_brain.utils.context_builder.gather_file_paths_async",
+                "mcp_the_force.utils.context_builder.gather_file_paths_async",
                 side_effect=mock_gather_files,
             ):
                 with patch(
-                    "mcp_second_brain.utils.context_builder.load_specific_files_async",
+                    "mcp_the_force.utils.context_builder.load_specific_files_async",
                     side_effect=mock_load_files,
                 ):
                     with patch("os.path.getsize", side_effect=mock_getsize):
@@ -149,7 +149,7 @@ class TestBuildContextWithStableList:
                             )  # Match the 4 bytes per token used in mock_getsize
 
                         with patch(
-                            "mcp_second_brain.utils.context_builder.estimate_tokens",
+                            "mcp_the_force.utils.context_builder.estimate_tokens",
                             side_effect=mock_estimate_tokens,
                         ):
                             (
@@ -213,11 +213,11 @@ class TestBuildContextWithStableList:
 
             with patch("os.stat", return_value=mock_stat):
                 with patch(
-                    "mcp_second_brain.utils.context_builder.gather_file_paths_async",
+                    "mcp_the_force.utils.context_builder.gather_file_paths_async",
                     side_effect=mock_gather_files,
                 ):
                     with patch(
-                        "mcp_second_brain.utils.context_loader.gather_file_paths",
+                        "mcp_the_force.utils.context_loader.gather_file_paths",
                         side_effect=mock_gather_files,
                     ):
                         (
@@ -292,11 +292,11 @@ class TestBuildContextWithStableList:
 
             with patch("os.stat", side_effect=mock_stat):
                 with patch(
-                    "mcp_second_brain.utils.context_builder.gather_file_paths_async",
+                    "mcp_the_force.utils.context_builder.gather_file_paths_async",
                     side_effect=mock_gather_files,
                 ):
                     with patch(
-                        "mcp_second_brain.utils.context_builder.load_specific_files_async",
+                        "mcp_the_force.utils.context_builder.load_specific_files_async",
                         side_effect=mock_load_files,
                     ):
                         (
@@ -349,11 +349,11 @@ class TestBuildContextWithStableList:
                 raise FileNotFoundError()
 
             with patch(
-                "mcp_second_brain.utils.context_builder.gather_file_paths_async",
+                "mcp_the_force.utils.context_builder.gather_file_paths_async",
                 side_effect=mock_gather_files,
             ):
                 with patch(
-                    "mcp_second_brain.utils.context_builder.load_specific_files_async",
+                    "mcp_the_force.utils.context_builder.load_specific_files_async",
                     side_effect=mock_load_files,
                 ):
                     with patch("os.path.getsize", side_effect=mock_getsize):
@@ -364,7 +364,7 @@ class TestBuildContextWithStableList:
                             )  # Match the 4 bytes per token used in mock_getsize
 
                         with patch(
-                            "mcp_second_brain.utils.context_builder.estimate_tokens",
+                            "mcp_the_force.utils.context_builder.estimate_tokens",
                             side_effect=mock_estimate_tokens,
                         ):
                             (
@@ -440,11 +440,11 @@ class TestBuildContextWithStableList:
                     "os.path.getsize", side_effect=lambda p: mock_stat(p).st_size
                 ):
                     with patch(
-                        "mcp_second_brain.utils.context_builder.gather_file_paths_async",
+                        "mcp_the_force.utils.context_builder.gather_file_paths_async",
                         side_effect=mock_gather_files,
                     ):
                         with patch(
-                            "mcp_second_brain.utils.context_builder.load_specific_files_async",
+                            "mcp_the_force.utils.context_builder.load_specific_files_async",
                             side_effect=mock_load_files,
                         ):
                             # First call without priority context

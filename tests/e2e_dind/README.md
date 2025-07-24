@@ -13,7 +13,7 @@ Each test scenario runs in its own Docker compose stack:
 
 ### Docker-in-Docker Setup
 ```
-mcp-e2e-runner (host container)
+the-force-e2e-runner (host container)
 ├── test-scenario-1-network
 │   ├── mcp-server (production build)
 │   └── claude-runner (CLI execution)
@@ -25,7 +25,7 @@ mcp-e2e-runner (host container)
 
 ## Test Scenarios
 
-All tests run concurrently with 100% pass rate. Each test validates a complete user workflow from Claude CLI through MCP Second-Brain server to AI models.
+All tests run concurrently with 100% pass rate. Each test validates a complete user workflow from Claude CLI through MCP The-Force server to AI models.
 
 ### 1. Smoke Test (`test_smoke.py`)
 - **Purpose**: Basic health check and core functionality validation
@@ -108,7 +108,7 @@ docker run --rm \
   -e OPENAI_API_KEY="your-key" \
   -e ANTHROPIC_API_KEY="your-key" \
   -e VERTEX_PROJECT="your-project" \
-  mcp-e2e-runner tests/e2e_dind/scenarios/test_smoke.py -v
+  the-force-e2e-runner tests/e2e_dind/scenarios/test_smoke.py -v
 ```
 
 ### CI/CD

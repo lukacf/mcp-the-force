@@ -1,6 +1,6 @@
-# Contributing to MCP Second-Brain
+# Contributing to MCP The-Force
 
-This guide covers everything you need to know to develop, test, and extend the MCP Second-Brain server.
+This guide covers everything you need to know to develop, test, and extend the MCP The-Force server.
 
 ## 🛠️ Development Setup
 
@@ -14,7 +14,7 @@ This guide covers everything you need to know to develop, test, and extend the M
 ```bash
 # Clone and install
 git clone <repository-url>
-cd mcp-second-brain
+cd mcp-the-force
 uv pip install -e ".[dev]"
 
 # Install pre-commit hooks
@@ -103,24 +103,24 @@ pytest tests/e2e_dind -v               # Docker-in-Docker E2E tests
 
 ### Core Components
 
-1. **Adapters** (`mcp_second_brain/adapters/`)
+1. **Adapters** (`mcp_the_force/adapters/`)
    - `base.py`: Abstract `BaseAdapter` defining the interface
    - `openai/`: OpenAI models integration (o3, o3-pro, gpt-4.1) via Responses API
    - `vertex/`: Google Vertex AI integration (Gemini 2.5 pro/flash) via google-genai SDK
 
-2. **Tool System** (`mcp_second_brain/tools/`)
+2. **Tool System** (`mcp_the_force/tools/`)
    - `descriptors.py`: Route descriptors for parameter routing
    - `base.py`: ToolSpec base class with dataclass-like definitions
    - `definitions.py`: Tool definitions for all models
    - `executor.py`: Orchestrates tool execution with component delegation
    - `integration.py`: FastMCP integration layer
 
-3. **Server** (`mcp_second_brain/server.py`)
+3. **Server** (`mcp_the_force/server.py`)
    - FastMCP-based MCP protocol implementation
    - Registers dataclass-based tools dynamically
    - Minimal orchestration logic
 
-4. **Context Management** (`mcp_second_brain/utils/`)
+4. **Context Management** (`mcp_the_force/utils/`)
    - `fs.py`: Intelligent file gathering with gitignore support and filtering
    - `prompt_builder.py`: Smart context inlining vs vector store routing
    - `vector_store.py`: OpenAI vector store integration for RAG
@@ -191,7 +191,7 @@ await store_conversation_memory(
 )
 
 # Git commit storage via post-commit hook
-python -m mcp_second_brain.memory.commit
+python -m mcp_the_force.memory.commit
 ```
 
 ### Session Management
@@ -286,7 +286,7 @@ class MyAdapter(BaseAdapter):
 
 To add new memory sources (beyond conversations and git commits):
 
-1. Create storage function in `mcp_second_brain/memory/`
+1. Create storage function in `mcp_the_force/memory/`
 2. Implement search integration in memory adapters
 3. Add to unified search in `search_project_history`
 
@@ -318,7 +318,7 @@ async def store_new_memory_type(content: str, metadata: Dict[str, Any]) -> None:
 
 1. **Use specific exception types**:
 ```python
-from mcp_second_brain.errors import (
+from mcp_the_force.errors import (
     AdapterError,
     ConfigurationError,
     VectorStoreError
@@ -430,13 +430,13 @@ env | grep -E "(OPENAI|VERTEX|MCP)"
 **Tool registration failures:**
 ```bash
 # Check tool registry
-python -c "from mcp_second_brain.tools.registry import list_tools; print(list_tools())"
+python -c "from mcp_the_force.tools.registry import list_tools; print(list_tools())"
 ```
 
 **Memory/Vector store issues:**
 ```bash
 # Check vector store status
-python -c "from mcp_second_brain.memory.config import get_memory_config; print(get_memory_config())"
+python -c "from mcp_the_force.memory.config import get_memory_config; print(get_memory_config())"
 ```
 
 ### Debug Logging
@@ -444,7 +444,7 @@ python -c "from mcp_second_brain.memory.config import get_memory_config; print(g
 Enable debug logging:
 ```bash
 export LOG_LEVEL=DEBUG
-uv run -- mcp-second-brain
+uv run -- mcp-the-force
 ```
 
 Or in configuration:
@@ -471,4 +471,4 @@ logging:
 5. Address feedback and iterate
 6. Squash commits before merge
 
-Thank you for contributing to MCP Second-Brain! 🧠✨
+Thank you for contributing to MCP The-Force! 🧠✨

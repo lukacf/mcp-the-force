@@ -226,7 +226,7 @@ def stack(request):
 
             # Also try to check if the image exists
             img_check = subprocess.run(
-                ["docker", "images", "mcp-e2e-runner:latest"],
+                ["docker", "images", "the-force-e2e-runner:latest"],
                 capture_output=True,
                 text=True,
                 check=False,
@@ -405,7 +405,7 @@ def claude(stack, request) -> Callable[[str, int], str]:
 
     # Configure MCP server using claude mcp add-json
     mcp_config = {
-        "command": "mcp-second-brain",
+        "command": "mcp-the-force",
         "args": [],
         "env": {
             "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY", ""),
@@ -425,7 +425,7 @@ def claude(stack, request) -> Callable[[str, int], str]:
             # Stable list is now always enabled - no feature flag needed
         },
         "timeout": 60000,
-        "description": "MCP Second-Brain server",
+        "description": "MCP The-Force server",
     }
 
     # Configure MCP server
@@ -435,7 +435,7 @@ def claude(stack, request) -> Callable[[str, int], str]:
         "claude",
         "mcp",
         "add-json",
-        "second-brain",
+        "the-force",
         json.dumps(mcp_config),
     ]
 
@@ -612,7 +612,7 @@ def call_claude_tool(claude: Callable[[str], str]) -> Callable[..., str]:
                     param_parts.append(f"{key}: {json.dumps(value)}")
 
         # Construct the natural language command
-        prompt = f"Use second-brain {tool_name} with {', '.join(param_parts)}"
+        prompt = f"Use the-force {tool_name} with {', '.join(param_parts)}"
 
         # Add response format instruction if provided
         if response_format:
@@ -791,7 +791,7 @@ def claude_with_low_context(stack, request) -> Callable[[str, int], str]:
 
     # Configure MCP server using claude mcp add-json with low CONTEXT_PERCENTAGE
     mcp_config = {
-        "command": "mcp-second-brain",
+        "command": "mcp-the-force",
         "args": [],
         "env": {
             "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY", ""),
@@ -811,7 +811,7 @@ def claude_with_low_context(stack, request) -> Callable[[str, int], str]:
             "CONTEXT_PERCENTAGE": "0.01",  # Set to 1% to force overflow with smaller files
         },
         "timeout": 60000,
-        "description": "MCP Second-Brain server (low context for overflow testing)",
+        "description": "MCP The-Force server (low context for overflow testing)",
     }
 
     # Configure MCP server
@@ -821,7 +821,7 @@ def claude_with_low_context(stack, request) -> Callable[[str, int], str]:
         "claude",
         "mcp",
         "add-json",
-        "second-brain-overflow",  # Use different name to avoid conflict
+        "the-force-overflow",  # Use different name to avoid conflict
         json.dumps(mcp_config),
     ]
 

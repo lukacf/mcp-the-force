@@ -3,8 +3,8 @@
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
 
-from mcp_second_brain.tools.executor import ToolExecutor
-from mcp_second_brain.tools.registry import ToolMetadata
+from mcp_the_force.tools.executor import ToolExecutor
+from mcp_the_force.tools.registry import ToolMetadata
 
 
 class TestExecutorIntegration:
@@ -28,7 +28,7 @@ class TestExecutorIntegration:
         )
 
         # Mock dependencies
-        with patch("mcp_second_brain.tools.executor.get_settings") as mock_settings:
+        with patch("mcp_the_force.tools.executor.get_settings") as mock_settings:
             # Stable list is always enabled - no feature flag needed
             mock_settings.return_value.mcp.context_percentage = 0.85
 
@@ -56,7 +56,7 @@ class TestExecutorIntegration:
                         return_value="<prompt>test</prompt>",
                     ) as mock_build:
                         with patch(
-                            "mcp_second_brain.adapters.get_adapter",
+                            "mcp_the_force.adapters.get_adapter",
                             return_value=(
                                 MagicMock(generate=AsyncMock(return_value="response")),
                                 None,
@@ -88,7 +88,7 @@ class TestExecutorIntegration:
         )
 
         # Mock dependencies
-        with patch("mcp_second_brain.tools.executor.get_settings") as mock_settings:
+        with patch("mcp_the_force.tools.executor.get_settings") as mock_settings:
             # Stable list is always enabled - no feature flag needed
             mock_settings.return_value.mcp.context_percentage = 0.85
 
@@ -110,17 +110,17 @@ class TestExecutorIntegration:
                     },
                 ):
                     with patch(
-                        "mcp_second_brain.tools.executor.StableListCache"
+                        "mcp_the_force.tools.executor.StableListCache"
                     ) as mock_cache_class:
                         mock_cache = MagicMock()
                         mock_cache_class.return_value = mock_cache
 
                         with patch(
-                            "mcp_second_brain.tools.executor.get_model_context_window",
+                            "mcp_the_force.tools.executor.get_model_context_window",
                             return_value=100000,
                         ):
                             with patch(
-                                "mcp_second_brain.tools.executor.build_context_with_stable_list",
+                                "mcp_the_force.tools.executor.build_context_with_stable_list",
                                 new_callable=AsyncMock,
                                 return_value=(
                                     [("/test/file.py", "content", 100)],
@@ -134,7 +134,7 @@ class TestExecutorIntegration:
                                     new_callable=AsyncMock,
                                 ) as mock_old_build:
                                     with patch(
-                                        "mcp_second_brain.adapters.get_adapter",
+                                        "mcp_the_force.adapters.get_adapter",
                                         return_value=(
                                             MagicMock(
                                                 generate=AsyncMock(
@@ -173,7 +173,7 @@ class TestExecutorIntegration:
         )
 
         # Mock dependencies
-        with patch("mcp_second_brain.tools.executor.get_settings") as mock_settings:
+        with patch("mcp_the_force.tools.executor.get_settings") as mock_settings:
             # Stable list is always enabled - no feature flag needed
             mock_settings.return_value.mcp.context_percentage = 0.85
 
@@ -201,7 +201,7 @@ class TestExecutorIntegration:
                         return_value="<prompt>test</prompt>",
                     ) as mock_build:
                         with patch(
-                            "mcp_second_brain.adapters.get_adapter",
+                            "mcp_the_force.adapters.get_adapter",
                             return_value=(
                                 MagicMock(generate=AsyncMock(return_value="response")),
                                 None,
@@ -233,7 +233,7 @@ class TestExecutorIntegration:
         )
 
         # Mock dependencies
-        with patch("mcp_second_brain.tools.executor.get_settings") as mock_settings:
+        with patch("mcp_the_force.tools.executor.get_settings") as mock_settings:
             # Stable list is always enabled - no feature flag needed
             mock_settings.return_value.mcp.context_percentage = 0.85
 
@@ -254,14 +254,14 @@ class TestExecutorIntegration:
                         "vector_store_ids": [],
                     },
                 ):
-                    with patch("mcp_second_brain.tools.executor.StableListCache"):
+                    with patch("mcp_the_force.tools.executor.StableListCache"):
                         with patch(
-                            "mcp_second_brain.tools.executor.get_model_context_window",
+                            "mcp_the_force.tools.executor.get_model_context_window",
                             return_value=100000,
                         ):
                             # Return inline files and overflow files
                             with patch(
-                                "mcp_second_brain.tools.executor.build_context_with_stable_list",
+                                "mcp_the_force.tools.executor.build_context_with_stable_list",
                                 new_callable=AsyncMock,
                                 return_value=(
                                     [("/test/inline.py", "content", 100)],
@@ -276,7 +276,7 @@ class TestExecutorIntegration:
                                     return_value="vs-123",
                                 ) as mock_create_vs:
                                     with patch(
-                                        "mcp_second_brain.adapters.get_adapter",
+                                        "mcp_the_force.adapters.get_adapter",
                                         return_value=(
                                             MagicMock(
                                                 generate=AsyncMock(

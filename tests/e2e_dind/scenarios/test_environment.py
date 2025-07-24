@@ -24,7 +24,7 @@ def test_environment_check(claude, stack):
         ["gosu", "claude", "claude", "mcp", "list"], "test-runner"
     )
     print(f"   MCP servers configured:\n{stdout}")
-    assert "second-brain" in stdout, "second-brain MCP server not configured"
+    assert "the-force" in stdout, "the-force MCP server not configured"
 
     # 3. Check if server container is running
     print("\n3. Checking server container...")
@@ -83,20 +83,20 @@ def test_environment_check(claude, stack):
                     "   ⚠️  WARNING: Using default test project - Gemini will fail with permission errors"
                 )
 
-    # 5. Check if mcp-second-brain is installed in server
-    print("\n5. Checking mcp-second-brain installation...")
+    # 5. Check if mcp-the-force is installed in server
+    print("\n5. Checking mcp-the-force installation...")
     stdout, stderr, return_code = stack.exec_in_container(
-        ["which", "mcp-second-brain"], "server"
+        ["which", "mcp-the-force"], "server"
     )
     if return_code == 0:
-        print(f"   mcp-second-brain found at: {stdout.strip()}")
+        print(f"   mcp-the-force found at: {stdout.strip()}")
     else:
-        print("   ERROR: mcp-second-brain not found!")
+        print("   ERROR: mcp-the-force not found!")
 
     # 6. Test starting the MCP server manually
     print("\n6. Testing manual MCP server startup...")
     stdout, stderr, return_code = stack.exec_in_container(
-        ["bash", "-c", "timeout 5 mcp-second-brain 2>&1 || true"], "server"
+        ["bash", "-c", "timeout 5 mcp-the-force 2>&1 || true"], "server"
     )
     print(f"   Server startup output:\n{stdout}")
     if stderr:
@@ -168,7 +168,7 @@ def test_environment_check(claude, stack):
             [
                 "bash",
                 "-c",
-                "cd /host-project && python3 -c 'import mcp_second_brain; print(\"Module imported successfully\")'",
+                "cd /host-project && python3 -c 'import mcp_the_force; print(\"Module imported successfully\")'",
             ],
             "server",
         )
@@ -196,7 +196,7 @@ def test_environment_check(claude, stack):
     # 9. Test a simple MCP tool call
     print("\n9. Testing simple MCP tool call...")
     try:
-        response = claude("Use second-brain list_models")
+        response = claude("Use the-force list_models")
         print(f"   Tool response received: {len(response)} characters")
         print(f"   First 500 chars of response: {response[:500]}...")
 
@@ -249,7 +249,7 @@ def test_debug_mcp_connection(claude, stack):
         )
         print(f"   MCP-related files found:\n{stdout}")
 
-    # 2. Try running mcp-second-brain directly via Claude
+    # 2. Try running mcp-the-force directly via Claude
     print("\n2. Testing direct MCP invocation via Claude...")
     # This simulates what Claude does internally
     cmd = [
@@ -257,7 +257,7 @@ def test_debug_mcp_connection(claude, stack):
         "claude",
         "bash",
         "-c",
-        'cd /host-project && echo \'{"jsonrpc":"2.0","method":"list","id":1}\' | VICTORIA_LOGS_URL=http://host.docker.internal:9428 CI_E2E=1 mcp-second-brain',
+        'cd /host-project && echo \'{"jsonrpc":"2.0","method":"list","id":1}\' | VICTORIA_LOGS_URL=http://host.docker.internal:9428 CI_E2E=1 mcp-the-force',
     ]
     stdout, stderr, return_code = stack.exec_in_container(cmd, "test-runner")
     print(f"   Direct invocation stdout:\n{stdout}")
@@ -305,9 +305,7 @@ def test_victoria_logs_integration(claude, stack):
         "priority_context": [],
         "session_id": "e2e-log-test",
     }
-    response = claude(
-        f"Use second-brain chat_with_gemini25_flash with {json.dumps(args)}"
-    )
+    response = claude(f"Use the-force chat_with_gemini25_flash with {json.dumps(args)}")
     print(f"   Response received: {len(response)} chars")
     print(f"   Response content: {response[:200]}...")
 
@@ -355,7 +353,7 @@ def test_victoria_logs_integration(claude, stack):
                 print("   ❌ Log marker NOT found in VictoriaLogs")
                 # Try a broader query
                 print("\n   Trying broader query...")
-                query = '_time:[now-5m, now] AND app:"mcp-second-brain"'
+                query = '_time:[now-5m, now] AND app:"mcp-the-force"'
                 result = subprocess.run(
                     [
                         "curl",
@@ -372,7 +370,7 @@ def test_victoria_logs_integration(claude, stack):
                     text=True,
                     timeout=10,
                 )
-                print(f"   Any mcp-second-brain logs: {len(result.stdout)} chars")
+                print(f"   Any mcp-the-force logs: {len(result.stdout)} chars")
                 if len(result.stdout) > 100:
                     print(f"   Sample: {result.stdout[:200]}...")
     except Exception as e:

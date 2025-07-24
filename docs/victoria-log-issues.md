@@ -8,7 +8,7 @@ VictoriaLogs was a complete red herring. When we disabled it, we accidentally al
 
 ## Abstract
 
-This post-mortem documents one of the most challenging debugging journeys in the project's history. The MCP Second-Brain server would consistently hang on the second query within a session. After an extensive investigation lasting longer than building the entire project, involving 23+ failed theories, the root cause was shockingly simple: a synchronous stderr handler blocking on a full pipe buffer.
+This post-mortem documents one of the most challenging debugging journeys in the project's history. The MCP The-Force server would consistently hang on the second query within a session. After an extensive investigation lasting longer than building the entire project, involving 23+ failed theories, the root cause was shockingly simple: a synchronous stderr handler blocking on a full pipe buffer.
 
 ## The Red Herring That Fooled Everyone
 

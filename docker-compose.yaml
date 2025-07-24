@@ -23,12 +23,12 @@ services:
       retries: 3
       start_period: 40s
     networks:
-      - mcp-network
+      - the-force-network
 
 networks:
-  mcp-network:
+  the-force-network:
     driver: bridge
 
 volumes:
-  mcp-logs-data:
+  the-force-logs-data:
     driver: local

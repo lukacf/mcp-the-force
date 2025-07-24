@@ -13,7 +13,7 @@ async def test_flow_preserves_reasoning_items_with_function_calls():
     This is a key requirement from the Responses API documentation - reasoning items
     MUST be included when sending follow-up requests after function execution.
     """
-    from mcp_second_brain.adapters.openai.flow import FlowOrchestrator
+    from mcp_the_force.adapters.openai.flow import FlowOrchestrator
 
     async def mock_tool_dispatcher(name, args):
         return {"result": "tool output"}
@@ -28,7 +28,7 @@ async def test_flow_preserves_reasoning_items_with_function_calls():
     }
 
     with patch(
-        "mcp_second_brain.adapters.openai.client.OpenAIClientFactory.get_instance"
+        "mcp_the_force.adapters.openai.client.OpenAIClientFactory.get_instance"
     ) as mock_factory:
         with patch("asyncio.sleep", return_value=None):  # Skip sleep in tests
             mock_client = AsyncMock()
@@ -92,7 +92,7 @@ async def test_flow_preserves_reasoning_items_with_function_calls():
 @pytest.mark.asyncio
 async def test_flow_handles_streaming_function_calls():
     """Verify function calls in streaming mode are handled correctly."""
-    from mcp_second_brain.adapters.openai.flow import FlowOrchestrator
+    from mcp_the_force.adapters.openai.flow import FlowOrchestrator
 
     async def mock_tool_dispatcher(name, args):
         return "Weather is sunny"
@@ -108,7 +108,7 @@ async def test_flow_handles_streaming_function_calls():
     }
 
     with patch(
-        "mcp_second_brain.adapters.openai.client.OpenAIClientFactory.get_instance"
+        "mcp_the_force.adapters.openai.client.OpenAIClientFactory.get_instance"
     ) as mock_factory:
         mock_client = AsyncMock()
         mock_factory.return_value = mock_client
@@ -148,7 +148,7 @@ async def test_flow_handles_streaming_function_calls():
 @pytest.mark.asyncio
 async def test_flow_handles_mixed_background_statuses():
     """Verify proper handling when job status changes during polling."""
-    from mcp_second_brain.adapters.openai.flow import FlowOrchestrator
+    from mcp_the_force.adapters.openai.flow import FlowOrchestrator
 
     orchestrator = FlowOrchestrator(tool_dispatcher=AsyncMock())
 
@@ -158,7 +158,7 @@ async def test_flow_handles_mixed_background_statuses():
     }
 
     with patch(
-        "mcp_second_brain.adapters.openai.client.OpenAIClientFactory.get_instance"
+        "mcp_the_force.adapters.openai.client.OpenAIClientFactory.get_instance"
     ) as mock_factory:
         with patch("asyncio.sleep", return_value=None):  # Skip sleep in tests
             mock_client = AsyncMock()
@@ -181,7 +181,7 @@ async def test_flow_handles_mixed_background_statuses():
 @pytest.mark.asyncio
 async def test_flow_extracts_content_from_complex_output():
     """Verify content extraction from various output formats."""
-    from mcp_second_brain.adapters.openai.flow import FlowOrchestrator
+    from mcp_the_force.adapters.openai.flow import FlowOrchestrator
 
     orchestrator = FlowOrchestrator(tool_dispatcher=AsyncMock())
 
@@ -225,7 +225,7 @@ async def test_flow_extracts_content_from_complex_output():
 
     for i, test_case in enumerate(test_cases):
         with patch(
-            "mcp_second_brain.adapters.openai.client.OpenAIClientFactory.get_instance"
+            "mcp_the_force.adapters.openai.client.OpenAIClientFactory.get_instance"
         ) as mock_factory:
             mock_client = AsyncMock()
             mock_factory.return_value = mock_client
@@ -252,7 +252,7 @@ async def test_flow_extracts_content_from_complex_output():
 @pytest.mark.asyncio
 async def test_flow_web_search_tool_attachment():
     """Verify web search tool is attached only for gpt-4.1."""
-    from mcp_second_brain.adapters.openai.flow import FlowOrchestrator
+    from mcp_the_force.adapters.openai.flow import FlowOrchestrator
 
     orchestrator = FlowOrchestrator(tool_dispatcher=AsyncMock())
 
@@ -264,7 +264,7 @@ async def test_flow_web_search_tool_attachment():
 
     for model, should_have_web_search in models_to_test:
         with patch(
-            "mcp_second_brain.adapters.openai.client.OpenAIClientFactory.get_instance"
+            "mcp_the_force.adapters.openai.client.OpenAIClientFactory.get_instance"
         ) as mock_factory:
             with patch("asyncio.sleep", return_value=None):  # Skip sleep in tests
                 mock_client = AsyncMock()
@@ -310,7 +310,7 @@ async def test_flow_web_search_tool_attachment():
 @pytest.mark.asyncio
 async def test_flow_return_debug_includes_tools():
     """Verify return_debug parameter includes tool information."""
-    from mcp_second_brain.adapters.openai.flow import FlowOrchestrator
+    from mcp_the_force.adapters.openai.flow import FlowOrchestrator
 
     orchestrator = FlowOrchestrator(tool_dispatcher=AsyncMock())
 
@@ -327,7 +327,7 @@ async def test_flow_return_debug_includes_tools():
     }
 
     with patch(
-        "mcp_second_brain.adapters.openai.client.OpenAIClientFactory.get_instance"
+        "mcp_the_force.adapters.openai.client.OpenAIClientFactory.get_instance"
     ) as mock_factory:
         with patch("asyncio.sleep", return_value=None):  # Skip sleep in tests
             mock_client = AsyncMock()
@@ -373,7 +373,7 @@ async def test_flow_return_debug_includes_tools():
 @pytest.mark.asyncio
 async def test_flow_handles_incomplete_responses():
     """Verify handling of incomplete responses due to token limits."""
-    from mcp_second_brain.adapters.openai.flow import FlowOrchestrator
+    from mcp_the_force.adapters.openai.flow import FlowOrchestrator
 
     orchestrator = FlowOrchestrator(tool_dispatcher=AsyncMock())
 
@@ -384,7 +384,7 @@ async def test_flow_handles_incomplete_responses():
     }
 
     with patch(
-        "mcp_second_brain.adapters.openai.client.OpenAIClientFactory.get_instance"
+        "mcp_the_force.adapters.openai.client.OpenAIClientFactory.get_instance"
     ) as mock_factory:
         with patch("asyncio.sleep", return_value=None):  # Skip sleep in tests
             mock_client = AsyncMock()
@@ -413,7 +413,7 @@ async def test_flow_handles_incomplete_responses():
 @pytest.mark.asyncio
 async def test_flow_respects_timeout_in_follow_up():
     """Verify timeout is properly tracked across initial and follow-up requests."""
-    from mcp_second_brain.adapters.openai.flow import FlowOrchestrator
+    from mcp_the_force.adapters.openai.flow import FlowOrchestrator
 
     async def mock_tool_dispatcher(name, args):
         await asyncio.sleep(0.1)  # Simulate some work
@@ -438,7 +438,7 @@ async def test_flow_respects_timeout_in_follow_up():
         return
 
     with patch(
-        "mcp_second_brain.adapters.openai.client.OpenAIClientFactory.get_instance"
+        "mcp_the_force.adapters.openai.client.OpenAIClientFactory.get_instance"
     ) as mock_factory:
         with patch("asyncio.sleep", side_effect=mock_sleep):
             mock_client = AsyncMock()

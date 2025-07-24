@@ -4,8 +4,8 @@ Integration tests for context loading with real file system operations.
 
 import os
 import pytest
-from mcp_second_brain.utils.fs import gather_file_paths
-from mcp_second_brain.utils.prompt_builder import build_prompt
+from mcp_the_force.utils.fs import gather_file_paths
+from mcp_the_force.utils.prompt_builder import build_prompt
 
 
 class TestContextLoadingIntegration:

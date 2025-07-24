@@ -4,7 +4,7 @@ import pytest
 from unittest.mock import Mock, patch
 from typing import List, Dict, Any
 
-from mcp_second_brain.tools.search_task_files import SearchTaskFilesAdapter
+from mcp_the_force.tools.search_task_files import SearchTaskFilesAdapter
 
 
 class MockSearchResult:
@@ -49,7 +49,7 @@ def search_adapter(mock_openai_client):
         return mock_openai_client
 
     with patch(
-        "mcp_second_brain.tools.search_task_files.OpenAIClientFactory.get_instance"
+        "mcp_the_force.tools.search_task_files.OpenAIClientFactory.get_instance"
     ) as mock_factory:
         mock_factory.return_value = mock_openai_client
         adapter = SearchTaskFilesAdapter()
@@ -137,7 +137,7 @@ class TestSearchTaskFilesDeduplication:
         self, search_adapter, tmp_path
     ):
         """Task files deduplication should be independent from memory deduplication."""
-        from mcp_second_brain.tools.search_history import SearchHistoryAdapter
+        from mcp_the_force.tools.search_history import SearchHistoryAdapter
 
         # Clear task files cache
         await search_adapter.clear_deduplication_cache()
@@ -147,26 +147,26 @@ class TestSearchTaskFilesDeduplication:
         mock_settings.openai_api_key = "test-key"
 
         with patch(
-            "mcp_second_brain.tools.search_history.get_settings",
+            "mcp_the_force.tools.search_history.get_settings",
             return_value=mock_settings,
         ):
-            with patch("mcp_second_brain.tools.search_history.get_memory_config"):
+            with patch("mcp_the_force.tools.search_history.get_memory_config"):
                 # Patch OpenAI client creation
                 with patch(
-                    "mcp_second_brain.tools.search_history.OpenAI", return_value=Mock()
+                    "mcp_the_force.tools.search_history.OpenAI", return_value=Mock()
                 ):
                     # Create test database path
                     test_db_path = (
-                        tmp_path / ".cache" / "mcp-second-brain" / "session_cache.db"
+                        tmp_path / ".cache" / "mcp-the-force" / "session_cache.db"
                     )
                     test_db_path.parent.mkdir(parents=True, exist_ok=True)
 
                     history_adapter = SearchHistoryAdapter()
                     # Force reinitialize deduplicator with test path
-                    from mcp_second_brain.tools.search_dedup_sqlite import (
+                    from mcp_the_force.tools.search_dedup_sqlite import (
                         SQLiteSearchDeduplicator,
                     )
-                    from mcp_second_brain.tools.search_history import (
+                    from mcp_the_force.tools.search_history import (
                         SearchHistoryAdapter as SHA,
                     )
 

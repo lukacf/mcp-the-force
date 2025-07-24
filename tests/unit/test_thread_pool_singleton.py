@@ -4,8 +4,8 @@ import pytest
 import asyncio
 import threading
 from unittest.mock import patch, MagicMock
-import mcp_second_brain.utils.thread_pool as tp
-from mcp_second_brain.utils.thread_pool import get_shared_executor
+import mcp_the_force.utils.thread_pool as tp
+from mcp_the_force.utils.thread_pool import get_shared_executor
 
 
 class TestThreadPoolSingleton:
@@ -43,7 +43,7 @@ class TestThreadPoolSingleton:
         future = executor.submit(lambda: threading.current_thread().name)
         thread_name = future.result()
 
-        assert thread_name.startswith("mcp-worker")
+        assert thread_name.startswith("force-worker")
 
     def test_thread_pool_uses_config(self):
         """Test that thread pool uses configured worker count."""
@@ -51,9 +51,7 @@ class TestThreadPoolSingleton:
         tp._shared_executor = None
 
         # Mock the settings at the module level where it's imported
-        with patch(
-            "mcp_second_brain.utils.thread_pool.get_settings"
-        ) as mock_get_settings:
+        with patch("mcp_the_force.utils.thread_pool.get_settings") as mock_get_settings:
             mock_settings = MagicMock()
             mock_settings.mcp.thread_pool_workers = 5
             mock_get_settings.return_value = mock_settings
@@ -64,7 +62,7 @@ class TestThreadPoolSingleton:
     @pytest.mark.asyncio
     async def test_run_in_thread_pool(self):
         """Test run_in_thread_pool utility function."""
-        from mcp_second_brain.utils.thread_pool import run_in_thread_pool
+        from mcp_the_force.utils.thread_pool import run_in_thread_pool
 
         def blocking_function(x, y):
             """Simulate a blocking operation."""
