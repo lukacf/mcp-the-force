@@ -5,3 +5,5 @@ mcp_the_force.egg-info/
 .coverage
 coverage.xml
 uv.lock
+victoria-logs-data/
+.mcp_vector_stores.db

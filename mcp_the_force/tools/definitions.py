@@ -573,3 +573,48 @@ class ChatWithGrok3Reasoning(ToolSpec):
 #         default="low",
 #         description="Controls reasoning effort (low/medium/high) for mini models",
 #     )
+
+
+@tool
+class TestLiteLLMGPT4o(ToolSpec):
+    """Test LiteLLM unified adapter with gpt-4o model.
+    This is a test tool for evaluating LiteLLM's unified interface,
+    particularly focusing on cancellation handling and context overflow.
+
+    Example usage:
+    - instructions: "Test basic generation with gpt-4o"
+    - output_format: "Simple response"
+    - context: []
+    - session_id: "litellm-test-001"
+    """
+
+    model_name = "gpt-4o"
+    adapter_class = "litellm"
+    context_window = 128_000
+    timeout = 300  # 5 minutes for gpt-4o
+
+    # Required parameters
+    instructions: str = Route.prompt(
+        pos=0, description="Task instructions for the model"
+    )
+    output_format: str = Route.prompt(pos=1, description="Desired output format")
+    context: List[str] = Route.prompt(
+        pos=2,
+        description="List of file/directory paths to include",
+    )
+    session_id: str = Route.session(
+        description="Session ID for testing session management"
+    )
+
+    # Optional parameters
+    structured_output_schema: Optional[str] = Route.structured_output(
+        description="JSON schema for structured output testing"
+    )
+    temperature: Optional[float] = Route.adapter(
+        default=0.7,
+        description="Sampling temperature (0.0-2.0)",
+    )
+    disable_memory_search: Optional[bool] = Route.adapter(
+        default=False,
+        description="Disable search_project_history tool",
+    )
