@@ -576,6 +576,54 @@ class ChatWithGrok3Reasoning(ToolSpec):
 
 
 @tool
+class TestGrokLiteLLM(ToolSpec):
+    """Test Grok via LiteLLM adapter.
+    This is a test tool for evaluating the new LiteLLM-based Grok adapter.
+
+    Example usage:
+    - instructions: "Test basic Grok functionality"
+    - output_format: "Simple response"
+    - context: []
+    - session_id: "grok-litellm-test-001"
+
+    Live Search examples:
+    - search_mode: "on" + instructions: "What are the latest AI developments?"
+    - search_parameters: {"allowedWebsites": ["arxiv.org"], "maxSearchResults": 10}
+    """
+
+    model_name = "grok-4"
+    adapter_class = "xai_litellm"  # New LiteLLM-based adapter
+    context_window = 256_000
+    timeout = 600
+
+    # Required parameters
+    instructions: str = Route.prompt(pos=0, description="User instructions")
+    output_format: str = Route.prompt(pos=1, description="Format requirements")
+    context: List[str] = Route.prompt(pos=2, description="Context files")
+    session_id: str = Route.session(description="Session ID for conversation")
+
+    # Optional parameters
+    priority_context: Optional[List[str]] = Route.prompt(
+        description="Files/directories to prioritize for inline inclusion"
+    )
+    search_mode: Optional[str] = Route.adapter(
+        default="auto", description="Live Search mode: 'auto', 'on', 'off'"
+    )
+    search_parameters: Optional[Dict[str, Any]] = Route.adapter(
+        default=None, description="Live Search parameters"
+    )
+    return_citations: Optional[bool] = Route.adapter(
+        default=True, description="Include citations from Live Search"
+    )
+    temperature: Optional[float] = Route.adapter(
+        default=0.7, description="Sampling temperature"
+    )
+    disable_memory_search: Optional[bool] = Route.adapter(
+        default=False, description="Disable search_project_history tool"
+    )
+
+
+@tool
 class TestLiteLLMGPT4o(ToolSpec):
     """Test LiteLLM unified adapter with gpt-4o model.
     This is a test tool for evaluating LiteLLM's unified interface,
