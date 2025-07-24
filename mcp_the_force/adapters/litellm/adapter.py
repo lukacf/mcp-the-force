@@ -9,6 +9,7 @@ import litellm
 from litellm import aresponses
 
 from mcp_the_force.adapters.base import BaseAdapter
+from mcp_the_force.unified_session_cache import unified_session_cache
 from ..tool_handler import ToolHandler
 
 logger = logging.getLogger(__name__)
@@ -29,19 +30,30 @@ class LiteLLMAdapter(BaseAdapter):
         """Initialize the LiteLLM adapter.
 
         Args:
-            model: Model name (used for compatibility with factory)
+            model: Model name in format "provider/model" (e.g., "grok/grok-4", "openai/gpt-4")
         """
         super().__init__()
-        # Override with our test model
-        self.model_name = "gpt-4o"
+        self.model_name = model
+        self.provider = model.split("/")[0] if "/" in model else "openai"
 
-        # Get API key from settings
+        # Get auth config for this provider
         from mcp_the_force.config import get_settings
 
         settings = get_settings()
-        self.api_key = settings.openai_api_key
-        if not self.api_key:
-            raise ValueError("OPENAI_API_KEY not configured")
+
+        # Self-contained auth - adapter gets its own config
+        if self.provider == "openai":
+            self.auth_config = {"api_key": settings.openai_api_key}
+        elif self.provider == "grok":
+            self.auth_config = {
+                "api_key": settings.xai_api_key,
+                "api_base": "https://api.x.ai/v1",
+            }
+        elif self.provider == "anthropic":
+            self.auth_config = {"api_key": settings.anthropic_api_key}
+        else:
+            # Try to get from providers config
+            self.auth_config = getattr(settings.providers, self.provider, {})
 
         # Initialize tool handler for built-in tools
         self.tool_handler = ToolHandler()
@@ -69,17 +81,39 @@ class LiteLLMAdapter(BaseAdapter):
 
             # Prepare parameters for Responses API
             params: Dict[str, Any] = {
-                "model": f"openai/{self.model_name}",  # LiteLLM needs provider prefix
+                "model": self.model_name,  # Already includes provider prefix
                 "input": messages,  # Responses API uses 'input' not 'messages'
-                "api_key": self.api_key,
                 "temperature": temperature,
                 "truncation": "auto",  # Recommended for long conversations
+                **self.auth_config,  # Auth config from __init__
             }
 
             # Handle session continuation
-            previous_response_id = kwargs.get("previous_response_id")
-            if previous_response_id:
-                params["previous_response_id"] = previous_response_id
+            session_id = kwargs.get("session_id")
+            if session_id and self.provider == "openai":
+                # For OpenAI, try to use response_id for efficient continuation
+                previous_response_id = await unified_session_cache.get_response_id(
+                    session_id
+                )
+                if previous_response_id:
+                    params["previous_response_id"] = previous_response_id
+                    logger.debug(f"Using previous_response_id for session {session_id}")
+
+            # Handle Grok Live Search parameters
+            if self.provider == "grok":
+                search_mode = kwargs.get("search_mode")
+                search_parameters = kwargs.get("search_parameters")
+                if search_mode or search_parameters:
+                    extra_body = {}
+                    if search_mode:
+                        extra_body["search_mode"] = search_mode
+                    if search_parameters:
+                        # Convert to snake_case for Grok API
+                        extra_body["search_parameters"] = self._snake_case_params(
+                            search_parameters
+                        )
+                    params["extra_body"] = extra_body
+                    logger.debug(f"Added Grok search parameters: {extra_body}")
 
             # Note: reasoning_effort is not supported by gpt-4o, will be dropped by LiteLLM
 
@@ -271,4 +305,18 @@ class LiteLLMAdapter(BaseAdapter):
             raise
         except Exception as e:
             logger.error(f"LiteLLM adapter error: {e}")
-            raise RuntimeError(f"LiteLLM generation failed: {str(e)}") from e
+            raise RuntimeError(f"LiteLLM generation failed: {str(e)}")
+
+    def _snake_case_params(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Convert camelCase keys to snake_case."""
+        result = {}
+        for key, value in params.items():
+            # Convert camelCase to snake_case
+            snake_key = ""
+            for i, char in enumerate(key):
+                if i > 0 and char.isupper():
+                    snake_key += "_" + char.lower()
+                else:
+                    snake_key += char.lower()
+            result[snake_key] = value
+        return result

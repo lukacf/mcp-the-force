@@ -5,6 +5,7 @@ from .base import BaseAdapter
 from .openai import OpenAIAdapter
 from .vertex import VertexAdapter
 from .grok import GrokAdapter
+from .grok_litellm import GrokLiteLLMAdapter
 from .litellm import LiteLLMAdapter
 import logging
 
@@ -15,7 +16,8 @@ logger = logging.getLogger(__name__)
 ADAPTER_REGISTRY: Dict[str, Type[BaseAdapter]] = {
     "openai": OpenAIAdapter,
     "vertex": VertexAdapter,
-    "xai": GrokAdapter,
+    "xai": GrokAdapter,  # Old adapter (to be replaced)
+    "xai_litellm": GrokLiteLLMAdapter,  # New LiteLLM-based adapter
     "litellm": LiteLLMAdapter,
 }
 
@@ -128,6 +130,7 @@ __all__ = [
     "OpenAIAdapter",
     "VertexAdapter",
     "GrokAdapter",
+    "GrokLiteLLMAdapter",
     "LiteLLMAdapter",
     "get_adapter",
     "register_adapter",
