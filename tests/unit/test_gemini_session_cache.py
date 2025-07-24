@@ -3,7 +3,7 @@ import tempfile
 import pytest
 from google.genai import types
 
-from mcp_second_brain.gemini_session_cache import (
+from mcp_the_force.gemini_session_cache import (
     _SQLiteGeminiSessionCache,
     _content_to_dict,
     _dict_to_content,

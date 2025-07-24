@@ -2,16 +2,14 @@
 
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
-from mcp_second_brain.adapters.grok import GrokAdapter, GROK_CAPABILITIES
-from mcp_second_brain.adapters.grok.errors import AdapterException, ErrorCategory
+from mcp_the_force.adapters.grok import GrokAdapter, GROK_CAPABILITIES
+from mcp_the_force.adapters.grok.errors import AdapterException, ErrorCategory
 
 
 @pytest.fixture
 def mock_grok_session_cache():
     """Mock the Grok session cache."""
-    with patch(
-        "mcp_second_brain.adapters.grok.adapter.grok_session_cache"
-    ) as mock_cache:
+    with patch("mcp_the_force.adapters.grok.adapter.grok_session_cache") as mock_cache:
         mock_cache.get_history = AsyncMock(return_value=None)
         mock_cache.set_history = AsyncMock()
         yield mock_cache
@@ -44,9 +42,7 @@ class TestGrokAdapter:
 
     def test_adapter_init_without_api_key(self):
         """Test adapter initialization fails without API key."""
-        with patch(
-            "mcp_second_brain.adapters.grok.adapter.get_settings"
-        ) as mock_settings:
+        with patch("mcp_the_force.adapters.grok.adapter.get_settings") as mock_settings:
             mock_settings.return_value.xai.api_key = None
 
             with pytest.raises(AdapterException) as exc_info:
@@ -57,13 +53,11 @@ class TestGrokAdapter:
 
     def test_adapter_init_with_api_key(self):
         """Test adapter initialization succeeds with API key."""
-        with patch(
-            "mcp_second_brain.adapters.grok.adapter.get_settings"
-        ) as mock_settings:
+        with patch("mcp_the_force.adapters.grok.adapter.get_settings") as mock_settings:
             mock_settings.return_value.xai.api_key = "xai-test-key"
 
             with patch(
-                "mcp_second_brain.adapters.grok.adapter.AsyncOpenAI"
+                "mcp_the_force.adapters.grok.adapter.AsyncOpenAI"
             ) as mock_client:
                 adapter = GrokAdapter("grok-3-beta")
 
@@ -77,9 +71,7 @@ class TestGrokAdapter:
     @pytest.mark.asyncio
     async def test_generate_with_unsupported_model(self):
         """Test generate fails with unsupported model."""
-        with patch(
-            "mcp_second_brain.adapters.grok.adapter.get_settings"
-        ) as mock_settings:
+        with patch("mcp_the_force.adapters.grok.adapter.get_settings") as mock_settings:
             mock_settings.return_value.xai.api_key = "xai-test-key"
 
             adapter = GrokAdapter()
@@ -98,11 +90,9 @@ class TestGrokAdapter:
     async def test_generate_success(self):
         """Test successful generation."""
         with (
+            patch("mcp_the_force.adapters.grok.adapter.get_settings") as mock_settings,
             patch(
-                "mcp_second_brain.adapters.grok.adapter.get_settings"
-            ) as mock_settings,
-            patch(
-                "mcp_second_brain.adapters.grok.adapter.grok_session_cache"
+                "mcp_the_force.adapters.grok.adapter.grok_session_cache"
             ) as mock_session_cache,
         ):
             mock_settings.return_value.xai.api_key = "xai-test-key"
@@ -110,7 +100,7 @@ class TestGrokAdapter:
             mock_session_cache.set_history = AsyncMock()
 
             with patch(
-                "mcp_second_brain.adapters.grok.adapter.AsyncOpenAI"
+                "mcp_the_force.adapters.grok.adapter.AsyncOpenAI"
             ) as mock_client_class:
                 # Create mock response
                 mock_response = MagicMock()
@@ -148,13 +138,11 @@ class TestGrokAdapter:
     @pytest.mark.asyncio
     async def test_generate_with_streaming(self):
         """Test streaming generation."""
-        with patch(
-            "mcp_second_brain.adapters.grok.adapter.get_settings"
-        ) as mock_settings:
+        with patch("mcp_the_force.adapters.grok.adapter.get_settings") as mock_settings:
             mock_settings.return_value.xai.api_key = "xai-test-key"
 
             with patch(
-                "mcp_second_brain.adapters.grok.adapter.AsyncOpenAI"
+                "mcp_the_force.adapters.grok.adapter.AsyncOpenAI"
             ) as mock_client_class:
                 # Create mock streaming response
                 async def mock_stream():
@@ -187,13 +175,11 @@ class TestGrokAdapter:
     @pytest.mark.asyncio
     async def test_generate_handles_rate_limit(self):
         """Test rate limit error handling."""
-        with patch(
-            "mcp_second_brain.adapters.grok.adapter.get_settings"
-        ) as mock_settings:
+        with patch("mcp_the_force.adapters.grok.adapter.get_settings") as mock_settings:
             mock_settings.return_value.xai.api_key = "xai-test-key"
 
             with patch(
-                "mcp_second_brain.adapters.grok.adapter.AsyncOpenAI"
+                "mcp_the_force.adapters.grok.adapter.AsyncOpenAI"
             ) as mock_client_class:
                 # Setup mock client to raise rate limit error
                 mock_client = AsyncMock()
@@ -220,13 +206,11 @@ class TestGrokAdapter:
     @pytest.mark.asyncio
     async def test_generate_with_reasoning_effort(self):
         """Test generation with reasoning_effort parameter for mini models."""
-        with patch(
-            "mcp_second_brain.adapters.grok.adapter.get_settings"
-        ) as mock_settings:
+        with patch("mcp_the_force.adapters.grok.adapter.get_settings") as mock_settings:
             mock_settings.return_value.xai.api_key = "xai-test-key"
 
             with patch(
-                "mcp_second_brain.adapters.grok.adapter.AsyncOpenAI"
+                "mcp_the_force.adapters.grok.adapter.AsyncOpenAI"
             ) as mock_client_class:
                 # Create mock response
                 mock_response = MagicMock()
@@ -265,13 +249,11 @@ class TestGrokAdapter:
     @pytest.mark.asyncio
     async def test_generate_with_function_calling(self):
         """Test successful generation with function calling."""
-        with patch(
-            "mcp_second_brain.adapters.grok.adapter.get_settings"
-        ) as mock_settings:
+        with patch("mcp_the_force.adapters.grok.adapter.get_settings") as mock_settings:
             mock_settings.return_value.xai.api_key = "test-key"
 
             with patch(
-                "mcp_second_brain.adapters.grok.adapter.AsyncOpenAI"
+                "mcp_the_force.adapters.grok.adapter.AsyncOpenAI"
             ) as mock_client_class:
                 # Mock response with tool_calls
                 mock_tool_call = MagicMock()
@@ -310,12 +292,10 @@ class TestGrokAdapter:
     @pytest.mark.asyncio
     async def test_generate_with_structured_output(self):
         """Test that structured_output_schema is passed as response_format."""
-        with patch(
-            "mcp_second_brain.adapters.grok.adapter.get_settings"
-        ) as mock_settings:
+        with patch("mcp_the_force.adapters.grok.adapter.get_settings") as mock_settings:
             mock_settings.return_value.xai.api_key = "test-key"
             with patch(
-                "mcp_second_brain.adapters.grok.adapter.AsyncOpenAI"
+                "mcp_the_force.adapters.grok.adapter.AsyncOpenAI"
             ) as mock_client_class:
                 mock_response = MagicMock()
                 mock_response.choices = [MagicMock()]
@@ -345,12 +325,10 @@ class TestGrokAdapter:
     @pytest.mark.asyncio
     async def test_error_handling_authentication(self):
         """Test authentication error handling."""
-        with patch(
-            "mcp_second_brain.adapters.grok.adapter.get_settings"
-        ) as mock_settings:
+        with patch("mcp_the_force.adapters.grok.adapter.get_settings") as mock_settings:
             mock_settings.return_value.xai.api_key = "test-key"
             with patch(
-                "mcp_second_brain.adapters.grok.adapter.AsyncOpenAI"
+                "mcp_the_force.adapters.grok.adapter.AsyncOpenAI"
             ) as mock_client_class:
                 mock_client = AsyncMock()
                 mock_client.chat.completions.create.side_effect = Exception(
@@ -367,12 +345,10 @@ class TestGrokAdapter:
     @pytest.mark.asyncio
     async def test_error_handling_invalid_request(self):
         """Test invalid request error handling (e.g., model not found)."""
-        with patch(
-            "mcp_second_brain.adapters.grok.adapter.get_settings"
-        ) as mock_settings:
+        with patch("mcp_the_force.adapters.grok.adapter.get_settings") as mock_settings:
             mock_settings.return_value.xai.api_key = "test-key"
             with patch(
-                "mcp_second_brain.adapters.grok.adapter.AsyncOpenAI"
+                "mcp_the_force.adapters.grok.adapter.AsyncOpenAI"
             ) as mock_client_class:
                 mock_client = AsyncMock()
                 mock_client.chat.completions.create.side_effect = Exception(
@@ -389,12 +365,10 @@ class TestGrokAdapter:
     @pytest.mark.asyncio
     async def test_parameter_passing(self):
         """Test that optional parameters are passed to the API."""
-        with patch(
-            "mcp_second_brain.adapters.grok.adapter.get_settings"
-        ) as mock_settings:
+        with patch("mcp_the_force.adapters.grok.adapter.get_settings") as mock_settings:
             mock_settings.return_value.xai.api_key = "test-key"
             with patch(
-                "mcp_second_brain.adapters.grok.adapter.AsyncOpenAI"
+                "mcp_the_force.adapters.grok.adapter.AsyncOpenAI"
             ) as mock_client_class:
                 mock_response = MagicMock()
                 mock_response.choices = [MagicMock()]

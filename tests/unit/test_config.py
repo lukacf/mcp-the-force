@@ -5,7 +5,7 @@ Unit tests for configuration and settings.
 import os
 import pytest
 from unittest.mock import patch
-from mcp_second_brain.config import Settings, _deep_merge, get_settings
+from mcp_the_force.config import Settings, _deep_merge, get_settings
 
 
 class TestSettings:
@@ -147,7 +147,7 @@ PORT=3000
 
     def test_get_settings_cached(self):
         """Test that get_settings() returns cached instance."""
-        from mcp_second_brain.config import get_settings
+        from mcp_the_force.config import get_settings
 
         # Clear cache first
         get_settings.cache_clear()
@@ -504,11 +504,11 @@ class TestConfigurationExport:
             mcp_config = settings.export_mcp_config()
 
             assert "mcpServers" in mcp_config
-            assert "second-brain" in mcp_config["mcpServers"]
+            assert "the-force" in mcp_config["mcpServers"]
 
-            server_config = mcp_config["mcpServers"]["second-brain"]
+            server_config = mcp_config["mcpServers"]["the-force"]
             assert server_config["command"] == "uv"
-            assert server_config["args"] == ["run", "--", "mcp-second-brain"]
+            assert server_config["args"] == ["run", "--", "mcp-the-force"]
             assert server_config["timeout"] == 3600000
             assert server_config["env"]["OPENAI_API_KEY"] == "test-key"
             assert server_config["env"]["VERTEX_PROJECT"] == "test-project"

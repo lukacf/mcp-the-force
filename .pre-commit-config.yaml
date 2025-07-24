@@ -12,7 +12,7 @@ repos:
     hooks:
       - id: mypy
         args: [--install-types, --non-interactive, --follow-imports=silent]
-        files: ^mcp_second_brain/
+        files: ^mcp_the_force/
 
   - repo: local
     hooks:

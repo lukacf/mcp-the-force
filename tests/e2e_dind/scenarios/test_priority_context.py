@@ -54,7 +54,7 @@ class TestPriorityContextAndFileTree:
                         param_parts.append(f"{key}: {json.dumps(value)}")
 
             # Construct the natural language command
-            prompt = f"Use second-brain {tool_name} with {', '.join(param_parts)}"
+            prompt = f"Use the-force {tool_name} with {', '.join(param_parts)}"
 
             # Add response format instruction if provided
             if response_format:
@@ -152,7 +152,7 @@ class TestPriorityContextAndFileTree:
                         param_parts.append(f"{key}: {json.dumps(value)}")
 
             # Construct the natural language command
-            prompt = f"Use second-brain {tool_name} with {', '.join(param_parts)}"
+            prompt = f"Use the-force {tool_name} with {', '.join(param_parts)}"
 
             # Add response format instruction if provided
             if response_format:
@@ -265,7 +265,7 @@ class TestPriorityContextAndFileTree:
                         param_parts.append(f"{key}: {json.dumps(value)}")
 
             # Construct the natural language command
-            prompt = f"Use second-brain {tool_name} with {', '.join(param_parts)}"
+            prompt = f"Use the-force {tool_name} with {', '.join(param_parts)}"
 
             # Add response format instruction if provided
             if response_format:

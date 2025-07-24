@@ -7,7 +7,7 @@ from unittest.mock import patch, AsyncMock
 @pytest.fixture
 def mock_memory_store():
     """Mock memory store to prevent real database writes."""
-    with patch("mcp_second_brain.memory_store.store_conversation") as mock_store:
+    with patch("mcp_the_force.memory_store.store_conversation") as mock_store:
         mock_store.return_value = None
         yield mock_store
 
@@ -16,7 +16,7 @@ def mock_memory_store():
 def mock_vector_store():
     """Mock vector store creation."""
     with patch(
-        "mcp_second_brain.tools.vector_store_manager.VectorStoreManager"
+        "mcp_the_force.tools.vector_store_manager.VectorStoreManager"
     ) as mock_vs:
         mock_manager = AsyncMock()
         mock_manager.create = AsyncMock(return_value="mock-vector-store-id")
@@ -28,9 +28,9 @@ def mock_vector_store():
 async def clean_session_caches():
     """Clean all session caches before and after tests."""
     # Import here to avoid circular imports
-    from mcp_second_brain.gemini_session_cache import gemini_session_cache
-    from mcp_second_brain.grok_session_cache import grok_session_cache
-    from mcp_second_brain.session_cache import session_cache
+    from mcp_the_force.gemini_session_cache import gemini_session_cache
+    from mcp_the_force.grok_session_cache import grok_session_cache
+    from mcp_the_force.session_cache import session_cache
 
     # Sessions are isolated by session_id, so we don't need to clear
     # Just ensure clean state by using unique session IDs

@@ -5,12 +5,12 @@ import tempfile
 import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from mcp_second_brain.tools.executor import ToolExecutor
-from mcp_second_brain.tools.registry import ToolMetadata
-from mcp_second_brain.tools.definitions import ChatWithGrok4
-from mcp_second_brain import session_cache as session_cache_module
-from mcp_second_brain import gemini_session_cache as gemini_session_cache_module
-from mcp_second_brain import grok_session_cache as grok_session_cache_module
+from mcp_the_force.tools.executor import ToolExecutor
+from mcp_the_force.tools.registry import ToolMetadata
+from mcp_the_force.tools.definitions import ChatWithGrok4
+from mcp_the_force import session_cache as session_cache_module
+from mcp_the_force import gemini_session_cache as gemini_session_cache_module
+from mcp_the_force import grok_session_cache as grok_session_cache_module
 
 # Use anyio for better async handling - but only with asyncio backend
 # This prevents "ModuleNotFoundError: No module named 'trio'" errors
@@ -102,16 +102,16 @@ class TestToolExecutorSessionHandling:
                 "get_history",
                 return_value=mock_history,
             ),
-            patch("mcp_second_brain.adapters.get_adapter") as mock_get_adapter,
+            patch("mcp_the_force.adapters.get_adapter") as mock_get_adapter,
             patch.object(tool_executor.validator, "validate") as mock_validate,
             patch.object(tool_executor.router, "route") as mock_route,
-            patch("mcp_second_brain.config.get_settings") as mock_settings,
+            patch("mcp_the_force.config.get_settings") as mock_settings,
             patch(
-                "mcp_second_brain.adapters.model_registry.get_model_context_window",
+                "mcp_the_force.adapters.model_registry.get_model_context_window",
                 return_value=256000,
             ),
             patch(
-                "mcp_second_brain.utils.context_builder.build_context_with_stable_list"
+                "mcp_the_force.utils.context_builder.build_context_with_stable_list"
             ) as mock_build_context,
         ):
             # Setup mocks
@@ -188,16 +188,16 @@ class TestToolExecutorSessionHandling:
             patch.object(
                 session_cache_module.session_cache, "set_response_id"
             ) as mock_set_response_id,
-            patch("mcp_second_brain.adapters.get_adapter") as mock_get_adapter,
+            patch("mcp_the_force.adapters.get_adapter") as mock_get_adapter,
             patch.object(tool_executor.validator, "validate") as mock_validate,
             patch.object(tool_executor.router, "route") as mock_route,
-            patch("mcp_second_brain.config.get_settings") as mock_settings,
+            patch("mcp_the_force.config.get_settings") as mock_settings,
             patch(
-                "mcp_second_brain.adapters.model_registry.get_model_context_window",
+                "mcp_the_force.adapters.model_registry.get_model_context_window",
                 return_value=200000,
             ),
             patch(
-                "mcp_second_brain.utils.context_builder.build_context_with_stable_list"
+                "mcp_the_force.utils.context_builder.build_context_with_stable_list"
             ) as mock_build_context,
         ):
             # Setup mocks
@@ -279,16 +279,16 @@ class TestToolExecutorSessionHandling:
                 "get_messages",
                 return_value=mock_gemini_messages,
             ) as mock_get_messages,
-            patch("mcp_second_brain.adapters.get_adapter") as mock_get_adapter,
+            patch("mcp_the_force.adapters.get_adapter") as mock_get_adapter,
             patch.object(tool_executor.validator, "validate") as mock_validate,
             patch.object(tool_executor.router, "route") as mock_route,
-            patch("mcp_second_brain.config.get_settings") as mock_settings,
+            patch("mcp_the_force.config.get_settings") as mock_settings,
             patch(
-                "mcp_second_brain.adapters.model_registry.get_model_context_window",
+                "mcp_the_force.adapters.model_registry.get_model_context_window",
                 return_value=2000000,
             ),
             patch(
-                "mcp_second_brain.utils.context_builder.build_context_with_stable_list"
+                "mcp_the_force.utils.context_builder.build_context_with_stable_list"
             ) as mock_build_context,
         ):
             # Setup mocks
@@ -386,16 +386,16 @@ class TestToolExecutorSessionHandling:
                     {"role": "assistant", "content": "Previous answer"},
                 ],
             ),
-            patch("mcp_second_brain.adapters.get_adapter") as mock_get_adapter,
+            patch("mcp_the_force.adapters.get_adapter") as mock_get_adapter,
             patch.object(tool_executor.validator, "validate") as mock_validate,
             patch.object(tool_executor.router, "route") as mock_route,
-            patch("mcp_second_brain.config.get_settings") as mock_settings,
+            patch("mcp_the_force.config.get_settings") as mock_settings,
             patch(
-                "mcp_second_brain.adapters.model_registry.get_model_context_window",
+                "mcp_the_force.adapters.model_registry.get_model_context_window",
                 return_value=256000,
             ),
             patch(
-                "mcp_second_brain.utils.context_builder.build_context_with_stable_list"
+                "mcp_the_force.utils.context_builder.build_context_with_stable_list"
             ) as mock_build_context,
         ):
             # Common mock setup
@@ -489,16 +489,16 @@ class TestToolExecutorSessionHandling:
         mock_tool_metadata.model_config["adapter_class"] = "xai"
 
         with (
-            patch("mcp_second_brain.adapters.get_adapter") as mock_get_adapter,
+            patch("mcp_the_force.adapters.get_adapter") as mock_get_adapter,
             patch.object(tool_executor.validator, "validate") as mock_validate,
             patch.object(tool_executor.router, "route") as mock_route,
-            patch("mcp_second_brain.config.get_settings") as mock_settings,
+            patch("mcp_the_force.config.get_settings") as mock_settings,
             patch(
-                "mcp_second_brain.adapters.model_registry.get_model_context_window",
+                "mcp_the_force.adapters.model_registry.get_model_context_window",
                 return_value=256000,
             ),
             patch(
-                "mcp_second_brain.utils.context_builder.build_context_with_stable_list"
+                "mcp_the_force.utils.context_builder.build_context_with_stable_list"
             ) as mock_build_context,
         ):
             # Setup mocks
@@ -574,16 +574,16 @@ class TestToolExecutorSessionHandling:
         mock_tool_metadata.model_config["adapter_class"] = "xai"
 
         with (
-            patch("mcp_second_brain.adapters.get_adapter") as mock_get_adapter,
+            patch("mcp_the_force.adapters.get_adapter") as mock_get_adapter,
             patch.object(tool_executor.validator, "validate") as mock_validate,
             patch.object(tool_executor.router, "route") as mock_route,
-            patch("mcp_second_brain.config.get_settings") as mock_settings,
+            patch("mcp_the_force.config.get_settings") as mock_settings,
             patch(
-                "mcp_second_brain.adapters.model_registry.get_model_context_window",
+                "mcp_the_force.adapters.model_registry.get_model_context_window",
                 return_value=256000,
             ),
             patch(
-                "mcp_second_brain.utils.context_builder.build_context_with_stable_list"
+                "mcp_the_force.utils.context_builder.build_context_with_stable_list"
             ) as mock_build_context,
         ):
             # Setup mocks

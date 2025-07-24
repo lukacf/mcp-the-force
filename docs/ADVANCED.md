@@ -1,14 +1,14 @@
 # Advanced Integration Guide
 
-This document contains advanced usage patterns and integration strategies for power users of the MCP Second-Brain server.
+This document contains advanced usage patterns and integration strategies for power users of the MCP The-Force server.
 
 ## Claude Integration Strategy
 
-This guide outlines how Claude should optimally use the Second Brain MCP server, leveraging parallel execution capabilities for maximum effectiveness.
+This guide outlines how Claude should optimally use the The Force MCP server, leveraging parallel execution capabilities for maximum effectiveness.
 
 ### Core Architecture: Three-Phase Intelligence Gathering
 
-When Second Brain MCP is available, Claude operates as an orchestrator of specialized AI models, using a three-phase approach:
+When The Force MCP is available, Claude operates as an orchestrator of specialized AI models, using a three-phase approach:
 
 #### Phase 1: Broad Surface Scan (5-10s)
 Launch 2-3 cheap, fast queries to map the problem space:

@@ -14,7 +14,7 @@ cat > "$HOOK_PATH" << 'EOF'
     cd "$(git rev-parse --show-toplevel)"
     
     # Run the memory capture
-    python -m mcp_second_brain.memory.commit 2>/dev/null
+    python -m mcp_the_force.memory.commit 2>/dev/null
 ) &
 EOF
 

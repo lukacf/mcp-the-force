@@ -14,7 +14,7 @@ from unittest.mock import patch
 def real_api_setup():
     """Ensure real API keys are available for e2e tests."""
     # Check for API keys - fail fast if not configured
-    from mcp_second_brain.config import get_settings
+    from mcp_the_force.config import get_settings
 
     settings = get_settings()
 
@@ -59,11 +59,11 @@ def track_tool_calls():
 
     with (
         patch(
-            "mcp_second_brain.tools.search_history.SearchHistoryAdapter.generate",
+            "mcp_the_force.tools.search_history.SearchHistoryAdapter.generate",
             mock_search_history,
         ),
         patch(
-            "mcp_second_brain.tools.search_task_files.SearchTaskFilesAdapter.generate",
+            "mcp_the_force.tools.search_task_files.SearchTaskFilesAdapter.generate",
             mock_search_task_files,
         ),
     ):

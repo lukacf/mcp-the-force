@@ -4,10 +4,10 @@ Unit tests for parameter validation.
 
 import pytest
 from typing import Optional, List
-from mcp_second_brain.tools.parameter_validator import ParameterValidator
-from mcp_second_brain.tools.registry import ToolMetadata, ParameterInfo
-from mcp_second_brain.tools.base import ToolSpec
-from mcp_second_brain.tools.descriptors import Route, RouteType
+from mcp_the_force.tools.parameter_validator import ParameterValidator
+from mcp_the_force.tools.registry import ToolMetadata, ParameterInfo
+from mcp_the_force.tools.base import ToolSpec
+from mcp_the_force.tools.descriptors import Route, RouteType
 
 
 class TestParameterValidator:
