@@ -7,7 +7,7 @@ import sqlite3
 
 import pytest
 
-from mcp_second_brain.memory.config import MemoryConfig, get_memory_config
+from mcp_the_force.memory.config import MemoryConfig, get_memory_config
 
 
 @pytest.fixture
@@ -35,9 +35,7 @@ class TestMemoryConfig:
 
     def test_init_creates_database(self, temp_db, mock_client):
         """Test that initialization creates database tables."""
-        with patch(
-            "mcp_second_brain.memory.config.get_client", return_value=mock_client
-        ):
+        with patch("mcp_the_force.memory.config.get_client", return_value=mock_client):
             MemoryConfig(db_path=temp_db)
 
         # Check tables were created
@@ -53,9 +51,7 @@ class TestMemoryConfig:
 
     def test_get_active_conversation_store_creates_first(self, temp_db, mock_client):
         """Test creating first conversation store."""
-        with patch(
-            "mcp_second_brain.memory.config.get_client", return_value=mock_client
-        ):
+        with patch("mcp_the_force.memory.config.get_client", return_value=mock_client):
             config = MemoryConfig(db_path=temp_db)
             store_id = config.get_active_conversation_store()
 
@@ -77,9 +73,7 @@ class TestMemoryConfig:
 
     def test_get_active_commit_store_creates_first(self, temp_db, mock_client):
         """Test creating first commit store."""
-        with patch(
-            "mcp_second_brain.memory.config.get_client", return_value=mock_client
-        ):
+        with patch("mcp_the_force.memory.config.get_client", return_value=mock_client):
             config = MemoryConfig(db_path=temp_db)
             store_id = config.get_active_commit_store()
 
@@ -98,9 +92,7 @@ class TestMemoryConfig:
         commit_store.id = "vs_commit_store"
         mock_client.vector_stores.create.side_effect = [conv_store, commit_store]
 
-        with patch(
-            "mcp_second_brain.memory.config.get_client", return_value=mock_client
-        ):
+        with patch("mcp_the_force.memory.config.get_client", return_value=mock_client):
             config = MemoryConfig(db_path=temp_db)
 
             # Create stores first
@@ -135,10 +127,8 @@ class TestMemoryConfig:
         mock_client.vector_stores.create.side_effect = [store1, store2]
 
         with (
-            patch(
-                "mcp_second_brain.memory.config.get_client", return_value=mock_client
-            ),
-            patch("mcp_second_brain.memory.config.get_settings") as mock_settings,
+            patch("mcp_the_force.memory.config.get_client", return_value=mock_client),
+            patch("mcp_the_force.memory.config.get_settings") as mock_settings,
         ):
             # Set low rollover limit for testing
             settings = MagicMock()
@@ -184,9 +174,7 @@ class TestMemoryConfig:
             stores.append(store)
         mock_client.vector_stores.create.side_effect = stores
 
-        with patch(
-            "mcp_second_brain.memory.config.get_client", return_value=mock_client
-        ):
+        with patch("mcp_the_force.memory.config.get_client", return_value=mock_client):
             config = MemoryConfig(db_path=temp_db)
 
             # Create some stores
@@ -203,10 +191,8 @@ class TestMemoryConfig:
     def test_singleton_instance(self, temp_db, mock_client):
         """Test that get_memory_config returns singleton."""
         with (
-            patch(
-                "mcp_second_brain.memory.config.get_client", return_value=mock_client
-            ),
-            patch("mcp_second_brain.memory.config.get_settings") as mock_settings,
+            patch("mcp_the_force.memory.config.get_client", return_value=mock_client),
+            patch("mcp_the_force.memory.config.get_settings") as mock_settings,
         ):
             settings = MagicMock()
             settings.session_db_path = str(temp_db)
@@ -251,7 +237,7 @@ class TestMemoryConfig:
                 results.append((store_type, f"ERROR: {e}"))
 
         with patch(
-            "mcp_second_brain.memory.config.get_client",
+            "mcp_the_force.memory.config.get_client",
             return_value=create_mock_client(),
         ):
             config = MemoryConfig(db_path=temp_db)

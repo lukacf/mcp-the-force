@@ -34,7 +34,7 @@ VictoriaLogs continues working perfectly through its QueueHandler. No hangs ever
 
 ## Original Investigation Log
 
-This document chronicles the extensive debugging journey for the MCP Second-Brain server hanging issue.
+This document chronicles the extensive debugging journey for the MCP The-Force server hanging issue.
 
 ## Summary of Major Discoveries (2025-07-18)
 
@@ -182,7 +182,7 @@ The following theories were investigated and fixes attempted, ALL of which faile
 mcp__second-brain__chat_with_o3(
     instructions="List 3 weird things about this codebase in one paragraph",
     output_format="One paragraph listing 3 weird/unusual things",
-    context=["/Users/luka/src/cc/mcp-second-brain"],
+    context=["/Users/luka/src/cc/mcp-the-force"],
     session_id="test-hang-issue-001",
     reasoning_effort="low"
 )
@@ -191,7 +191,7 @@ mcp__second-brain__chat_with_o3(
 mcp__second-brain__chat_with_o3(
     instructions="What are the 3 most complex parts of this codebase?",
     output_format="One paragraph describing the 3 most complex parts",
-    context=["/Users/luka/src/cc/mcp-second-brain"],
+    context=["/Users/luka/src/cc/mcp-the-force"],
     session_id="test-hang-issue-001",
     reasoning_effort="low"
 )

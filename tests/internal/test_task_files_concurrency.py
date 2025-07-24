@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 import pytest
 
-from mcp_second_brain.tools.search_task_files import SearchTaskFilesAdapter
+from mcp_the_force.tools.search_task_files import SearchTaskFilesAdapter
 
 
 @pytest.mark.asyncio

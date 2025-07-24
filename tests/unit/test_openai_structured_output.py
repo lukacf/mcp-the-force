@@ -3,8 +3,8 @@
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 
-from mcp_second_brain.adapters.openai.adapter import OpenAIAdapter
-from mcp_second_brain.adapters.openai.models import OpenAIRequest
+from mcp_the_force.adapters.openai.adapter import OpenAIAdapter
+from mcp_the_force.adapters.openai.models import OpenAIRequest
 
 
 class TestOpenAIStructuredOutput:
@@ -62,7 +62,7 @@ class TestOpenAIStructuredOutput:
         }
 
         # Mock the settings to provide API key
-        with patch("mcp_second_brain.config.get_settings") as mock_settings:
+        with patch("mcp_the_force.config.get_settings") as mock_settings:
             mock_settings.return_value.openai_api_key = "test-key"
             adapter = OpenAIAdapter("gpt-4.1")
 
@@ -78,7 +78,7 @@ class TestOpenAIStructuredOutput:
         mock_client.responses.retrieve.return_value = mock_response
 
         with patch(
-            "mcp_second_brain.adapters.openai.client.OpenAIClientFactory.get_instance",
+            "mcp_the_force.adapters.openai.client.OpenAIClientFactory.get_instance",
             return_value=mock_client,
         ):
             await adapter.generate(
@@ -107,7 +107,7 @@ class TestOpenAIStructuredOutput:
         }
 
         # Mock the settings to provide API key
-        with patch("mcp_second_brain.config.get_settings") as mock_settings:
+        with patch("mcp_the_force.config.get_settings") as mock_settings:
             mock_settings.return_value.openai_api_key = "test-key"
             adapter = OpenAIAdapter("gpt-4.1")
 
@@ -121,7 +121,7 @@ class TestOpenAIStructuredOutput:
         mock_client.responses.create.return_value = mock_response
 
         with patch(
-            "mcp_second_brain.adapters.openai.client.OpenAIClientFactory.get_instance",
+            "mcp_the_force.adapters.openai.client.OpenAIClientFactory.get_instance",
             return_value=mock_client,
         ):
             result = await adapter.generate(
@@ -141,7 +141,7 @@ class TestOpenAIStructuredOutput:
         }
 
         # Mock the settings to provide API key
-        with patch("mcp_second_brain.config.get_settings") as mock_settings:
+        with patch("mcp_the_force.config.get_settings") as mock_settings:
             mock_settings.return_value.openai_api_key = "test-key"
             adapter = OpenAIAdapter("gpt-4.1")
 
@@ -156,7 +156,7 @@ class TestOpenAIStructuredOutput:
         mock_client.responses.create.return_value = mock_response
 
         with patch(
-            "mcp_second_brain.adapters.openai.client.OpenAIClientFactory.get_instance",
+            "mcp_the_force.adapters.openai.client.OpenAIClientFactory.get_instance",
             return_value=mock_client,
         ):
             # Should raise validation error
@@ -172,7 +172,7 @@ class TestOpenAIStructuredOutput:
         schema = {"type": "object"}
 
         # Mock the settings to provide API key
-        with patch("mcp_second_brain.config.get_settings") as mock_settings:
+        with patch("mcp_the_force.config.get_settings") as mock_settings:
             mock_settings.return_value.openai_api_key = "test-key"
             adapter = OpenAIAdapter("gpt-4.1")
 
@@ -187,7 +187,7 @@ class TestOpenAIStructuredOutput:
         mock_client.responses.create.return_value = mock_response
 
         with patch(
-            "mcp_second_brain.adapters.openai.client.OpenAIClientFactory.get_instance",
+            "mcp_the_force.adapters.openai.client.OpenAIClientFactory.get_instance",
             return_value=mock_client,
         ):
             # Should raise JSON decode error

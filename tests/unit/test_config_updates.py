@@ -3,7 +3,7 @@
 import pytest
 import os
 from unittest.mock import patch
-from mcp_second_brain.config import Settings, get_settings
+from mcp_the_force.config import Settings, get_settings
 
 
 class TestConfigurationUpdates:

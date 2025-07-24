@@ -4,7 +4,7 @@ import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 import json
 
-from mcp_second_brain.adapters.vertex.adapter import VertexAdapter
+from mcp_the_force.adapters.vertex.adapter import VertexAdapter
 
 
 class TestGeminiStructuredOutput:
@@ -38,7 +38,7 @@ class TestGeminiStructuredOutput:
         mock_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
 
         with patch(
-            "mcp_second_brain.adapters.vertex.adapter.get_client",
+            "mcp_the_force.adapters.vertex.adapter.get_client",
             return_value=mock_client,
         ):
             with patch.object(
@@ -84,7 +84,7 @@ class TestGeminiStructuredOutput:
         mock_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
 
         with patch(
-            "mcp_second_brain.adapters.vertex.adapter.get_client",
+            "mcp_the_force.adapters.vertex.adapter.get_client",
             return_value=mock_client,
         ):
             await adapter.generate(
@@ -137,7 +137,7 @@ class TestGeminiStructuredOutput:
         mock_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
 
         with patch(
-            "mcp_second_brain.adapters.vertex.adapter.get_client",
+            "mcp_the_force.adapters.vertex.adapter.get_client",
             return_value=mock_client,
         ):
             await adapter.generate(
@@ -184,7 +184,7 @@ class TestGeminiStructuredOutput:
         mock_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
 
         with patch(
-            "mcp_second_brain.adapters.vertex.adapter.get_client",
+            "mcp_the_force.adapters.vertex.adapter.get_client",
             return_value=mock_client,
         ):
             result = await adapter.generate(
@@ -225,7 +225,7 @@ class TestGeminiStructuredOutput:
         mock_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
 
         with patch(
-            "mcp_second_brain.adapters.vertex.adapter.get_client",
+            "mcp_the_force.adapters.vertex.adapter.get_client",
             return_value=mock_client,
         ):
             # Should NOT raise validation error - we rely on Gemini's schema enforcement
@@ -261,7 +261,7 @@ class TestGeminiStructuredOutput:
         mock_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
 
         with patch(
-            "mcp_second_brain.adapters.vertex.adapter.get_client",
+            "mcp_the_force.adapters.vertex.adapter.get_client",
             return_value=mock_client,
         ):
             # Should NOT raise error - returns the plain text as-is

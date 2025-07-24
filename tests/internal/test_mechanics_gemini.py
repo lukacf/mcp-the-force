@@ -7,8 +7,8 @@ constructed. They do NOT test actual model behavior.
 
 import pytest
 import json
-from mcp_second_brain.tools.executor import executor
-from mcp_second_brain.tools.registry import get_tool
+from mcp_the_force.tools.executor import executor
+from mcp_the_force.tools.registry import get_tool
 from unittest.mock import patch
 
 
@@ -214,7 +214,7 @@ class TestGeminiMechanics:
 
         async def buggy_execute(metadata, **kwargs):
             # Use the real router
-            from mcp_second_brain.tools.parameter_router import ParameterRouter
+            from mcp_the_force.tools.parameter_router import ParameterRouter
 
             router = ParameterRouter()
             routed = router.route(metadata, kwargs)

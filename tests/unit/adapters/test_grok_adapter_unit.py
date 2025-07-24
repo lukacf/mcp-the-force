@@ -7,7 +7,7 @@ with all dependencies properly mocked.
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from mcp_second_brain.adapters.grok.adapter import GrokAdapter
+from mcp_the_force.adapters.grok.adapter import GrokAdapter
 
 
 @pytest.fixture
@@ -22,7 +22,7 @@ def mock_openai_client():
 @pytest.fixture
 def grok_adapter_with_mock(mock_openai_client, mock_env):
     """Create GrokAdapter with mocked dependencies for unit testing."""
-    with patch("mcp_second_brain.adapters.grok.adapter.AsyncOpenAI") as mock_openai:
+    with patch("mcp_the_force.adapters.grok.adapter.AsyncOpenAI") as mock_openai:
         mock_openai.return_value = mock_openai_client
 
         adapter = GrokAdapter(model_name="grok-4")
@@ -55,7 +55,7 @@ class TestGrokAdapterUnit:
 
         # Mock session cache to isolate the adapter
         with patch(
-            "mcp_second_brain.adapters.grok.adapter.grok_session_cache",
+            "mcp_the_force.adapters.grok.adapter.grok_session_cache",
             new_callable=AsyncMock,
         ) as mock_cache:
             mock_cache.get_history.return_value = []
@@ -118,7 +118,7 @@ class TestGrokAdapterUnit:
 
         # Mock session cache
         with patch(
-            "mcp_second_brain.adapters.grok.adapter.grok_session_cache",
+            "mcp_the_force.adapters.grok.adapter.grok_session_cache",
             new_callable=AsyncMock,
         ) as mock_cache:
             mock_cache.get_history.return_value = []
@@ -152,7 +152,7 @@ class TestGrokAdapterUnit:
 
         # Mock session cache to verify calls
         with patch(
-            "mcp_second_brain.adapters.grok.adapter.grok_session_cache",
+            "mcp_the_force.adapters.grok.adapter.grok_session_cache",
             new_callable=AsyncMock,
         ) as mock_cache:
             mock_cache.get_history.return_value = []

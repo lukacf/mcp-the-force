@@ -2,8 +2,8 @@
 Unit tests for the descriptor-based parameter routing system.
 """
 
-from mcp_second_brain.tools.descriptors import RouteDescriptor, Route, RouteType
-from mcp_second_brain.tools.base import ToolSpec
+from mcp_the_force.tools.descriptors import RouteDescriptor, Route, RouteType
+from mcp_the_force.tools.base import ToolSpec
 
 
 class TestRouteDescriptor:
@@ -26,7 +26,7 @@ class TestRouteDescriptor:
 
     def test_descriptor_with_default_factory(self):
         """Test descriptor with default factory."""
-        from mcp_second_brain.tools.descriptors import _NO_DEFAULT
+        from mcp_the_force.tools.descriptors import _NO_DEFAULT
 
         desc = RouteDescriptor(route=RouteType.PROMPT, default_factory=list)
         assert desc.default is _NO_DEFAULT
@@ -44,7 +44,7 @@ class TestRouteDescriptor:
 
     def test_has_default_property(self):
         """Test has_default property correctly identifies defaults."""
-        from mcp_second_brain.tools.descriptors import _NO_DEFAULT
+        from mcp_the_force.tools.descriptors import _NO_DEFAULT
 
         # No default
         desc1 = RouteDescriptor(route=RouteType.PROMPT)
@@ -171,7 +171,7 @@ class TestTypedDescriptors:
     def test_toolspec_type_preservation(self):
         """Test that ToolSpec preserves field types without type ignores."""
         from typing import List
-        from mcp_second_brain.tools.registry import tool
+        from mcp_the_force.tools.registry import tool
 
         @tool
         class TestTool(ToolSpec):
@@ -206,7 +206,7 @@ class TestTypedDescriptors:
     def test_dataclass_transform_compatibility(self):
         """Test that dataclass_transform allows proper type checking."""
         from typing import List
-        from mcp_second_brain.tools.registry import tool
+        from mcp_the_force.tools.registry import tool
 
         @tool
         class MyTool(ToolSpec):

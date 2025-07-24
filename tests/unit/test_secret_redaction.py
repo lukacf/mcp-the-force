@@ -3,11 +3,11 @@
 import pytest
 import asyncio
 from unittest.mock import patch, MagicMock, AsyncMock
-from mcp_second_brain.tools.executor import executor
-from mcp_second_brain.tools.registry import get_tool, tool
-from mcp_second_brain.tools.base import ToolSpec
-from mcp_second_brain.tools.descriptors import Route
-from mcp_second_brain.utils.redaction import redact_secrets
+from mcp_the_force.tools.executor import executor
+from mcp_the_force.tools.registry import get_tool, tool
+from mcp_the_force.tools.base import ToolSpec
+from mcp_the_force.tools.descriptors import Route
+from mcp_the_force.utils.redaction import redact_secrets
 
 
 class TestSecretRedaction:
@@ -43,7 +43,7 @@ class TestSecretRedaction:
         mock_adapter.generate = mock_generate
 
         with patch(
-            "mcp_second_brain.adapters.get_adapter", return_value=(mock_adapter, None)
+            "mcp_the_force.adapters.get_adapter", return_value=(mock_adapter, None)
         ):
             result = await executor.execute(metadata, prompt="test")
 
@@ -79,7 +79,7 @@ class TestSecretRedaction:
         mock_adapter.generate = mock_generate
 
         with patch(
-            "mcp_second_brain.adapters.get_adapter", return_value=(mock_adapter, None)
+            "mcp_the_force.adapters.get_adapter", return_value=(mock_adapter, None)
         ):
             result = await executor.execute(metadata, prompt="test")
 
@@ -126,18 +126,18 @@ class TestSecretRedaction:
 
         # Also need to patch the underlying store_conversation_memory that conftest patches
         with patch(
-            "mcp_second_brain.memory.conversation.store_conversation_memory",
+            "mcp_the_force.memory.conversation.store_conversation_memory",
             AsyncMock(return_value=None),
         ):
             with patch(
-                "mcp_second_brain.adapters.get_adapter",
+                "mcp_the_force.adapters.get_adapter",
                 return_value=(mock_adapter, None),
             ):
                 with patch(
-                    "mcp_second_brain.tools.safe_memory.safe_store_conversation_memory",
+                    "mcp_the_force.tools.safe_memory.safe_store_conversation_memory",
                     side_effect=mock_store_memory,
                 ) as mock_safe_store:
-                    with patch("mcp_second_brain.config.get_settings") as mock_settings:
+                    with patch("mcp_the_force.config.get_settings") as mock_settings:
                         mock_settings.return_value.memory_enabled = True
 
                         result = await executor.execute(

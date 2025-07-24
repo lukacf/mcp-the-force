@@ -5,8 +5,8 @@ These tests verify Grok session management and multi-turn support.
 
 import pytest
 import json
-from mcp_second_brain.tools.executor import executor
-from mcp_second_brain.tools.registry import get_tool
+from mcp_the_force.tools.executor import executor
+from mcp_the_force.tools.registry import get_tool
 
 
 class TestGrokMultiTurn:

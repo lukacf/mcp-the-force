@@ -17,7 +17,7 @@ class TestCLI:
     def test_cli_help(self):
         """Test that CLI shows help without errors."""
         result = subprocess.run(
-            [sys.executable, "-m", "mcp_second_brain", "--help"],
+            [sys.executable, "-m", "mcp_the_force", "--help"],
             capture_output=True,
             text=True,
         )
@@ -26,14 +26,14 @@ class TestCLI:
         assert result.returncode == 0
 
         # Should show help text
-        assert "mcp-second-brain" in result.stdout
+        assert "mcp-the-force" in result.stdout
         assert "Usage:" in result.stdout
         assert "--help" in result.stdout
 
     def test_cli_version(self):
         """Test that CLI shows version."""
         result = subprocess.run(
-            [sys.executable, "-m", "mcp_second_brain", "--version"],
+            [sys.executable, "-m", "mcp_the_force", "--version"],
             capture_output=True,
             text=True,
         )
@@ -49,7 +49,7 @@ class TestCLI:
     def test_cli_invalid_args(self):
         """Test CLI handles invalid arguments gracefully."""
         result = subprocess.run(
-            [sys.executable, "-m", "mcp_second_brain", "--invalid-option"],
+            [sys.executable, "-m", "mcp_the_force", "--invalid-option"],
             capture_output=True,
             text=True,
         )
@@ -59,12 +59,12 @@ class TestCLI:
 
         # Should show error message
         assert "Error: Unknown option: --invalid-option" in result.stderr
-        assert "Try 'python -m mcp_second_brain --help'" in result.stderr
+        assert "Try 'python -m mcp_the_force --help'" in result.stderr
 
     def test_module_imports(self):
         """Test that the package can be imported without errors."""
         result = subprocess.run(
-            [sys.executable, "-c", "import mcp_second_brain; print('OK')"],
+            [sys.executable, "-c", "import mcp_the_force; print('OK')"],
             capture_output=True,
             text=True,
         )
@@ -75,7 +75,7 @@ class TestCLI:
     def test_direct_import_and_help(self):
         """Test that we can import __main__ module and call help directly."""
         # Import and capture help output
-        import mcp_second_brain.__main__ as main_module
+        import mcp_the_force.__main__ as main_module
 
         captured_output = io.StringIO()
         with redirect_stdout(captured_output):
@@ -83,7 +83,7 @@ class TestCLI:
                 # Simulate --help argument
                 original_argv = sys.argv
                 try:
-                    sys.argv = ["mcp_second_brain", "--help"]
+                    sys.argv = ["mcp_the_force", "--help"]
                     # Re-run the module logic
                     if "--help" in sys.argv:
                         main_module._print_help()
@@ -96,14 +96,14 @@ class TestCLI:
 
         # Should have printed help
         output = captured_output.getvalue()
-        assert "mcp-second-brain" in output
+        assert "mcp-the-force" in output
         assert "Model-Context-Protocol server" in output
 
     def test_valid_arguments_recognized(self):
         """Test that valid arguments are recognized."""
         # Test with valid arguments (shouldn't error)
         result = subprocess.run(
-            [sys.executable, "-m", "mcp_second_brain", "--help"],
+            [sys.executable, "-m", "mcp_the_force", "--help"],
             capture_output=True,
             text=True,
         )

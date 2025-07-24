@@ -5,7 +5,7 @@ import tempfile
 import os
 import asyncio
 
-from mcp_second_brain.session_cache import _SQLiteSessionCache, session_cache
+from mcp_the_force.session_cache import _SQLiteSessionCache, session_cache
 
 
 @pytest.mark.asyncio
