@@ -64,7 +64,7 @@ To enable the developer logging system for debugging MCP operations:
 }
 ```
 
-When developer logging is enabled, you can search logs using the `search_mcp_debug_logs` tool within Claude Desktop.
+When developer logging is enabled in `config.yaml`, you can search logs using the `search_mcp_debug_logs` tool within Claude Desktop.
 
 ### Environment Variables in Claude Desktop
 
@@ -85,11 +85,9 @@ MCP The-Force uses a unified YAML-based configuration system with environment va
 
 The system loads configuration from multiple sources with clear precedence (highest to lowest):
 
-1. **Environment Variables** - Override any setting for CI/CD and production (recommended for Claude Desktop)
-2. **YAML Files** - Alternative configuration method (`config.yaml` + `secrets.yaml`)
-3. **Defaults** - Sensible defaults built into the application
-
-**Note**: For Claude Desktop integration, we recommend using environment variables in the MCP server configuration rather than YAML files.
+1. **Environment Variables** - Primarily for client integrations (e.g., Claude Desktop) or CI/CD. These will override YAML settings.
+2. **YAML Files** - The primary and recommended method for local configuration (`config.yaml` for general settings, `secrets.yaml` for API keys).
+3. **Defaults** - Sensible defaults built into the application.
 
 ### Setup Configuration Files
 
@@ -132,18 +130,6 @@ providers:
     api_key: sk-ant-...
 ```
 
-### Environment Variable Override
-
-You can override any setting using environment variables:
-
-| Category | Environment Variables |
-|----------|----------------------|
-| OpenAI | `OPENAI_API_KEY` |
-| Anthropic | `ANTHROPIC_API_KEY` |
-| MCP Server | `HOST`, `PORT`, `CONTEXT_PERCENTAGE`, `DEFAULT_TEMPERATURE` |
-| Logging | `LOG_LEVEL` |
-| Vertex AI | `VERTEX_PROJECT`, `VERTEX_LOCATION` |
-| Vertex OAuth (CI/CD) | `GCLOUD_OAUTH_CLIENT_ID`, `GCLOUD_OAUTH_CLIENT_SECRET`, `GCLOUD_USER_REFRESH_TOKEN` |
 
 ### Configuration CLI
 
@@ -166,7 +152,8 @@ mcp-config export-client          # Generate mcp-config.json for Claude
    ```yaml
    providers:
      xai:
-       api_key: xai-...
+       enabled: true
+       api_key: "xai-..." # Add your key here
    ```
 3. Or set environment variable: `export XAI_API_KEY=xai-...`
 
@@ -238,29 +225,29 @@ gcloud iam service-accounts add-iam-policy-binding \
 
 ### Primary Chat Tools
 
-| Tool | Model | Best For | Context | Sessions |
-|------|-------|----------|---------|----------|
-| `chat_with_gemini25_pro` | Gemini 2.5 Pro | Deep analysis, multimodal content | ~1M tokens | ✅ |
-| `chat_with_gemini25_flash` | Gemini 2.5 Flash | Fast summaries, quick insights | ~1M tokens | ✅ |
-| `chat_with_o3` | OpenAI o3 | Step-by-step reasoning, algorithms | ~200k tokens | ✅ |
-| `chat_with_o3_pro` | OpenAI o3-pro | Formal analysis, complex debugging | ~200k tokens | ✅ |
-| `chat_with_gpt4_1` | GPT-4.1 | Large-scale refactoring, RAG workflows | ~1M tokens | ✅ |
-| `chat_with_grok3_reasoning` | xAI Grok 3 Beta | Complex problem solving, debugging | ~131k tokens | ✅ |
-| `chat_with_grok4` | xAI Grok 4 | Advanced reasoning, large documents | ~256k tokens | ✅ |
+| Tool | Model | Best For | Context | Sessions | Web Search |
+|---|---|---|---|---|---|
+| `chat_with_gemini25_pro` | Gemini 2.5 Pro | Deep analysis, multimodal | ~1M tokens | ✅ | No |
+| `chat_with_gemini25_flash` | Gemini 2.5 Flash | Fast summaries, triage | ~1M tokens | ✅ | No |
+| `chat_with_o3` | OpenAI o3 | Step-by-step reasoning | ~200k tokens | ✅ | ✅ |
+| `chat_with_o3_pro` | OpenAI o3-pro | Formal analysis, deep debugging | ~200k tokens | ✅ | ✅ |
+| `chat_with_gpt4_1` | GPT-4.1 | Large-scale refactoring, RAG | ~1M tokens | ✅ | ✅ |
+| `chat_with_grok4` | xAI Grok 4 | Advanced reasoning, real-time info | ~256k tokens | ✅ | ✅ |
+| `chat_with_grok3_reasoning` | Grok 3 Beta | Complex problem solving, real-time info | ~131k tokens | ✅ | ✅ |
 
 ### Research Tools
 
 | Tool | Model | Best For | Features |
-|------|-------|----------|----------|
-| `research_with_o3_deep_research` | OpenAI o3-deep-research | Ultra-deep research with web search | 10-60 min response time |
-| `research_with_o4_mini_deep_research` | OpenAI o4-mini-deep-research | Fast research with web search | 2-10 min response time |
+|---|---|---|---|
+| `research_with_o3_deep_research` | o3-deep-research | Ultra-deep research | Autonomous web search (10-60 min) |
+| `research_with_o4_mini_deep_research` | o4-mini-deep-research | Fast, focused research | Autonomous web search (2-10 min) |
 
 ### Utility Tools
 
-- `list_models` - List all available models and their capabilities
-- `search_project_history` - Search past conversations and git commits
-- `search_session_attachments` - Search files attached to current session
-- `search_mcp_debug_logs` - Search debug logs (requires developer mode enabled)
+-   `list_models` - List all available models and their capabilities.
+-   `count_project_tokens` - Count tokens for specified files or directories.
+-   `search_project_history` - Search past conversations and git commits from the project's long-term memory.
+-   `search_mcp_debug_logs` - (Developer mode only) Run a raw LogsQL query against VictoriaLogs debug logs. Note: This tool no longer accepts friendly parameters; it takes a single `query` string containing the raw LogsQL.
 
 ### Tool Naming Convention
 
@@ -270,44 +257,39 @@ Tools follow these naming patterns for clarity and consistency:
 
 ## 📁 Smart Context Management
 
-The server intelligently handles large codebases through a two-tier approach:
+The server intelligently handles large codebases through a "stable inline list" approach, which optimizes context for multi-turn conversations.
 
-### 🔄 **Inline Context** (Fast Access)
-- Files within context percentage (default 85% of model limit) are embedded directly in the prompt
-- Provides immediate access for small to medium projects
-- Optimized for quick analysis and focused tasks
+### How It Works
 
-### 🔍 **Vector Store/RAG** (Large Projects)
-- Files exceeding the inline limit are uploaded to OpenAI vector stores
-- Automatic semantic search and retrieval
-- Handles codebases of any size with intelligent chunking
+1.  **First Request**: The server analyzes your `context` files.
+    *   It calculates a `token_budget` based on the model's context window (e.g., 85% of 1M tokens).
+    *   It fills this budget by inlining the smallest files first to maximize the number of complete files the model sees.
+    *   Files that don't fit are designated for a vector store.
+    *   This initial set of inlined files becomes the **stable inline list** for the session.
+
+2.  **Subsequent Requests (in the same session)**:
+    *   The server only sends files from the stable list that have **changed** since the last turn.
+    *   Unchanged files are not sent, saving significant tokens and reducing latency.
+    *   Files that were sent to the vector store remain available for searching via the model's internal `search_task_files` function.
+
+This provides the speed of inline context with the scale of a vector store, making conversations about large projects efficient.
 
 ### File Filtering
-- **Respects .gitignore**: Automatically excludes files based on your project's .gitignore rules
-- **Binary file detection**: Skips non-text files (images, binaries, archives)
-- **Size limits**: 500KB per file, 50MB total maximum
-- **Supported extensions**: 60+ text file types including code, docs, configs
+- **Respects .gitignore**: Automatically excludes files based on your project's .gitignore rules.
+- **Binary file detection**: Skips non-text files (images, binaries, archives).
+- **Size limits**: 2MB per file, 50MB total maximum per request.
+- **Supported extensions**: 60+ text file types including code, docs, and configs.
 
 ## 💬 Conversation Support
 
-### Multi-Turn Sessions
+All AI chat and research tools support persistent multi-turn conversations via the `session_id` parameter.
 
-All models support persistent conversations through session management:
-
-**OpenAI models (o3, o3-pro, gpt-4.1, research models)**:
-- Pass `session_id` parameter to maintain conversation continuity
-- Server maintains ephemeral cache (1 hour TTL) of OpenAI response IDs
-- No conversation history stored - OpenAI maintains full context
-
-**Gemini models (gemini-2.5-pro, gemini-2.5-flash)**:
-- Require `session_id` parameter for multi-turn conversations
-- Full conversation history stored locally in SQLite
-- Same TTL and cache management as OpenAI models
-
-### Session Best Practices
-- Use descriptive session IDs: `"debug-auth-issue-2024"`
-- Keep sessions focused on single topics for better context
-- Clean up long sessions by starting fresh when context becomes cluttered
+-   **Unified Persistent Caching**: The server uses a single SQLite database (`.mcp_sessions.sqlite3` by default) to manage conversation history for **all** models (OpenAI, Gemini, and Grok). This ensures conversations survive server restarts.
+-   **How it Works**:
+    -   **OpenAI**: The server caches the `response_id` required by the OpenAI Responses API to continue a conversation.
+    -   **Gemini/Grok**: The server stores the full conversation history (all user and assistant messages) in the database.
+-   **Session TTL**: The default Time-To-Live for all sessions is 1 hour, but this is configurable in `config.yaml`.
+-   **Session IDs**: Session IDs are global. Use unique, descriptive names for different tasks (e.g., "debug-auth-issue-2024-07-15").
 
 ## 📋 Structured Output Support
 
@@ -446,15 +428,16 @@ search_mcp_debug_logs(instance="mcp-the-force_dev_8747aa1d")
 search_mcp_debug_logs(since="24h", order="asc")
 ```
 
-### Search Parameters
-- `text`: Search for text in log messages (case-insensitive)
-- `severity`: Filter by log level (debug|info|warning|error|critical)
-- `since/until`: Time range (5m, 2h, 3d) or absolute timestamps
-- `project`: "current" (default), "all", or specific path
-- `context`: Environment filter (dev|test|e2e|*)
-- `instance`: Instance ID filter (exact or wildcard pattern)
-- `limit`: Maximum results (default: 100)
-- `order`: Sort order ("desc" newest first, "asc" oldest first)
+### Searching Logs
+Use the `search_mcp_debug_logs` tool with a raw LogsQL query string. This provides maximum flexibility for debugging.
+
+**LogsQL Pocket Guide**
+- `_time:5m error` - Find "error" in the last 5 minutes.
+- `{app="mcp-the-force"} "CallToolRequest"` - Find a phrase in a specific app's logs.
+- `_time:1h | stats count() by (tool_id)` - Aggregate logs to find the most used tools.
+
+**Example Usage in Claude:**
+`search_mcp_debug_logs(query='_time:10m error OR critical {app="mcp-the-force"} | sort by (_time desc)')`
 
 ### Log Levels
 - `debug`: Detailed debugging information
