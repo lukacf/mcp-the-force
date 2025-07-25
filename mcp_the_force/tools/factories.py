@@ -34,7 +34,7 @@ def make_chat_tool(bp: ToolBlueprint) -> Type[ToolSpec]:
     # First, collect all annotations in MRO order
     all_annotations = {}
     for cls in reversed(bp.param_class.__mro__):
-        if cls == object:  # Skip object base class
+        if cls is object:  # Skip object base class
             continue
         if hasattr(cls, "__annotations__"):
             all_annotations.update(cls.__annotations__)
@@ -44,7 +44,7 @@ def make_chat_tool(bp: ToolBlueprint) -> Type[ToolSpec]:
 
     # Then copy Route descriptors
     for cls in bp.param_class.__mro__:
-        if cls == object:  # Skip object base class
+        if cls is object:  # Skip object base class
             continue
         for name, value in cls.__dict__.items():
             # Check if it's a RouteDescriptor
@@ -91,7 +91,7 @@ def make_research_tool(bp: ToolBlueprint) -> Type[ToolSpec]:
     # First, collect all annotations in MRO order
     all_annotations = {}
     for cls in reversed(bp.param_class.__mro__):
-        if cls == object:  # Skip object base class
+        if cls is object:  # Skip object base class
             continue
         if hasattr(cls, "__annotations__"):
             all_annotations.update(cls.__annotations__)
@@ -101,7 +101,7 @@ def make_research_tool(bp: ToolBlueprint) -> Type[ToolSpec]:
 
     # Then copy Route descriptors
     for cls in bp.param_class.__mro__:
-        if cls == object:  # Skip object base class
+        if cls is object:  # Skip object base class
             continue
         for name, value in cls.__dict__.items():
             # Check if it's a RouteDescriptor

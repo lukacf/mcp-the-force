@@ -12,6 +12,15 @@ _ADAPTER_REGISTRY: Dict[str, Tuple[str, str]] = {
 
 def get_adapter_class(key: str) -> Type[Any]:
     """Dynamically import and return adapter class."""
+    # Check if we should use mock adapter for testing
+    from ..config import get_settings
+
+    settings = get_settings()
+    if settings.adapter_mock:
+        from .mock_adapter import MockAdapter
+
+        return MockAdapter
+
     if key not in _ADAPTER_REGISTRY:
         raise KeyError(f"Unknown adapter: {key}")
 

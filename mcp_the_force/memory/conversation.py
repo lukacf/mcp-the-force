@@ -11,7 +11,6 @@ import tempfile
 from typing import List, Dict, Any, Optional, TypedDict
 from xml.etree import ElementTree as ET
 
-from ..adapters.openai.client import OpenAIClientFactory
 from ..config import get_settings
 from ..utils.redaction import redact_dict
 from .async_config import get_async_memory_config
@@ -43,7 +42,9 @@ async def store_conversation_memory(
     )
 
     try:
-        # Get async client
+        # Get async client (lazy import to avoid circular dependency)
+        from ..adapters.openai.client import OpenAIClientFactory
+
         settings = get_settings()
         client = await OpenAIClientFactory.get_instance(api_key=settings.openai_api_key)
 
@@ -220,7 +221,7 @@ async def create_conversation_summary(
 
     # Try to use Gemini Flash for summarization
     try:
-        from ..adapters import get_adapter
+        from ..adapters.registry import get_adapter_class
         from ..config import get_settings
 
         settings = get_settings()
@@ -261,15 +262,31 @@ Conversation to summarize:
 """
 
         # Use the central adapter factory instead of direct instantiation
-        adapter, error = get_adapter("vertex", "gemini-2.5-flash")
-        if not adapter:
-            logger.warning(f"Failed to get Vertex adapter for summarization: {error}")
+        try:
+            adapter_cls = get_adapter_class("google")
+            adapter = adapter_cls("gemini-2.5-flash")
+        except Exception as e:
+            logger.warning(f"Failed to get Vertex adapter for summarization: {e}")
             # Fall back to structured summary
             return _create_fallback_summary(user_components, response, tool_name)
 
-        summary = await adapter.generate(
-            prompt=summarization_prompt, vector_store_ids=None, temperature=0.3
+        # Create minimal params for MCPAdapter protocol
+        from types import SimpleNamespace
+        from ..adapters.protocol import CallContext, ToolDispatcher
+        
+        params = SimpleNamespace(temperature=0.3)
+        ctx = CallContext(session_id="", vector_store_ids=None)
+        tool_dispatcher = ToolDispatcher(vector_store_ids=None)
+        
+        result = await adapter.generate(
+            prompt=summarization_prompt, 
+            params=params,
+            ctx=ctx,
+            tool_dispatcher=tool_dispatcher
         )
+        
+        # Extract content from result
+        summary = result.get("content", "") if isinstance(result, dict) else str(result)
 
         # Add metadata header
         return f"""## AI Consultation Session

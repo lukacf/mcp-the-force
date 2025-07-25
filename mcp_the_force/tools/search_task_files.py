@@ -11,7 +11,7 @@ import asyncio
 from openai import AsyncOpenAI
 import fastmcp.exceptions
 
-from ..adapters.base import BaseAdapter
+# No longer need BaseAdapter - this is a local service
 from ..adapters.openai.client import OpenAIClientFactory
 from .base import ToolSpec
 from .descriptors import Route
@@ -45,8 +45,8 @@ class SearchTaskFiles(ToolSpec):
     )
 
 
-class SearchTaskFilesAdapter(BaseAdapter):
-    """Adapter for searching task files in vector stores."""
+class SearchTaskFilesAdapter:
+    """Local service for searching task files in vector stores."""
 
     model_name = "task_files_search"
     context_window = 0  # Not applicable
@@ -67,6 +67,17 @@ class SearchTaskFilesAdapter(BaseAdapter):
     async def clear_deduplication_cache(cls):
         """Clear the deduplication cache."""
         await cls._deduplicator.clear_cache()
+
+    async def execute(self, **kwargs) -> str:
+        """Execute method for local service compatibility."""
+        # Extract the necessary parameters for generate
+        query = kwargs.get("query", "")
+        vector_store_ids = kwargs.get("vector_store_ids", [])
+
+        # Call generate with the appropriate parameters
+        return await self.generate(
+            prompt=query, vector_store_ids=vector_store_ids, **kwargs
+        )
 
     async def generate(
         self,

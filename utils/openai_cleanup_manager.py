@@ -243,7 +243,7 @@ class OpenAICleanupManager:
 
             # Run batch deletions in parallel
             print(
-                f"\nProcessing batch {batch_start//batch_size + 1} ({len(batch)} stores)..."
+                f"\nProcessing batch {batch_start // batch_size + 1} ({len(batch)} stores)..."
             )
             results = await asyncio.gather(*delete_tasks, return_exceptions=True)
 
@@ -409,7 +409,7 @@ class OpenAICleanupManager:
         print(f"\n\n{GREEN}✓ File cleanup complete in {elapsed:.1f} seconds!{RESET}")
         print(f"Deleted: {deleted}")
         print(f"Failed: {failed}")
-        print(f"Rate: {deleted/elapsed:.0f} files/sec")
+        print(f"Rate: {deleted / elapsed:.0f} files/sec")
 
     async def _delete_file(self, file_id: str):
         """Delete a single file."""
