@@ -5,11 +5,9 @@ import contextlib
 import logging
 import time
 import uuid
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Any
 import fastmcp.exceptions
-from mcp_the_force import adapters
-from mcp_the_force import session_cache as session_cache_module
-from mcp_the_force import gemini_session_cache as gemini_session_cache_module
+from mcp_the_force.adapters.registry import get_adapter_class
 from .registry import ToolMetadata
 from .vector_store_manager import vector_store_manager
 from .prompt_engine import prompt_engine
@@ -28,7 +26,8 @@ from ..operation_manager import operation_manager
 # Stable list imports
 from ..utils.context_builder import build_context_with_stable_list
 from ..utils.stable_list_cache import StableListCache
-from ..adapters.model_registry import get_model_context_window
+
+# Context window now comes from tool metadata, no central registry needed
 from lxml import etree as ET
 
 logger = logging.getLogger(__name__)
@@ -107,15 +106,15 @@ class ToolExecutor:
                 cache = StableListCache()
 
                 # Calculate token budget
-                model_name = metadata.model_config["model_name"]
-                model_limit = get_model_context_window(model_name)
+                # Context window comes from tool metadata
+                model_limit = metadata.model_config.get("context_window", 128_000)
                 context_percentage = settings.mcp.context_percentage
 
                 # The context_percentage (default 0.85) already includes safety margin
                 # The remaining 15% is for system prompts, tool responses, etc.
                 token_budget = max(int(model_limit * context_percentage), 1000)
                 logger.debug(
-                    f"[TOKEN_BUDGET] Model: {model_name}, limit: {model_limit:,}, "
+                    f"[TOKEN_BUDGET] Model: {metadata.model_config['model_name']}, limit: {model_limit:,}, "
                     f"percentage: {context_percentage:.0%}, "
                     f"budget: {token_budget:,}"
                 )
@@ -193,73 +192,27 @@ class ToolExecutor:
                 )
                 files_for_vector_store = None
 
-            # Include developer/system prompt for assistant models
+            # Build messages in OpenAI format - ALL adapters will handle this
             from ..prompts import get_developer_prompt
 
             model_name = metadata.model_config["model_name"]
-            adapter_class = metadata.model_config["adapter_class"]
             developer_prompt = get_developer_prompt(model_name)
 
-            messages: Optional[List[Dict[str, Any]]] = None
+            # All adapters use OpenAI format (either natively or via LiteLLM)
+            messages = [
+                {"role": "developer", "content": developer_prompt},
+                {"role": "user", "content": prompt},
+            ]
+
+            adapter_params = routed_params["adapter"]
+            assert isinstance(adapter_params, dict)  # Type hint for mypy
+            # Don't add messages to adapter_params - they'll be passed separately
+
+            # Store messages for conversation memory
+            prompt_params["messages"] = messages
+
+            # For backwards compatibility, keep final_prompt
             final_prompt = prompt
-
-            if adapter_class == "openai":
-                # OpenAI Responses API supports developer role
-                messages = [
-                    {"role": "developer", "content": developer_prompt},
-                    {"role": "user", "content": prompt},
-                ]
-                adapter_params = routed_params["adapter"]
-                assert isinstance(adapter_params, dict)  # Type hint for mypy
-                adapter_params["messages"] = messages
-                # Store messages for conversation memory
-                prompt_params["messages"] = messages
-            elif adapter_class == "vertex":
-                # Gemini models - use system_instruction parameter
-                adapter_params = routed_params["adapter"]
-                assert isinstance(adapter_params, dict)  # Type hint for mypy
-
-                # ALWAYS send the developer prompt so the model maintains its role
-                # across the entire session. Gemini deduplicates identical system
-                # instructions, so this is safe and necessary.
-                adapter_params["system_instruction"] = developer_prompt
-
-                # Since session_id is mandatory, we always have a session
-                # The adapter will handle loading history and adding the new message
-                session_id = session_params.get("session_id")
-                logger.debug(f"Vertex adapter will handle session {session_id}")
-            elif adapter_class == "xai":
-                # Grok models - use system message in messages array (OpenAI format)
-                # Note: For sessions, Grok adapter will manage history itself
-                messages = [
-                    {"role": "system", "content": developer_prompt},
-                    {"role": "user", "content": prompt},
-                ]
-                adapter_params = routed_params["adapter"]
-                assert isinstance(adapter_params, dict)  # Type hint for mypy
-                adapter_params["messages"] = messages
-                # Store messages for conversation memory
-                prompt_params["messages"] = messages
-            elif adapter_class == "litellm":
-                # LiteLLM adapter - use developer role like OpenAI Responses API
-                messages = [
-                    {"role": "developer", "content": developer_prompt},
-                    {"role": "user", "content": prompt},
-                ]
-                adapter_params = routed_params["adapter"]
-                assert isinstance(adapter_params, dict)  # Type hint for mypy
-                adapter_params["messages"] = messages
-                # Store messages for conversation memory
-                prompt_params["messages"] = messages
-            else:
-                # Unknown adapter - use safe default of prepending
-                final_prompt = f"{developer_prompt}\n\n{prompt}"
-                # Store messages for conversation memory
-                messages = [
-                    {"role": "system", "content": developer_prompt},
-                    {"role": "user", "content": prompt},
-                ]
-                prompt_params["messages"] = messages
 
             # 4. Handle vector store if needed
             vs_id = None
@@ -326,70 +279,93 @@ class ToolExecutor:
             # Memory stores are no longer auto-attached
             # Models should use search_project_history function to access memory
 
-            # 5. Get adapter
+            # 5. Check if this is a local service or an AI adapter
+            service_cls = metadata.model_config.get("service_cls")
+
+            if service_cls:
+                # This is a local utility service
+                logger.debug(f"[DEBUG] Using local service: {service_cls}")
+                # Service class is already the actual class, not a string
+                service = service_cls()
+
+                # For local services, we skip adapter-specific logic
+                # and jump straight to execution
+                adapter_params = routed_params["adapter"]
+                assert isinstance(adapter_params, dict)
+
+                # Add any prompt parameters that might be needed
+                prompt_params_for_service = {
+                    k: v for k, v in routed_params["prompt"].items() if k != "prompt"
+                }
+                adapter_params.update(prompt_params_for_service)
+
+                # Execute the service
+                result = await service.execute(**adapter_params)
+                return result
+
+            # Otherwise, get AI adapter from registry
             logger.debug("[DEBUG] About to get settings")
             settings = get_settings()
             logger.debug("[DEBUG] About to get adapter")
-            adapter, error = adapters.get_adapter(
-                metadata.model_config["adapter_class"],
-                metadata.model_config["model_name"],
-            )
-            logger.debug(f"[DEBUG] Got adapter: {adapter}")
-            if not adapter:
-                raise fastmcp.exceptions.ToolError(
-                    f"Failed to initialize adapter: {error}"
-                )
 
-            # 6. Handle session
-            previous_response_id = None
-            gemini_messages = None
+            # Get adapter class from registry and instantiate
+            try:
+                adapter_class_name = metadata.model_config["adapter_class"]
+                model_name = metadata.model_config["model_name"]
+
+                # Get adapter class from registry
+                adapter_cls = get_adapter_class(adapter_class_name)
+
+                # Instantiate adapter with model name
+                adapter = adapter_cls(model_name)
+                logger.debug(f"[DEBUG] Got adapter: {adapter}")
+            except KeyError:
+                raise fastmcp.exceptions.ToolError(
+                    f"Unknown adapter: {adapter_class_name}"
+                )
+            except Exception as e:
+                raise fastmcp.exceptions.ToolError(f"Failed to initialize adapter: {e}")
+
+            # 6. Handle session - unified for all adapters
             session_params = routed_params["session"]
             assert isinstance(session_params, dict)  # Type hint for mypy
             session_id = session_params.get("session_id")
+
+            # All adapters now handle sessions uniformly via unified session cache
+            # The adapters themselves will load/save session history as needed
             if session_id:
-                if metadata.model_config["adapter_class"] in ["openai", "litellm"]:
-                    previous_response_id = (
-                        await session_cache_module.session_cache.get_response_id(
-                            session_id
-                        )
-                    )
-                    if previous_response_id:
-                        logger.debug(f"Continuing session {session_id}")
-                elif metadata.model_config["adapter_class"] == "vertex":
-                    # Vertex adapter expects List[Dict[str, str]]; use the helper that
-                    # already converts Gemini Content objects into this format.
-                    gemini_messages = await gemini_session_cache_module.gemini_session_cache.get_messages(
-                        session_id
-                    )
-                # Note: Grok (xai) adapter handles its own session loading
+                logger.debug(f"Session {session_id} will be handled by adapter")
 
-            # 7. Execute model call
-            logger.debug("[STEP 14] Preparing to execute model call")
+            # 7. Create parameters for MCPAdapter protocol
+            logger.debug(
+                "[STEP 14] Preparing adapter parameters for MCPAdapter protocol"
+            )
+
+            # Import SimpleNamespace for creating the params instance
+            from types import SimpleNamespace
+
+            # Consolidate all routed parameters into one dictionary
+            param_data = {}
+
+            # Add adapter-specific parameters
             adapter_params = routed_params["adapter"]
-            assert isinstance(adapter_params, dict)  # Type hint for mypy
+            assert isinstance(adapter_params, dict)
+            logger.debug(
+                f"[PARAM_DEBUG] adapter_params keys: {list(adapter_params.keys())}"
+            )
+            param_data.update(adapter_params)
 
-            # FIX: Merge session parameters into adapter parameters
+            # Add session parameters
             session_params = routed_params.get("session", {})
-            adapter_params.update(session_params)
+            param_data.update(session_params)
 
-            if previous_response_id:
-                adapter_params["previous_response_id"] = previous_response_id
-
-            if gemini_messages is not None:
-                adapter_params["messages"] = gemini_messages + [
-                    {"role": "user", "content": prompt}
-                ]
-
-            # Merge structured_output parameters into adapter params
+            # Add structured output parameters
             structured_output_params = routed_params.get("structured_output", {})
-            assert isinstance(structured_output_params, dict)
-            adapter_params.update(structured_output_params)
+            param_data.update(structured_output_params)
 
-            # TODO: This adapter-specific translation should be moved into each adapter's
-            # generate() method for better separation of concerns
+            # Handle structured output schema parsing
             schema_str = structured_output_params.get("structured_output_schema")
             if schema_str is not None:
-                # Parse the JSON string to dict
                 try:
                     import json
 
@@ -398,48 +374,61 @@ class ToolExecutor:
                         if isinstance(schema_str, str)
                         else schema_str
                     )
+                    param_data["structured_output_schema"] = schema
                 except (json.JSONDecodeError, ValueError) as e:
                     raise ValueError(f"Invalid JSON in structured_output_schema: {e}")
 
-                adapter_class = metadata.model_config["adapter_class"]
-                if adapter_class == "openai":
-                    # OpenAI adapter handles structured_output_schema internally
-                    # Just ensure it's passed through as dict
-                    adapter_params["structured_output_schema"] = schema
-                elif adapter_class == "vertex":
-                    # Pass the original JSON schema - let the adapter handle conversion
-                    adapter_params["structured_output_schema"] = schema
-                elif adapter_class == "xai":
-                    # xAI/Grok format
-                    adapter_params["output_schema"] = schema
-                    adapter_params["format"] = "json"
-                    # Remove the generic key since xAI uses different parameters
-                    adapter_params.pop("structured_output_schema", None)
-
-            # Merge prompt parameters for adapters that need them (e.g., SearchHistoryAdapter)
-            # Don't include 'prompt' itself as it's passed as positional arg
-            # Don't include 'messages' either if we've already set it from session handling
+            # Add prompt parameters that adapters might need
+            # Instructions and output_format are used to build the XML prompt
+            # Context is handled separately for file gathering
             prompt_params_for_adapter = {
                 k: v
                 for k, v in prompt_params.items()
-                if k != "prompt"
-                and (k != "messages" or "messages" not in adapter_params)
+                if k
+                not in [
+                    "prompt",
+                    "messages",
+                    "context",
+                    "instructions",
+                    "output_format",
+                ]
             }
-            adapter_params.update(prompt_params_for_adapter)
+            logger.debug(
+                f"[PARAM_DEBUG] prompt_params_for_adapter keys: {list(prompt_params_for_adapter.keys())}"
+            )
+            param_data.update(prompt_params_for_adapter)
 
-            # Pass session_id to the adapter so it can propagate to built-in tools
-            if session_id:
-                adapter_params["session_id"] = session_id
+            # Create the params instance using SimpleNamespace
+            logger.debug(
+                f"[PARAM_DEBUG] Final param_data keys: {list(param_data.keys())}"
+            )
+            logger.debug(f"[PARAM_DEBUG] param_data: {param_data}")
+            params_instance = SimpleNamespace(**param_data)
 
-            explicit_vs_ids = routed_params.get("vector_store_ids")
+            # Create CallContext
+            from ..adapters.protocol import CallContext
+
+            explicit_vs_ids = routed_params.get("vector_store_ids", [])
             assert isinstance(explicit_vs_ids, list)
             if explicit_vs_ids:
                 vector_store_ids = (vector_store_ids or []) + list(explicit_vs_ids)
 
+            call_context = CallContext(
+                session_id=session_id or "",
+                vector_store_ids=vector_store_ids,
+            )
+
+            # Create ToolDispatcher
+            from ..adapters.tool_dispatcher import (
+                ToolDispatcher as ProtocolToolDispatcher,
+            )
+
+            tool_dispatcher = ProtocolToolDispatcher(vector_store_ids=vector_store_ids)
+
             timeout_seconds = metadata.model_config["timeout"]
             adapter_start_time = time.time()
             logger.debug(
-                f"[STEP 15] Calling adapter.generate with prompt {len(final_prompt)} chars, vector_store_ids={vector_store_ids}, timeout={timeout_seconds}s"
+                f"[STEP 15] Calling adapter.generate with MCPAdapter protocol, prompt {len(final_prompt)} chars, timeout={timeout_seconds}s"
             )
             logger.debug(
                 f"[TIMING] Starting adapter.generate at {time.strftime('%H:%M:%S')}"
@@ -452,13 +441,16 @@ class ToolExecutor:
 
             # Scope context is now set by the integration layer, so we don't need to set it here
             try:
+                # Call adapter.generate with MCPAdapter protocol signature
                 result = await operation_manager.run_with_timeout(
                     operation_id,
                     adapter.generate(
                         prompt=final_prompt,
-                        vector_store_ids=vector_store_ids,
+                        params=params_instance,  # Pass the SimpleNamespace instance
+                        ctx=call_context,
+                        tool_dispatcher=tool_dispatcher,
                         timeout=timeout_seconds,
-                        **adapter_params,
+                        vector_store_ids=vector_store_ids,  # Pass as kwarg for backward compat
                     ),
                     timeout=timeout_seconds,
                 )
@@ -504,7 +496,7 @@ class ToolExecutor:
                 )
                 logger.debug(f"[CANCEL] Vector store IDs were: {vector_store_ids}")
                 logger.debug(f"[CANCEL] Session ID was: {session_id}")
-                logger.debug(f"[CANCEL] Adapter was: {adapter_class}")
+                logger.debug(f"[CANCEL] Adapter was: {adapter}")
                 logger.debug("[CANCEL] Re-raising CancelledError from executor")
                 raise  # Important: do NOT convert or return
             except Exception as e:
@@ -519,18 +511,8 @@ class ToolExecutor:
                 logger.debug("[STEP 17.1] Result is dict")
                 content = result.get("content", "")
                 logger.debug(f"[STEP 17.2] Got content, length: {len(str(content))}")
-                if (
-                    session_id
-                    and metadata.model_config["adapter_class"] in ["openai", "litellm"]
-                    and "response_id" in result
-                ):
-                    logger.debug(
-                        f"[STEP 17.3] Saving response_id for session {session_id}"
-                    )
-                    await session_cache_module.session_cache.set_response_id(
-                        session_id, result["response_id"]
-                    )
-                    logger.debug("[STEP 17.4] Response_id saved")
+                # Session management is handled by adapters via the unified session cache
+                # Each adapter decides what to store (response_id for OpenAI, full history for others)
                 # Session management is now handled inside the adapters themselves
                 # No need to save sessions here for Vertex/Grok models
 

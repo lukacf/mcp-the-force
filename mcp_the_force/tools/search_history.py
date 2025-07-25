@@ -19,7 +19,8 @@ if TYPE_CHECKING:
 from ..memory.config import get_memory_config
 from ..utils.redaction import redact_secrets
 from ..config import get_settings
-from ..adapters.base import BaseAdapter
+
+# Local service - no adapter imports needed
 from .base import ToolSpec
 from .descriptors import Route
 from .registry import tool
@@ -61,40 +62,14 @@ def _calculate_relative_time(timestamp: int) -> str:
         return "just now"
 
 
-@tool
-class SearchProjectHistory(ToolSpec):
-    """Search across all project history stores."""
-
-    model_name = "history_search"
-    adapter_class = "SearchHistoryAdapter"
-    context_window = 0  # Not applicable for search
-    timeout = 30  # 30 second timeout for searches
-
-    # Parameters
-    query = Route.prompt(description="Search query or semicolon-separated queries")
-    max_results = Route.prompt(
-        description="Maximum results to return (default: 40)",
-        default=40,
-    )
-    store_types = Route.prompt(
-        description="Types of stores to search (default: ['conversation', 'commit'])",
-        default_factory=lambda: ["conversation", "commit"],
-    )
-
-
-class SearchHistoryAdapter(BaseAdapter):
-    """Adapter for searching project history stores."""
-
-    model_name = "history_search"
-    context_window = 0  # Not applicable
-    description_snippet = "Search project history stores"
+class SearchHistoryService:
+    """Local service for searching project history stores."""
 
     # Class-level SQLite deduplicator (singleton)
     _deduplicator = None
     _deduplicator_lock = asyncio.Lock()
 
-    def __init__(self, model_name: str = "history_search"):
-        self.model_name = model_name
+    def __init__(self):
         settings = get_settings()
         self.client = OpenAI(api_key=settings.openai_api_key)
         self.memory_config = get_memory_config()
@@ -102,14 +77,14 @@ class SearchHistoryAdapter(BaseAdapter):
 
     def _ensure_deduplicator(self):
         """Ensure the SQLite deduplicator is initialized."""
-        if SearchHistoryAdapter._deduplicator is None:
+        if SearchHistoryService._deduplicator is None:
             # Use the same database as memory config
             home = Path.home()
             cache_dir = home / ".cache" / "mcp-the-force"
             cache_dir.mkdir(parents=True, exist_ok=True)
             db_path = cache_dir / "session_cache.db"
 
-            SearchHistoryAdapter._deduplicator = SQLiteSearchDeduplicator(
+            SearchHistoryService._deduplicator = SQLiteSearchDeduplicator(
                 db_path=db_path,
                 ttl_hours=24,  # 24 hour TTL for search deduplication
             )
@@ -128,12 +103,7 @@ class SearchHistoryAdapter(BaseAdapter):
             self._deduplicator.clear_session_cache(session_id)
             logger.info(f"[SEARCH_HISTORY] Cleared cache for session {session_id}")
 
-    async def generate(
-        self,
-        prompt: str,
-        vector_store_ids: List[str] | None = None,
-        **kwargs: Any,
-    ) -> str:
+    async def execute(self, **kwargs: Any) -> str:
         """Search memory stores and return formatted results.
 
         This method is called by the ToolExecutor when any model
@@ -142,12 +112,9 @@ class SearchHistoryAdapter(BaseAdapter):
         # Extract search parameters
         query = kwargs.get("query")
         if not query:
-            # Heuristic: treat prompt as a query only if it's short
-            # and looks like plain text (no angle-brackets XML).
-            if prompt and len(prompt) <= 256 and "<" not in prompt:
-                query = prompt
-            else:
-                query = ""
+            # For LocalService, there's no prompt parameter
+            # Just set empty query
+            query = ""
         max_results = kwargs.get("max_results", 20)
         # Ensure max_results is an integer
         if isinstance(max_results, str):
@@ -369,3 +336,27 @@ class SearchHistoryAdapter(BaseAdapter):
             except Exception as e:
                 logger.error(f"Failed to search store {store_id}: {e}")
                 raise
+
+
+@tool
+class SearchProjectHistory(ToolSpec):
+    """Search across all project history stores."""
+
+    # Required for @tool decorator
+    model_name = "search_project_history"
+
+    # Use local service instead of adapter
+    service_cls = SearchHistoryService
+    adapter_class = None  # Signal to executor that this runs locally
+    timeout = 30  # 30 second timeout for searches
+
+    # Parameters
+    query = Route.prompt(description="Search query or semicolon-separated queries")
+    max_results = Route.prompt(
+        description="Maximum results to return (default: 40)",
+        default=40,
+    )
+    store_types = Route.prompt(
+        description="Types of stores to search (default: ['conversation', 'commit'])",
+        default_factory=lambda: ["conversation", "commit"],
+    )

@@ -89,34 +89,23 @@ class StateResetManager:
         """Find and close all SQLite connections."""
         try:
             # Import here to avoid circular imports
-            from ..session_cache import _instance as session_cache_instance
-            from ..gemini_session_cache import _instance as gemini_cache_instance
-            from ..grok_session_cache import _instance as grok_cache_instance
+            # Note: The old session caches have been replaced by unified_session_cache
+            from ..unified_session_cache import _instance_cache
 
-            # Close all cache instances
-            caches = [
-                ("session_cache", session_cache_instance),
-                ("gemini_cache", gemini_cache_instance),
-                ("grok_cache", grok_cache_instance),
-            ]
-
-            for name, cache in caches:
-                if cache is not None:
-                    logger.warning(f"[STATE RESET] Closing {name}")
+            # Close all unified session cache instances
+            for db_path, cache_instance in list(_instance_cache.items()):
+                if cache_instance is not None:
+                    logger.warning(
+                        f"[STATE RESET] Closing unified session cache for {db_path}"
+                    )
                     try:
-                        cache.close()
+                        if hasattr(cache_instance, "close"):
+                            cache_instance.close()
                     except Exception as e:
-                        logger.error(f"[STATE RESET] Failed to close {name}: {e}")
+                        logger.error(f"[STATE RESET] Failed to close cache: {e}")
 
-            # Clear the singleton instances
-            import sys
-
-            if "mcp_the_force.session_cache" in sys.modules:
-                sys.modules["mcp_the_force.session_cache"]._instance = None
-            if "mcp_the_force.gemini_session_cache" in sys.modules:
-                sys.modules["mcp_the_force.gemini_session_cache"]._instance = None
-            if "mcp_the_force.grok_session_cache" in sys.modules:
-                sys.modules["mcp_the_force.grok_session_cache"]._instance = None
+            # Clear the cache instances
+            _instance_cache.clear()
 
         except Exception as e:
             logger.error(f"[STATE RESET] Failed to close SQLite connections: {e}")

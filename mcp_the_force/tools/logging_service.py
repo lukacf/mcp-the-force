@@ -1,35 +1,24 @@
-"""Adapter that forwards raw LogsQL to VictoriaLogs and prettifies the reply."""
+"""Local service that forwards raw LogsQL to VictoriaLogs and prettifies the reply."""
 
 import json
 import httpx
 import textwrap
-from typing import List, Any
+from typing import Any
 
-from .base import BaseAdapter
 from ..config import get_settings
 
 MAX_LINES_RETURNED = 120  # hard cap to keep LLM context small
 TRUNCATE_MSG_AT = 200  # characters
 
 
-class LoggingAdapter(BaseAdapter):
-    """Simple pass-through adapter for raw LogsQL queries."""
+class LoggingService:
+    """Local service for executing raw LogsQL queries."""
 
-    model_name = "utility"
-    context_window = 0
-    description_snippet = "Raw LogsQL → VictoriaLogs adapter"
-
-    def __init__(self, model_name: str = "utility"):
-        self.model_name = model_name
+    def __init__(self):
         self.base_url = "http://localhost:9428"
 
-    async def generate(
-        self,
-        prompt: str,  # unused (ToolSpec passes empty string)
-        vector_store_ids: List[str] | None = None,
-        **kwargs: Any,
-    ) -> str:
-        """Handle raw LogsQL query execution."""
+    async def execute(self, **kwargs: Any) -> str:
+        """Execute raw LogsQL query and return formatted results."""
         settings = get_settings()
         if not settings.logging.developer_mode.enabled:
             return (

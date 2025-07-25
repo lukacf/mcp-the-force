@@ -10,20 +10,21 @@ from dataclasses import dataclass
 from uuid import uuid4
 
 from .client import OpenAIClientFactory
-from .models import OpenAIRequest, model_capabilities
-from .tool_exec import ToolExecutor, BuiltInToolDispatcher
+from .models import OpenAIRequest
+from .tool_exec import ToolExecutor
 from .errors import (
     AdapterException,
     ErrorCategory,
     TimeoutException,
     GatewayTimeoutException,
 )
-from .constants import (
+from ..openai.constants import (
     INITIAL_POLL_DELAY_SEC,
     MAX_POLL_INTERVAL_SEC,
     STREAM_TIMEOUT_THRESHOLD,
 )
 from ..memory_search_declaration import create_search_history_declaration_openai
+from .models import OPENAI_MODEL_CAPABILITIES
 import json
 import jsonschema
 
@@ -66,7 +67,7 @@ class BaseFlowStrategy(ABC):
 
         tools = []
 
-        capability = model_capabilities.get(self.context.request.model)
+        capability = OPENAI_MODEL_CAPABILITIES.get(self.context.request.model)
 
         # Only add custom tools if the model supports them
         if capability is None or capability.supports_custom_tools:
@@ -181,7 +182,7 @@ class BaseFlowStrategy(ABC):
 
         try:
             # Extract JSON from potential markdown wrapping
-            from mcp_the_force.utils.json_extractor import extract_json
+            from ...utils.json_extractor import extract_json
 
             clean_json = extract_json(content)
 
@@ -282,7 +283,7 @@ class BackgroundFlowStrategy(BaseFlowStrategy):
             api_params["parallel_tool_calls"] = self.context.request.parallel_tool_calls
 
         # Only add reasoning parameters if the model supports them
-        capability = model_capabilities.get(self.context.request.model)
+        capability = OPENAI_MODEL_CAPABILITIES.get(self.context.request.model)
         if (
             self.context.request.reasoning_effort
             and capability
@@ -448,7 +449,7 @@ class StreamingFlowStrategy(BaseFlowStrategy):
             api_params["parallel_tool_calls"] = self.context.request.parallel_tool_calls
 
         # Only add reasoning parameters if the model supports them
-        capability = model_capabilities.get(self.context.request.model)
+        capability = OPENAI_MODEL_CAPABILITIES.get(self.context.request.model)
         if (
             self.context.request.reasoning_effort
             and capability
@@ -550,18 +551,13 @@ class StreamingFlowStrategy(BaseFlowStrategy):
 class FlowOrchestrator:
     """Orchestrates the execution flow for OpenAI requests."""
 
-    def __init__(self, tool_dispatcher=None):
-        """Initialize orchestrator with optional custom tool dispatcher.
+    def __init__(self, tool_dispatcher):
+        """Initialize orchestrator with tool dispatcher.
 
         Args:
-            tool_dispatcher: Optional custom function for dispatching tools.
-                           If not provided, uses BuiltInToolDispatcher.
+            tool_dispatcher: Tool dispatcher instance that implements the ToolDispatcher protocol.
         """
-        if tool_dispatcher is None:
-            # Default to built-in tools
-            self.tool_dispatcher = lambda: BuiltInToolDispatcher()
-        else:
-            self.tool_dispatcher = lambda: tool_dispatcher
+        self.tool_dispatcher = tool_dispatcher
 
     async def run(self, request_data: Dict[str, Any]) -> Dict[str, Any]:
         """Run the orchestrated flow.
@@ -593,7 +589,7 @@ class FlowOrchestrator:
             use_background = self._should_use_background(request)
 
             # Log unknown models
-            if request.model not in model_capabilities:
+            if request.model not in OPENAI_MODEL_CAPABILITIES:
                 logger.warning(
                     f"Unknown model '{request.model}' - defaulting to background mode"
                 )
@@ -610,7 +606,7 @@ class FlowOrchestrator:
             start_time = asyncio.get_event_loop().time()
 
             # Build or fetch the dispatcher *once*
-            dispatcher_candidate = self.tool_dispatcher()
+            dispatcher_candidate = self.tool_dispatcher
 
             if callable(dispatcher_candidate):  # custom dispatcher
                 tool_executor = ToolExecutor(dispatcher_candidate)
@@ -684,8 +680,8 @@ class FlowOrchestrator:
     def _should_use_background(self, request: OpenAIRequest) -> bool:
         """Determine if background mode should be used."""
         # Check model capabilities if available
-        if request.model in model_capabilities:
-            capability = model_capabilities[request.model]
+        if request.model in OPENAI_MODEL_CAPABILITIES:
+            capability = OPENAI_MODEL_CAPABILITIES[request.model]
 
             # Force background for models that require it
             if capability.force_background:
@@ -711,8 +707,8 @@ class FlowOrchestrator:
         model = data.get("model", "")
 
         # Check if model requires background mode
-        if model in model_capabilities:
-            capability = model_capabilities[model]
+        if model in OPENAI_MODEL_CAPABILITIES:
+            capability = OPENAI_MODEL_CAPABILITIES[model]
 
             # Force background for models that require it
             if capability.force_background:

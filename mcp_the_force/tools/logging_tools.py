@@ -4,6 +4,7 @@ from typing import Any
 from .base import ToolSpec
 from .registry import tool
 from .descriptors import Route
+from .logging_service import LoggingService
 
 LOGSQL_POCKET_GUIDE = """
 LogsQL pocket guide
@@ -73,10 +74,12 @@ Examples
    _time:2h "CallToolRequest" {{project="/Users/myproject"}}
 """.format(guide=LOGSQL_POCKET_GUIDE)
 
-    # This is a special utility tool that doesn't use an AI model
-    model_name = "utility"
-    adapter_class = "LoggingAdapter"
-    context_window = 0
+    # Required for @tool decorator
+    model_name = "search_mcp_debug_logs"
+
+    # Use local service instead of adapter
+    service_cls = LoggingService
+    adapter_class = None  # Signal to executor that this runs locally
     timeout = 30
 
     # Single parameter: the raw LogsQL query
