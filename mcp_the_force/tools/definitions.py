@@ -430,7 +430,7 @@ class ChatWithGrok4(ToolSpec):
     """
 
     model_name = "grok-4"
-    adapter_class = "xai"
+    adapter_class = "xai_protocol"  # Updated to use protocol-based adapter
     context_window = 256_000
     timeout = 600  # Longer timeout for complex reasoning
 
@@ -491,7 +491,7 @@ class ChatWithGrok3Reasoning(ToolSpec):
     """
 
     model_name = "grok-3-beta"
-    adapter_class = "xai"
+    adapter_class = "xai_protocol"  # Updated to use protocol-based adapter
     context_window = 131_000
     timeout = 900  # Longer timeout for reasoning mode
 
@@ -592,7 +592,7 @@ class TestGrokLiteLLM(ToolSpec):
     """
 
     model_name = "grok-4"
-    adapter_class = "xai_litellm"  # New LiteLLM-based adapter
+    adapter_class = "xai_protocol"  # Updated to use protocol-based adapter
     context_window = 256_000
     timeout = 600
 
