@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 def patch_background_flow():
     """Patch BackgroundFlowStrategy to handle cancellation properly."""
     try:
-        from mcp_the_force.adapters.openai_new.flow import BackgroundFlowStrategy
+        from .flow import BackgroundFlowStrategy
 
         # Store original execute method
         original_execute = BackgroundFlowStrategy.execute

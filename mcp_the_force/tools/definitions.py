@@ -138,7 +138,7 @@ class ChatWithO3(ToolSpec):
     - session_id: "graph-algo-001" (for multi-turn refinement)"""
 
     model_name = "o3"
-    adapter_class = "openai"
+    adapter_class = "openai_protocol"
     context_window = 200_000
     timeout = 1800
 
@@ -198,7 +198,7 @@ class ChatWithO3Pro(ToolSpec):
     - session_id: "consensus-proof-001"""
 
     model_name = "o3-pro"
-    adapter_class = "openai"
+    adapter_class = "openai_protocol"
     context_window = 200_000
     timeout = 2700  # 45 minutes
 
@@ -248,7 +248,7 @@ class ChatWithGPT4_1(ToolSpec):
     - session_id: "react-refactor-001"""
 
     model_name = "gpt-4.1"
-    adapter_class = "openai"
+    adapter_class = "openai_protocol"
     context_window = 1_000_000
     timeout = 300
 
@@ -295,7 +295,7 @@ class ResearchWithO3DeepResearch(ToolSpec):
     - session_id: "quantum-research-001" (for follow-up questions)"""
 
     model_name = "o3-deep-research"
-    adapter_class = "openai"
+    adapter_class = "openai_protocol"
     context_window = 200_000
     timeout = 3600  # 1 hour
 
@@ -344,7 +344,7 @@ class ResearchWithO4MiniDeepResearch(ToolSpec):
     - session_id: "api-research-001"""
 
     model_name = "o4-mini-deep-research"
-    adapter_class = "openai"
+    adapter_class = "openai_protocol"
     context_window = 200_000
     timeout = 900  # 15 minutes
 
@@ -690,20 +690,18 @@ class TestOpenAIProtocol(ToolSpec):
     output_format: str = Route.prompt(pos=1, description="Desired output format")
     session_id: str = Route.session(description="Session ID for conversation")
 
-    # Parameter with default
     context: List[str] = Route.prompt(
         pos=2,
         description="List of file/directory paths to include",
-        default_factory=list,
     )
 
     # Optional parameters
+    structured_output_schema: Optional[str] = Route.structured_output(
+        description="JSON schema for structured output validation"
+    )
     reasoning_effort: Optional[str] = Route.adapter(
         default="medium", description="Reasoning effort (low/medium/high)"
     )
     disable_memory_search: Optional[bool] = Route.adapter(
         default=False, description="Disable search_project_history tool"
-    )
-    structured_output_schema: Optional[dict] = Route.adapter(
-        default=None, description="JSON schema for structured output"
     )

@@ -134,7 +134,10 @@ def get_adapter(
             register_adapter("openai_protocol", OpenAIBridgeAdapter)
             logger.debug("Lazily registered OpenAIBridgeAdapter")
         except ImportError as e:
+            import traceback
+
             logger.error(f"Failed to lazy-load OpenAIBridgeAdapter: {e}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
             return (
                 None,
                 f"Protocol adapter {adapter_key} could not be loaded: {e}",
