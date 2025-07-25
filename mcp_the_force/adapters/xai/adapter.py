@@ -189,13 +189,9 @@ class GrokAdapter:
                 "temperature": params.temperature,
             }
 
-            # Add reasoning effort for supported models (not Grok 4!)
+            # Add reasoning effort for supported models
             # Note: Grok only supports "low" or "high", not "medium"
-            if (
-                self.capabilities.supports_reasoning_effort
-                and params.reasoning_effort
-                and self.model_name != "grok-4"
-            ):  # Grok 4 doesn't support it
+            if self.capabilities.supports_reasoning_effort and params.reasoning_effort:
                 # Map medium to high for Grok
                 effort = params.reasoning_effort
                 if effort == "medium":
@@ -234,7 +230,7 @@ class GrokAdapter:
                 else False
             )
             built_in_tools = tool_dispatcher.get_tool_declarations(
-                adapter_type="grok",  # Must be "grok" to get search_task_files
+                capabilities=self.capabilities,
                 disable_memory_search=disable_memory_search,
             )
             tools.extend(built_in_tools)

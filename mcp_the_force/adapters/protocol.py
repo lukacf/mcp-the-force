@@ -19,7 +19,7 @@ class ToolDispatcher(Protocol):
     """Interface for tool execution."""
 
     def get_tool_declarations(
-        self, adapter_type: str, disable_memory_search: bool = False
+        self, capabilities: AdapterCapabilities, disable_memory_search: bool = False
     ) -> List[Dict[str, Any]]:
         """Get tool declarations in the format expected by the adapter."""
         ...

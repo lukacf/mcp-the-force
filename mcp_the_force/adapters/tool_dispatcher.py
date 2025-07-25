@@ -5,6 +5,7 @@ import logging
 from typing import Any, Dict, List, Optional
 from .tool_handler import ToolHandler
 from .protocol import CallContext
+from .capabilities import AdapterCapabilities
 
 logger = logging.getLogger(__name__)
 
@@ -22,20 +23,19 @@ class ToolDispatcher:
         self.vector_store_ids = vector_store_ids or []
 
     def get_tool_declarations(
-        self, adapter_type: str = "openai", disable_memory_search: bool = False
+        self, capabilities: AdapterCapabilities, disable_memory_search: bool = False
     ) -> List[Dict[str, Any]]:
         """Get tool declarations in the format expected by the adapter.
 
         Args:
-            adapter_type: Type of adapter ("openai", "grok", "gemini")
+            capabilities: Adapter capabilities
             disable_memory_search: Whether to disable search_project_history tool
 
         Returns:
             List of tool declarations in the appropriate format
         """
-        # Use the existing tool handler's method
         return self.tool_handler.prepare_tool_declarations(
-            adapter_type=adapter_type,  # type: ignore[arg-type]
+            capabilities=capabilities,
             vector_store_ids=self.vector_store_ids,
             disable_memory_search=disable_memory_search,
         )
