@@ -20,24 +20,70 @@ litellm.drop_params = True
 
 
 class GrokLiteLLMAdapter(BaseAdapter):
-    """Grok adapter using LiteLLM's unified interface."""
+    """Grok adapter using LiteLLM's unified interface.
+
+    This is a complete replacement for the original Grok adapter,
+    supporting all xAI models with their specific capabilities.
+    """
 
     # Default model attributes (can be overridden by specific models)
     model_name = "grok-4"
     context_window = 256_000
     description_snippet = "Grok via LiteLLM"
 
-    # Grok model capabilities
+    # Complete Grok model capabilities matching original adapter
     CAPABILITIES = {
-        "grok-4": {
-            "context_window": 256_000,
-            "supports_functions": True,
-            "supports_live_search": True,
-        },
         "grok-3-beta": {
             "context_window": 131_000,
             "supports_functions": True,
             "supports_live_search": True,
+            "supports_streaming": True,
+            "description": "General purpose Grok 3 model",
+        },
+        "grok-3-fast": {
+            "context_window": 131_000,
+            "supports_functions": True,
+            "supports_live_search": True,
+            "supports_streaming": True,
+            "description": "Fast inference with Grok 3",
+        },
+        "grok-4": {
+            "context_window": 256_000,
+            "supports_functions": True,
+            "supports_live_search": True,
+            "supports_streaming": True,
+            "description": "Advanced multi-agent reasoning, large documents",
+        },
+        "grok-4-heavy": {
+            "context_window": 256_000,
+            "supports_functions": True,
+            "supports_live_search": True,
+            "supports_streaming": True,
+            "description": "Maximum capability (if available)",
+        },
+        "grok-3-mini": {
+            "context_window": 32_000,
+            "supports_functions": True,
+            "supports_live_search": True,
+            "supports_streaming": True,
+            "supports_reasoning_effort": True,
+            "description": "Quick responses, supports reasoning effort",
+        },
+        "grok-3-mini-beta": {
+            "context_window": 32_000,
+            "supports_functions": True,
+            "supports_live_search": True,
+            "supports_streaming": True,
+            "supports_reasoning_effort": True,
+            "description": "Beta version of mini model with reasoning effort",
+        },
+        "grok-3-mini-fast": {
+            "context_window": 32_000,
+            "supports_functions": True,
+            "supports_live_search": True,
+            "supports_streaming": True,
+            "supports_reasoning_effort": True,
+            "description": "Fast mini model with reasoning effort",
         },
     }
 
@@ -61,10 +107,20 @@ class GrokLiteLLMAdapter(BaseAdapter):
             raise ValueError("XAI_API_KEY not configured")
 
         # Get and set capabilities
-        capabilities = self.CAPABILITIES.get(model, self.CAPABILITIES["grok-4"])
-        self.context_window = capabilities["context_window"]
+        capabilities = self.CAPABILITIES.get(model)
+        if not capabilities:
+            raise ValueError(
+                f"Unknown Grok model: {model}. Supported models: {list(self.CAPABILITIES.keys())}"
+            )
+
+        self.context_window = capabilities["context_window"]  # type: ignore[assignment]
         self.supports_functions = capabilities["supports_functions"]
         self.supports_live_search = capabilities["supports_live_search"]
+        self.supports_streaming = capabilities.get("supports_streaming", True)
+        self.supports_reasoning_effort = capabilities.get(
+            "supports_reasoning_effort", False
+        )
+        self.description = capabilities.get("description", f"Grok {model}")
 
         # Initialize tool handler
         self.tool_handler = ToolHandler()
@@ -84,7 +140,15 @@ class GrokLiteLLMAdapter(BaseAdapter):
         stream: bool = False,
         **kwargs: Any,
     ) -> Dict[str, Any]:
-        """Generate a response using Grok via LiteLLM's Responses API."""
+        """Generate a response using Grok via LiteLLM's Responses API.
+
+        Supports all Grok features including:
+        - Live Search (web/X search)
+        - Session continuation
+        - Tool calling
+        - Structured output
+        - Reasoning effort (for mini models)
+        """
         try:
             # Initialize conversation_input in Responses API format
             conversation_input = []
@@ -136,6 +200,10 @@ class GrokLiteLLMAdapter(BaseAdapter):
                 "api_key": self.api_key,
                 "temperature": temperature,
             }
+
+            # Add reasoning effort for supported models
+            if self.supports_reasoning_effort and "reasoning_effort" in kwargs:
+                params["reasoning_effort"] = kwargs["reasoning_effort"]
 
             # Note: xAI doesn't support previous_response_id, so we rely on history replay
             # The full conversation history is already included in messages
