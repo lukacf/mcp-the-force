@@ -117,8 +117,8 @@ class TestToolFeatureParity:
         # Check Grok models
         for model_class in GROK_MODELS:
             assert (
-                model_class.adapter_class == "xai"
-            ), f"{model_class.__name__} should use xai adapter"
+                model_class.adapter_class == "xai_protocol"
+            ), f"{model_class.__name__} should use xai_protocol adapter"
 
     def test_no_duplicate_parameter_positions(self):
         """No model should have duplicate position numbers for parameters."""
