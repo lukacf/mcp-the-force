@@ -126,6 +126,20 @@ def get_adapter(
                 f"Protocol adapter {adapter_key} could not be loaded: {e}",
             )
 
+    # Lazy load protocol-based OpenAI adapter
+    if adapter_key == "openai_protocol" and adapter_key not in ADAPTER_REGISTRY:
+        try:
+            from .openai_bridge import OpenAIBridgeAdapter
+
+            register_adapter("openai_protocol", OpenAIBridgeAdapter)
+            logger.debug("Lazily registered OpenAIBridgeAdapter")
+        except ImportError as e:
+            logger.error(f"Failed to lazy-load OpenAIBridgeAdapter: {e}")
+            return (
+                None,
+                f"Protocol adapter {adapter_key} could not be loaded: {e}",
+            )
+
     cache_key = (adapter_key, model_name)
 
     # Check cache first
