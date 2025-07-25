@@ -1,10 +1,12 @@
 from typing import List, BinaryIO, Sequence
 from pathlib import Path
 from ..config import get_settings
-from ..adapters.openai.client import OpenAIClientFactory
 import logging
 import time
 import asyncio
+
+# Lazy import OpenAIClientFactory to avoid circular dependency
+# It will be imported when needed in the functions that use it
 
 logger = logging.getLogger(__name__)
 
@@ -271,6 +273,8 @@ async def create_vector_store(paths: List[str]) -> str:
     try:
         # Create vector store
         # Use factory to get event-loop scoped client instance
+        from ..adapters.openai.client import OpenAIClientFactory
+
         client = await OpenAIClientFactory.get_instance(
             api_key=get_settings().openai_api_key
         )
@@ -462,6 +466,8 @@ async def delete_vector_store(vector_store_id: str) -> None:
 
     try:
         # Use factory to get event-loop scoped client instance
+        from ..adapters.openai.client import OpenAIClientFactory
+
         client = await OpenAIClientFactory.get_instance(
             api_key=get_settings().openai_api_key
         )

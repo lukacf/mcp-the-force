@@ -214,11 +214,12 @@ class TestErrorHandlingIntegration:
     @pytest.mark.asyncio
     async def test_adapter_initialization_failure(self):
         """Test handling of adapter initialization failures."""
-        # Patch get_adapter to return an error
-        with patch("mcp_the_force.adapters.get_adapter") as mock_get_adapter:
-            mock_get_adapter.return_value = (
-                None,
-                "Failed to initialize adapter: Test error",
+        # Since MCP_ADAPTER_MOCK=1, we need to patch MockAdapter's __init__ to raise an error
+        with patch(
+            "mcp_the_force.adapters.mock_adapter.MockAdapter.__init__"
+        ) as mock_init:
+            mock_init.side_effect = RuntimeError(
+                "Failed to initialize adapter: Test error"
             )
 
             tool_metadata = get_tool("chat_with_gemini25_flash")

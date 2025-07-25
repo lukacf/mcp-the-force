@@ -6,6 +6,8 @@ in ToolSpec classes.
 """
 
 from typing import List, Optional, Any, Dict
+
+# Import Route directly - will fix circular import differently
 from ..tools.descriptors import Route
 
 

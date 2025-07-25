@@ -14,12 +14,22 @@ T = TypeVar("T", bound=ToolSpec)
 TOOL_REGISTRY: Dict[str, "ToolMetadata"] = {}
 
 
+_autogen_loaded = False
+
+
 def _ensure_populated() -> None:
     """Ensure tools are registered by importing definitions if needed."""
-    if TOOL_REGISTRY:  # already loaded
-        return
-    # Importing this module registers every tool class via the @tool decorator
-    from . import definitions  # noqa: F401
+    global _autogen_loaded
+
+    if not TOOL_REGISTRY:
+        # Importing this module registers every tool class via the @tool decorator
+        from . import definitions  # noqa: F401
+
+    if not _autogen_loaded:
+        # Import autogen to generate dynamic tools
+        from . import autogen  # noqa: F401
+
+        _autogen_loaded = True
 
 
 @dataclass

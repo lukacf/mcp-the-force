@@ -25,6 +25,7 @@ async def test_file_tree_in_prompt():
         "adapter_class": "openai",
         "model_name": "test-model",
         "timeout": 10,
+        "context_window": 100000,
     }
 
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -48,11 +49,9 @@ async def test_file_tree_in_prompt():
             patch(
                 "mcp_the_force.utils.thread_pool.get_settings"
             ) as mock_thread_settings,
-            patch("mcp_the_force.adapters.get_adapter") as mock_get_adapter,
             patch(
-                "mcp_the_force.adapters.model_registry.get_model_context_window",
-                return_value=100000,
-            ),
+                "mcp_the_force.adapters.registry.get_adapter_class"
+            ) as mock_get_adapter_class,
             patch("mcp_the_force.utils.fs.gather_file_paths_async") as mock_gather,
             patch(
                 "mcp_the_force.utils.context_loader.load_specific_files_async"
@@ -102,10 +101,15 @@ async def test_file_tree_in_prompt():
                 (str(root / "src" / "utils.py"), "# utils", 5),
             ]
 
-            # Mock adapter
+            # Mock adapter class and instance
             mock_adapter = AsyncMock()
-            mock_adapter.generate = AsyncMock(return_value="Test response")
-            mock_get_adapter.return_value = (mock_adapter, None)
+            mock_adapter.generate = AsyncMock(return_value={"content": "Test response"})
+            mock_adapter.param_class = MagicMock()
+
+            # Mock adapter class that returns our mock instance
+            mock_adapter_class = MagicMock()
+            mock_adapter_class.return_value = mock_adapter
+            mock_get_adapter_class.return_value = mock_adapter_class
 
             # Execute
             await executor.execute(
@@ -121,7 +125,7 @@ async def test_file_tree_in_prompt():
             assert mock_adapter.generate.called
 
             # Get the prompt that was passed
-            prompt = mock_adapter.generate.call_args[1]["prompt"]
+            prompt = mock_adapter.generate.call_args.kwargs["prompt"]
 
             # The prompt may have additional instructions at the end
             # Split to get just the XML part
