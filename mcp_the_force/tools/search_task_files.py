@@ -82,6 +82,11 @@ class SearchTaskFilesAdapter(BaseAdapter):
         query = kwargs.get("query", prompt)
         max_results = kwargs.get("max_results", 20)
 
+        logger.info(
+            f"[SEARCH_TASK_FILES] Query: '{query}', Max results: {max_results}, "
+            f"Vector stores: {len(vector_store_ids) if vector_store_ids else 0}"
+        )
+
         if not query:
             raise fastmcp.exceptions.ToolError("Search query is required")
 
@@ -131,7 +136,8 @@ class SearchTaskFilesAdapter(BaseAdapter):
                     all_results.extend(result)
 
             logger.info(
-                f"Search completed. Total results: {len(all_results)}, Errors: {errors}"
+                f"[SEARCH_TASK_FILES] Search completed. Total results: {len(all_results)}, "
+                f"Errors: {errors}, Queries: {queries}"
             )
 
             # Sort by relevance score
@@ -146,8 +152,9 @@ class SearchTaskFilesAdapter(BaseAdapter):
             # Format response
             if not deduplicated_results:
                 logger.warning(
-                    f"No results after deduplication. Total results before: {len(all_results)}, "
-                    f"Duplicate count: {duplicate_count}, Query: '{query}'"
+                    f"[SEARCH_TASK_FILES] No results after deduplication. "
+                    f"Total before: {len(all_results)}, Duplicates: {duplicate_count}, "
+                    f"Query: '{query}'"
                 )
                 return f"No results found in task files for query: '{query}'"
 
@@ -231,7 +238,8 @@ class SearchTaskFilesAdapter(BaseAdapter):
                     results.append(result)
 
                 logger.info(
-                    f"Store {store_id} returned {len(results)} results for query '{query}'"
+                    f"[SEARCH_TASK_FILES] Store {store_id} returned {len(results)} results "
+                    f"for query: '{query}'"
                 )
                 return results
 
