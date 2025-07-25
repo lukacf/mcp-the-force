@@ -234,7 +234,7 @@ class GrokAdapter:
                 else False
             )
             built_in_tools = tool_dispatcher.get_tool_declarations(
-                adapter_type="openai",  # Grok uses OpenAI format
+                adapter_type="grok",  # Must be "grok" to get search_task_files
                 disable_memory_search=disable_memory_search,
             )
             tools.extend(built_in_tools)
