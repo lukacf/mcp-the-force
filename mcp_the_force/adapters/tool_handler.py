@@ -1,18 +1,15 @@
 """
 Centralized tool handling for built-in MCP tools across all adapters.
 
-This module implements a DRY solution for tool declaration and execution
-that was previously duplicated across OpenAI, Vertex, and Grok adapters.
+This module provides tool declaration and execution based on adapter capabilities.
 """
 
 import logging
-from typing import List, Dict, Any, Optional, Literal
+from typing import List, Dict, Any, Optional
 from abc import ABC, abstractmethod
+from .capabilities import AdapterCapabilities
 
 logger = logging.getLogger(__name__)
-
-# Type alias for supported adapter types
-AdapterType = Literal["openai", "vertex", "grok"]
 
 
 class ToolHandler:
@@ -107,81 +104,52 @@ class ToolHandler:
 
     def prepare_tool_declarations(
         self,
-        adapter_type: AdapterType,
+        capabilities: AdapterCapabilities,
         vector_store_ids: Optional[List[str]] = None,
         disable_memory_search: bool = False,
     ) -> List[Dict[str, Any]]:
         """
-        Prepare tool declarations in the correct format for the adapter type.
+        Prepare tool declarations based on adapter capabilities.
 
-        This centralizes the logic for determining which tools to declare
-        and formats them correctly for each adapter's API requirements.
+        All tools are returned in OpenAI format since LiteLLM handles translation.
 
         Args:
-            adapter_type: Type of adapter (openai, vertex, grok)
-            vector_store_ids: Vector store IDs that determine if attachment
-                            search tool should be included
-            disable_memory_search: If True, skip declaring search_project_history tool
+            capabilities: Adapter capabilities
+            vector_store_ids: Vector store IDs for attachment search
+            disable_memory_search: If True, skip search_project_history tool
 
         Returns:
-            List of tool declarations in the correct format for the adapter
-
-        Raises:
-            ValueError: If adapter_type is not supported
+            List of tool declarations in OpenAI format
         """
-        if adapter_type not in {"openai", "vertex", "grok"}:
-            raise ValueError(f"Unsupported adapter type: {adapter_type}")
-
         declarations = []
 
         # All adapters get the project history search tool unless disabled
         if not disable_memory_search:
-            if adapter_type in {"openai", "grok"}:
-                declarations.append(self._get_memory_declaration_openai())
-            elif adapter_type == "vertex":
-                declarations.append(self._get_memory_declaration_vertex())
+            declarations.append(self._get_memory_declaration_openai())
 
         # Add task files search tool when vector stores are provided
-        # Only for non-OpenAI models (Gemini/Grok)
-        if vector_store_ids and adapter_type in {"vertex", "grok"}:
+        # Only for adapters without native file search
+        if vector_store_ids and not capabilities.native_file_search:
             logger.info(
-                f"Adding task files search tool for {adapter_type} adapter "
-                f"with {len(vector_store_ids)} vector stores"
+                f"Adding task files search tool with {len(vector_store_ids)} vector stores"
             )
-            if adapter_type == "grok":
-                declarations.append(self._get_task_files_declaration_openai())
-            elif adapter_type == "vertex":
-                declarations.append(self._get_task_files_declaration_vertex())
+            declarations.append(self._get_task_files_declaration_openai())
 
         return declarations
 
     def _get_memory_declaration_openai(self) -> Dict[str, Any]:
-        """Get memory search tool declaration for OpenAI-compatible APIs."""
+        """Get memory search tool declaration in OpenAI format."""
         from .memory_search_declaration import create_search_history_declaration_openai
 
         return create_search_history_declaration_openai()
 
-    def _get_memory_declaration_vertex(self) -> Dict[str, Any]:
-        """Get memory search tool declaration for Vertex AI."""
-        from .memory_search_declaration import create_search_history_declaration_gemini
-
-        return create_search_history_declaration_gemini()
-
     def _get_task_files_declaration_openai(self) -> Dict[str, Any]:
-        """Get task files search tool declaration for OpenAI-compatible APIs (Grok)."""
+        """Get task files search tool declaration in OpenAI format."""
         from .task_files_search_declaration import (
             create_task_files_search_declaration_openai,
         )
 
         return create_task_files_search_declaration_openai()
-
-    def _get_task_files_declaration_vertex(self) -> Dict[str, Any]:
-        """Get task files search tool declaration for Vertex AI."""
-        from .task_files_search_declaration import (
-            create_task_files_search_declaration_gemini,
-        )
-
-        return create_task_files_search_declaration_gemini()
 
 
 # Future Strategy pattern interface (not implemented yet, but designed for migration)

@@ -72,10 +72,15 @@ def tool(
 
         # Get model configuration
         model_config = cls.get_model_config()
-        if not model_config["model_name"]:
-            raise ValueError(f"{cls.__name__} must define model_name")
-        if not model_config["adapter_class"]:
-            raise ValueError(f"{cls.__name__} must define adapter_class")
+        # Allow local tools to signal via explicit adapter_class=None
+        adapter_value = model_config.get("adapter_class")
+        explicit_adapter = "adapter_class" in cls.__dict__
+        # For non-local tools, enforce both model_name and adapter_class are defined
+        if not (explicit_adapter and adapter_value is None):
+            if not model_config.get("model_name"):
+                raise ValueError(f"{cls.__name__} must define model_name")
+            if not adapter_value:
+                raise ValueError(f"{cls.__name__} must define adapter_class")
 
         # Extract parameters
         parameters = {}

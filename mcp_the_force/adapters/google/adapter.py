@@ -101,7 +101,7 @@ class GeminiAdapter:
         tools = []
         if tool_dispatcher:
             built_in_tools = tool_dispatcher.get_tool_declarations(
-                adapter_type="grok",  # Use "grok" to get OpenAI format + search_task_files
+                capabilities=self.capabilities,
                 disable_memory_search=getattr(params, "disable_memory_search", False),
             )
             tools.extend(built_in_tools)
