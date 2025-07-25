@@ -664,3 +664,46 @@ class TestLiteLLMGPT4o(ToolSpec):
         default=False,
         description="Disable search_project_history tool",
     )
+
+
+@tool
+class TestOpenAIProtocol(ToolSpec):
+    """Test OpenAI protocol adapter (o3).
+    This is a test tool for the new protocol-based OpenAI adapter.
+
+    Example usage:
+    - instructions: "Explain what 2+2 equals"
+    - output_format: "Brief answer"
+    - context: []
+    - session_id: "test-openai-protocol-001"
+    """
+
+    model_name = "o3"
+    adapter_class = "openai_protocol"  # Use the new protocol adapter
+    context_window = 200_000
+    timeout = 300  # 5 minutes
+
+    # Required parameters
+    instructions: str = Route.prompt(
+        pos=0, description="Task instructions for the model"
+    )
+    output_format: str = Route.prompt(pos=1, description="Desired output format")
+    session_id: str = Route.session(description="Session ID for conversation")
+
+    # Parameter with default
+    context: List[str] = Route.prompt(
+        pos=2,
+        description="List of file/directory paths to include",
+        default_factory=list,
+    )
+
+    # Optional parameters
+    reasoning_effort: Optional[str] = Route.adapter(
+        default="medium", description="Reasoning effort (low/medium/high)"
+    )
+    disable_memory_search: Optional[bool] = Route.adapter(
+        default=False, description="Disable search_project_history tool"
+    )
+    structured_output_schema: Optional[dict] = Route.adapter(
+        default=None, description="JSON schema for structured output"
+    )
