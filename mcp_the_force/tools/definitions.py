@@ -624,6 +624,52 @@ class TestGrokLiteLLM(ToolSpec):
 
 
 @tool
+class TestGrokProtocol(ToolSpec):
+    """Test protocol-based Grok adapter.
+    This tool tests the new architecture with Protocol, AdapterCapabilities,
+    and type-safe parameters.
+
+    Example usage:
+    - instructions: "Test the protocol-based Grok adapter"
+    - output_format: "Brief response"
+    - context: []
+    - session_id: "grok-protocol-test-001"
+    """
+
+    model_name = "grok-3-mini"  # Test mini model with reasoning effort
+    adapter_class = "xai_protocol"  # Uses the bridge adapter
+    context_window = 32_000  # Mini model has smaller context
+    timeout = 600
+
+    # Required parameters
+    instructions: str = Route.prompt(pos=0, description="User instructions")
+    output_format: str = Route.prompt(pos=1, description="Format requirements")
+    context: List[str] = Route.prompt(pos=2, description="Context files")
+    session_id: str = Route.session(description="Session ID for conversation")
+
+    # Optional parameters matching GrokToolParams
+    search_mode: Optional[str] = Route.adapter(
+        default="auto", description="Live Search mode: 'auto', 'on', 'off'"
+    )
+    search_parameters: Optional[Dict[str, Any]] = Route.adapter(
+        default=None, description="Live Search parameters"
+    )
+    return_citations: Optional[bool] = Route.adapter(
+        default=True, description="Include citations from Live Search"
+    )
+    temperature: Optional[float] = Route.adapter(
+        default=0.7, description="Sampling temperature"
+    )
+    disable_memory_search: Optional[bool] = Route.adapter(
+        default=False, description="Disable search_project_history tool"
+    )
+    reasoning_effort: Optional[str] = Route.adapter(
+        default=None,
+        description="Reasoning effort for Grok mini models (low/high only)",
+    )
+
+
+@tool
 class TestLiteLLMGPT4o(ToolSpec):
     """Test LiteLLM unified adapter with gpt-4o model.
     This is a test tool for evaluating LiteLLM's unified interface,

@@ -7,6 +7,8 @@ from .vertex import VertexAdapter
 from .grok import GrokAdapter
 from .grok_litellm import GrokLiteLLMAdapter
 from .litellm import LiteLLMAdapter
+
+# Protocol components imported lazily to avoid circular imports
 import logging
 
 
@@ -18,6 +20,7 @@ ADAPTER_REGISTRY: Dict[str, Type[BaseAdapter]] = {
     "vertex": VertexAdapter,
     "xai": GrokAdapter,  # Old adapter (to be replaced)
     "xai_litellm": GrokLiteLLMAdapter,  # New LiteLLM-based adapter
+    # "xai_protocol" registered dynamically below
     "litellm": LiteLLMAdapter,
 }
 
@@ -92,6 +95,20 @@ def get_adapter(
                 f"Adapter {adapter_key} could not be loaded due to an import error.",
             )
 
+    # Lazy load protocol-based Grok adapter
+    if adapter_key == "xai_protocol" and adapter_key not in ADAPTER_REGISTRY:
+        try:
+            from .grok_bridge import GrokBridgeAdapter
+
+            register_adapter("xai_protocol", GrokBridgeAdapter)
+            logger.debug("Lazily registered GrokBridgeAdapter")
+        except ImportError as e:
+            logger.error(f"Failed to lazy-load GrokBridgeAdapter: {e}")
+            return (
+                None,
+                f"Protocol adapter {adapter_key} could not be loaded: {e}",
+            )
+
     cache_key = (adapter_key, model_name)
 
     # Check cache first
@@ -126,12 +143,14 @@ def register_adapter(key: str, adapter_class: Type[BaseAdapter]):
 
 
 __all__ = [
+    # Legacy adapters
     "BaseAdapter",
     "OpenAIAdapter",
     "VertexAdapter",
     "GrokAdapter",
     "GrokLiteLLMAdapter",
     "LiteLLMAdapter",
+    # Functions
     "get_adapter",
     "register_adapter",
 ]
