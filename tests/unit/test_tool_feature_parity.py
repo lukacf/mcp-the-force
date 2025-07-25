@@ -111,8 +111,8 @@ class TestToolFeatureParity:
         # Check OpenAI models
         for model_class in OPENAI_MODELS:
             assert (
-                model_class.adapter_class == "openai"
-            ), f"{model_class.__name__} should use openai adapter"
+                model_class.adapter_class == "openai_protocol"
+            ), f"{model_class.__name__} should use openai_protocol adapter"
 
         # Check Grok models
         for model_class in GROK_MODELS:

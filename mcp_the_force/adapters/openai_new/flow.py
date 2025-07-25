@@ -23,7 +23,7 @@ from ..openai.constants import (
     MAX_POLL_INTERVAL_SEC,
     STREAM_TIMEOUT_THRESHOLD,
 )
-from ...tools.memory_search_declaration import create_search_history_declaration_openai
+from ..memory_search_declaration import create_search_history_declaration_openai
 from .models import OPENAI_MODEL_CAPABILITIES
 import json
 import jsonschema
@@ -182,7 +182,7 @@ class BaseFlowStrategy(ABC):
 
         try:
             # Extract JSON from potential markdown wrapping
-            from mcp_the_force.utils.json_extractor import extract_json
+            from ...utils.json_extractor import extract_json
 
             clean_json = extract_json(content)
 

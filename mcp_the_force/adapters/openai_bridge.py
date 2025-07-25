@@ -112,11 +112,23 @@ class OpenAIBridgeAdapter(BaseAdapter):
                     session_id=context.session_id,
                 )
 
+            async def dispatch(self, name: str, arguments: Dict[str, Any]) -> Any:
+                """Dispatch method for compatibility with BuiltInToolDispatcher interface."""
+                # The flow.py expects this method
+                return await self.handler.execute_tool_call(
+                    tool_name=name,
+                    tool_args=arguments,
+                    vector_store_ids=self.vector_store_ids
+                    if hasattr(self, "vector_store_ids")
+                    else None,
+                    session_id=self.session_id if hasattr(self, "session_id") else None,
+                )
+
         tool_dispatcher = ToolDispatcherWrapper(tool_handler)
 
         # Call protocol adapter
         # Cast params to satisfy mypy - the protocol adapter will handle validation
-        from ..params import OpenAIToolParams
+        from .params import OpenAIToolParams
 
         result = await self.protocol_adapter.generate(
             prompt=prompt,

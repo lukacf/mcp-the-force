@@ -100,15 +100,26 @@ class OpenAIProtocolAdapter:
                         f"Continuing session {ctx.session_id} with response_id: {previous_response_id}"
                     )
 
+            # Parse structured_output_schema if it's a string
+            structured_output_schema = getattr(params, "structured_output_schema", None)
+            if structured_output_schema and isinstance(structured_output_schema, str):
+                import json
+
+                try:
+                    structured_output_schema = json.loads(structured_output_schema)
+                except json.JSONDecodeError:
+                    logger.warning(
+                        f"Failed to parse structured_output_schema as JSON: {structured_output_schema}"
+                    )
+                    structured_output_schema = None
+
             # Build request data for FlowOrchestrator
             request_data = {
                 "model": self.model_name,
                 "messages": messages,
                 "reasoning_effort": getattr(params, "reasoning_effort", None),
                 "vector_store_ids": ctx.vector_store_ids,
-                "structured_output_schema": getattr(
-                    params, "structured_output_schema", None
-                ),
+                "structured_output_schema": structured_output_schema,
                 "disable_memory_search": getattr(
                     params, "disable_memory_search", False
                 ),
