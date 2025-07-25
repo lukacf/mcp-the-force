@@ -5,7 +5,6 @@ from typing import Optional, List
 from pathlib import Path
 
 from .config import MemoryConfig
-from ..adapters.openai.client import OpenAIClientFactory
 from ..config import get_settings
 from ..utils.loiter_killer_client import LoiterKillerClient
 
@@ -44,6 +43,9 @@ class AsyncMemoryConfig:
 
             # Verify the store actually exists in OpenAI
             settings = get_settings()
+            # Lazy import to avoid circular dependency
+            from ..adapters.openai.client import OpenAIClientFactory
+
             client = await OpenAIClientFactory.get_instance(
                 api_key=settings.openai_api_key
             )
@@ -87,6 +89,9 @@ class AsyncMemoryConfig:
         # Need to create a new store - do this async
         logger.info(f"[MEMORY] Need to create new store (current: {store_id})")
         settings = get_settings()
+        # Lazy import to avoid circular dependency
+        from ..adapters.openai.client import OpenAIClientFactory
+
         client = await OpenAIClientFactory.get_instance(api_key=settings.openai_api_key)
 
         if not store_id:
@@ -155,6 +160,9 @@ class AsyncMemoryConfig:
 
         # Create new store via async API
         settings = get_settings()
+        # Lazy import to avoid circular dependency
+        from ..adapters.openai.client import OpenAIClientFactory
+
         client = await OpenAIClientFactory.get_instance(api_key=settings.openai_api_key)
 
         name = f"project-{store_type}s-{new_num:03d}"
@@ -226,6 +234,9 @@ class AsyncMemoryConfig:
 
             # Verify the store actually exists in OpenAI
             settings = get_settings()
+            # Lazy import to avoid circular dependency
+            from ..adapters.openai.client import OpenAIClientFactory
+
             client = await OpenAIClientFactory.get_instance(
                 api_key=settings.openai_api_key
             )
@@ -269,6 +280,9 @@ class AsyncMemoryConfig:
         # Need to create a new store - do this async
         logger.info(f"[MEMORY] Need to create new store (current: {store_id})")
         settings = get_settings()
+        # Lazy import to avoid circular dependency
+        from ..adapters.openai.client import OpenAIClientFactory
+
         client = await OpenAIClientFactory.get_instance(api_key=settings.openai_api_key)
 
         if not store_id:

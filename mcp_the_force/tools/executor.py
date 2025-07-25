@@ -398,6 +398,35 @@ class ToolExecutor:
             )
             param_data.update(prompt_params_for_adapter)
 
+            # Add defaults from the adapter's param class for any missing parameters
+            # This ensures all expected attributes exist on the SimpleNamespace
+            if hasattr(adapter, "param_class"):
+                param_class = adapter.param_class
+                # Import the sentinel value to check for no default
+                from ..tools.descriptors import _NO_DEFAULT
+
+                # Get all Route descriptors from the param class
+                for attr_name in dir(param_class):
+                    if attr_name.startswith("_"):
+                        continue
+                    attr_value = getattr(param_class, attr_name)
+                    # Check if it's a RouteDescriptor
+                    if hasattr(attr_value, "route") and hasattr(attr_value, "default"):
+                        # Add the default value if not already provided
+                        if attr_name not in param_data:
+                            # Handle default_factory
+                            if attr_value.default_factory is not None:
+                                default_val = attr_value.default_factory()
+                            elif attr_value.default is not _NO_DEFAULT:
+                                default_val = attr_value.default
+                            else:
+                                # No default specified, skip
+                                continue
+                            param_data[attr_name] = default_val
+                            logger.debug(
+                                f"[PARAM_DEBUG] Added default for {attr_name}: {default_val}"
+                            )
+
             # Create the params instance using SimpleNamespace
             logger.debug(
                 f"[PARAM_DEBUG] Final param_data keys: {list(param_data.keys())}"

@@ -100,6 +100,7 @@ class MockAdapter:
         # 4. Produce a "mock response" that includes all the metadata
         # ------------------------------------------------------------------
         metadata = {
+            "mock": True,  # Add this field that the test expects
             "model": self.model_name,
             "prompt": prompt,
             "prompt_length": len(prompt),
@@ -111,7 +112,7 @@ class MockAdapter:
         }
 
         # Add mock response to history
-        mock_response = f"Mock response with metadata: {json.dumps(metadata)}"
+        mock_response = json.dumps(metadata)  # Return pure JSON for integration tests
         if session_id:
             history.append({"role": "assistant", "content": mock_response})
             session_key = f"{session_id}:{self.model_name}"

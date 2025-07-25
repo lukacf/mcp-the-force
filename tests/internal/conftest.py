@@ -28,35 +28,22 @@ def mock_vector_store():
 async def clean_session_caches():
     """Clean all session caches before and after tests."""
     # Import here to avoid circular imports
-    from mcp_the_force.gemini_session_cache import gemini_session_cache
-    from mcp_the_force.grok_session_cache import grok_session_cache
-    from mcp_the_force.session_cache import session_cache
+    from mcp_the_force.unified_session_cache import unified_session_cache
 
     # Sessions are isolated by session_id, so we don't need to clear
     # Just ensure clean state by using unique session IDs
 
     yield
 
-    # Close connections after test, ensuring all are attempted.
-    # With the segfault fixed, we can handle potential errors gracefully.
+    # Close connections after test
     import logging
 
     logger = logging.getLogger(__name__)
 
     try:
-        gemini_session_cache.close()
+        unified_session_cache.close()
     except Exception as e:
-        logger.error(f"Failed to close gemini_session_cache: {e}")
-
-    try:
-        grok_session_cache.close()
-    except Exception as e:
-        logger.error(f"Failed to close grok_session_cache: {e}")
-
-    try:
-        session_cache.close()
-    except Exception as e:
-        logger.error(f"Failed to close session_cache: {e}")
+        logger.error(f"Failed to close unified_session_cache: {e}")
 
 
 # Note: Removed track_tool_calls fixture - it's meaningless with MockAdapter
