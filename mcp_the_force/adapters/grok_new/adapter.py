@@ -248,7 +248,10 @@ class GrokAdapter:
                 request_params["tool_choice"] = kwargs.get("tool_choice", "auto")
                 logger.info(f"[GROK_TOOLS] Passing {len(tools)} tools to LiteLLM")
                 for tool in tools:
-                    tool_name = tool.get("function", {}).get("name", "unknown")
+                    # Tools from prepare_tool_declarations have format: {"type": "function", "name": ...}
+                    tool_name = tool.get(
+                        "name", tool.get("function", {}).get("name", "unknown")
+                    )
                     logger.info(f"[GROK_TOOL] - {tool_name}")
 
             # Tool calling loop for Responses API
