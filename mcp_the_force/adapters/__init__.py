@@ -3,7 +3,8 @@
 from typing import Dict, Tuple, Type, Optional
 from .base import BaseAdapter
 from .openai import OpenAIAdapter
-from .vertex import VertexAdapter
+
+# from .vertex import VertexAdapter  # Replaced by protocol-based adapter
 from .grok import GrokAdapter
 from .grok_litellm import GrokLiteLLMAdapter
 from .litellm import LiteLLMAdapter
@@ -17,10 +18,11 @@ logger = logging.getLogger(__name__)
 # Adapter registry
 ADAPTER_REGISTRY: Dict[str, Type[BaseAdapter]] = {
     "openai": OpenAIAdapter,
-    "vertex": VertexAdapter,
+    # "vertex": VertexAdapter,  # Old adapter (replaced by protocol-based)
     "xai": GrokAdapter,  # Old adapter (to be replaced)
     "xai_litellm": GrokLiteLLMAdapter,  # New LiteLLM-based adapter
     # "xai_protocol" registered dynamically below
+    # "vertex" registered dynamically below
     "litellm": LiteLLMAdapter,
 }
 
@@ -109,6 +111,21 @@ def get_adapter(
                 f"Protocol adapter {adapter_key} could not be loaded: {e}",
             )
 
+    # Lazy load protocol-based Gemini adapter
+    # Override the old vertex adapter with the new protocol-based one
+    if adapter_key == "vertex" and adapter_key not in ADAPTER_REGISTRY:
+        try:
+            from .gemini_bridge import GeminiBridgeAdapter
+
+            register_adapter("vertex", GeminiBridgeAdapter)
+            logger.debug("Lazily registered GeminiBridgeAdapter")
+        except ImportError as e:
+            logger.error(f"Failed to lazy-load GeminiBridgeAdapter: {e}")
+            return (
+                None,
+                f"Protocol adapter {adapter_key} could not be loaded: {e}",
+            )
+
     cache_key = (adapter_key, model_name)
 
     # Check cache first
@@ -146,7 +163,7 @@ __all__ = [
     # Legacy adapters
     "BaseAdapter",
     "OpenAIAdapter",
-    "VertexAdapter",
+    # "VertexAdapter",  # Replaced by protocol-based adapter
     "GrokAdapter",
     "GrokLiteLLMAdapter",
     "LiteLLMAdapter",
