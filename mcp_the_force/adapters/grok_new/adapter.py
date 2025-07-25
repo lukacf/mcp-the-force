@@ -226,9 +226,18 @@ class GrokAdapter:
 
             # Add tools if needed
             tools = []
-            if ctx.vector_store_ids and not self.capabilities.native_file_search:
-                # Get tool declarations from dispatcher
-                tools = tool_dispatcher.get_tool_declarations(adapter_type="openai")
+
+            # Get built-in tools (including search_project_history)
+            disable_memory_search = (
+                params.disable_memory_search
+                if hasattr(params, "disable_memory_search")
+                else False
+            )
+            built_in_tools = tool_dispatcher.get_tool_declarations(
+                adapter_type="openai",  # Grok uses OpenAI format
+                disable_memory_search=disable_memory_search,
+            )
+            tools.extend(built_in_tools)
 
             # Add any extra tools passed in
             extra_tools = kwargs.get("tools", [])
