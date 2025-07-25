@@ -246,6 +246,11 @@ class GrokAdapter:
             if tools:
                 request_params["tools"] = tools
                 request_params["tool_choice"] = kwargs.get("tool_choice", "auto")
+                logger.info(f"Grok adapter: Passing {len(tools)} tools to LiteLLM")
+                for tool in tools:
+                    logger.debug(
+                        f"Tool: {tool.get('function', {}).get('name', 'unknown')}"
+                    )
 
             # Tool calling loop for Responses API
             final_content = ""
@@ -309,6 +314,7 @@ class GrokAdapter:
 
                 for tool_call in tool_calls:
                     tool_name = tool_call.name
+                    logger.info(f"Grok executing tool: {tool_name}")
                     tool_args = tool_call.arguments  # Already a string
 
                     try:
