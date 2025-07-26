@@ -6,13 +6,12 @@ import logging
 from typing import Any, Dict
 
 import litellm
-from litellm import acompletion
+from litellm import aresponses
 
-from ..params import GeminiToolParams
 from ..protocol import CallContext, ToolDispatcher
 from ..capabilities import AdapterCapabilities
 from ...unified_session_cache import unified_session_cache
-from .models import GEMINI_MODEL_CAPABILITIES
+from .definitions import GeminiToolParams, GEMINI_MODEL_CAPABILITIES
 
 logger = logging.getLogger(__name__)
 
@@ -86,16 +85,37 @@ class GeminiAdapter:
         Returns:
             Dict with "content" key containing the response
         """
-        # Load session history
-        history = []
+        # Build conversation input in Responses API format
+        conversation_input = []
+
+        # Load existing conversation history
         if ctx.session_id:
             history = await unified_session_cache.get_history(ctx.session_id)
-            logger.info(
-                f"[GEMINI] Loaded {len(history)} messages from session {ctx.session_id}"
+            if history:
+                conversation_input = history
+                logger.info(
+                    f"[GEMINI] Loaded {len(conversation_input)} items from session {ctx.session_id}"
+                )
+
+        # Add system instruction if provided
+        system_instruction = kwargs.get("system_instruction")
+        if system_instruction and not conversation_input:
+            conversation_input.append(
+                {
+                    "type": "message",
+                    "role": "system",
+                    "content": [{"type": "text", "text": system_instruction}],
+                }
             )
 
-        # Build messages in OpenAI format
-        messages = history + [{"role": "user", "content": prompt}]
+        # Add the user's prompt
+        conversation_input.append(
+            {
+                "type": "message",
+                "role": "user",
+                "content": [{"type": "text", "text": prompt}],
+            }
+        )
 
         # Get tool declarations
         tools = []
@@ -110,10 +130,10 @@ class GeminiAdapter:
         if "tools" in kwargs:
             tools.extend(kwargs["tools"])
 
-        # Build request parameters
+        # Build request parameters for Responses API
         request_params = {
             "model": f"vertex_ai/{self.model_name}",  # LiteLLM provider prefix
-            "messages": messages,
+            "input": conversation_input,  # Responses API uses 'input'
             "temperature": getattr(params, "temperature", 1.0),
         }
 
@@ -155,80 +175,112 @@ class GeminiAdapter:
                 request_params[key] = kwargs[key]
 
         try:
-            # Make the API call via LiteLLM
+            # Make the API call via LiteLLM Responses API
             logger.info(
-                f"[GEMINI] Calling LiteLLM with model: {request_params['model']}"
+                f"[GEMINI] Calling LiteLLM Responses API with model: {request_params['model']}"
             )
-            response = await acompletion(**request_params)
+            response = await aresponses(**request_params)
 
-            # Extract the response
-            response_message = response.choices[0].message
+            # Process response (Responses API format)
+            final_content = ""
+            tool_calls = []
+
+            # Extract content and tool calls from response.output
+            if hasattr(response, "output"):
+                for item in response.output:
+                    if item.type == "message":
+                        # Extract content from message
+                        if hasattr(item, "content"):
+                            if isinstance(item.content, str):
+                                final_content = item.content
+                            elif isinstance(item.content, list):
+                                # Handle list of content items
+                                for content_item in item.content:
+                                    if hasattr(content_item, "text"):
+                                        final_content = content_item.text
+                                    elif (
+                                        hasattr(content_item, "type")
+                                        and content_item.type == "text"
+                                    ):
+                                        final_content = content_item.text
+                    elif item.type == "function_call":
+                        tool_calls.append(item)
 
             # Handle function calls if present
-            if hasattr(response_message, "tool_calls") and response_message.tool_calls:
-                logger.info(
-                    f"[GEMINI] Processing {len(response_message.tool_calls)} tool calls"
-                )
-
-                # Convert response to dict for history
-                messages.append(response_message.model_dump())
+            if tool_calls:
+                logger.info(f"[GEMINI] Processing {len(tool_calls)} tool calls")
 
                 # Execute tool calls
                 tool_results = []
-                for tool_call in response_message.tool_calls:
-                    logger.info(f"[GEMINI] Executing tool: {tool_call.function.name}")
+                for tool_call in tool_calls:
+                    logger.info(f"[GEMINI] Executing tool: {tool_call.name}")
                     try:
                         result = await tool_dispatcher.execute(
-                            tool_name=tool_call.function.name,
-                            tool_args=tool_call.function.arguments,
+                            tool_name=tool_call.name,
+                            tool_args=tool_call.arguments,
                             context=ctx,
                         )
                         tool_results.append(
                             {
-                                "tool_call_id": tool_call.id,
-                                "role": "tool",
-                                "name": tool_call.function.name,
-                                "content": str(result),
+                                "type": "function_call_output",
+                                "call_id": tool_call.call_id,
+                                "output": str(result),
                             }
                         )
                     except Exception as e:
                         logger.error(
-                            f"[GEMINI] Tool {tool_call.function.name} failed: {e}",
+                            f"[GEMINI] Tool {tool_call.name} failed: {e}",
                             exc_info=True,
                         )
                         tool_results.append(
                             {
-                                "tool_call_id": tool_call.id,
-                                "role": "tool",
-                                "name": tool_call.function.name,
-                                "content": f"Error: {str(e)}",
+                                "type": "function_call_output",
+                                "call_id": tool_call.call_id,
+                                "output": f"Error: {str(e)}",
                             }
                         )
 
-                # Add tool results to messages
-                messages.extend(tool_results)
+                # Add tool results to conversation and continue
+                conversation_input.extend(tool_results)
 
-                # Continue the conversation with tool results
-                request_params["messages"] = messages
-                response = await acompletion(**request_params)
-                response_message = response.choices[0].message
+                request_params["input"] = conversation_input
+                response = await aresponses(**request_params)
 
-            # Get the final content
-            content = response_message.content or ""
+                # Process the follow-up response
+                if hasattr(response, "output"):
+                    for item in response.output:
+                        if item.type == "message" and hasattr(item, "content"):
+                            if isinstance(item.content, str):
+                                final_content = item.content
+                            elif isinstance(item.content, list):
+                                for content_item in item.content:
+                                    if hasattr(content_item, "text"):
+                                        final_content = content_item.text
 
-            # Save updated history
-            messages.append(response_message.model_dump())
+            # Add assistant response to conversation history
+            if final_content:
+                conversation_input.append(
+                    {
+                        "type": "message",
+                        "role": "assistant",
+                        "content": [{"type": "text", "text": final_content}],
+                    }
+                )
+
+            # Save the conversation history
             if ctx.session_id:
-                await unified_session_cache.set_history(ctx.session_id, messages)
+                await unified_session_cache.set_history(
+                    ctx.session_id, conversation_input
+                )
                 # Store API format for compatibility
-                await unified_session_cache.set_api_format(ctx.session_id, "chat")
+                await unified_session_cache.set_api_format(ctx.session_id, "responses")
                 logger.info(
-                    f"[GEMINI] Saved {len(messages)} messages to session {ctx.session_id}"
+                    f"[GEMINI] Saved {len(conversation_input)} items to session {ctx.session_id}"
                 )
 
             # Return response
             return {
-                "content": content,
+                "content": final_content,
                 "citations": None,  # Gemini doesn't have Live Search like Grok
             }
 

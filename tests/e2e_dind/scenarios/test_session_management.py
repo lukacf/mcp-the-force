@@ -70,9 +70,9 @@ class TestSessionManagement:
         # Validate recall - should match our schema exactly
         result = safe_json(response)
         assert result is not None, f"Failed to parse JSON: {response}"
-        assert (
-            result["found_in_session"] is True
-        ), f"Should find info in session: {result}"
+        assert result["found_in_session"] is True, (
+            f"Should find info in session: {result}"
+        )
         assert result["protocol_name"] == "GAMMA-7", f"Wrong protocol: {result}"
         assert result["port_number"] == 8443, f"Wrong port: {result}"
 
@@ -90,9 +90,9 @@ class TestSessionManagement:
         # Original session should still remember
         result = safe_json(response)
         assert result is not None, f"Failed to parse JSON: {response}"
-        assert (
-            result["found_in_session"] is True
-        ), f"Should find info in original session: {result}"
+        assert result["found_in_session"] is True, (
+            f"Should find info in original session: {result}"
+        )
         assert result["protocol_name"] == "GAMMA-7", f"Wrong protocol: {result}"
         assert result["port_number"] == 8443, f"Wrong port: {result}"
 
@@ -156,9 +156,9 @@ class TestSessionManagement:
         result = safe_json(response)
         assert result is not None, f"Failed to parse JSON: {response}"
         assert result["found"] is True, f"Value not found: {result}"
-        assert (
-            "ABC-123-XYZ" in result["recalled_value"]
-        ), f"Wrong code recalled: {result}"
+        assert "ABC-123-XYZ" in result["recalled_value"], (
+            f"Wrong code recalled: {result}"
+        )
 
     def test_cross_model_history_search(self, call_claude_tool):
         """Test that one model can search project history to find another model's conversations."""
@@ -215,9 +215,9 @@ class TestSessionManagement:
         # Validate that Gemini found the information through history search
         result = safe_json(response)
         assert result is not None, f"Failed to parse JSON: {response}"
-        assert (
-            result["found_protocol"] is True
-        ), f"Protocol not found in history: {result}"
+        assert result["found_protocol"] is True, (
+            f"Protocol not found in history: {result}"
+        )
         assert "DELTA-9" in result["protocol_name"], f"Wrong protocol found: {result}"
         assert result["port_number"] == 7625, f"Wrong port found: {result}"
         assert result["results_count"] > 0, f"No search results returned: {result}"

@@ -14,8 +14,12 @@ class AdapterCapabilities:
 
     # Core capabilities
     native_file_search: bool = False
-    supports_functions: bool = True
+    supports_functions: bool = True  # Legacy name for supports_tools
+    supports_tools: bool = True  # Tools/function calling
     supports_streaming: bool = True
+    supports_temperature: bool = True  # Temperature parameter
+    supports_structured_output: bool = True  # JSON schema output
+    supports_web_search: bool = False  # Web search capability
     parallel_function_calls: Optional[int] = None
     max_context_window: Optional[int] = None
 
@@ -28,3 +32,4 @@ class AdapterCapabilities:
     description: str = ""
     provider: str = ""
     model_family: str = ""
+    model_name: str = ""  # Specific model name

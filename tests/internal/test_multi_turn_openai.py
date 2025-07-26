@@ -24,10 +24,10 @@ class TestOpenAIMultiTurn:
         # Mock response IDs
         with (
             patch(
-                "mcp_the_force.session_cache.session_cache.set_response_id"
+                "mcp_the_force.unified_session_cache.UnifiedSessionCache.set_response_id"
             ) as mock_set_id,
             patch(
-                "mcp_the_force.session_cache.session_cache.get_response_id",
+                "mcp_the_force.unified_session_cache.UnifiedSessionCache.get_response_id",
                 return_value=None,
             ) as mock_get_id,
         ):

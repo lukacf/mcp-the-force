@@ -56,6 +56,29 @@ class ParameterValidator:
             if name in kwargs:
                 value = kwargs[name]
             else:
+                # Check if this parameter has capability requirements before applying default
+                if (
+                    hasattr(param_info, "requires_capability")
+                    and param_info.requires_capability
+                ):
+                    # If metadata has capabilities, check them
+                    if hasattr(metadata, "capabilities") and metadata.capabilities:
+                        try:
+                            if not param_info.requires_capability(
+                                metadata.capabilities
+                            ):
+                                # Skip this parameter - not supported by model
+                                logger.debug(
+                                    f"Skipping default for parameter {name} - not supported by model"
+                                )
+                                continue
+                        except Exception as e:
+                            # If capability check fails, skip the parameter
+                            logger.debug(
+                                f"Capability check failed for {name}: {e}, skipping default"
+                            )
+                            continue
+
                 value = param_info.default
 
             # Check that required parameters are not None
@@ -179,6 +202,22 @@ class ParameterValidator:
 
                     parsed = json.loads(value)
                     if isinstance(parsed, list):
+                        return parsed
+                except (json.JSONDecodeError, ValueError):
+                    pass
+            return None
+
+        # Handle Dict types
+        if origin is dict or expected_type is dict:
+            if isinstance(value, dict):
+                return value
+            if isinstance(value, str):
+                # Try to parse JSON string
+                try:
+                    import json
+
+                    parsed = json.loads(value)
+                    if isinstance(parsed, dict):
                         return parsed
                 except (json.JSONDecodeError, ValueError):
                     pass

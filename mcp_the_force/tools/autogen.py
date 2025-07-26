@@ -1,27 +1,28 @@
-"""Auto-generate tool classes from adapter blueprints."""
+"""Auto-generate tool classes from adapter blueprints.
+
+This module imports adapter packages which triggers blueprint registration
+through their definitions.py files. It uses the central adapter registry
+to know which adapters to import.
+"""
 
 import importlib
 import logging
 
 from .blueprint_registry import BLUEPRINTS
 from .factories import make_tool
+from ..adapters.registry import list_adapters
 
 logger = logging.getLogger(__name__)
 
-# Explicit list of blueprint modules
-_BLUEPRINT_MODULES = [
-    "mcp_the_force.adapters.openai.tool_blueprint",
-    "mcp_the_force.adapters.google.tool_blueprint",
-    "mcp_the_force.adapters.xai.tool_blueprint",
-]
-
-# Import all blueprint modules (triggers self-registration)
-for modpath in _BLUEPRINT_MODULES:
+# Import all adapter packages from the central registry
+# This ensures we have only ONE place where adapters are listed
+for adapter_key in list_adapters():
+    package = f"mcp_the_force.adapters.{adapter_key}"
     try:
-        importlib.import_module(modpath)
-        logger.debug(f"Imported blueprint module: {modpath}")
+        importlib.import_module(package)
+        logger.debug(f"Imported adapter package: {package}")
     except ImportError as e:
-        logger.warning(f"Failed to import blueprint module {modpath}: {e}")
+        logger.warning(f"Failed to import adapter package {package}: {e}")
 
 # Generate tool classes
 generated_tools = []

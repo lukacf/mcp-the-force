@@ -31,7 +31,9 @@ async def store_conversation_memory(
         )
         return
 
-    if not tool_metadata.capabilities.get("writes_memory"):
+    # Check if the tool has writes_memory capability
+    # capabilities is a dataclass, not a dict
+    if not getattr(tool_metadata.capabilities, "writes_memory", False):
         logger.info(
             f"Tool {tool_name} does not have writes_memory capability, skipping memory storage"
         )
@@ -273,18 +275,18 @@ Conversation to summarize:
         # Create minimal params for MCPAdapter protocol
         from types import SimpleNamespace
         from ..adapters.protocol import CallContext, ToolDispatcher
-        
+
         params = SimpleNamespace(temperature=0.3)
         ctx = CallContext(session_id="", vector_store_ids=None)
         tool_dispatcher = ToolDispatcher(vector_store_ids=None)
-        
+
         result = await adapter.generate(
-            prompt=summarization_prompt, 
+            prompt=summarization_prompt,
             params=params,
             ctx=ctx,
-            tool_dispatcher=tool_dispatcher
+            tool_dispatcher=tool_dispatcher,
         )
-        
+
         # Extract content from result
         summary = result.get("content", "") if isinstance(result, dict) else str(result)
 

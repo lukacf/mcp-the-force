@@ -5,7 +5,12 @@ using LiteLLM internally and Pattern B (inheritance-only) for capabilities.
 """
 
 from .adapter import GrokAdapter
-from .models import (
+
+# Import definitions to trigger blueprint registration
+from . import definitions  # noqa: F401
+
+# Re-export from definitions
+from .definitions import (
     GROK_MODEL_CAPABILITIES,
     GrokBaseCapabilities,
     Grok3Capabilities,
