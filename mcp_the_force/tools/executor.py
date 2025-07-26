@@ -91,6 +91,10 @@ class ToolExecutor:
             # 3. Build prompt
             prompt_params = routed_params["prompt"]
             assert isinstance(prompt_params, dict)  # Type hint for mypy
+            
+            # Extract disable_memory_store from adapter params
+            adapter_params_check = routed_params.get("adapter", {})
+            disable_memory_store = adapter_params_check.get("disable_memory_store", False)
 
             # Get session info
             session_params = routed_params["session"]
@@ -600,7 +604,7 @@ class ToolExecutor:
                 logger.debug("[STEP 17.6] Redaction complete")
 
                 # 8a. Store conversation in memory (with redacted content)
-                if settings.memory_enabled and session_id:
+                if settings.memory_enabled and session_id and not disable_memory_store:
                     try:
                         # Extract messages from prompt
                         conv_messages = prompt_params.get("messages", [])
@@ -631,7 +635,7 @@ class ToolExecutor:
                 redacted_result = redact_secrets(str(result))
 
                 # Store conversation for Vertex models too (with redacted content)
-                if settings.memory_enabled and session_id:
+                if settings.memory_enabled and session_id and not disable_memory_store:
                     try:
                         conv_messages = prompt_params.get("messages", [])
                         if not isinstance(conv_messages, list):
