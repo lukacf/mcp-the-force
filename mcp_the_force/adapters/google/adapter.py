@@ -324,7 +324,7 @@ class GeminiAdapter:
                     )
                     
                 # Save the full conversation history
-                await unified_session_cache.save_history(
+                await unified_session_cache.set_history(
                     ctx.session_id, conversation_input
                 )
                 # Store API format for compatibility
