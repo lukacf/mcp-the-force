@@ -85,30 +85,11 @@ class GeminiAdapter:
         Returns:
             Dict with "content" key containing the response
         """
-        # Build conversation input in Responses API format
+        # Build conversation input for the current turn only
+        # The Responses API maintains conversation state via previous_response_id
         conversation_input = []
 
-        # Load existing conversation history
-        if ctx.session_id:
-            history = await unified_session_cache.get_history(ctx.session_id)
-            if history:
-                conversation_input = history
-                logger.info(
-                    f"[GEMINI] Loaded {len(conversation_input)} items from session {ctx.session_id}"
-                )
-
-        # Add system instruction if provided
-        system_instruction = kwargs.get("system_instruction")
-        if system_instruction and not conversation_input:
-            conversation_input.append(
-                {
-                    "type": "message",
-                    "role": "system",
-                    "content": [{"type": "text", "text": system_instruction}],
-                }
-            )
-
-        # Add the user's prompt
+        # Add the user's prompt for this turn
         conversation_input.append(
             {
                 "type": "message",
@@ -136,6 +117,17 @@ class GeminiAdapter:
             "input": conversation_input,  # Responses API uses 'input'
             "temperature": getattr(params, "temperature", 1.0),
         }
+
+        # Add previous_response_id for session continuation
+        if ctx.session_id:
+            previous_response_id = await unified_session_cache.get_metadata(
+                ctx.session_id, "last_response_id"
+            )
+            if previous_response_id:
+                request_params["previous_response_id"] = previous_response_id
+                logger.info(
+                    f"[GEMINI] Continuing session with previous_response_id: {previous_response_id}"
+                )
 
         # Add Vertex AI configuration
         if os.getenv("VERTEX_PROJECT"):
@@ -240,10 +232,16 @@ class GeminiAdapter:
                             }
                         )
 
-                # Add tool results to conversation and continue
-                conversation_input.extend(tool_results)
+                # Send only tool results for the follow-up request
+                request_params["input"] = tool_results
 
-                request_params["input"] = conversation_input
+                # Must include previous_response_id for tool response continuation
+                if hasattr(response, "id"):
+                    request_params["previous_response_id"] = response.id
+                    logger.info(
+                        f"[GEMINI] Sending tool results with previous_response_id: {response.id}"
+                    )
+
                 response = await aresponses(**request_params)
 
                 # Process the follow-up response
@@ -257,25 +255,15 @@ class GeminiAdapter:
                                     if hasattr(content_item, "text"):
                                         final_content = content_item.text
 
-            # Add assistant response to conversation history
-            if final_content:
-                conversation_input.append(
-                    {
-                        "type": "message",
-                        "role": "assistant",
-                        "content": [{"type": "text", "text": final_content}],
-                    }
-                )
-
-            # Save the conversation history
-            if ctx.session_id:
-                await unified_session_cache.set_history(
-                    ctx.session_id, conversation_input
+            # Save the response ID for session continuation
+            if ctx.session_id and hasattr(response, "id"):
+                await unified_session_cache.set_metadata(
+                    ctx.session_id, "last_response_id", response.id
                 )
                 # Store API format for compatibility
                 await unified_session_cache.set_api_format(ctx.session_id, "responses")
                 logger.info(
-                    f"[GEMINI] Saved {len(conversation_input)} items to session {ctx.session_id}"
+                    f"[GEMINI] Saved response_id {response.id} for session {ctx.session_id}"
                 )
 
             # Return response
