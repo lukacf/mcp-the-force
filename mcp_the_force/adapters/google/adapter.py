@@ -90,11 +90,24 @@ class GeminiAdapter:
         conversation_input = []
 
         # Add the user's prompt for this turn
+        prompt_text = prompt
+        
+        # Add JSON formatting instruction when structured output is requested
+        if (
+            hasattr(params, "structured_output_schema")
+            and params.structured_output_schema
+        ):
+            # Add response_format instruction if provided
+            if hasattr(params, "response_format") and params.response_format:
+                prompt_text = f"{prompt}\n\n{params.response_format}"
+            else:
+                prompt_text = f"{prompt}\n\nRespond ONLY with valid JSON that matches the schema."
+            
         conversation_input.append(
             {
                 "type": "message",
                 "role": "user",
-                "content": [{"type": "text", "text": prompt}],
+                "content": [{"type": "text", "text": prompt_text}],
             }
         )
 
@@ -116,6 +129,13 @@ class GeminiAdapter:
             "model": f"vertex_ai/{self.model_name}",  # LiteLLM provider prefix
             "temperature": getattr(params, "temperature", 1.0),
         }
+        
+        # Lower temperature for structured outputs to improve compliance
+        if (
+            hasattr(params, "structured_output_schema")
+            and params.structured_output_schema
+        ):
+            base_params["temperature"] = min(base_params["temperature"], 0.3)
 
         # Add Vertex AI configuration
         if os.getenv("VERTEX_PROJECT"):
@@ -245,7 +265,7 @@ class GeminiAdapter:
                     "input": tool_results,
                     "previous_response_id": response.id,
                 }
-                
+
                 # Add Vertex AI/API key config from base_params
                 if "vertex_project" in base_params:
                     follow_up_params["vertex_project"] = base_params["vertex_project"]
@@ -263,7 +283,7 @@ class GeminiAdapter:
                 # Process the follow-up response
                 final_content = ""  # Reset content before parsing follow-up
                 tool_calls = []  # Re-initialize to avoid processing stale calls
-                
+
                 if hasattr(response, "output"):
                     for item in response.output:
                         if item.type == "message" and hasattr(item, "content"):
