@@ -47,6 +47,7 @@ class TestSessionManagement:
             session_id=session_id_a,
             structured_output_schema=storage_schema,
             response_format="respond ONLY with the JSON",
+            disable_memory_search="true",
         )
 
         # Validate storage confirmation - should match our schema exactly
@@ -65,6 +66,7 @@ class TestSessionManagement:
             session_id=session_id_a,
             structured_output_schema=recall_schema,
             response_format="respond ONLY with the JSON",
+            disable_memory_search="true",
         )
 
         # Validate recall - should match our schema exactly
@@ -86,6 +88,7 @@ class TestSessionManagement:
             session_id=session_id_a,  # Back to original session
             structured_output_schema=recall_schema,
             response_format="respond ONLY with the JSON",
+            disable_memory_search="true",
         )
 
         # Original session should still remember
@@ -192,6 +195,7 @@ class TestSessionManagement:
             output_format="Acknowledge what you've stored",
             context=[],
             session_id=session_id,
+            disable_memory_search="true",  # Ensure we're testing real session storage
         )
 
         # Simple validation that it was stored
