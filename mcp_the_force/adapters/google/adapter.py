@@ -100,7 +100,9 @@ class GeminiAdapter:
             and params.structured_output_schema
             and "json" not in prompt.lower()
         ):
-            prompt_text = f"{prompt}\n\nRespond ONLY with valid JSON that matches the schema."
+            prompt_text = (
+                f"{prompt}\n\nRespond ONLY with valid JSON that matches the schema."
+            )
 
         conversation_input.append(
             {
@@ -258,8 +260,8 @@ class GeminiAdapter:
                         "type": "message",
                         "role": "user",
                         "content": [
-                            {"type": "text", "text": ""}
-                        ],  # Empty text satisfies requirement
+                            {"type": "text", "text": " "}
+                        ],  # Single space satisfies text requirement
                     },
                     *tool_results,  # Add the function_call_output items
                 ]
