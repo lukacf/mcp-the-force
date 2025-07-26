@@ -35,22 +35,22 @@ class TestToolRegistration:
                 # Local services have service_cls instead of adapter_class
                 if metadata.model_config.get("service_cls"):
                     # This is a local service, different validation
-                    assert metadata.model_config[
-                        "model_name"
-                    ], f"Tool {tool_id} missing model_name"
+                    assert metadata.model_config["model_name"], (
+                        f"Tool {tool_id} missing model_name"
+                    )
                 else:
                     # This is an AI model tool
-                    assert metadata.model_config[
-                        "model_name"
-                    ], f"Tool {tool_id} missing model_name"
-                    assert metadata.model_config[
-                        "adapter_class"
-                    ], f"Tool {tool_id} missing adapter_class"
+                    assert metadata.model_config["model_name"], (
+                        f"Tool {tool_id} missing model_name"
+                    )
+                    assert metadata.model_config["adapter_class"], (
+                        f"Tool {tool_id} missing adapter_class"
+                    )
                 # Description might be optional for test tools
                 if not (tool_id.startswith("test_") or tool_id.startswith("tool")):
-                    assert metadata.model_config.get(
-                        "description"
-                    ), f"Tool {tool_id} missing description"
+                    assert metadata.model_config.get("description"), (
+                        f"Tool {tool_id} missing description"
+                    )
                 assert len(metadata.parameters) > 0, f"Tool {tool_id} has no parameters"
 
     def test_no_duplicate_registrations(self):
@@ -69,6 +69,6 @@ class TestToolRegistration:
         tools_after = list_tools()
         primary_tools_after = [t for t, m in tools_after.items() if t == m.id]
 
-        assert len(primary_tools_before) == len(
-            primary_tools_after
-        ), "Tool count changed after reimport"
+        assert len(primary_tools_before) == len(primary_tools_after), (
+            "Tool count changed after reimport"
+        )

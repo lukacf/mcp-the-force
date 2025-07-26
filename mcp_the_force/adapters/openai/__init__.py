@@ -6,9 +6,14 @@ directly since LiteLLM's purpose is to translate TO OpenAI format.
 """
 
 from .adapter import OpenAIProtocolAdapter
-from .models import OPENAI_MODEL_CAPABILITIES
 from .errors import AdapterException, ErrorCategory
 from . import cancel_aware_flow  # Apply cancellation patch  # noqa: F401
+
+# Import definitions to trigger blueprint registration
+from . import definitions  # noqa: F401
+
+# Re-export from definitions
+from .definitions import OPENAI_MODEL_CAPABILITIES
 
 __all__ = [
     "OpenAIProtocolAdapter",

@@ -11,10 +11,9 @@ from typing import Any, Dict, List
 import litellm
 from litellm import aresponses
 
-from ..params import GrokToolParams
 from ..protocol import CallContext, ToolDispatcher
 from ...unified_session_cache import unified_session_cache
-from .models import GROK_MODEL_CAPABILITIES
+from .definitions import GrokToolParams, GROK_MODEL_CAPABILITIES
 
 logger = logging.getLogger(__name__)
 
@@ -186,36 +185,41 @@ class GrokAdapter:
                 "model": f"xai/{self.model_name}",  # LiteLLM needs provider prefix
                 "input": conversation_input,  # Responses API uses 'input'
                 "api_key": self.api_key,
-                "temperature": params.temperature,
+                "temperature": getattr(params, "temperature", 0.7),
             }
 
             # Add reasoning effort for supported models
             # Note: Grok only supports "low" or "high", not "medium"
-            if self.capabilities.supports_reasoning_effort and params.reasoning_effort:
+            if self.capabilities.supports_reasoning_effort and getattr(
+                params, "reasoning_effort", None
+            ):
                 # Map medium to high for Grok
-                effort = params.reasoning_effort
+                effort = getattr(params, "reasoning_effort", None)
                 if effort == "medium":
                     effort = "high"
                 request_params["reasoning_effort"] = effort
 
             # Add Live Search parameters for xAI
             search_params = {}
-            if params.search_mode:
-                search_params["mode"] = params.search_mode
-                logger.info(f"Grok Live Search enabled: mode={params.search_mode}")
-            if params.search_parameters:
-                search_params.update(self._snake_case_params(params.search_parameters))
+            search_mode = getattr(params, "search_mode", None)
+            if search_mode:
+                search_params["mode"] = search_mode
+                logger.info(f"Grok Live Search enabled: mode={search_mode}")
+            search_parameters = getattr(params, "search_parameters", None)
+            if search_parameters:
+                search_params.update(self._snake_case_params(search_parameters))
             if search_params:
                 request_params["search_parameters"] = search_params
                 logger.info(f"Grok Live Search parameters: {search_params}")
 
             # Add structured output
-            if params.structured_output_schema:
+            structured_output_schema = getattr(params, "structured_output_schema", None)
+            if structured_output_schema:
                 request_params["response_format"] = {
                     "type": "json_schema",
                     "json_schema": {
                         "name": "structured_response",
-                        "schema": params.structured_output_schema,
+                        "schema": structured_output_schema,
                         "strict": True,
                     },
                 }
@@ -225,7 +229,7 @@ class GrokAdapter:
 
             # Get built-in tools (including search_project_history)
             disable_memory_search = (
-                params.disable_memory_search
+                getattr(params, "disable_memory_search", False)
                 if hasattr(params, "disable_memory_search")
                 else False
             )
@@ -337,7 +341,9 @@ class GrokAdapter:
 
             # Extract citations if requested
             citations: List[Any] = []
-            if params.return_citations and params.search_mode:
+            if getattr(params, "return_citations", True) and getattr(
+                params, "search_mode", None
+            ):
                 # TODO: Extract citations from response metadata
                 # Grok returns citations in the response somewhere
                 pass

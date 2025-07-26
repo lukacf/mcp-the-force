@@ -1,10 +1,54 @@
 """Factory functions for generating tool classes."""
 
-from typing import Dict, Any, Type
+import importlib
+import logging
+from typing import Dict, Any, Type, Optional
 from .base import ToolSpec
 from .registry import tool
 from .blueprint import ToolBlueprint
 from .descriptors import RouteDescriptor
+from ..adapters.capabilities import AdapterCapabilities
+
+logger = logging.getLogger(__name__)
+
+
+def _get_model_capabilities(
+    adapter_key: str, model_name: str
+) -> Optional[AdapterCapabilities]:
+    """Get capabilities for a specific model from its adapter.
+
+    This dynamically imports the adapter's definitions module and retrieves
+    the capabilities from the model registry by looking for a dict that
+    contains the model.
+    """
+    try:
+        # Import the adapter's definitions module
+        definitions_module = importlib.import_module(
+            f"mcp_the_force.adapters.{adapter_key}.definitions"
+        )
+
+        # Look for any dict in the module that contains our model_name as a key
+        # This avoids hardcoding registry names
+        for attr_name in dir(definitions_module):
+            attr_value = getattr(definitions_module, attr_name)
+            if isinstance(attr_value, dict) and model_name in attr_value:
+                capabilities = attr_value.get(model_name)
+                if isinstance(capabilities, AdapterCapabilities):
+                    logger.debug(
+                        f"Retrieved capabilities for {model_name} from {adapter_key}.definitions.{attr_name}"
+                    )
+                    return capabilities
+
+        logger.warning(
+            f"No capabilities found for {model_name} in {adapter_key}.definitions"
+        )
+        return None
+
+    except Exception as e:
+        logger.error(
+            f"Failed to get capabilities for {model_name} from {adapter_key}: {e}"
+        )
+        return None
 
 
 def make_tool(blueprint: ToolBlueprint) -> Type[ToolSpec]:
@@ -71,7 +115,14 @@ def make_chat_tool(bp: ToolBlueprint) -> Type[ToolSpec]:
 
     # Create and register the class
     cls = type(class_name, (ToolSpec,), attrs)
-    return tool(cls)
+    registered_cls = tool(cls)
+
+    # After registration, update the metadata with capabilities
+    if hasattr(registered_cls, "_tool_metadata"):
+        capabilities = _get_model_capabilities(bp.adapter_key, bp.model_name)
+        registered_cls._tool_metadata.capabilities = capabilities
+
+    return registered_cls
 
 
 def make_research_tool(bp: ToolBlueprint) -> Type[ToolSpec]:
@@ -126,4 +177,11 @@ def make_research_tool(bp: ToolBlueprint) -> Type[ToolSpec]:
 
     # Create and register the class
     cls = type(class_name, (ToolSpec,), attrs)
-    return tool(cls)
+    registered_cls = tool(cls)
+
+    # After registration, update the metadata with capabilities
+    if hasattr(registered_cls, "_tool_metadata"):
+        capabilities = _get_model_capabilities(bp.adapter_key, bp.model_name)
+        registered_cls._tool_metadata.capabilities = capabilities
+
+    return registered_cls
