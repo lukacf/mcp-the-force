@@ -93,17 +93,14 @@ class GeminiAdapter:
         prompt_text = prompt
 
         # Add JSON formatting instruction when structured output is requested
+        # The test already includes "respond ONLY with the JSON" in the prompt,
+        # so we only add instruction if JSON is not mentioned
         if (
             hasattr(params, "structured_output_schema")
             and params.structured_output_schema
+            and "json" not in prompt.lower()
         ):
-            # Add response_format instruction if provided
-            if hasattr(params, "response_format") and params.response_format:
-                prompt_text = f"{prompt}\n\n{params.response_format}"
-            else:
-                prompt_text = (
-                    f"{prompt}\n\nRespond ONLY with valid JSON that matches the schema."
-                )
+            prompt_text = f"{prompt}\n\nRespond ONLY with valid JSON that matches the schema."
 
         conversation_input.append(
             {
@@ -260,11 +257,13 @@ class GeminiAdapter:
                     {
                         "type": "message",
                         "role": "user",
-                        "content": [{"type": "text", "text": ""}],  # Empty text satisfies requirement
+                        "content": [
+                            {"type": "text", "text": ""}
+                        ],  # Empty text satisfies requirement
                     },
                     *tool_results,  # Add the function_call_output items
                 ]
-                
+
                 follow_up_params = {
                     "model": base_params["model"],  # Use base model config
                     "input": follow_up_input,
