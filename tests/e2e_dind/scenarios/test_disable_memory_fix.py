@@ -24,7 +24,7 @@ def test_disable_memory_search_fix(call_claude_tool):
 
     # Test with disable_memory_search set to true (as string)
     response = call_claude_tool(
-        "chat_with_gpt4_1",
+        "chat_with_gpt41",
         instructions="Say 'test passed' and confirm success",
         output_format="JSON with message and success fields",
         context=[],
