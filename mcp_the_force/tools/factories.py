@@ -70,6 +70,7 @@ def make_chat_tool(bp: ToolBlueprint) -> Type[ToolSpec]:
         "adapter_class": bp.adapter_key,
         "context_window": bp.context_window,
         "timeout": bp.timeout,
+        "description": bp.description,  # Add explicit description attribute
     }
 
     # Copy Route descriptors AND type annotations from param class and all parent classes
@@ -134,6 +135,7 @@ def make_research_tool(bp: ToolBlueprint) -> Type[ToolSpec]:
         "adapter_class": bp.adapter_key,
         "context_window": bp.context_window,
         "timeout": bp.timeout,
+        "description": bp.description,  # Add explicit description attribute
     }
 
     # Copy Route descriptors AND type annotations from param class and all parent classes
