@@ -82,12 +82,10 @@ class ToolHandler:
 
     async def _execute_memory_search(self, tool_args: Dict[str, Any]) -> str:
         """Execute project history search tool."""
-        from ..tools.search_history import SearchHistoryAdapter
+        from ..tools.search_history import SearchHistoryService
 
-        history_adapter = SearchHistoryAdapter()
-        return await history_adapter.generate(
-            prompt=tool_args.get("query", ""), **tool_args
-        )
+        history_service = SearchHistoryService()
+        return await history_service.execute(**tool_args)
 
     async def _execute_task_files_search(
         self, tool_args: Dict[str, Any], vector_store_ids: Optional[List[str]]

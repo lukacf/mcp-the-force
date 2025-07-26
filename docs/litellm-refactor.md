@@ -2,351 +2,476 @@
 
 ## Overview
 
-This document outlines the architectural refactor to a **protocol-based design**. This design decouples the core framework from provider-specific adapters by defining a clear `MCPAdapter` protocol. While new adapters *can* be implemented using libraries like LiteLLM for simplicity (as seen in the new Grok adapter), the primary goal is adherence to the protocol, not mandating a specific underlying library.
+This document describes the protocol-based adapter architecture for the MCP The-Force server. The architecture provides a clean, extensible system for integrating AI models while maintaining type safety, capability-aware validation, and excellent developer experience.
 
-**Status**: Mid-migration. Only Grok has been migrated using the bridge pattern. Other providers (OpenAI, Gemini) still use the legacy BaseAdapter system.
+**Status**: Fully designed, implementation in progress.
 
-## Design Principles
+## Core Concepts
 
-1. **Protocol Over Inheritance**: Use structural typing (Protocol) instead of base classes
-2. **Pattern B for Capabilities**: Compile-time dataclass inheritance for model capabilities
-3. **Type Safety**: Use dataclasses and Route descriptors for parameters
-4. **Bridge Pattern**: Temporary scaffolding to connect new protocol adapters with legacy system
-5. **Unified Interfaces**: Single session cache, consistent tool handling
+### 1. Protocol-Based Design
 
-## Architecture Components
-
-### 1. Adapter Protocol (`mcp_the_force/adapters/protocol.py`)
-
-Defines the `MCPAdapter` protocol that all new adapters must structurally satisfy:
+All adapters implement the `MCPAdapter` protocol without inheritance:
 
 ```python
 class MCPAdapter(Protocol):
-    """Interface that all adapters must satisfy.
-    
-    This is a Protocol (structural typing) - adapters don't need to
-    inherit from this, they just need to have these attributes/methods.
-    """
-    capabilities: AdapterCapabilities
-    param_class: type
-    display_name: str
-    model_name: str
+    """Protocol that all adapters must satisfy."""
+    param_class: Type[Any]           # Links to parameter class
+    capabilities: AdapterCapabilities # What the model can do
     
     async def generate(
         self,
         prompt: str,
-        params: Any,  # Instance of param_class
+        params: Any,              # Instance of param_class
         ctx: CallContext,
         *,
         tool_dispatcher: ToolDispatcher,
         **kwargs: Any
     ) -> Dict[str, Any]:
-        """Generate response from the model"""
+        """Generate response from the model."""
         ...
 ```
 
-Also defines the `ToolDispatcher` protocol for standardized tool execution.
+### 2. Single Source of Truth
 
-### 2. Adapter Capabilities (`mcp_the_force/adapters/capabilities.py`)
+Each adapter has a `definitions.py` file that contains:
+- Capability classes
+- Parameter class with Route descriptors
+- Model registry
+- Blueprint generation
 
-Base dataclass using **Pattern B** (inheritance-only) for zero-runtime capability definition:
+This eliminates the need to edit multiple files when adding models or features.
 
-```python
-@dataclass
-class AdapterCapabilities:
-    """What the framework needs to know about an adapter"""
-    native_file_search: bool = False
-    supports_functions: bool = True
-    supports_streaming: bool = True
-    parallel_function_calls: Optional[int] = None
-    max_context_window: Optional[int] = None
-    supports_live_search: bool = False
-    supports_reasoning_effort: bool = False
-    supports_vision: bool = False
-    description: str = ""
-    provider: str = ""
-    model_family: str = ""
-```
+### 3. Enhanced Route Descriptors
 
-Provider-specific capabilities inherit from this base (see `mcp_the_force/adapters/grok_new/models.py`):
+Route descriptors now include capability requirements:
 
 ```python
-@dataclass
-class GrokBaseCapabilities(AdapterCapabilities):
-    """Base capabilities shared by all Grok models."""
-    native_file_search: bool = False
-    supports_functions: bool = True
-    supports_streaming: bool = True
-    supports_live_search: bool = True
-    provider: str = "xai"
-    model_family: str = "grok"
-
-@dataclass
-class GrokMiniCapabilities(GrokBaseCapabilities):
-    """Grok mini models with reasoning effort support."""
-    max_context_window: int = 32_000
-    supports_reasoning_effort: bool = True
-    description: str = "Quick responses with adjustable reasoning effort"
-```
-
-### 3. Parameter Classes (`mcp_the_force/adapters/params.py`)
-
-Type-safe parameter definitions using Route descriptors:
-
-```python
-class BaseToolParams:
-    """Parameters every tool has.
-    
-    This is not a dataclass - it works with Route descriptors like ToolSpec.
-    """
-    instructions: ClassVar[RouteDescriptor] = Route.prompt(pos=0, description="User instructions")
-    output_format: ClassVar[RouteDescriptor] = Route.prompt(pos=1, description="Expected output format")
-    context: ClassVar[RouteDescriptor] = Route.prompt(pos=2, description="Context files/directories")
-    session_id: ClassVar[RouteDescriptor] = Route.session(description="Session ID for conversation")
-
-class GrokToolParams(BaseToolParams):
-    """Grok-specific parameters."""
-    search_mode: ClassVar[RouteDescriptor] = Route.adapter(
-        default="auto", description="Live Search mode: 'auto', 'on', 'off'"
+class OpenAIToolParams(BaseToolParams):
+    reasoning_effort: str = Route.adapter(
+        default="medium",
+        description="Reasoning effort level",
+        requires_capability=lambda c: c.supports_reasoning_effort
     )
-    search_parameters: ClassVar[RouteDescriptor] = Route.adapter(
-        default=None, description="Live Search parameters"
-    )
-    # ... more Grok-specific params
 ```
 
-### 4. Unified Session Cache (`mcp_the_force/unified_session_cache.py`)
+The lambda provides type-safe, IDE-friendly capability validation.
 
-Single, provider-agnostic session cache storing conversations in a flexible format:
+## Architecture Components
 
-```python
-@dataclass
-class UnifiedSession:
-    """Session data stored in the cache."""
-    session_id: str
-    updated_at: int
-    history: List[Dict[str, Any]] = field(default_factory=list)  # Flexible format
-    provider_metadata: Dict[str, Any] = field(default_factory=dict)  # Provider-specific data
+### 1. Adapter Structure
+
+Each adapter is a self-contained package:
+
 ```
-
-Supports both Chat and Responses API formats, with provider-specific metadata.
-
-### 5. Bridge Adapters (Temporary Scaffolding)
-
-The key to migration - bridge adapters that connect new protocol adapters to the legacy system:
-
-```python
-# mcp_the_force/adapters/grok_bridge.py
-class GrokBridgeAdapter(BaseAdapter):
-    """Bridge adapter connecting protocol-based GrokAdapter to legacy system."""
-    
-    def __init__(self, model_name: str = "grok-4"):
-        # Create the protocol-based adapter
-        self.protocol_adapter = GrokAdapter(model_name)
-        
-        # Copy attributes for BaseAdapter compatibility
-        self.model_name = self.protocol_adapter.model_name
-        self.display_name = self.protocol_adapter.display_name
-        self.context_window = self.protocol_adapter.capabilities.max_context_window or 131_000
-    
-    async def generate(self, prompt: str, **kwargs) -> Union[str, Dict[str, Any]]:
-        """Translate legacy generate call to protocol generate."""
-        # Extract parameters
-        vector_store_ids = kwargs.get("vector_store_ids")
-        session_id = kwargs.get("session_id")
-        # ... extract more params
-        
-        # Create protocol objects
-        params = SimpleNamespace(
-            instructions=prompt,
-            output_format="",
-            context=[],
-            session_id=session_id or "",
-            search_mode=search_mode,
-            # ... more params
-        )
-        
-        ctx = CallContext(
-            session_id=session_id or "",
-            vector_store_ids=vector_store_ids,
-        )
-        
-        tool_dispatcher = ToolDispatcher(vector_store_ids=vector_store_ids)
-        
-        # Call protocol adapter
-        return await self.protocol_adapter.generate(
-            prompt=prompt,
-            params=params,
-            ctx=ctx,
-            tool_dispatcher=tool_dispatcher,
-            **kwargs,
-        )
-```
-
-## The Migration Path: A Step-by-Step Guide
-
-Using Grok as the canonical example:
-
-### 1. Create New Adapter Package
-```bash
-mcp_the_force/adapters/grok_new/
+mcp_the_force/adapters/openai/
 ├── __init__.py
-├── adapter.py      # Protocol-based adapter
-└── models.py       # Pattern B capabilities
+├── adapter.py          # MCPAdapter implementation
+├── definitions.py      # Single source of truth
+├── flow.py            # Provider-specific logic
+└── client.py          # API client management
 ```
 
-### 2. Define Capabilities (Pattern B)
+### 2. The definitions.py Pattern
+
 ```python
-# grok_new/models.py
+# adapters/openai/definitions.py
+
+# 1. Parameter class with capability requirements
+class OpenAIToolParams(BaseToolParams):
+    temperature: float = Route.adapter(
+        default=0.2,
+        requires_capability=lambda c: c.supports_temperature
+    )
+    
+    reasoning_effort: str = Route.adapter(
+        default="medium",
+        requires_capability=lambda c: c.supports_reasoning_effort
+    )
+
+# 2. Capability definitions
 @dataclass
-class GrokBaseCapabilities(AdapterCapabilities):
-    """Base for all Grok models"""
-    # ... common capabilities
+class O3Capabilities(AdapterCapabilities):
+    supports_reasoning_effort: bool = True
+    supports_temperature: bool = False  # o3 doesn't support temperature!
+    max_context_window: int = 200_000
 
-@dataclass  
-class Grok4Capabilities(GrokBaseCapabilities):
-    """Grok 4 specific"""
-    max_context_window: int = 256_000
-    description: str = "Advanced multi-agent reasoning"
+# 3. Model registry
+OPENAI_MODEL_CAPABILITIES = {
+    "o3": O3Capabilities(),
+    "o3-pro": O3ProCapabilities(),
+    "gpt-4.1": GPT41Capabilities(),
+}
 
-# Registry
-GROK_MODEL_CAPABILITIES = {
-    "grok-4": Grok4Capabilities(),
-    # ... more models
+# 4. Blueprint generation
+def _generate_and_register_blueprints():
+    for model_name, capabilities in OPENAI_MODEL_CAPABILITIES.items():
+        blueprint = ToolBlueprint(
+            model_name=model_name,
+            adapter_key="openai",
+            param_class=OpenAIToolParams,
+            description=capabilities.description,
+            timeout=_calculate_timeout(model_name),
+            context_window=capabilities.max_context_window,
+        )
+        register_blueprints([blueprint])
+
+# Auto-register on import
+_generate_and_register_blueprints()
+```
+
+### 3. Validation Chain
+
+The system provides multi-layered validation:
+
+```
+MCP Request
+    ↓
+ParameterValidator      # Type checking, required fields
+    ↓
+CapabilityValidator     # Model-specific capability validation
+    ↓
+ParameterRouter        # Routes to adapter/prompt/session
+    ↓
+Adapter                # Provider-specific validation
+    ↓
+API Call
+```
+
+Example validation error:
+```
+ValueError: Parameter 'temperature' requires capability 'supports_temperature' 
+            which model 'o3' doesn't support
+```
+
+### 4. Tool Generation Flow
+
+```
+Import adapter package → definitions.py runs → Blueprints registered
+                                                        ↓
+                                                  make_tool()
+                                                        ↓
+                                                 Dynamic tool class
+                                                        ↓
+                                                 @tool decorator
+                                                        ↓
+                                                 MCP registration
+```
+
+### 5. Route Descriptor System
+
+Routes declare both destination and validation:
+
+```python
+@dataclass
+class RouteDescriptor:
+    route: RouteType                               # WHERE it goes
+    default: Any = _NO_DEFAULT                     # Default value
+    description: Optional[str] = None              # Documentation
+    position: Optional[int] = None                 # Argument order
+    requires_capability: Optional[Callable] = None # WHEN it's valid
+```
+
+## Implementation Guide
+
+### Adding a New Model
+
+1. Edit the adapter's `definitions.py`:
+```python
+# Add capability class
+@dataclass
+class NewModelCapabilities(BaseCapabilities):
+    supports_new_feature: bool = True
+    max_context_window: int = 100_000
+
+# Add to registry
+OPENAI_MODEL_CAPABILITIES = {
+    # ... existing models ...
+    "new-model": NewModelCapabilities(),
 }
 ```
 
-### 3. Implement Protocol-Based Adapter
+That's it! Blueprint generation handles the rest.
+
+### Adding a New Parameter
+
+1. Edit the adapter's `definitions.py`:
 ```python
-# grok_new/adapter.py
-class GrokAdapter:  # Note: NO inheritance!
-    """Protocol-based Grok adapter using LiteLLM."""
+class OpenAIToolParams(BaseToolParams):
+    # ... existing params ...
     
-    def __init__(self, model: str = "grok-4"):
-        self.model_name = model
-        self.capabilities = GROK_MODEL_CAPABILITIES[model]
-        self.param_class = GrokToolParams
-        # ...
-    
-    async def generate(
-        self,
-        prompt: str,
-        params: GrokToolParams,
-        ctx: CallContext,
-        *,
-        tool_dispatcher: ToolDispatcher,
-        **kwargs: Any,
-    ) -> Dict[str, Any]:
-        # Implementation using LiteLLM
+    new_feature: str = Route.adapter(
+        default="standard",
+        description="New feature mode",
+        requires_capability=lambda c: c.supports_new_feature
+    )
 ```
 
-### 4. Create Parameter Class
-Add to `mcp_the_force/adapters/params.py`:
+2. Update the capability class:
 ```python
-class GrokToolParams(BaseToolParams):
-    """Grok-specific parameters"""
-    search_mode: ClassVar[RouteDescriptor] = Route.adapter(default="auto")
-    # ... more params
+@dataclass
+class AdapterCapabilities:
+    # ... existing capabilities ...
+    supports_new_feature: bool = False
 ```
 
-### 5. Create Bridge Adapter
+### Creating a New Adapter
+
+1. Create adapter package:
+```bash
+mcp_the_force/adapters/newprovider/
+├── __init__.py
+├── adapter.py
+└── definitions.py
+```
+
+2. Implement in `definitions.py`:
 ```python
-# mcp_the_force/adapters/grok_bridge.py
+# Parameters
+class NewProviderToolParams(BaseToolParams):
+    custom_param: str = Route.adapter(default="value")
+
+# Capabilities
+@dataclass
+class NewProviderCapabilities(AdapterCapabilities):
+    provider: str = "newprovider"
+    supports_streaming: bool = True
+
+# Models
+NEW_PROVIDER_MODELS = {
+    "model-1": NewProviderCapabilities(),
+}
+
+# Generate blueprints
+_generate_and_register_blueprints()
+```
+
+3. Implement adapter:
+```python
+class NewProviderAdapter:
+    param_class = NewProviderToolParams
+    
+    def __init__(self, model_name: str):
+        self.model_name = model_name
+        self.capabilities = NEW_PROVIDER_MODELS[model_name]
+    
+    async def generate(self, prompt, params, ctx, *, tool_dispatcher, **kwargs):
+        # Implementation
+```
+
+4. Register in `adapters/registry.py`:
+```python
+_ADAPTER_REGISTRY = {
+    # ... existing ...
+    "newprovider": ("mcp_the_force.adapters.newprovider.adapter", "NewProviderAdapter"),
+}
+```
+
+## Benefits
+
+1. **Type Safety**: Lambda-based capability requirements with IDE support
+2. **Single Source of Truth**: One file to edit per adapter
+3. **Early Validation**: Catches errors before expensive API calls
+4. **Clear Errors**: Users know exactly why parameters fail
+5. **Extensible**: New adapters follow the established pattern
+6. **DRY**: No duplication between capabilities and parameters
+
+## Implementation Task List
+
+This is a linear, zero-shot implementation plan. No backwards compatibility, no gradual migration.
+
+### Phase 1: Core Infrastructure (Do First)
+
+1. **Update RouteDescriptor** (`tools/descriptors.py`)
+   - Add `requires_capability: Optional[Callable[[Any], bool]] = None` field
+   - Update `Route.adapter()` to accept `requires_capability` parameter
+
+2. **Update ParameterInfo** (`tools/registry.py`)
+   - Add `requires_capability: Optional[Callable] = None` field
+   - Update parameter extraction to preserve capability requirements
+
+3. **Enhance ToolDispatcher Protocol** (`adapters/tool_dispatcher.py`)
+   - Add `execute_batch(tool_calls: List[ToolCall]) -> List[str]` method
+   - Ensure parallel execution capability for OpenAI compatibility
+   - Update ToolHandler implementation to support batch execution
+
+4. **Create CapabilityValidator** (`tools/capability_validator.py`)
+   - New class that validates parameters against model capabilities
+   - Method: `validate_against_capabilities(metadata, kwargs, capabilities)`
+   - Execute lambdas and provide clear error messages
+   - Skip capability checks (only) for local tools where `capabilities is None`
+   - Error format: `"Parameter 'X' is not supported by model 'Y' because its 'capability_Z' is False"`
+
+5. **Update ToolMetadata** (`tools/registry.py`)
+   - Add `capabilities: Optional[AdapterCapabilities] = None` field
+   - Store model capabilities during tool registration
+
+6. **Update ToolExecutor** (`tools/executor.py`)
+   - Add `capability_validator = CapabilityValidator()` 
+   - Get capabilities from metadata instead of instantiating adapter
+   - Call capability validator after basic validation
+   - Ensure local tools (adapter_class = None) still get full parameter validation
+
+### Phase 2: Adapter Migration (Do in Order)
+
+#### 2.1 OpenAI Adapter
+
+5. **Create definitions.py** (`adapters/openai/definitions.py`)
+   - Move `OpenAIToolParams` from central params.py
+   - Add capability requirements to each parameter
+   - Move model capabilities from models.py
+   - Add blueprint generation logic
+
+6. **Update OpenAI adapter** (`adapters/openai/adapter.py`)
+   - Import from local definitions
+   - Reference `self.param_class = OpenAIToolParams`
+   - Remove any redundant validation
+
+7. **Update OpenAI flow.py** (`adapters/openai/flow.py`)
+   - Remove local ToolExecutor import
+   - Update to use passed-in tool_dispatcher
+   - Preserve parallel execution using `tool_dispatcher.execute_batch()`
+   - Remove the BuiltInToolDispatcher class
+
+8. **Delete tool_exec.py** (`adapters/openai/tool_exec.py`)
+   - Delete file after flow.py is updated
+   - Verify no other imports reference it
+
+#### 2.2 Google Adapter
+
+9. **Create definitions.py** (`adapters/google/definitions.py`)
+   - Move `GeminiToolParams` from central params.py
+   - Add capability requirements
+   - Consolidate model definitions
+   - Add blueprint generation
+
+10. **Update Google adapter** (`adapters/google/adapter.py`)
+    - Import from local definitions
+    - Reference local param class
+
+#### 2.3 XAI Adapter
+
+11. **Create definitions.py** (`adapters/xai/definitions.py`)
+    - Move `GrokToolParams` from central params.py
+    - Add capability requirements
+    - Consolidate model definitions
+    - Add blueprint generation
+
+12. **Update XAI adapter** (`adapters/xai/adapter.py`)
+    - Import from local definitions
+    - Reference local param class
+
+### Phase 3: Cleanup
+
+13. **Clean central params.py** (`adapters/params.py`)
+    - Remove all adapter-specific param classes
+    - Keep only `BaseToolParams`
+    - Add clear documentation about inheritance pattern
+
+14. **Update adapter __init__.py files**
+    - Import from definitions to trigger blueprint registration
+    - Ensure proper exports
+
+15. **Update tools/autogen.py**
+    - Simplify to just import adapter packages
+    - Remove any adapter-specific logic
+
+16. **Update blueprint processing** (`tools/factories.py`)
+    - Extract capabilities from adapter during tool generation
+    - Store capabilities in ToolMetadata
+    - Ensure local tools have None capabilities
+
+17. **Add registration validation** (`tools/blueprint_registry.py`)
+    - Validate blueprints at registration time
+    - Check parameter-capability consistency
+    - Ensure all required fields present
+
+### Phase 4: Testing & Verification
+
+18. **Update unit tests**
+    - Fix imports to use local param classes
+    - Update mocks to include capabilities
+    - Add capability validation tests
+    - Test clear error message format
+
+19. **Integration testing**
+    - Test each adapter with valid parameters
+    - Test each adapter with invalid parameters (capability mismatch)
+    - Verify error messages match expected format
+    - Test local tools still get full parameter validation
+
+20. **Parallel execution testing**
+    - Verify OpenAI adapter maintains parallel tool execution
+    - Test batch execution performance
+    - Ensure other adapters work with new ToolDispatcher
+
+21. **End-to-end testing**
+    - Test actual tool calls through MCP
+    - Verify validation happens at right stage
+    - Confirm performance is acceptable
+    - Test error propagation to MCP clients
+
+### Phase 5: Documentation
+
+22. **Update inline documentation**
+    - Add docstrings explaining capability requirements
+    - Document the lambda pattern
+    - Add examples of capability validation
+    - Document parallel vs serial tool execution
+
+23. **Update README/guides**
+    - Document how to add new models
+    - Document how to add new parameters
+    - Include troubleshooting guide
+    - Add migration guide for any external consumers
+
+### Completion Checklist
+
+- [ ] All adapters use local definitions.py
+- [ ] No adapter-specific code in central files
+- [ ] Capability validation works for all parameters
+- [ ] Clear error messages for capability mismatches
+- [ ] All tests pass
+- [ ] Documentation is complete
+
+---
+
+# Legacy System Documentation
+
+## Original Bridge Pattern Migration
+
+The initial refactor used a bridge pattern to migrate from inheritance-based to protocol-based adapters. This section documents the original approach for historical context.
+
+### Bridge Adapter Pattern
+
+The migration used bridge adapters to connect new protocol adapters to the legacy BaseAdapter system:
+
+```python
 class GrokBridgeAdapter(BaseAdapter):
-    """Temporary bridge to legacy system"""
-    # See example above
-```
-
-### 6. Register Bridge
-In `mcp_the_force/adapters/__init__.py`:
-```python
-def get_adapter(adapter_type: str) -> BaseAdapter:
-    # ... existing code ...
+    """Bridge connecting protocol adapter to legacy system."""
     
-    # Lazy loading for new protocol adapters
-    if adapter_type == "xai_protocol":
-        from .grok_bridge import GrokBridgeAdapter
-        return GrokBridgeAdapter
+    def __init__(self, model_name: str):
+        self.protocol_adapter = GrokAdapter(model_name)
+        # Copy attributes for BaseAdapter compatibility
+        
+    async def generate(self, prompt: str, **kwargs):
+        # Translate legacy call to protocol call
+        params = SimpleNamespace(...)
+        ctx = CallContext(...)
+        return await self.protocol_adapter.generate(...)
 ```
 
-### 7. Update Tool Definitions
-In `mcp_the_force/tools/definitions.py`:
-```python
-@tool
-class ChatWithGrok4(ToolSpec):
-    model_name = "grok-4"
-    adapter_class = "xai_protocol"  # Changed from "xai"
-    # ... rest unchanged
-```
+### Migration Status (Historical)
 
-## Current Status
+- ✅ Grok migrated with bridge pattern
+- ✅ Protocol definitions created
+- ✅ Unified session cache implemented
+- ❌ OpenAI and Gemini remained on BaseAdapter
 
-### Completed
-- ✅ Protocol definitions (MCPAdapter, ToolDispatcher)
-- ✅ Capabilities with Pattern B (AdapterCapabilities + inheritance)
-- ✅ Parameter classes with Route descriptors
-- ✅ Unified session cache
-- ✅ Grok adapter migration (using bridge pattern)
-- ✅ Tool updates for Grok
+### Lessons from Bridge Pattern
 
-### In Progress
-- 🔄 OpenAI adapter migration
-- 🔄 Gemini adapter migration
-- 🔄 Removal of provider-specific session caches
+1. **Gradual migration worked** but added complexity
+2. **Two systems in parallel** created confusion
+3. **Parameter extraction** was error-prone
+4. **Direct protocol adoption** would have been cleaner
 
-### TODO
-- [ ] Migrate remaining adapters (OpenAI, Gemini)
-- [ ] Remove legacy adapters after migration
-- [ ] Remove bridge adapters once framework is updated
-- [ ] Update executor to work directly with protocol adapters
-- [ ] **Dynamic System Prompt Generation** (see below)
-- [ ] Add concurrency protection to unified cache
-- [ ] Remove scattered provider checks (`if adapter == "xai"`)
-
-## Dynamic System Prompt Generation (TODO)
-
-Current system prompts are hardcoded in `prompts.py`. We should generate them dynamically based on capabilities:
-
-```python
-def generate_system_prompt(
-    capabilities: AdapterCapabilities,
-    available_tools: List[str],
-    model_specific_info: Optional[str] = None
-) -> str:
-    """Generate system prompt based on model capabilities."""
-    # Use capabilities to build appropriate prompt
-    # - supports_live_search → Mention Live Search
-    # - supports_vision → Mention multimodal
-    # - available_tools → Only mention tools that are available
-    # - etc.
-```
-
-Benefits:
-- Eliminates hardcoded prompts
-- Automatically adapts to new models
-- Uses capabilities we've already defined
-- Scales without code changes
-
-## Lessons Learned
-
-1. **Protocol > Inheritance**: The Protocol approach provides flexibility without tight coupling
-2. **Pattern B Works Well**: Simple dataclass inheritance for capabilities is clean and type-safe
-3. **Bridge Pattern is Essential**: Allows gradual migration without breaking the system
-4. **LiteLLM is Optional**: It's a useful implementation detail, not a requirement
-5. **Route Descriptors Need Care**: Can't use with dataclasses, need regular classes with ClassVar
-
-## Benefits of Final Architecture
-
-1. **Clean Separation**: Adapters are truly isolated
-2. **Type Safety**: Full typing with dataclasses and protocols
-3. **Gradual Migration**: Bridge pattern allows incremental updates
-4. **Future Proof**: Easy to add new providers or swap implementations
-5. **Zero Runtime Logic**: Pattern B capabilities are defined at compile time
-
-## Next Steps
-
-1. Continue migrating adapters one by one using the established pattern
-2. Test each migration thoroughly before moving to the next
-3. Once all adapters are migrated, update the framework to use protocols directly
-4. Remove bridge adapters and legacy code
-5. Implement dynamic system prompt generation
+The current architecture eliminates bridges entirely, with all adapters implementing the protocol directly.

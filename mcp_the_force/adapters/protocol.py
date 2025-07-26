@@ -15,6 +15,15 @@ class CallContext:
     # Add more context as needed
 
 
+@dataclass
+class ToolCall:
+    """Represents a single tool call request."""
+
+    tool_name: str
+    tool_args: str  # JSON string
+    tool_call_id: Optional[str] = None
+
+
 class ToolDispatcher(Protocol):
     """Interface for tool execution."""
 
@@ -28,6 +37,20 @@ class ToolDispatcher(Protocol):
         self, tool_name: str, tool_args: str, context: CallContext
     ) -> Any:
         """Execute a tool and return its result."""
+        ...
+
+    async def execute_batch(
+        self, tool_calls: List[ToolCall], context: CallContext
+    ) -> List[str]:
+        """Execute multiple tools in parallel and return their results.
+
+        Args:
+            tool_calls: List of tool calls to execute
+            context: Call context
+
+        Returns:
+            List of string results, one per tool call
+        """
         ...
 
 

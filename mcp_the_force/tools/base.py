@@ -27,7 +27,7 @@ class ToolSpec:
     model_name: str = ""
     adapter_class: str = ""
     context_window: int = 0
-    timeout: int = 300
+    timeout: int = 600  # Default timeout 10 minutes
     description: str = ""
 
     # LocalService class (optional, for utility tools)
@@ -69,6 +69,7 @@ class ToolSpec:
                     "default": None if value.default is _NO_DEFAULT else value.default,
                     "description": value.description,
                     "type": hints.get(name, Any),
+                    "requires_capability": value.requires_capability,
                 }
 
                 # Extract type information

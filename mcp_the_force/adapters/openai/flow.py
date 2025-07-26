@@ -1,32 +1,31 @@
-"""Flow orchestration for OpenAI adapter using Strategy Pattern."""
+"""Flow orchestration for OpenAI adapter using the native Responses API."""
 
 import asyncio
+import copy
 import logging
 import random
-import time
+import json
+import jsonschema
 from abc import ABC, abstractmethod
-from typing import Dict, Any, List, Set
+from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
 from uuid import uuid4
 
 from .client import OpenAIClientFactory
-from .models import OpenAIRequest
-from .tool_exec import ToolExecutor
+from .models import OpenAIRequest, OPENAI_MODEL_CAPABILITIES
+from ..protocol import CallContext, ToolCall
 from .errors import (
     AdapterException,
     ErrorCategory,
     TimeoutException,
     GatewayTimeoutException,
 )
-from ..openai.constants import (
+from .constants import (
     INITIAL_POLL_DELAY_SEC,
     MAX_POLL_INTERVAL_SEC,
     STREAM_TIMEOUT_THRESHOLD,
 )
 from ..memory_search_declaration import create_search_history_declaration_openai
-from .models import OPENAI_MODEL_CAPABILITIES
-import json
-import jsonschema
 
 logger = logging.getLogger(__name__)
 
@@ -38,513 +37,293 @@ class FlowContext:
     request: OpenAIRequest
     client: Any  # AsyncOpenAI
     tools: List[Dict[str, Any]]
-    tool_executor: ToolExecutor
+    tool_dispatcher: Any
+    session_id: str
+    vector_store_ids: Optional[List[str]]
     start_time: float
     timeout_remaining: float
 
-    def update_timeout(self, elapsed: float):
-        """Update remaining timeout after elapsed time."""
-        self.timeout_remaining = max(0, self.timeout_remaining - elapsed)
-
 
 class BaseFlowStrategy(ABC):
-    """Base strategy for flow execution."""
+    """Base strategy for flow execution using the Responses API."""
 
     def __init__(self, context: FlowContext):
         self.context = context
-        self.telemetry: Dict[str, Any] = {}  # For debugging/metrics
 
     @abstractmethod
     async def execute(self) -> Dict[str, Any]:
         """Execute the flow and return the result."""
         pass
 
+    def _add_additional_properties_recursively(self, schema_node: Any) -> None:
+        """
+        Recursively traverses a JSON schema to add OpenAI-required properties:
+        1. 'additionalProperties: false' to all objects
+        2. 'required' array listing all properties for objects
+        """
+        if not isinstance(schema_node, dict):
+            return
+
+        # If the current node is an object schema
+        if schema_node.get("type") == "object":
+            # Add additionalProperties: false if not present
+            if "additionalProperties" not in schema_node:
+                schema_node["additionalProperties"] = False
+
+            # Add required array if object has properties but no required array
+            if "properties" in schema_node and "required" not in schema_node:
+                # All properties are required by default for OpenAI
+                schema_node["required"] = list(schema_node["properties"].keys())
+
+        # Recurse into properties of an object
+        if "properties" in schema_node:
+            for prop in schema_node["properties"].values():
+                self._add_additional_properties_recursively(prop)
+
+        # Recurse into items of an array
+        if "items" in schema_node:
+            self._add_additional_properties_recursively(schema_node["items"])
+
+        # Recurse into anyOf, allOf, oneOf definitions
+        for key in ["anyOf", "allOf", "oneOf"]:
+            if key in schema_node:
+                for sub_schema in schema_node[key]:
+                    self._add_additional_properties_recursively(sub_schema)
+
+    def _prepare_api_params(self) -> Dict[str, Any]:
+        """Prepare API parameters with any necessary transformations."""
+        api_params = self.context.request.to_api_format()
+
+        # Transform structured output schema if present
+        if "text" in api_params and "format" in api_params["text"]:
+            format_spec = api_params["text"]["format"]
+            if format_spec.get("type") == "json_schema" and "schema" in format_spec:
+                # Deep copy the schema to avoid modifying the original
+                schema = copy.deepcopy(format_spec["schema"])
+                # Apply OpenAI's requirement for additionalProperties: false
+                self._add_additional_properties_recursively(schema)
+                format_spec["schema"] = schema
+
+        return api_params
+
     def _build_tools_list(self) -> List[Dict[str, Any]]:
-        """Build the tools list based on request and model capabilities."""
-        import logging
-
-        logger = logging.getLogger(__name__)
-
+        """Build the tools list for the API request."""
         tools = []
-
         capability = OPENAI_MODEL_CAPABILITIES.get(self.context.request.model)
+        if not capability:
+            return []
 
-        # Only add custom tools if the model supports them
-        if capability is None or capability.supports_custom_tools:
-            # Add search_project_history tool unless disabled
+        if capability.supports_custom_tools:
             if not self.context.request.disable_memory_search:
                 tools.append(create_search_history_declaration_openai())
-
-            # Add native OpenAI file search if vector stores provided
-            logger.info(
-                f"{self.context.request.model}: vector_store_ids={self.context.request.vector_store_ids}"
-            )
-            if self.context.request.vector_store_ids:
-                # Use OpenAI's native file_search tool with vector store IDs
-                tools.append(
-                    {
-                        "type": "file_search",
-                        "vector_store_ids": self.context.request.vector_store_ids,
-                    }
-                )
-
-        # Add web search for supported models
-        if capability and capability.supports_web_search:
-            tools.append({"type": capability.web_search_tool})
-
-        # Add any custom tools from request (only if allowed)
-        if capability is None or capability.supports_custom_tools:
             if self.context.request.tools:
                 tools.extend(self.context.request.tools)
+
+        if capability.supports_web_search:
+            tools.append({"type": capability.web_search_tool})
+
+        if self.context.request.vector_store_ids:
+            tools.append({"type": "file_search"})
 
         return tools
 
     def _extract_content_from_output(self, response: Any) -> str:
-        """Extract text content from various response formats."""
-        # First try the convenience property
-        content = getattr(response, "output_text", "")
+        """Extract text content from the response object's output array."""
+        if hasattr(response, "output_text"):
+            return response.output_text
 
-        # If empty, extract from output array
-        if not content and hasattr(response, "output") and response.output:
-            text_parts = []
-
+        text_parts = []
+        if hasattr(response, "output"):
             for item in response.output:
-                if isinstance(item, dict):
-                    # Handle dict representation
-                    if item.get("type") == "message" and "content" in item:
-                        for content_item in item["content"]:
-                            if isinstance(content_item, dict) and content_item.get(
-                                "type"
-                            ) in ("text", "output_text"):
-                                text_parts.append(content_item.get("text", ""))
-                else:
-                    # Handle object representation
-                    if (
-                        hasattr(item, "type")
-                        and item.type == "message"
-                        and hasattr(item, "content")
-                    ):
-                        for content_item in item.content:
-                            if hasattr(content_item, "type") and content_item.type in (
-                                "text",
-                                "output_text",
-                            ):
-                                text_parts.append(getattr(content_item, "text", ""))
-                            elif isinstance(content_item, dict) and content_item.get(
-                                "type"
-                            ) in ("text", "output_text"):
-                                text_parts.append(content_item.get("text", ""))
-
-            if text_parts:
-                content = "".join(text_parts)
-
-        return content
+                if getattr(item, "type", "") == "message":
+                    for content_item in getattr(item, "content", []):
+                        if getattr(content_item, "type", "") == "output_text":
+                            text_parts.append(getattr(content_item, "text", ""))
+        return "".join(text_parts)
 
     def _extract_function_calls(self, response: Any) -> List[Any]:
-        """Extract and deduplicate function calls from response."""
-        if not hasattr(response, "output") or not response.output:
+        """Extract function calls from the response object's output array."""
+        if not hasattr(response, "output"):
             return []
-
-        seen_call_ids = set()
-        function_calls = []
-
-        for item in response.output:
-            # Handle both dict and object representations
-            if isinstance(item, dict):
-                if item.get("type") == "function_call":
-                    call_id = item.get("call_id")
-                    if call_id and call_id not in seen_call_ids:
-                        seen_call_ids.add(call_id)
-                        function_calls.append(item)
-            else:
-                if hasattr(item, "type") and item.type == "function_call":
-                    call_id = getattr(item, "call_id", None)
-                    if call_id and call_id not in seen_call_ids:
-                        seen_call_ids.add(call_id)
-                        function_calls.append(item)
-
-        return function_calls
-
-    def _collect_all_output_items(self, response: Any) -> List[Any]:
-        """Collect all output items including reasoning for preservation."""
-        if not hasattr(response, "output") or not response.output:
-            return []
-        return list(response.output)
+        return [
+            item
+            for item in response.output
+            if getattr(item, "type", "") == "function_call"
+        ]
 
     def _validate_structured_output(self, content: str) -> str:
-        """Validate structured output against schema and extract clean JSON.
-
-        Returns:
-            Clean JSON string if structured output is requested, otherwise original content
-        """
+        """Validate and clean JSON output against a schema."""
         if not self.context.request.structured_output_schema:
             return content
-
         try:
-            # Extract JSON from potential markdown wrapping
             from ...utils.json_extractor import extract_json
 
             clean_json = extract_json(content)
-
-            # Validate against schema
             parsed = json.loads(clean_json)
             jsonschema.validate(parsed, self.context.request.structured_output_schema)
-
-            # Return clean JSON
             return clean_json
-        except jsonschema.ValidationError as e:
+        except (jsonschema.ValidationError, json.JSONDecodeError, ValueError) as e:
             raise AdapterException(
-                ErrorCategory.PARSING,
-                f"Response does not match requested schema: {str(e)}",
-            )
-        except (json.JSONDecodeError, ValueError) as e:
-            raise AdapterException(
-                ErrorCategory.PARSING, f"Response is not valid JSON: {str(e)}"
+                ErrorCategory.PARSING, f"Structured output validation failed: {e}"
             )
 
     async def _handle_function_calls(
-        self,
-        function_calls: List[Any],
-        original_response_id: str,
-        all_output_items: List[Any],
+        self, function_calls: List[Any], response_id: str
     ) -> Dict[str, Any]:
-        """Execute function calls and get follow-up response."""
+        """Execute tools and orchestrate the follow-up API call."""
         logger.info(
-            f"{self.context.request.model} returned {len(function_calls)} function calls"
+            f"Executing {len(function_calls)} tool calls for response {response_id}"
         )
 
-        # Execute the function calls with bounded concurrency
-        results = await self.context.tool_executor.run_all(function_calls)
+        tool_calls = [
+            ToolCall(tool_name=c.name, tool_args=c.arguments, tool_call_id=c.call_id)
+            for c in function_calls
+        ]
+        call_context = CallContext(
+            session_id=self.context.session_id,
+            vector_store_ids=self.context.vector_store_ids,
+        )
+        tool_results = await self.context.tool_dispatcher.execute_batch(
+            tool_calls, call_context
+        )
 
-        # When using previous_response_id, we only send the function call results
-        # The API manages the conversation state server-side
-        follow_up_input = results
+        # The new input is just the list of tool outputs. The server maintains state.
+        follow_up_input = [
+            {
+                "type": "function_call_output",
+                "call_id": call.tool_call_id,
+                "output": result,
+            }
+            for call, result in zip(tool_calls, tool_results)
+        ]
 
-        # Build follow-up parameters
-        follow_up_params: Dict[str, Any] = {
-            "model": self.context.request.model,
-            "previous_response_id": original_response_id,
-            "messages": follow_up_input,  # Use messages for OpenAIRequest validation
-            "tools": self.context.tools,
-            "parallel_tool_calls": self.context.request.parallel_tool_calls,
-        }
+        # Create a new request for the follow-up, preserving key parameters
+        follow_up_request_data = self.context.request.model_dump(
+            exclude={"input", "previous_response_id"}
+        )
+        follow_up_request_data.update(
+            {
+                "input": follow_up_input,
+                "previous_response_id": response_id,
+            }
+        )
 
-        # Add optional parameters
-        if self.context.request.temperature is not None:
-            follow_up_params["temperature"] = self.context.request.temperature
+        follow_up_request = OpenAIRequest(**follow_up_request_data)
 
-        if self.context.request.reasoning_effort:
-            follow_up_params["reasoning_effort"] = self.context.request.reasoning_effort
-
-        # Preserve vector_store_ids for attachment search
-        if self.context.request.vector_store_ids:
-            follow_up_params["vector_store_ids"] = self.context.request.vector_store_ids
-
-        # Preserve structured_output_schema for JSON responses
-        if self.context.request.structured_output_schema:
-            follow_up_params["structured_output_schema"] = (
-                self.context.request.structured_output_schema
-            )
-
-        # Execute follow-up with appropriate strategy
-        follow_up_request = OpenAIRequest(**follow_up_params)
         follow_up_context = FlowContext(
             request=follow_up_request,
             client=self.context.client,
             tools=self.context.tools,
-            tool_executor=self.context.tool_executor,
+            tool_dispatcher=self.context.tool_dispatcher,
+            session_id=self.context.session_id,
+            vector_store_ids=self.context.vector_store_ids,
             start_time=asyncio.get_event_loop().time(),
             timeout_remaining=self.context.timeout_remaining,
         )
 
-        # Use same strategy type for follow-up
-        if isinstance(self, BackgroundFlowStrategy):
-            follow_up_strategy: BaseFlowStrategy = BackgroundFlowStrategy(
-                follow_up_context
-            )
-        else:
-            follow_up_strategy = StreamingFlowStrategy(follow_up_context)
-
-        return await follow_up_strategy.execute()
+        # Use the same strategy type (streaming/background) for the follow-up
+        strategy = self.__class__(follow_up_context)
+        return await strategy.execute()
 
 
 class BackgroundFlowStrategy(BaseFlowStrategy):
     """Strategy for background/polling execution."""
 
     async def execute(self) -> Dict[str, Any]:
-        """Execute background flow with polling."""
-        # Build API parameters
-        api_params = self.context.request.to_api_format()
-        api_params["background"] = True
-        api_params["stream"] = False  # Explicitly set to False for background mode
-
+        api_params = self._prepare_api_params()
         if self.context.tools:
             api_params["tools"] = self.context.tools
-            api_params["parallel_tool_calls"] = self.context.request.parallel_tool_calls
 
-        # Only add reasoning parameters if the model supports them
-        capability = OPENAI_MODEL_CAPABILITIES.get(self.context.request.model)
-        if (
-            self.context.request.reasoning_effort
-            and capability
-            and capability.supports_reasoning_effort
-        ):
-            api_params["reasoning"] = {"effort": self.context.request.reasoning_effort}
-            # Remove the flat reasoning_effort parameter that was included by to_api_format()
-            api_params.pop("reasoning_effort", None)
-
-        # Create initial response
-        logger.info(
-            f"[ADAPTER] Starting OpenAI responses.create at {time.strftime('%H:%M:%S')}"
-        )
-        logger.info(f"[DEBUG] api_params keys: {list(api_params.keys())}")
-        logger.info(
-            f"[DEBUG] previous_response_id: {api_params.get('previous_response_id')}"
-        )
-        api_start_time = time.time()
         initial_response = await self.context.client.responses.create(**api_params)
-        api_end_time = time.time()
-        logger.info(
-            f"[ADAPTER] OpenAI responses.create completed in {api_end_time - api_start_time:.2f}s"
-        )
         response_id = initial_response.id
 
-        # Check if the initial response is already completed (for tests/immediate responses)
-        initial_job = initial_response
-        if hasattr(initial_job, "status") and initial_job.status == "completed":
-            # Handle immediately completed response
-            content = self._extract_content_from_output(initial_job)
-            function_calls = self._extract_function_calls(initial_job)
-
-            if function_calls:
-                all_output_items = self._collect_all_output_items(initial_job)
-                return await self._handle_function_calls(
-                    function_calls, response_id, all_output_items
-                )
-
-            # Validate structured output and extract clean JSON if needed
-            content = self._validate_structured_output(content)
-
-            immediate_result: Dict[str, Any] = {
-                "content": content,
-                "response_id": response_id,
-            }
-
-            if self.context.request.return_debug:
-                immediate_result["_debug_tools"] = self.context.tools
-
-            return immediate_result
-
-        # Poll for completion with exponential backoff
-        delay = INITIAL_POLL_DELAY_SEC
-        start_poll_time = asyncio.get_event_loop().time()
-
-        logger.info(
-            f"Starting background polling for {response_id}, timeout={self.context.timeout_remaining}s"
-        )
-
-        while True:
-            try:
+        if initial_response.status == "completed":
+            job = initial_response
+        else:
+            delay = INITIAL_POLL_DELAY_SEC
+            start_poll_time = asyncio.get_event_loop().time()
+            while True:
                 await asyncio.sleep(delay)
-            except asyncio.CancelledError:
-                logger.warning(f"[CANCEL] Polling cancelled for {response_id}")
-                logger.info(
-                    f"[CANCEL] Active tasks during OpenAI poll cancel: {len(asyncio.all_tasks())}"
-                )
-                logger.info("[CANCEL] Re-raising from OpenAI polling loop")
-                # Re-raise to propagate cancellation properly
-                raise
-
-            elapsed = asyncio.get_event_loop().time() - start_poll_time
-
-            # Check if we've exceeded timeout
-            if elapsed >= self.context.timeout_remaining:
-                logger.info(
-                    f"Timeout reached: elapsed={elapsed:.1f}s >= timeout={self.context.timeout_remaining}s"
-                )
-                break
-
-            # Check status
-            logger.debug(
-                f"[ADAPTER] Polling OpenAI response status for {response_id} at {time.strftime('%H:%M:%S')} (elapsed: {elapsed:.1f}s)"
-            )
-            job = await self.context.client.responses.retrieve(response_id)
-            logger.debug(
-                f"[ADAPTER] OpenAI response {response_id} status: {job.status}"
-            )
-
-            if job.status == "completed":
-                # Extract content
-                content = self._extract_content_from_output(job)
-
-                # Check for function calls
-                function_calls = self._extract_function_calls(job)
-                if function_calls:
-                    all_output_items = self._collect_all_output_items(job)
-                    return await self._handle_function_calls(
-                        function_calls, response_id, all_output_items
+                elapsed = asyncio.get_event_loop().time() - start_poll_time
+                if elapsed >= self.context.timeout_remaining:
+                    raise TimeoutException(
+                        f"Job {response_id} timed out",
+                        elapsed,
+                        self.context.request.timeout,
                     )
 
-                # Validate structured output and extract clean JSON if needed
-                content = self._validate_structured_output(content)
+                job = await self.context.client.responses.retrieve(response_id)
+                if job.status == "completed":
+                    break
+                if job.status not in ["queued", "in_progress"]:
+                    error = getattr(job, "error", {}) or {}
+                    raise AdapterException(
+                        ErrorCategory.TRANSIENT_API,
+                        f"Run failed with status {job.status}: {error.get('message', 'Unknown')}",
+                    )
+                delay = min(delay * 1.8 + random.uniform(0, 0.2), MAX_POLL_INTERVAL_SEC)
 
-                # Return final result
-                polled_result: Dict[str, Any] = {
-                    "content": content,
-                    "response_id": response_id,
-                }
+        function_calls = self._extract_function_calls(job)
+        if function_calls:
+            return await self._handle_function_calls(function_calls, response_id)
 
-                if self.context.request.return_debug:
-                    polled_result["_debug_tools"] = self.context.tools
+        content = self._extract_content_from_output(job)
+        content = self._validate_structured_output(content)
 
-                return polled_result
-
-            elif job.status == "incomplete":
-                # Handle incomplete response
-                content = self._extract_content_from_output(job)
-                return {
-                    "content": content,
-                    "response_id": response_id,
-                    "status": "incomplete",
-                }
-
-            elif job.status not in ["queued", "in_progress"]:
-                # Handle failed/cancelled/unknown status
-                error_msg = getattr(job, "error", {})
-                if isinstance(error_msg, dict):
-                    error_detail = error_msg.get("message", "Unknown error")
-                else:
-                    error_detail = str(error_msg) if error_msg else "Unknown error"
-
-                raise RuntimeError(
-                    f"Run failed with status: {job.status}. Error: {error_detail}"
-                )
-
-            # Update delay with exponential backoff
-            delay = min(delay * 1.8, MAX_POLL_INTERVAL_SEC)
-            # Add jitter to prevent thundering herd
-            delay += random.uniform(0, 0.2)
-
-        # Timeout reached
-        final_elapsed = asyncio.get_event_loop().time() - start_poll_time
-        raise TimeoutException(
-            f"Job {response_id} timed out after {final_elapsed:.1f}s",
-            elapsed=final_elapsed,
-            timeout=self.context.request.timeout,
-        )
+        result = {"content": content, "response_id": response_id}
+        if self.context.request.return_debug:
+            result["_debug_tools"] = self.context.tools
+        return result
 
 
 class StreamingFlowStrategy(BaseFlowStrategy):
     """Strategy for streaming execution."""
 
     async def execute(self) -> Dict[str, Any]:
-        """Execute streaming flow."""
-        # Build API parameters
-        api_params = self.context.request.to_api_format()
-        api_params["stream"] = True
-        api_params["background"] = False  # Explicitly set to False for streaming mode
-
+        api_params = self._prepare_api_params()
         if self.context.tools:
             api_params["tools"] = self.context.tools
-            api_params["parallel_tool_calls"] = self.context.request.parallel_tool_calls
 
-        # Only add reasoning parameters if the model supports them
-        capability = OPENAI_MODEL_CAPABILITIES.get(self.context.request.model)
-        if (
-            self.context.request.reasoning_effort
-            and capability
-            and capability.supports_reasoning_effort
-        ):
-            api_params["reasoning"] = {"effort": self.context.request.reasoning_effort}
-            # Remove the flat reasoning_effort parameter that was included by to_api_format()
-            api_params.pop("reasoning_effort", None)
-
-        # Create streaming response
         stream = await asyncio.wait_for(
             self.context.client.responses.create(**api_params),
             timeout=self.context.timeout_remaining,
         )
 
-        # Process stream
-        response_id = None
-        content_parts = []
-        function_calls = []
-        function_call_ids: Set[str] = set()
-        event_count = 0
+        response_id, content_parts, function_calls = None, [], []
+        final_response_obj = None
 
         async for event in stream:
-            event_count += 1
+            if (
+                response_id is None
+                and hasattr(event, "id")
+                and event.id.startswith("resp_")
+            ):
+                response_id = event.id
+            if hasattr(event, "type") and event.type == "response.delta":
+                content_parts.append(event.delta)
+            if hasattr(event, "type") and event.type == "response.final_response":
+                final_response_obj = event.response
 
-            # Capture response ID from various locations
-            if response_id is None:
-                if (
-                    hasattr(event, "id")
-                    and isinstance(event.id, str)
-                    and event.id.startswith("resp_")
-                ):
-                    response_id = event.id
-                    logger.debug(f"Captured response ID from event.id: {response_id}")
-                elif hasattr(event, "response_id"):
-                    response_id = event.response_id
-                    logger.debug(
-                        f"Captured response ID from event.response_id: {response_id}"
-                    )
+        if final_response_obj:
+            function_calls = self._extract_function_calls(final_response_obj)
 
-            # Handle different event types
-            if hasattr(event, "type"):
-                if event.type in (
-                    "response.delta",
-                    "ResponseOutputTextDelta",
-                ) and hasattr(event, "delta"):
-                    content_parts.append(event.delta)
-                elif event.type == "response.output_text" and hasattr(event, "text"):
-                    content_parts.append(event.text)
-                elif event.type in ("response.tool_call", "tool_call", "function_call"):
-                    # Collect function calls, avoiding duplicates
-                    call_id = getattr(event, "call_id", None)
-                    if call_id and call_id not in function_call_ids:
-                        function_call_ids.add(call_id)
-                        function_calls.append(
-                            {
-                                "type": "function_call",
-                                "call_id": call_id,
-                                "name": getattr(event, "name", None),
-                                "arguments": getattr(event, "arguments", "{}"),
-                            }
-                        )
-            # Fallback for other structures
-            elif hasattr(event, "output_text") and event.output_text:
-                content_parts.append(event.output_text)
-            elif hasattr(event, "text") and event.text:
-                content_parts.append(event.text)
+        if function_calls:
+            # The full response object is needed to get complete tool call details
+            if not response_id and final_response_obj:
+                response_id = final_response_obj.id
+            if not response_id:
+                raise AdapterException(
+                    ErrorCategory.PARSING,
+                    "Could not determine response_id for stream with tool calls.",
+                )
+            return await self._handle_function_calls(function_calls, response_id)
 
         content = "".join(content_parts)
-
-        # Handle function calls if present
-        if function_calls:
-            logger.info(
-                f"{self.context.request.model} streaming returned {len(function_calls)} function calls"
-            )
-
-            # For streaming with functions, we need to preserve the context differently
-            all_output_items = function_calls.copy()
-            return await self._handle_function_calls(
-                function_calls, response_id or "", all_output_items
-            )
-
-        # Validate structured output and extract clean JSON if needed
         content = self._validate_structured_output(content)
 
-        # Return result
-        logger.info(
-            f"Streaming complete: events={event_count}, content_length={len(content)}, response_id={response_id}"
-        )
-
-        result: Dict[str, Any] = {"content": content, "response_id": response_id}
-
+        result = {"content": content, "response_id": response_id}
         if self.context.request.return_debug:
             result["_debug_tools"] = self.context.tools
-
         return result
 
 
@@ -552,177 +331,73 @@ class FlowOrchestrator:
     """Orchestrates the execution flow for OpenAI requests."""
 
     def __init__(self, tool_dispatcher):
-        """Initialize orchestrator with tool dispatcher.
-
-        Args:
-            tool_dispatcher: Tool dispatcher instance that implements the ToolDispatcher protocol.
-        """
         self.tool_dispatcher = tool_dispatcher
 
     async def run(self, request_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Run the orchestrated flow.
-
-        Args:
-            request_data: Raw request data including model, messages, etc.
-
-        Returns:
-            Response dictionary with content and metadata.
-        """
         try:
-            # 0. Extract a caller-supplied session_id *before* we build
-            #    the OpenAIRequest; it is not part of that model schema.
-            explicit_session_id = request_data.pop("session_id", None)
-
-            # 1. Pre-process request to handle model capabilities
-            request_data = self._preprocess_request(request_data)
-
-            # Extract API key before creating request object
+            session_id = request_data.pop("session_id", f"sess_{uuid4().hex}")
             api_key = request_data.pop("_api_key", None)
 
-            # 2. Validate and create request object
+            self._preprocess_request(request_data)
             request = OpenAIRequest(**request_data)
 
-            # 3. Get process-safe client
             client = await OpenAIClientFactory.get_instance(api_key)
-
-            # 3. Determine execution strategy
             use_background = self._should_use_background(request)
-
-            # Log unknown models
-            if request.model not in OPENAI_MODEL_CAPABILITIES:
-                logger.warning(
-                    f"Unknown model '{request.model}' - defaulting to background mode"
-                )
-
-            # Override request based on strategy
-            if use_background:
-                request.background = True
-                request.stream = False
-            else:
-                request.background = False
-                request.stream = True
-
-            # 4. Create context
-            start_time = asyncio.get_event_loop().time()
-
-            # Build or fetch the dispatcher *once*
-            dispatcher_candidate = self.tool_dispatcher
-
-            if callable(dispatcher_candidate):  # custom dispatcher
-                tool_executor = ToolExecutor(dispatcher_candidate)
-            else:  # Built-in dispatcher
-                # Stable scope rules:
-                #  1) caller-supplied session_id
-                #  2) instance_id (for consistent deduplication)
-                #  3) new random UUID (if no instance_id available)
-                # Never use previous_response_id as it changes every turn
-                from ...logging.setup import get_instance_id
-
-                dedup_session_id = explicit_session_id
-                if not dedup_session_id:
-                    instance_id = get_instance_id()
-                    if instance_id:
-                        dedup_session_id = f"instance_{instance_id}"
-                    else:
-                        dedup_session_id = f"sess_{uuid4().hex}"
-
-                dispatcher_candidate.vector_store_ids = request.vector_store_ids
-                dispatcher_candidate.session_id = dedup_session_id
-
-                tool_executor = ToolExecutor(dispatcher_candidate.dispatch)
+            request.background = use_background
+            request.stream = not use_background
 
             context = FlowContext(
                 request=request,
                 client=client,
-                tools=[],  # Will be built by strategy
-                tool_executor=tool_executor,
-                start_time=start_time,
+                tools=[],
+                tool_dispatcher=self.tool_dispatcher,
+                session_id=session_id,
+                vector_store_ids=request.vector_store_ids,
+                start_time=asyncio.get_event_loop().time(),
                 timeout_remaining=request.timeout,
             )
 
-            # 5. Select and execute strategy
-            if use_background:
-                strategy: BaseFlowStrategy = BackgroundFlowStrategy(context)
-            else:
-                strategy = StreamingFlowStrategy(context)
-
-            # Build tools within strategy
+            strategy = (
+                BackgroundFlowStrategy(context)
+                if use_background
+                else StreamingFlowStrategy(context)
+            )
             context.tools = strategy._build_tools_list()
 
-            # 6. Execute and handle errors
             return await strategy.execute()
 
         except asyncio.TimeoutError:
             raise TimeoutException(
-                "Request timed out", elapsed=request.timeout, timeout=request.timeout
+                "Request timed out", request.timeout, request.timeout
             )
         except Exception as e:
-            # Handle specific OpenAI errors
             if hasattr(e, "status_code"):
-                if e.status_code in [504, 524]:
-                    raise GatewayTimeoutException(e.status_code, request.model)
-                elif e.status_code == 429:
-                    raise AdapterException(
-                        ErrorCategory.RATE_LIMIT, str(e), e.status_code
-                    )
-                elif e.status_code in [401, 403]:
-                    raise AdapterException(
-                        ErrorCategory.FATAL_CLIENT, str(e), e.status_code
-                    )
-                elif e.status_code >= 500:
-                    raise AdapterException(
-                        ErrorCategory.TRANSIENT_API, str(e), e.status_code
-                    )
-
-            # Let other errors propagate
+                status = e.status_code
+                if status in [504, 524]:
+                    raise GatewayTimeoutException(status, request_data.get("model"))
+                if status == 429:
+                    raise AdapterException(ErrorCategory.RATE_LIMIT, str(e), status)
+                if status >= 500:
+                    raise AdapterException(ErrorCategory.TRANSIENT_API, str(e), status)
+                if status >= 400:
+                    raise AdapterException(ErrorCategory.FATAL_CLIENT, str(e), status)
             raise
 
     def _should_use_background(self, request: OpenAIRequest) -> bool:
-        """Determine if background mode should be used."""
-        # Check model capabilities if available
-        if request.model in OPENAI_MODEL_CAPABILITIES:
-            capability = OPENAI_MODEL_CAPABILITIES[request.model]
-
-            # Force background for models that require it
+        capability = OPENAI_MODEL_CAPABILITIES.get(request.model)
+        if capability:
             if capability.force_background:
                 return True
-
-            # Use background for long timeouts or models without streaming
-            if (
-                request.timeout > STREAM_TIMEOUT_THRESHOLD
-                or not capability.supports_streaming
-            ):
+            if not capability.supports_streaming:
                 return True
-        else:
-            # Unknown model - default to safe background mode
+        if request.timeout > STREAM_TIMEOUT_THRESHOLD:
             return True
-
-        # User preference
         return request.background
 
-    def _preprocess_request(self, request_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Pre-process request to handle model-specific requirements."""
-        # Make a copy to avoid modifying original
-        data = request_data.copy()
+    def _preprocess_request(self, data: Dict[str, Any]):
+        """Applies model-specific defaults before validation."""
         model = data.get("model", "")
-
-        # Check if model requires background mode
-        if model in OPENAI_MODEL_CAPABILITIES:
-            capability = OPENAI_MODEL_CAPABILITIES[model]
-
-            # Force background for models that require it
-            if capability.force_background:
-                data["background"] = True
-                data["stream"] = False
-
-            # Handle timeout-based background selection
-            elif data.get("timeout", 300) > STREAM_TIMEOUT_THRESHOLD:
-                data["background"] = True
-                data["stream"] = False
-
-            # Apply default reasoning_effort if not provided
-            if capability.supports_reasoning_effort and "reasoning_effort" not in data:
-                if capability.default_reasoning_effort:
-                    data["reasoning_effort"] = capability.default_reasoning_effort
-
-        return data
+        capability = OPENAI_MODEL_CAPABILITIES.get(model)
+        if capability and capability.supports_reasoning_effort:
+            if "reasoning_effort" not in data and capability.default_reasoning_effort:
+                data["reasoning_effort"] = capability.default_reasoning_effort

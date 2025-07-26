@@ -49,16 +49,16 @@ class TestToolFeatureParity:
 
             for feature, expected_route_type in REQUIRED_FEATURES.items():
                 # Check the attribute exists
-                assert hasattr(
-                    tool_class, feature
-                ), f"{tool_name} missing required feature: {feature}"
+                assert hasattr(tool_class, feature), (
+                    f"{tool_name} missing required feature: {feature}"
+                )
 
                 # Check it's the right type of route
                 attr = getattr(tool_class, feature)
                 if isinstance(attr, RouteDescriptor):
-                    assert (
-                        attr.route == expected_route_type
-                    ), f"{tool_name}.{feature} has wrong route type"
+                    assert attr.route == expected_route_type, (
+                        f"{tool_name}.{feature} has wrong route type"
+                    )
 
     def test_all_models_have_priority_context_support(self):
         """All chat models should support priority_context for prioritized inline inclusion."""
@@ -73,16 +73,16 @@ class TestToolFeatureParity:
 
             tool_class = tool_metadata.spec_class
 
-            assert hasattr(
-                tool_class, "reasoning_effort"
-            ), f"{tool_name} missing reasoning_effort parameter"
+            assert hasattr(tool_class, "reasoning_effort"), (
+                f"{tool_name} missing reasoning_effort parameter"
+            )
 
         # GPT-4.1 now also has reasoning_effort in the new architecture
         gpt41_metadata = get_tool("chat_with_gpt41")
         if gpt41_metadata:
-            assert hasattr(
-                gpt41_metadata.spec_class, "reasoning_effort"
-            ), "chat_with_gpt41 should have reasoning_effort in the new architecture"
+            assert hasattr(gpt41_metadata.spec_class, "reasoning_effort"), (
+                "chat_with_gpt41 should have reasoning_effort in the new architecture"
+            )
 
     def test_gemini_models_have_reasoning_effort(self):
         """Gemini models should have reasoning_effort (now supported via thinking_budget)."""
@@ -92,9 +92,9 @@ class TestToolFeatureParity:
 
             tool_class = tool_metadata.spec_class
 
-            assert hasattr(
-                tool_class, "reasoning_effort"
-            ), f"{tool_name} should have reasoning_effort - Gemini now supports it via thinking_budget"
+            assert hasattr(tool_class, "reasoning_effort"), (
+                f"{tool_name} should have reasoning_effort - Gemini now supports it via thinking_budget"
+            )
 
     def test_all_models_have_descriptions(self):
         """All model tools should have descriptions."""
@@ -103,9 +103,9 @@ class TestToolFeatureParity:
             assert tool_metadata is not None, f"Tool {tool_name} not found in registry"
 
             # Check the metadata has a description
-            assert (
-                tool_metadata.model_config.get("description") is not None
-            ), f"{tool_name} missing description"
+            assert tool_metadata.model_config.get("description") is not None, (
+                f"{tool_name} missing description"
+            )
 
     def test_model_adapter_consistency(self):
         """Model should use the correct adapter family."""
@@ -113,25 +113,25 @@ class TestToolFeatureParity:
         for tool_name in GEMINI_TOOL_NAMES:
             tool_metadata = get_tool(tool_name)
             assert tool_metadata is not None
-            assert (
-                tool_metadata.model_config.get("adapter_class") == "google"
-            ), f"{tool_name} should use google adapter"
+            assert tool_metadata.model_config.get("adapter_class") == "google", (
+                f"{tool_name} should use google adapter"
+            )
 
         # Check OpenAI models
         for tool_name in OPENAI_TOOL_NAMES:
             tool_metadata = get_tool(tool_name)
             assert tool_metadata is not None
-            assert (
-                tool_metadata.model_config.get("adapter_class") == "openai"
-            ), f"{tool_name} should use openai adapter"
+            assert tool_metadata.model_config.get("adapter_class") == "openai", (
+                f"{tool_name} should use openai adapter"
+            )
 
         # Check Grok models
         for tool_name in GROK_TOOL_NAMES:
             tool_metadata = get_tool(tool_name)
             assert tool_metadata is not None
-            assert (
-                tool_metadata.model_config.get("adapter_class") == "xai"
-            ), f"{tool_name} should use xai adapter"
+            assert tool_metadata.model_config.get("adapter_class") == "xai", (
+                f"{tool_name} should use xai adapter"
+            )
 
     def test_no_duplicate_parameter_positions(self):
         """No model should have duplicate position numbers for parameters."""
@@ -165,12 +165,12 @@ class TestToolFeatureParity:
         for tool_name in ALL_CHAT_TOOL_NAMES:
             tool_metadata = get_tool(tool_name)
             assert tool_metadata is not None, f"Tool {tool_name} not registered"
-            assert (
-                tool_metadata.spec_class is not None
-            ), f"Tool {tool_name} has no class"
-            assert (
-                tool_metadata.model_config.get("description") is not None
-            ), f"Tool {tool_name} has no description"
-            assert (
-                tool_metadata.model_config.get("adapter_class") is not None
-            ), f"Tool {tool_name} has no adapter type"
+            assert tool_metadata.spec_class is not None, (
+                f"Tool {tool_name} has no class"
+            )
+            assert tool_metadata.model_config.get("description") is not None, (
+                f"Tool {tool_name} has no description"
+            )
+            assert tool_metadata.model_config.get("adapter_class") is not None, (
+                f"Tool {tool_name} has no adapter type"
+            )

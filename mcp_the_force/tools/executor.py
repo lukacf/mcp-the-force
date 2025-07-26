@@ -13,6 +13,7 @@ from .vector_store_manager import vector_store_manager
 from .prompt_engine import prompt_engine
 from .parameter_validator import ParameterValidator
 from .parameter_router import ParameterRouter
+from .capability_validator import CapabilityValidator
 # Scope management is now handled at the integration layer
 
 # Import debug logger
@@ -45,6 +46,7 @@ class ToolExecutor:
         """
         self.validator = ParameterValidator(strict_mode)
         self.router = ParameterRouter()
+        self.capability_validator = CapabilityValidator()
         self.prompt_engine = prompt_engine
         self.vector_store_manager = vector_store_manager
 
@@ -288,6 +290,15 @@ class ToolExecutor:
                 # Service class is already the actual class, not a string
                 service = service_cls()
 
+                # For local services, still do full parameter validation
+                # but skip capability checks (pass None for capabilities)
+                logger.debug(
+                    "[STEP 1.5] Validating parameters for local tool (no capability checks)"
+                )
+                self.capability_validator.validate_against_capabilities(
+                    metadata, validated_params, None
+                )
+
                 # For local services, we skip adapter-specific logic
                 # and jump straight to execution
                 adapter_params = routed_params["adapter"]
@@ -319,6 +330,20 @@ class ToolExecutor:
                 # Instantiate adapter with model name
                 adapter = adapter_cls(model_name)
                 logger.debug(f"[DEBUG] Got adapter: {adapter}")
+
+                # Validate parameters against adapter capabilities
+                if hasattr(adapter, "capabilities"):
+                    logger.debug(
+                        f"[STEP 1.5] Validating parameters against {model_name} capabilities"
+                    )
+                    self.capability_validator.validate_against_capabilities(
+                        metadata, validated_params, adapter.capabilities
+                    )
+                else:
+                    logger.debug(
+                        f"[STEP 1.5] Adapter {adapter_class_name} has no capabilities attribute, skipping capability validation"
+                    )
+
             except KeyError:
                 raise fastmcp.exceptions.ToolError(
                     f"Unknown adapter: {adapter_class_name}"
@@ -414,6 +439,30 @@ class ToolExecutor:
                     if hasattr(attr_value, "route") and hasattr(attr_value, "default"):
                         # Add the default value if not already provided
                         if attr_name not in param_data:
+                            # Check if this parameter has capability requirements
+                            if (
+                                hasattr(attr_value, "requires_capability")
+                                and attr_value.requires_capability
+                            ):
+                                # Validate capability before adding default
+                                capabilities = getattr(adapter, "capabilities", None)
+                                if capabilities:
+                                    try:
+                                        if not attr_value.requires_capability(
+                                            capabilities
+                                        ):
+                                            # Skip this parameter - not supported by model
+                                            logger.debug(
+                                                f"[PARAM_DEBUG] Skipping default for {attr_name} - not supported by model"
+                                            )
+                                            continue
+                                    except Exception:
+                                        # If capability check fails, skip the parameter
+                                        logger.debug(
+                                            f"[PARAM_DEBUG] Capability check failed for {attr_name}, skipping"
+                                        )
+                                        continue
+
                             # Handle default_factory
                             if attr_value.default_factory is not None:
                                 default_val = attr_value.default_factory()

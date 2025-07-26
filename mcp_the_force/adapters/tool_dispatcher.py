@@ -1,10 +1,11 @@
 """Tool dispatcher implementation for protocol-based adapters."""
 
+import asyncio
 import json
 import logging
 from typing import Any, Dict, List, Optional
 from .tool_handler import ToolHandler
-from .protocol import CallContext
+from .protocol import CallContext, ToolCall
 from .capabilities import AdapterCapabilities
 
 logger = logging.getLogger(__name__)
@@ -75,3 +76,48 @@ class ToolDispatcher:
         except Exception as e:
             logger.error(f"Tool execution failed: {e}")
             return f"Error executing {tool_name}: {str(e)}"
+
+    async def execute_batch(
+        self, tool_calls: List[ToolCall], context: CallContext
+    ) -> List[str]:
+        """Execute multiple tools in parallel and return their results.
+
+        Args:
+            tool_calls: List of tool calls to execute
+            context: Call context
+
+        Returns:
+            List of string results, one per tool call
+        """
+
+        async def execute_single(tool_call: ToolCall) -> str:
+            """Execute a single tool call and return the result as a string."""
+            try:
+                # Update context with tool_call_id if provided
+                call_context = CallContext(
+                    session_id=context.session_id,
+                    vector_store_ids=context.vector_store_ids,
+                    tool_call_id=tool_call.tool_call_id,
+                )
+
+                result = await self.execute(
+                    tool_name=tool_call.tool_name,
+                    tool_args=tool_call.tool_args,
+                    context=call_context,
+                )
+
+                # Convert result to string if needed
+                if isinstance(result, str):
+                    return result
+                else:
+                    return json.dumps(result, ensure_ascii=False)
+
+            except Exception as e:
+                logger.error(f"Tool execution failed for {tool_call.tool_name}: {e}")
+                return f"Error executing {tool_call.tool_name}: {str(e)}"
+
+        # Execute all tools in parallel
+        tasks = [execute_single(tool_call) for tool_call in tool_calls]
+        results = await asyncio.gather(*tasks)
+
+        return results

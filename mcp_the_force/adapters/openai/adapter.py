@@ -1,18 +1,13 @@
-"""Protocol-based OpenAI adapter using native OpenAI SDK.
-
-This adapter implements the MCPAdapter protocol without inheritance,
-using the OpenAI SDK directly (not LiteLLM) since LiteLLM's purpose
-is to translate TO OpenAI format.
-"""
+"""Protocol-based OpenAI adapter using native OpenAI SDK."""
 
 import logging
+import json
 from typing import Any, Dict
 
 from ..protocol import CallContext, ToolDispatcher
-from ..params import OpenAIToolParams
 from ...unified_session_cache import unified_session_cache
 from .flow import FlowOrchestrator
-from .models import OPENAI_MODEL_CAPABILITIES
+from .definitions import OpenAIToolParams, OPENAI_MODEL_CAPABILITIES
 
 logger = logging.getLogger(__name__)
 
@@ -79,15 +74,13 @@ class OpenAIProtocolAdapter:
             Dict with "content" and optionally "response_id"
         """
         try:
-            # Build messages from kwargs or create new
-            messages = kwargs.get("messages")
-            if not messages:
-                # Check for system instruction
-                system_instruction = kwargs.get("system_instruction")
-                messages = []
-                if system_instruction:
-                    messages.append({"role": "system", "content": system_instruction})
-                messages.append({"role": "user", "content": prompt})
+            # Build input for Responses API format
+            # The prompt is the user's input
+
+            # Extract system instructions
+            from ...prompts import get_developer_prompt
+
+            instructions = get_developer_prompt(self.model_name)
 
             # Load previous_response_id from session if continuing
             previous_response_id = None
@@ -100,11 +93,9 @@ class OpenAIProtocolAdapter:
                         f"Continuing session {ctx.session_id} with response_id: {previous_response_id}"
                     )
 
-            # Parse structured_output_schema if it's a string
+            # Prepare structured output schema
             structured_output_schema = getattr(params, "structured_output_schema", None)
             if structured_output_schema and isinstance(structured_output_schema, str):
-                import json
-
                 try:
                     structured_output_schema = json.loads(structured_output_schema)
                 except json.JSONDecodeError:
@@ -113,31 +104,23 @@ class OpenAIProtocolAdapter:
                     )
                     structured_output_schema = None
 
-            # Build request data for FlowOrchestrator
+            # Build request data for FlowOrchestrator using Responses API format
             request_data = {
                 "model": self.model_name,
-                "messages": messages,
-                "reasoning_effort": getattr(params, "reasoning_effort", None),
+                "input": prompt,
+                "instructions": instructions,
+                "previous_response_id": previous_response_id,
                 "vector_store_ids": ctx.vector_store_ids,
+                "reasoning_effort": getattr(params, "reasoning_effort", None),
+                "temperature": getattr(params, "temperature", None),
                 "structured_output_schema": structured_output_schema,
                 "disable_memory_search": getattr(
                     params, "disable_memory_search", False
                 ),
-                "session_id": ctx.session_id,  # FlowOrchestrator expects this
+                "session_id": ctx.session_id,
                 "_api_key": self._api_key,
-                "previous_response_id": previous_response_id,
-                "return_debug": kwargs.get("return_debug", False),
-                "max_output_tokens": kwargs.get("max_output_tokens"),
-                "timeout": kwargs.get("timeout", 300),
+                **kwargs,  # Pass through any other kwargs like timeout, etc.
             }
-
-            # Add any extra kwargs that might be needed
-            for key, value in kwargs.items():
-                if key not in request_data and key not in [
-                    "messages",
-                    "system_instruction",
-                ]:
-                    request_data[key] = value
 
             # Create and run flow orchestrator
             orchestrator = FlowOrchestrator(tool_dispatcher=tool_dispatcher)
