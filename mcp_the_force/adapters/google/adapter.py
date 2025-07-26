@@ -118,6 +118,10 @@ class GeminiAdapter:
             "temperature": getattr(params, "temperature", 1.0),
         }
 
+        # Add instructions if provided
+        if hasattr(params, "instructions") and params.instructions:
+            request_params["instructions"] = params.instructions
+
         # Add previous_response_id for session continuation
         if ctx.session_id:
             previous_response_id = await unified_session_cache.get_metadata(
