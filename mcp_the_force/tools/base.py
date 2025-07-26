@@ -37,16 +37,14 @@ class ToolSpec:
     prompt_template: str | None = None
 
     @classmethod
-    def get_model_config(
-        cls, description_from_docstring: Optional[str] = None
-    ) -> Dict[str, Any]:
+    def get_model_config(cls) -> Dict[str, Any]:
         """Get model configuration from class attributes."""
         config = {
             "model_name": cls.model_name,
             "adapter_class": cls.adapter_class,
             "context_window": cls.context_window,
             "timeout": cls.timeout,
-            "description": cls.description or description_from_docstring or "",
+            "description": cls.description,
         }
         # Include service_cls if defined (for LocalService pattern)
         if hasattr(cls, "service_cls") and cls.service_cls is not None:

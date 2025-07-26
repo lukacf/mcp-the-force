@@ -344,6 +344,12 @@ class SearchProjectHistory(ToolSpec):
 
     # Required for @tool decorator
     model_name = "search_project_history"
+    description = (
+        "Search project history (semantic vector database search) for past decisions, conversations, and commits. "
+        "⚠️ IMPORTANT: Returns HISTORICAL data that may be OUTDATED. "
+        "Do NOT use to understand current code state. "
+        "Best for finding past design decisions and understanding project evolution."
+    )
 
     # Use local service instead of adapter
     service_cls = SearchHistoryService
