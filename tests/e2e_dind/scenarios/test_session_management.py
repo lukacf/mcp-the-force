@@ -124,7 +124,7 @@ class TestSessionManagement:
 
         # Turn 1: Store a simple value using GPT-4.1
         response = call_claude_tool(
-            "chat_with_gpt4_1",
+            "chat_with_gpt41",
             instructions="Remember this code: ABC-123-XYZ",
             output_format="JSON confirming what was stored",
             context=[],
@@ -142,7 +142,7 @@ class TestSessionManagement:
 
         # Turn 2: Recall the value in the same session
         response = call_claude_tool(
-            "chat_with_gpt4_1",
+            "chat_with_gpt41",
             instructions="What was the code I asked you to remember?",
             output_format="JSON with the recalled code",
             context=[],
@@ -185,7 +185,7 @@ class TestSessionManagement:
 
         # Step 1: Store unique information with GPT-4.1
         response = call_claude_tool(
-            "chat_with_gpt4_1",
+            "chat_with_gpt41",
             instructions="Remember this network configuration: Protocol DELTA-9 operates on port 7625",
             output_format="Acknowledge what you've stored",
             context=[],

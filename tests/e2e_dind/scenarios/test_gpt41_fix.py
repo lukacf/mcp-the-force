@@ -36,7 +36,7 @@ def test_gpt41_multi_turn_fixed(call_claude_tool):
 
     # Turn 1: Store a simple value using GPT-4.1 (WITHOUT disable_memory_search)
     response = call_claude_tool(
-        "chat_with_gpt4_1",
+        "chat_with_gpt41",
         instructions="Remember this code: ABC-123-XYZ",
         output_format="JSON confirming what was stored",
         context=[],
@@ -54,7 +54,7 @@ def test_gpt41_multi_turn_fixed(call_claude_tool):
 
     # Turn 2: Recall the value in the same session
     response = call_claude_tool(
-        "chat_with_gpt4_1",
+        "chat_with_gpt41",
         instructions="What was the code I asked you to remember?",
         output_format="JSON with the recalled code",
         context=[],

@@ -43,7 +43,7 @@ class TestStableInlineList:
 
         # Call with context that will trigger overflow
         response = call_claude_tool(
-            "chat_with_gpt4_1",
+            "chat_with_gpt41",
             instructions=(
                 f"Search all provided files for the sentence containing the token '{MARKER_SMALL_FILE}'. "
                 f"You will need to use your search tool to find a token in a different file: '{MARKER_LARGE_FILE}'. "
@@ -85,7 +85,7 @@ class TestStableInlineList:
 
         # First call - establish the stable list and send initial files
         response1 = call_claude_tool(
-            "chat_with_gpt4_1",
+            "chat_with_gpt41",
             instructions=f"Find and quote the sentences containing the tokens '{MARKER_SMALL_FILE}' and '{MARKER_CONTEXT_1}'.",
             output_format="Quote the exact sentences containing the tokens.",
             context=[unchanged_file, context1_file],
@@ -107,7 +107,7 @@ class TestStableInlineList:
         create_file_in_container(context2_file, context2_content)
 
         response2 = call_claude_tool(
-            "chat_with_gpt4_1",
+            "chat_with_gpt41",
             instructions=(
                 f"In this multi-turn conversation:\n"
                 f"1. Confirm you remember the token '{MARKER_SMALL_FILE}' from our previous exchange.\n"
@@ -145,7 +145,7 @@ class TestStableInlineList:
 
         # First call - establish baseline
         response1 = call_claude_tool(
-            "chat_with_gpt4_1",
+            "chat_with_gpt41",
             instructions=f"Find and quote the sentence containing token '{MARKER_SMALL_FILE}'.",
             output_format="Quote the exact sentence containing the token.",
             context=[changing_file],
@@ -174,7 +174,7 @@ class TestStableInlineList:
 
         # Second call - should detect the change and resend the file
         response2 = call_claude_tool(
-            "chat_with_gpt4_1",
+            "chat_with_gpt41",
             instructions=f"The file has changed. Find and quote the sentence containing the new token '{MARKER_MODIFIED_FILE}'.",
             output_format="Quote the exact sentence containing the token.",
             context=[changing_file],  # Same file path, but content is modified
