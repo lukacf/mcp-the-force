@@ -14,7 +14,6 @@ from xml.etree import ElementTree as ET
 from ..config import get_settings
 from ..utils.redaction import redact_dict
 from .async_config import get_async_memory_config
-from ..tools.registry import get_tool
 
 logger = logging.getLogger(__name__)
 
@@ -23,24 +22,9 @@ async def store_conversation_memory(
     session_id: str, tool_name: str, messages: List[Dict[str, Any]], response: str
 ) -> None:
     """Store conversation summary in vector store after tool call."""
-    # Check if tool writes to memory using capability flag
-    tool_metadata = get_tool(tool_name)
-    if not tool_metadata:
-        logger.warning(
-            f"No metadata found for tool {tool_name}, skipping memory storage"
-        )
-        return
-
-    # Check if the tool has writes_memory capability
-    # capabilities is a dataclass, not a dict
-    if not getattr(tool_metadata.capabilities, "writes_memory", False):
-        logger.info(
-            f"Tool {tool_name} does not have writes_memory capability, skipping memory storage"
-        )
-        return
-
+    # Memory storage is applied universally to all chat tools
     logger.info(
-        f"Tool {tool_name} has writes_memory capability, proceeding with storage"
+        f"Storing conversation memory for tool {tool_name}, session {session_id}"
     )
 
     try:
@@ -274,7 +258,8 @@ Conversation to summarize:
 
         # Create minimal params for MCPAdapter protocol
         from types import SimpleNamespace
-        from ..adapters.protocol import CallContext, ToolDispatcher
+        from ..adapters.protocol import CallContext
+        from ..adapters.tool_dispatcher import ToolDispatcher
 
         params = SimpleNamespace(temperature=0.3)
         ctx = CallContext(session_id="", vector_store_ids=None)
