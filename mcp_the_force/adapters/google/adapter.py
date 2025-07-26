@@ -111,12 +111,25 @@ class GeminiAdapter:
         if "tools" in kwargs:
             tools.extend(kwargs["tools"])
 
-        # Build request parameters for Responses API
-        request_params = {
+        # Build base parameters that are always included
+        base_params = {
             "model": f"vertex_ai/{self.model_name}",  # LiteLLM provider prefix
-            "input": conversation_input,  # Responses API uses 'input'
             "temperature": getattr(params, "temperature", 1.0),
         }
+
+        # Add Vertex AI configuration
+        if os.getenv("VERTEX_PROJECT"):
+            base_params["vertex_project"] = os.getenv("VERTEX_PROJECT")
+        if os.getenv("VERTEX_LOCATION"):
+            base_params["vertex_location"] = os.getenv("VERTEX_LOCATION")
+
+        # Add API key if using direct Gemini API
+        if os.getenv("GEMINI_API_KEY"):
+            base_params["api_key"] = os.getenv("GEMINI_API_KEY")
+
+        # Build initial request with all parameters for user turn
+        request_params = {**base_params}
+        request_params["input"] = conversation_input
 
         # Add instructions if provided
         if hasattr(params, "instructions") and params.instructions:
@@ -133,17 +146,7 @@ class GeminiAdapter:
                     f"[GEMINI] Continuing session with previous_response_id: {previous_response_id}"
                 )
 
-        # Add Vertex AI configuration
-        if os.getenv("VERTEX_PROJECT"):
-            request_params["vertex_project"] = os.getenv("VERTEX_PROJECT")
-        if os.getenv("VERTEX_LOCATION"):
-            request_params["vertex_location"] = os.getenv("VERTEX_LOCATION")
-
-        # Add API key if using direct Gemini API
-        if os.getenv("GEMINI_API_KEY"):
-            request_params["api_key"] = os.getenv("GEMINI_API_KEY")
-
-        # Add tools if any
+        # Add tools if any (only for user turns)
         if tools:
             request_params["tools"] = tools
             request_params["tool_choice"] = kwargs.get("tool_choice", "auto")
@@ -179,7 +182,7 @@ class GeminiAdapter:
 
             # Process response (Responses API format)
             final_content = ""
-            tool_calls = []
+            tool_calls = []  # Re-initialize before parsing
 
             # Extract content and tool calls from response.output
             if hasattr(response, "output"):
@@ -236,19 +239,31 @@ class GeminiAdapter:
                             }
                         )
 
-                # Send only tool results for the follow-up request
-                request_params["input"] = tool_results
+                # Create minimal follow-up request with ONLY required fields
+                follow_up_params = {
+                    "model": base_params["model"],  # Use base model config
+                    "input": tool_results,
+                    "previous_response_id": response.id,
+                }
+                
+                # Add Vertex AI/API key config from base_params
+                if "vertex_project" in base_params:
+                    follow_up_params["vertex_project"] = base_params["vertex_project"]
+                if "vertex_location" in base_params:
+                    follow_up_params["vertex_location"] = base_params["vertex_location"]
+                if "api_key" in base_params:
+                    follow_up_params["api_key"] = base_params["api_key"]
 
-                # Must include previous_response_id for tool response continuation
-                if hasattr(response, "id"):
-                    request_params["previous_response_id"] = response.id
-                    logger.info(
-                        f"[GEMINI] Sending tool results with previous_response_id: {response.id}"
-                    )
+                logger.info(
+                    f"[GEMINI] Sending tool results with previous_response_id: {response.id}"
+                )
 
-                response = await aresponses(**request_params)
+                response = await aresponses(**follow_up_params)
 
                 # Process the follow-up response
+                final_content = ""  # Reset content before parsing follow-up
+                tool_calls = []  # Re-initialize to avoid processing stale calls
+                
                 if hasattr(response, "output"):
                     for item in response.output:
                         if item.type == "message" and hasattr(item, "content"):
