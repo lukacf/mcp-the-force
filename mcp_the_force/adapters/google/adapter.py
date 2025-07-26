@@ -91,7 +91,7 @@ class GeminiAdapter:
 
         # Add the user's prompt for this turn
         prompt_text = prompt
-        
+
         # Add JSON formatting instruction when structured output is requested
         if (
             hasattr(params, "structured_output_schema")
@@ -101,8 +101,10 @@ class GeminiAdapter:
             if hasattr(params, "response_format") and params.response_format:
                 prompt_text = f"{prompt}\n\n{params.response_format}"
             else:
-                prompt_text = f"{prompt}\n\nRespond ONLY with valid JSON that matches the schema."
-            
+                prompt_text = (
+                    f"{prompt}\n\nRespond ONLY with valid JSON that matches the schema."
+                )
+
         conversation_input.append(
             {
                 "type": "message",
@@ -129,13 +131,6 @@ class GeminiAdapter:
             "model": f"vertex_ai/{self.model_name}",  # LiteLLM provider prefix
             "temperature": getattr(params, "temperature", 1.0),
         }
-        
-        # Lower temperature for structured outputs to improve compliance
-        if (
-            hasattr(params, "structured_output_schema")
-            and params.structured_output_schema
-        ):
-            base_params["temperature"] = min(base_params["temperature"], 0.3)
 
         # Add Vertex AI configuration
         if os.getenv("VERTEX_PROJECT"):
@@ -260,9 +255,19 @@ class GeminiAdapter:
                         )
 
                 # Create minimal follow-up request with ONLY required fields
+                # Gemini requires at least one text message in the input
+                follow_up_input = [
+                    {
+                        "type": "message",
+                        "role": "user",
+                        "content": [{"type": "text", "text": ""}],  # Empty text satisfies requirement
+                    },
+                    *tool_results,  # Add the function_call_output items
+                ]
+                
                 follow_up_params = {
                     "model": base_params["model"],  # Use base model config
-                    "input": tool_results,
+                    "input": follow_up_input,
                     "previous_response_id": response.id,
                 }
 
