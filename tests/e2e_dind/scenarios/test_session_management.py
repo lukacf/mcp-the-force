@@ -41,7 +41,7 @@ class TestSessionManagement:
         # Step 1: Store technical information in session A
         response = call_claude_tool(
             "chat_with_gemini25_pro",
-            instructions="Remember this: Protocol GAMMA-7 uses port 8443. Confirm what you stored.",
+            instructions="I need you to remember this information: Protocol GAMMA-7 uses port 8443. Please acknowledge that you have stored this information.",
             output_format="JSON confirming the stored information",
             context=[],
             session_id=session_id_a,
@@ -73,7 +73,8 @@ class TestSessionManagement:
         assert result["found_in_session"] is True, (
             f"Should find info in session: {result}"
         )
-        assert result["protocol_name"] == "GAMMA-7", f"Wrong protocol: {result}"
+        # Accept both "GAMMA-7" and "Protocol GAMMA-7" as valid responses
+        assert "GAMMA-7" in result["protocol_name"], f"Wrong protocol: {result}"
         assert result["port_number"] == 8443, f"Wrong port: {result}"
 
         # Step 3: Test session persistence (return to original session)
@@ -93,7 +94,8 @@ class TestSessionManagement:
         assert result["found_in_session"] is True, (
             f"Should find info in original session: {result}"
         )
-        assert result["protocol_name"] == "GAMMA-7", f"Wrong protocol: {result}"
+        # Accept both "GAMMA-7" and "Protocol GAMMA-7" as valid responses
+        assert "GAMMA-7" in result["protocol_name"], f"Wrong protocol: {result}"
         assert result["port_number"] == 8443, f"Wrong port: {result}"
 
     def test_multi_turn_conversation(self, call_claude_tool):
