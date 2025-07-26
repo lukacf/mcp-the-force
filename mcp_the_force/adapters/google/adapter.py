@@ -89,6 +89,16 @@ class GeminiAdapter:
         # The Responses API maintains conversation state via previous_response_id
         conversation_input = []
 
+        # Load session history if continuing (similar to Grok adapter)
+        if ctx.session_id:
+            history = await unified_session_cache.get_history(ctx.session_id)
+            if history:
+                # History is already in Responses API format
+                conversation_input = history
+                logger.debug(
+                    f"[GEMINI] Loaded {len(history)} items from session {ctx.session_id}"
+                )
+
         # Add the user's prompt for this turn
         prompt_text = prompt
 
@@ -149,16 +159,9 @@ class GeminiAdapter:
         if hasattr(params, "instructions") and params.instructions:
             request_params["instructions"] = params.instructions
 
-        # Add previous_response_id for session continuation
-        if ctx.session_id:
-            previous_response_id = await unified_session_cache.get_metadata(
-                ctx.session_id, "last_response_id"
-            )
-            if previous_response_id:
-                request_params["previous_response_id"] = previous_response_id
-                logger.info(
-                    f"[GEMINI] Continuing session with previous_response_id: {previous_response_id}"
-                )
+        # Note: We now load full conversation history like Grok adapter
+        # instead of using previous_response_id which wasn't working properly
+        # with LiteLLM for Gemini
 
         # Add tools if any (only for user turns)
         if tools:
@@ -253,23 +256,31 @@ class GeminiAdapter:
                             }
                         )
 
-                # Create minimal follow-up request with ONLY required fields
-                # Gemini requires at least one text message in the input
-                follow_up_input = [
+                # Add assistant's message with tool calls to conversation history
+                conversation_input.append(
+                    {
+                        "type": "message",
+                        "role": "assistant",
+                        "content": [{"type": "text", "text": final_content or ""}],
+                        # Note: tool_calls would be added here if we tracked them
+                    }
+                )
+                
+                # Add tool results to conversation history
+                conversation_input.extend(tool_results)
+                
+                # Add a minimal user message to continue (Gemini requires text)
+                conversation_input.append(
                     {
                         "type": "message",
                         "role": "user",
-                        "content": [
-                            {"type": "text", "text": " "}
-                        ],  # Single space satisfies text requirement
-                    },
-                    *tool_results,  # Add the function_call_output items
-                ]
+                        "content": [{"type": "text", "text": " "}],  # Single space
+                    }
+                )
 
                 follow_up_params = {
                     "model": base_params["model"],  # Use base model config
-                    "input": follow_up_input,
-                    "previous_response_id": response.id,
+                    "input": conversation_input,  # Use full conversation history
                 }
 
                 # Add Vertex AI/API key config from base_params
@@ -300,15 +311,26 @@ class GeminiAdapter:
                                     if hasattr(content_item, "text"):
                                         final_content = content_item.text
 
-            # Save the response ID for session continuation
-            if ctx.session_id and hasattr(response, "id"):
-                await unified_session_cache.set_metadata(
-                    ctx.session_id, "last_response_id", response.id
+            # Save the full conversation history (like Grok adapter)
+            if ctx.session_id:
+                # Add assistant's response to conversation history
+                if final_content:
+                    conversation_input.append(
+                        {
+                            "type": "message",
+                            "role": "assistant",
+                            "content": [{"type": "text", "text": final_content}],
+                        }
+                    )
+                    
+                # Save the full conversation history
+                await unified_session_cache.save_history(
+                    ctx.session_id, conversation_input
                 )
                 # Store API format for compatibility
                 await unified_session_cache.set_api_format(ctx.session_id, "responses")
                 logger.info(
-                    f"[GEMINI] Saved response_id {response.id} for session {ctx.session_id}"
+                    f"[GEMINI] Saved session {ctx.session_id} with {len(conversation_input)} items"
                 )
 
             # Return response
