@@ -29,3 +29,7 @@ class BaseToolParams:
     output_format: str = Route.prompt(pos=1, description="Expected output format")
     context: List[str] = Route.prompt(pos=2, description="Context files/directories")
     session_id: str = Route.session(description="Session ID for conversation")
+    disable_memory_store: bool = Route.adapter(
+        default=False,
+        description="Disable saving the conversation to project history",
+    )
