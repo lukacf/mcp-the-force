@@ -83,7 +83,11 @@ def tool(
         tool_id = _camel_to_snake(cls.__name__)
 
         # Get model configuration
-        model_config = cls.get_model_config()
+        # Explicitly pass the docstring to ensure it's captured for manually defined tools.
+        # get_model_config will prioritize an explicit description attribute on the class,
+        # then fall back to this docstring, which is the desired behavior.
+        docstring = cls.__doc__
+        model_config = cls.get_model_config(description_from_docstring=docstring)
         # Allow local tools to signal via explicit adapter_class=None
         adapter_value = model_config.get("adapter_class")
         explicit_adapter = "adapter_class" in cls.__dict__
