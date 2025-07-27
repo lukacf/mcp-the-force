@@ -9,7 +9,7 @@ from typing import Optional, List, Any
 import fastmcp.exceptions
 from mcp_the_force.adapters.registry import get_adapter_class
 from .registry import ToolMetadata
-from .vector_store_manager import vector_store_manager
+from ..local_services.vector_store import vector_store_manager
 from .prompt_engine import prompt_engine
 from .parameter_validator import ParameterValidator
 from .parameter_router import ParameterRouter

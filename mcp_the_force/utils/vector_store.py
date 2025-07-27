@@ -15,7 +15,11 @@ PARALLEL_BATCHES = 10
 
 
 async def _upload_single_batch(
-    client, vector_store_id: str, files: Sequence[BinaryIO], batch_id: str, timeout: float = 15.0
+    client,
+    vector_store_id: str,
+    files: Sequence[BinaryIO],
+    batch_id: str,
+    timeout: float = 15.0,
 ) -> dict:
     """Upload a single batch of files without retry logic."""
     start = time.time()
@@ -102,35 +106,39 @@ async def _upload_single_batch(
 
 
 async def _upload_batch_with_retry(
-    client, vector_store_id: str, files: Sequence[BinaryIO], batch_num: int, max_retries: int = 3
+    client,
+    vector_store_id: str,
+    files: Sequence[BinaryIO],
+    batch_num: int,
+    max_retries: int = 3,
 ) -> dict:
     """
     Upload batch with exponential backoff and progressive batch splitting.
-    
+
     On retry, failed batches are split into smaller chunks and uploaded in parallel.
     """
     backoff_base = 2
     current_files = list(files)  # Convert to list for easier manipulation
     total_completed = 0
     start_time = time.time()
-    
+
     for attempt in range(max_retries):
         if attempt > 0:
             # Exponential backoff: 2s, 4s, 8s...
-            wait_time = backoff_base ** attempt
+            wait_time = backoff_base**attempt
             logger.info(
                 f"Batch {batch_num}: Retry attempt {attempt + 1}/{max_retries} after {wait_time}s backoff"
             )
             await asyncio.sleep(wait_time)
-            
+
             # Reset file pointers for retry
             for file in current_files:
                 try:
-                    if hasattr(file, 'seek'):
+                    if hasattr(file, "seek"):
                         file.seek(0)
                 except Exception as e:
                     logger.warning(f"Could not reset file pointer: {e}")
-        
+
         try:
             # Determine batch splitting strategy
             if attempt == 0 or len(current_files) <= 3:
@@ -138,7 +146,7 @@ async def _upload_batch_with_retry(
                 result = await _upload_single_batch(
                     client, vector_store_id, current_files, str(batch_num)
                 )
-                
+
                 if result["failed"] == 0:
                     # Full success
                     result["batch_num"] = batch_num
@@ -157,43 +165,48 @@ async def _upload_batch_with_retry(
                 else:
                     # Total failure - retry all files
                     current_files = result["failed_files"]
-                    
+
             else:
                 # Split failed batch into smaller chunks for parallel retry
                 split_factor = min(attempt + 1, 4)  # Max 4-way split
                 chunk_size = max(1, len(current_files) // split_factor)
                 sub_batches = []
                 for i in range(0, len(current_files), chunk_size):
-                    sub_batches.append(current_files[i:i + chunk_size])
-                
+                    sub_batches.append(current_files[i : i + chunk_size])
+
                 logger.info(
                     f"Batch {batch_num}: Splitting {len(current_files)} files into "
                     f"{len(sub_batches)} sub-batches of ~{chunk_size} files each"
                 )
-                
+
                 # Upload sub-batches in parallel
-                sub_results = await asyncio.gather(*[
-                    _upload_single_batch(
-                        client, vector_store_id, sub_batch, f"{batch_num}.{i+1}"
-                    )
-                    for i, sub_batch in enumerate(sub_batches)
-                ], return_exceptions=True)
-                
+                sub_results = await asyncio.gather(
+                    *[
+                        _upload_single_batch(
+                            client, vector_store_id, sub_batch, f"{batch_num}.{i+1}"
+                        )
+                        for i, sub_batch in enumerate(sub_batches)
+                    ],
+                    return_exceptions=True,
+                )
+
                 # Aggregate results
                 batch_completed = 0
                 failed_files = []
-                
+
                 for i, result in enumerate(sub_results):
                     if isinstance(result, Exception):
-                        logger.error(f"Sub-batch {batch_num}.{i+1} failed with exception: {result}")
+                        logger.error(
+                            f"Sub-batch {batch_num}.{i+1} failed with exception: {result}"
+                        )
                         failed_files.extend(sub_batches[i])
                     elif isinstance(result, dict):
                         batch_completed += result["completed"]
                         if result["failed"] > 0:
                             failed_files.extend(result["failed_files"])
-                
+
                 total_completed += batch_completed
-                
+
                 if len(failed_files) == 0:
                     # All sub-batches succeeded
                     return {
@@ -210,12 +223,14 @@ async def _upload_batch_with_retry(
                         f"Batch {batch_num}: After sub-batch retry, "
                         f"{len(failed_files)} files still failing"
                     )
-                    
+
         except Exception as e:
-            logger.error(f"Batch {batch_num}: Attempt {attempt + 1} failed with error: {e}")
+            logger.error(
+                f"Batch {batch_num}: Attempt {attempt + 1} failed with error: {e}"
+            )
             # On exception, retry all current files
             continue
-    
+
     # After all retries
     total_failed = len(current_files)
     return {
@@ -607,11 +622,9 @@ async def add_files_to_vector_store(
         return [], skipped_files
 
     try:
-        logger.debug(
-            f"Getting OpenAI client for {len(supported_new_files)} files"
-        )
+        logger.debug(f"Getting OpenAI client for {len(supported_new_files)} files")
         from ..adapters.openai.client import OpenAIClientFactory
-        
+
         client = await OpenAIClientFactory.get_instance(
             api_key=get_settings().openai_api_key
         )

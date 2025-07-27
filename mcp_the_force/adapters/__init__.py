@@ -8,8 +8,10 @@ Adapters are registered in registry.py and accessed via get_adapter_class().
 
 # Re-export registry functions for convenience
 from .registry import get_adapter_class, list_adapters
+from .litellm_base import LiteLLMBaseAdapter
 
 __all__ = [
     "get_adapter_class",
     "list_adapters",
+    "LiteLLMBaseAdapter",
 ]
