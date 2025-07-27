@@ -18,9 +18,8 @@ class StableListCache(BaseSQLiteCache):
 
     def __init__(self, db_path: Optional[str] = None, ttl: Optional[int] = None):
         if db_path is None:
-            settings = get_settings()
-            # Use the same database as session cache for simplicity
-            db_path = settings.session_db_path
+            # Check for environment variable first (for testing)
+            db_path = os.getenv("STABLE_LIST_DB_PATH", ".stable_list_cache.sqlite3")
         if ttl is None:
             settings = get_settings()
             ttl = settings.session_ttl_seconds

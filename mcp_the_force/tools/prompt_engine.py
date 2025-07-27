@@ -49,26 +49,10 @@ class PromptEngine:
         # Handle the current special case for context
         # Convert list of paths to string if needed
         if "context" in prompt_params and isinstance(prompt_params["context"], list):
-            if prompt_params["context"]:
-                # Use the existing build_prompt utility for now
-                # This maintains backward compatibility
-                from ..utils.prompt_builder import build_prompt
-
-                instructions = prompt_params.get("instructions", "")
-                output_format = prompt_params.get("output_format", "")
-                context = prompt_params.get("context", [])
-
-                # Call build_prompt directly without asyncio.to_thread
-                # build_prompt is fast enough to not need threading
-                prompt, _ = build_prompt(
-                    instructions,
-                    output_format,
-                    context,
-                    None,  # Attachments handled separately via vector store
-                )
-                return prompt
-            else:
-                prompt_params["context"] = ""
+            # Context is handled by the executor via build_context_with_stable_list
+            # This should never be reached with the current architecture
+            logger.warning("Unexpected list context in prompt_engine - this is a bug")
+            prompt_params["context"] = ""
 
         # Format the template with available parameters
         try:

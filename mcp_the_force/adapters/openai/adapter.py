@@ -5,7 +5,7 @@ import json
 from typing import Any, Dict
 
 from ..protocol import CallContext, ToolDispatcher
-from ...unified_session_cache import unified_session_cache
+from ...unified_session_cache import UnifiedSessionCache
 from .flow import FlowOrchestrator
 from .definitions import OpenAIToolParams, OPENAI_MODEL_CAPABILITIES
 
@@ -85,7 +85,7 @@ class OpenAIProtocolAdapter:
             # Load previous_response_id from session if continuing
             previous_response_id = None
             if ctx.session_id:
-                previous_response_id = await unified_session_cache.get_response_id(
+                previous_response_id = await UnifiedSessionCache.get_response_id(
                     ctx.session_id
                 )
                 if previous_response_id:
@@ -128,11 +128,11 @@ class OpenAIProtocolAdapter:
 
             # Store response_id in session for continuity
             if ctx.session_id and "response_id" in result:
-                await unified_session_cache.set_response_id(
+                await UnifiedSessionCache.set_response_id(
                     ctx.session_id, result["response_id"]
                 )
                 # Also store that we're using OpenAI native format
-                await unified_session_cache.set_api_format(
+                await UnifiedSessionCache.set_api_format(
                     ctx.session_id, "openai_native"
                 )
                 logger.debug(
