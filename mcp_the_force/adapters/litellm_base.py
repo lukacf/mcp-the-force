@@ -59,44 +59,6 @@ class LiteLLMBaseAdapter:
         """
         pass
 
-    def _convert_messages_to_input(
-        self, messages: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
-        """Convert chat format messages to Responses API input format.
-
-        Args:
-            messages: Messages in chat format
-
-        Returns:
-            Messages in Responses API input format
-        """
-        conversation_input = []
-
-        for msg in messages:
-            role = msg["role"]
-            content = msg["content"]
-
-            if role in ["system", "user", "assistant"]:
-                # Convert to Responses API format
-                conversation_input.append(
-                    {
-                        "type": "message",
-                        "role": role,
-                        "content": [{"type": "text", "text": content}],
-                    }
-                )
-            elif role == "tool":
-                # Convert tool response to function_call_output
-                conversation_input.append(
-                    {
-                        "type": "function_call_output",
-                        "call_id": msg.get("tool_call_id", ""),
-                        "output": content,
-                    }
-                )
-
-        return conversation_input
-
     async def _load_session_history(self, session_id: str) -> List[Dict[str, Any]]:
         """Load session history from cache.
 
@@ -118,7 +80,6 @@ class LiteLLMBaseAdapter:
         self,
         prompt: str,
         ctx: CallContext,
-        messages: Optional[List[Dict[str, Any]]] = None,
         system_instruction: Optional[str] = None,
         structured_output_schema: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
@@ -127,7 +88,6 @@ class LiteLLMBaseAdapter:
         Args:
             prompt: User prompt
             ctx: Call context
-            messages: Optional existing messages
             system_instruction: Optional system instruction
             structured_output_schema: Optional JSON schema
 
@@ -136,10 +96,8 @@ class LiteLLMBaseAdapter:
         """
         conversation_input = []
 
-        # Handle existing messages
-        if messages:
-            conversation_input.extend(self._convert_messages_to_input(messages))
-        elif system_instruction:
+        # Handle system instruction
+        if system_instruction:
             conversation_input.append(
                 {
                     "type": "message",
@@ -404,7 +362,6 @@ class LiteLLMBaseAdapter:
                 self._build_conversation_input(
                     prompt,
                     ctx,
-                    messages=kwargs.get("messages"),
                     system_instruction=kwargs.get("system_instruction"),
                     structured_output_schema=getattr(
                         params, "structured_output_schema", None
