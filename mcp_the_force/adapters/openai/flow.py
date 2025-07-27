@@ -261,10 +261,19 @@ class BackgroundFlowStrategy(BaseFlowStrategy):
                 if job.status == "completed":
                     break
                 if job.status not in ["queued", "in_progress"]:
-                    error = getattr(job, "error", {}) or {}
+                    error = getattr(job, "error", None)
+                    error_message = "Unknown error"
+                    if error:
+                        # Handle both object and dict forms
+                        if hasattr(error, "message"):
+                            error_message = error.message
+                        elif isinstance(error, dict):
+                            error_message = error.get("message", "Unknown error")
+                        else:
+                            error_message = str(error)
                     raise AdapterException(
                         ErrorCategory.TRANSIENT_API,
-                        f"Run failed with status {job.status}: {error.get('message', 'Unknown')}",
+                        f"Run failed with status {job.status}: {error_message}",
                     )
                 delay = min(delay * 1.8 + random.uniform(0, 0.2), MAX_POLL_INTERVAL_SEC)
 
