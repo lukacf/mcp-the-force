@@ -14,7 +14,7 @@ from uuid import uuid4
 from .client import OpenAIClientFactory
 from .models import OpenAIRequest, OPENAI_MODEL_CAPABILITIES
 from ..protocol import CallContext, ToolCall
-from .errors import (
+from ..errors import (
     AdapterException,
     ErrorCategory,
     TimeoutException,
