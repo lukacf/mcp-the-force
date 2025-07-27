@@ -32,6 +32,102 @@ PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 
+@pytest.fixture(autouse=True)
+def isolate_test_databases(tmp_path, monkeypatch):
+    """Ensure tests use isolated databases, not production ones.
+
+    This fixture intercepts SQLite connections to redirect production database
+    paths to temporary test databases. This approach is safe because:
+    - No global state is modified
+    - Monkeypatch automatically cleans up on test failure
+    - Only specific database paths are redirected
+    """
+    import sqlite3
+    import shutil
+
+    # Define production database names to redirect
+    PRODUCTION_DBS = {
+        ".mcp_sessions.sqlite3",
+        ".stable_list_cache.sqlite3",
+        ".mcp_logs.sqlite3",
+        ".mcp_vector_stores.db",
+    }
+
+    # Create test database mapping
+    test_db_map = {}
+    for db_name in PRODUCTION_DBS:
+        test_path = tmp_path / f"test_{db_name}"
+        test_db_map[db_name] = str(test_path)
+
+    # Store the original sqlite3.connect
+    original_connect = sqlite3.connect
+
+    def mock_connect(database, *args, **kwargs):
+        """Redirect production database paths to test paths."""
+        # Skip special SQLite databases
+        if database == ":memory:" or not isinstance(database, str):
+            return original_connect(database, *args, **kwargs)
+
+        # Convert to Path for easier handling
+        db_path = Path(database)
+        db_name = db_path.name
+
+        # Check if this is a production database (by name)
+        if db_name in PRODUCTION_DBS:
+            # Redirect to test database
+            database = test_db_map[db_name]
+
+        # Also check if the full path ends with production database name
+        elif any(database.endswith(prod_db) for prod_db in PRODUCTION_DBS):
+            # Extract the production db name and redirect
+            for prod_db in PRODUCTION_DBS:
+                if database.endswith(prod_db):
+                    database = test_db_map[prod_db]
+                    break
+
+        # Call original connect with potentially redirected path
+        return original_connect(database, *args, **kwargs)
+
+    # Patch sqlite3.connect
+    monkeypatch.setattr(sqlite3, "connect", mock_connect)
+
+    # Clear any existing singleton instances before test
+    from mcp_the_force import unified_session_cache as usc_module
+
+    if hasattr(usc_module, "_instance") and usc_module._instance is not None:
+        try:
+            usc_module._instance.close()
+        except Exception:
+            pass  # Ignore errors during cleanup
+        usc_module._instance = None
+
+    yield
+
+    # Cleanup after test
+    try:
+        # Close and clear singleton
+        if hasattr(usc_module, "_instance") and usc_module._instance is not None:
+            try:
+                usc_module._instance.close()
+            except Exception:
+                pass  # Ignore errors during cleanup
+            usc_module._instance = None
+
+        # Also try to close via the public interface
+        from mcp_the_force.unified_session_cache import unified_session_cache
+
+        try:
+            unified_session_cache.close()
+        except Exception:
+            pass  # Ignore errors during cleanup
+
+    finally:
+        # Remove test databases - tmp_path is automatically cleaned up by pytest
+        # but we can be explicit about it
+        if tmp_path.exists():
+            shutil.rmtree(tmp_path, ignore_errors=True)
+
+
 @pytest.fixture(scope="session", autouse=True)
 def verify_mock_adapter_for_integration():
     """Verify MockAdapter is properly activated for integration tests."""
@@ -155,12 +251,8 @@ def mock_openai_factory(mock_openai_client):
 
     with (
         patch(
-            "mcp_the_force.utils.vector_store.OpenAIClientFactory.get_instance",
-            new=mock_get_instance,
-        ),
-        patch(
-            "mcp_the_force.utils.vector_store_files.OpenAIClientFactory.get_instance",
-            new=mock_get_instance,
+            "mcp_the_force.utils.vector_store.get_client",
+            return_value=mock_openai_client,
         ),
         patch(
             "mcp_the_force.adapters.openai.client.OpenAIClientFactory.get_instance",

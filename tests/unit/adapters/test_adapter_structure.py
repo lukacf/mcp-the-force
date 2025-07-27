@@ -7,6 +7,27 @@ Note: Actual cancellation behavior testing requires integration tests with real 
 """
 
 import pytest
+from unittest.mock import patch, MagicMock
+
+
+@pytest.fixture(autouse=True)
+def mock_gemini_settings():
+    """Auto-mock Gemini settings for all tests to avoid credential errors."""
+    mock_settings = MagicMock()
+    mock_settings.vertex.project = "test-project"
+    mock_settings.vertex.location = "test-location"
+    mock_settings.openai_api_key = "test-key"
+    mock_settings.xai_api_key = "test-key"
+
+    # Add thread pool settings
+    mock_settings.mcp.thread_pool_workers = 5
+
+    # Add gemini settings
+    mock_settings.gemini.api_key = None
+
+    # Patch get_settings at the config module level since adapters import it locally
+    with patch("mcp_the_force.config.get_settings", return_value=mock_settings):
+        yield
 
 
 @pytest.mark.unit

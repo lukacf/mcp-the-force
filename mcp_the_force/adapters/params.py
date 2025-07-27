@@ -8,8 +8,6 @@ The inheritance pattern ensures that all tools have a consistent base
 set of parameters while allowing adapter-specific extensions.
 """
 
-from typing import List
-
 # Import Route directly for base parameters
 from ..tools.descriptors import Route
 
@@ -25,11 +23,16 @@ class BaseToolParams:
     and add their own parameters with appropriate capability requirements.
     """
 
-    instructions: str = Route.prompt(pos=0, description="User instructions")
-    output_format: str = Route.prompt(pos=1, description="Expected output format")
-    context: List[str] = Route.prompt(pos=2, description="Context files/directories")
-    session_id: str = Route.session(description="Session ID for conversation")
-    disable_memory_store: bool = Route.adapter(
+    instructions = Route.prompt(pos=0, description="User instructions")  # type: ignore[assignment]
+    output_format = Route.prompt(pos=1, description="Expected output format")  # type: ignore[assignment]
+    context = Route.prompt(pos=2, description="Context files/directories")  # type: ignore[assignment]
+    priority_context = Route.prompt(  # type: ignore[assignment, var-annotated]
+        pos=3,
+        description="Priority files to always include inline (within token budget)",
+        default_factory=list,
+    )
+    session_id = Route.session(description="Session ID for conversation")  # type: ignore[assignment]
+    disable_memory_store = Route.adapter(  # type: ignore[assignment]
         default=False,
         description="Disable saving the conversation to project history",
     )

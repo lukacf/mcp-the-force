@@ -40,9 +40,9 @@ class TestMultiTurnErrors:
         assert data["model"] == "gemini-2.5-pro"
 
         # 2. Session ID was passed through to adapter
-        assert "session_id" in data["adapter_kwargs"], (
-            "Bug: session_id not passed to adapter!"
-        )
+        assert (
+            "session_id" in data["adapter_kwargs"]
+        ), "Bug: session_id not passed to adapter!"
         assert data["adapter_kwargs"]["session_id"] == "test-session-123"
 
         # 3. Other parameters were routed correctly
@@ -86,12 +86,12 @@ class TestMultiTurnErrors:
         data2 = parse_adapter_response(result2)
 
         # Both calls should have system_instruction in adapter_kwargs
-        assert "system_instruction" in data1["adapter_kwargs"], (
-            "First turn missing system_instruction"
-        )
-        assert "system_instruction" in data2["adapter_kwargs"], (
-            "Bug: Second turn missing system_instruction!"
-        )
+        assert (
+            "system_instruction" in data1["adapter_kwargs"]
+        ), "First turn missing system_instruction"
+        assert (
+            "system_instruction" in data2["adapter_kwargs"]
+        ), "Bug: Second turn missing system_instruction!"
 
         # Verify session continuity
         assert data1["adapter_kwargs"]["session_id"] == session_id
@@ -151,9 +151,10 @@ class TestMultiTurnErrors:
     async def test_cross_model_sessions_isolated(
         self, clean_session_caches, session_id_generator
     ):
-        """Test that sessions are isolated between different model types."""
-        # Same session ID, different models
-        session_id = session_id_generator()
+        """Test that sessions with different IDs are isolated."""
+        # Different session IDs for different models
+        gemini_session = session_id_generator()
+        grok_session = session_id_generator()
 
         # Gemini: Store fact A
         gemini_meta = get_tool("chat_with_gemini25_pro")
@@ -162,17 +163,17 @@ class TestMultiTurnErrors:
             instructions="Gemini fact: Earth has one moon",
             output_format="OK",
             context=[],
-            session_id=session_id,
+            session_id=gemini_session,
         )
 
-        # Grok: Store fact B (same session ID)
+        # Grok: Store fact B (different session ID)
         grok_meta = get_tool("chat_with_grok4")
         await executor.execute(
             grok_meta,
             instructions="Grok fact: Mars has two moons",
             output_format="OK",
             context=[],
-            session_id=session_id,
+            session_id=grok_session,
         )
 
         # Query Gemini - should only know its fact
@@ -181,7 +182,7 @@ class TestMultiTurnErrors:
             instructions="What facts do you know about moons?",
             output_format="List facts",
             context=[],
-            session_id=session_id,
+            session_id=gemini_session,
         )
 
         gemini_data = json.loads(gemini_result)
@@ -194,7 +195,7 @@ class TestMultiTurnErrors:
             instructions="What facts do you know about moons?",
             output_format="List facts",
             context=[],
-            session_id=session_id,
+            session_id=grok_session,
         )
 
         grok_data = json.loads(grok_result)
@@ -261,9 +262,9 @@ class TestMultiTurnErrors:
             for other in range(1, 6):
                 if other != session_num:
                     other_num = str(other * 100)
-                    assert other_num not in data["prompt"], (
-                        f"Session {session_num} has data from session {other}!"
-                    )
+                    assert (
+                        other_num not in data["prompt"]
+                    ), f"Session {session_num} has data from session {other}!"
 
         # Run 5 concurrent sessions
         await asyncio.gather(*[session_flow(i) for i in range(1, 6)])

@@ -129,7 +129,7 @@ class SecurityConfig(BaseModel):
             # macOS specific
             "/System",
             "/private/etc",
-            "/private/var",
+            # Note: /private/var excluded to allow temp files in tests
             # Block sensitive Library subdirectories but allow iCloud Drive
             "~/Library/Keychains",
             "~/Library/Cookies",

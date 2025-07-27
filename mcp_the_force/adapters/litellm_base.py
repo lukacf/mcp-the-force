@@ -9,8 +9,8 @@ from litellm import aresponses
 
 from .protocol import CallContext, ToolDispatcher
 from .capabilities import AdapterCapabilities
-from .errors import ToolExecutionException, AdapterException, ErrorCategory
-from ..unified_session_cache import unified_session_cache
+from .errors import ToolExecutionException
+from ..unified_session_cache import UnifiedSessionCache
 
 logger = logging.getLogger(__name__)
 
@@ -106,7 +106,7 @@ class LiteLLMBaseAdapter:
         Returns:
             Conversation history in Responses API format
         """
-        history = await unified_session_cache.get_history(session_id)
+        history = await UnifiedSessionCache.get_history(session_id)
         if history:
             logger.debug(
                 f"[{self.display_name}] Loaded {len(history)} items from session {session_id}"
@@ -290,9 +290,7 @@ class LiteLLMBaseAdapter:
                     )
                 except Exception as e:
                     tool_error = ToolExecutionException(
-                        tool_name=tool_call.name,
-                        error=e,
-                        provider=self.display_name
+                        tool_name=tool_call.name, error=e, provider=self.display_name
                     )
                     logger.error(str(tool_error))
                     updated_conversation.append(
@@ -343,7 +341,7 @@ class LiteLLMBaseAdapter:
                 final_conversation.append(assistant_msg)
 
             # Save to cache
-            await unified_session_cache.set_history(
+            await UnifiedSessionCache.set_history(
                 ctx.session_id,
                 final_conversation,
             )
