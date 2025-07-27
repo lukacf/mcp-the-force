@@ -6,7 +6,7 @@ PYTEST := pytest
 FAST_UNIT_MARKER := "not slow and not e2e and not integration"
 
 # Phony targets ensure these are always run, regardless of file names.
-.PHONY: help install-hooks lint test test-unit test-integration e2e test-all ci clean
+.PHONY: help install-hooks lint test test-unit test-integration e2e test-all ci clean backup
 
 help:
 	@echo "Usage: make <target>"
@@ -21,6 +21,7 @@ help:
 	@echo "  test-all         Run all tests (unit, integration, e2e)."
 	@echo "  ci               Run the main CI suite (lint, unit, integration)."
 	@echo "  clean            Remove temporary files and caches."
+	@echo "  backup           Manually backup SQLite databases."
 
 install-hooks:
 	@echo "Installing pre-commit hooks..."
@@ -201,6 +202,10 @@ clean:
 	find . -type d -name "__pycache__" -delete
 	rm -rf .pytest_cache .coverage coverage.xml .mypy_cache
 	rm -rf htmlcov
+
+backup:
+	@echo "Backing up SQLite databases..."
+	@scripts/backup_databases.sh
 	@echo "✓ Clean complete!"
 
 clean-e2e:

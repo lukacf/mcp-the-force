@@ -43,16 +43,16 @@ class TestGrokAdapterUnit:
         self, grok_adapter_with_mock, mock_litellm_response
     ):
         """Unit test: Simple conversation without tool calls."""
-        # Mock litellm.aresponses
-        with patch("litellm.aresponses") as mock_aresponses:
+        # Mock litellm.aresponses at the import location
+        with patch("mcp_the_force.adapters.litellm_base.aresponses") as mock_aresponses:
             mock_aresponses.return_value = mock_litellm_response
 
             # Mock unified session cache to isolate the adapter
             with patch(
-                "mcp_the_force.adapters.xai.adapter.unified_session_cache",
-                new_callable=AsyncMock,
-            ) as mock_cache:
-                mock_cache.get_history.return_value = []
+                "mcp_the_force.adapters.litellm_base.UnifiedSessionCache",
+            ) as mock_cache_class:
+                mock_cache_class.get_history = AsyncMock(return_value=[])
+                mock_cache_class.set_history = AsyncMock()
 
                 # Create params and context for protocol-based adapter
                 params = SimpleNamespace(
@@ -85,8 +85,10 @@ class TestGrokAdapterUnit:
                 assert result["content"] == "Hello! How can I help you today?"
 
                 # Verify adapter called session cache correctly
-                mock_cache.get_history.assert_called_once_with("test-session-simple")
-                mock_cache.set_history.assert_called_once()
+                mock_cache_class.get_history.assert_called_once_with(
+                    "test-session-simple"
+                )
+                mock_cache_class.set_history.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_unknown_tool_handling(self, grok_adapter_with_mock):
@@ -116,16 +118,16 @@ class TestGrokAdapterUnit:
         # Set up the output attribute (Responses API format)
         mock_final_response.output = [message_item]
 
-        # Mock litellm.aresponses with side_effect
-        with patch("litellm.aresponses") as mock_aresponses:
+        # Mock litellm.aresponses at the import location with side_effect
+        with patch("mcp_the_force.adapters.litellm_base.aresponses") as mock_aresponses:
             mock_aresponses.side_effect = [mock_tool_call_response, mock_final_response]
 
             # Mock session cache
             with patch(
-                "mcp_the_force.adapters.xai.adapter.unified_session_cache",
-                new_callable=AsyncMock,
-            ) as mock_cache:
-                mock_cache.get_history.return_value = []
+                "mcp_the_force.adapters.litellm_base.UnifiedSessionCache",
+            ) as mock_cache_class:
+                mock_cache_class.get_history = AsyncMock(return_value=[])
+                mock_cache_class.set_history = AsyncMock()
 
                 # Create params and context
                 params = SimpleNamespace(
@@ -176,16 +178,16 @@ class TestGrokAdapterUnit:
         # Set up the output attribute (Responses API format)
         mock_response.output = [message_item]
 
-        # Mock litellm.aresponses
-        with patch("litellm.aresponses") as mock_aresponses:
+        # Mock litellm.aresponses at the import location
+        with patch("mcp_the_force.adapters.litellm_base.aresponses") as mock_aresponses:
             mock_aresponses.return_value = mock_response
 
             # Mock session cache to verify calls
             with patch(
-                "mcp_the_force.adapters.xai.adapter.unified_session_cache",
-                new_callable=AsyncMock,
-            ) as mock_cache:
-                mock_cache.get_history.return_value = []
+                "mcp_the_force.adapters.litellm_base.UnifiedSessionCache",
+            ) as mock_cache_class:
+                mock_cache_class.get_history = AsyncMock(return_value=[])
+                mock_cache_class.set_history = AsyncMock()
 
                 # Create params and context
                 params = SimpleNamespace(
@@ -216,10 +218,10 @@ class TestGrokAdapterUnit:
                 )
 
                 # Verify session cache was called with correct session ID
-                mock_cache.get_history.assert_called_once_with("test-session-123")
-                mock_cache.set_history.assert_called_once()
+                mock_cache_class.get_history.assert_called_once_with("test-session-123")
+                mock_cache_class.set_history.assert_called_once()
 
                 # Check that history was stored with correct session ID
-                call_args = mock_cache.set_history.call_args
+                call_args = mock_cache_class.set_history.call_args
                 session_id_arg = call_args[0][0]
                 assert session_id_arg == "test-session-123"

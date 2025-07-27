@@ -159,9 +159,9 @@ class TestSessionManagement:
         assert data1["model"] == "o3"
 
         # Continue with gpt4
-        gpt4_metadata = get_tool("chat_with_gpt4_1")
+        gpt4_metadata = get_tool("chat_with_gpt41")
         if not gpt4_metadata:
-            raise ValueError("Tool chat_with_gpt4_1 not found")
+            raise ValueError("Tool chat_with_gpt41 not found")
         result2 = await executor.execute(
             gpt4_metadata,
             instructions="Continue conversation",
@@ -242,7 +242,10 @@ class TestSessionManagement:
         data1 = parse_response(result1)
         assert data1["mock"] is True
         msgs1 = data1["adapter_kwargs"].get("messages")
-        assert msgs1 and len(msgs1) == 1
+        # First turn should have developer message + user message
+        assert msgs1 and len(msgs1) == 2
+        assert msgs1[0]["role"] == "developer"
+        assert msgs1[1]["role"] == "user"
 
         result2 = await executor.execute(
             tool_metadata,

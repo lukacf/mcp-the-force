@@ -3,6 +3,7 @@ Unit tests for ToolExecutor orchestration.
 """
 
 import pytest
+import asyncio
 from unittest.mock import patch, AsyncMock, MagicMock
 from types import SimpleNamespace
 import fastmcp.exceptions
@@ -32,9 +33,42 @@ class TestToolExecutor:
         adapter.model_name = "mock-model"
         return adapter
 
+    @pytest.fixture
+    def mock_gemini_adapter(self):
+        """Create a mock Gemini adapter with proper capabilities."""
+        adapter = MagicMock(spec=MCPAdapter)
+        adapter.generate = AsyncMock(return_value={"content": "Mock Gemini response"})
+        # Gemini supports reasoning_effort
+        adapter.capabilities = AdapterCapabilities(
+            supports_reasoning_effort=True,
+            supports_temperature=True,
+            supports_structured_output=True,
+        )
+        adapter.param_class = MagicMock()
+        adapter.display_name = "Mock Gemini Adapter"
+        adapter.model_name = "gemini-2.5-flash"
+        return adapter
+
+    @pytest.fixture
+    def mock_openai_adapter(self):
+        """Create a mock OpenAI adapter with proper capabilities."""
+        adapter = MagicMock(spec=MCPAdapter)
+        adapter.generate = AsyncMock(return_value={"content": "Mock OpenAI response"})
+        # O-series supports reasoning_effort but not temperature
+        adapter.capabilities = AdapterCapabilities(
+            supports_reasoning_effort=True,
+            supports_temperature=False,  # O-series doesn't support temperature
+            supports_structured_output=True,
+            supports_web_search=True,
+        )
+        adapter.param_class = MagicMock()
+        adapter.display_name = "Mock OpenAI Adapter"
+        adapter.model_name = "o3"
+        return adapter
+
     @pytest.mark.asyncio
     async def test_execute_gemini_tool(
-        self, executor, mock_adapter, tmp_path, mock_env
+        self, executor, mock_gemini_adapter, tmp_path, mock_env
     ):
         """Test executing a Gemini tool with proper parameter routing."""
         # Create a test file
@@ -42,11 +76,19 @@ class TestToolExecutor:
         test_file.write_text("print('hello')")
 
         # Mock the adapter registry to return a mock class that returns our mock adapter
-        mock_adapter_class = MagicMock(return_value=mock_adapter)
+        mock_adapter_class = MagicMock(return_value=mock_gemini_adapter)
 
-        # Patch the registry at the module level where it's imported
-        with patch("mcp_the_force.tools.executor.get_adapter_class") as mock_get_class:
+        # Patch the registry and disable memory storage for unit test
+        with (
+            patch("mcp_the_force.tools.executor.get_adapter_class") as mock_get_class,
+            patch(
+                "mcp_the_force.memory.conversation.store_conversation_memory"
+            ) as mock_store,
+        ):
             mock_get_class.return_value = mock_adapter_class
+            # Mock memory storage to prevent API calls
+            mock_store.return_value = asyncio.Future()
+            mock_store.return_value.set_result(None)
 
             # Import get_tool after patching
             from mcp_the_force.tools.registry import get_tool
@@ -66,8 +108,8 @@ class TestToolExecutor:
             assert mock_adapter_class.called
 
         # Verify adapter was called with correct params
-        assert mock_adapter.generate.call_count >= 1
-        call_args = mock_adapter.generate.call_args_list[0]
+        assert mock_gemini_adapter.generate.call_count >= 1
+        call_args = mock_gemini_adapter.generate.call_args_list[0]
 
         # Check prompt was built
         prompt = call_args[1]["prompt"]
@@ -82,24 +124,34 @@ class TestToolExecutor:
         assert params.temperature == 0.5
 
         # Check result
-        assert result == "Mock response"
+        assert result == "Mock Gemini response"
 
     @pytest.mark.asyncio
-    async def test_execute_openai_tool_with_session(self, executor, mock_adapter):
+    async def test_execute_openai_tool_with_session(
+        self, executor, mock_openai_adapter
+    ):
         """Test executing an OpenAI tool with session support."""
-        mock_adapter_class = MagicMock(return_value=mock_adapter)
+        mock_adapter_class = MagicMock(return_value=mock_openai_adapter)
 
-        with patch("mcp_the_force.tools.executor.get_adapter_class") as mock_get_class:
+        with (
+            patch("mcp_the_force.tools.executor.get_adapter_class") as mock_get_class,
+            patch(
+                "mcp_the_force.memory.conversation.store_conversation_memory"
+            ) as mock_store,
+        ):
             mock_get_class.return_value = mock_adapter_class
+            # Mock memory storage to prevent API calls
+            mock_store.return_value = asyncio.Future()
+            mock_store.return_value.set_result(None)
 
             # Mock session cache
             with patch(
-                "mcp_the_force.unified_session_cache.unified_session_cache"
-            ) as mock_cache:
-                mock_cache.get_response_id = AsyncMock(
+                "mcp_the_force.unified_session_cache.UnifiedSessionCache"
+            ) as mock_cache_class:
+                mock_cache_class.get_response_id = AsyncMock(
                     return_value="previous_response_id"
                 )
-                mock_cache.set_response_id = AsyncMock()
+                mock_cache_class.set_response_id = AsyncMock()
 
                 from mcp_the_force.tools.registry import get_tool
 
@@ -114,8 +166,8 @@ class TestToolExecutor:
                 )
 
         # Verify adapter was called with CallContext
-        assert mock_adapter.generate.called
-        call_args = mock_adapter.generate.call_args_list[0]
+        assert mock_openai_adapter.generate.called
+        call_args = mock_openai_adapter.generate.call_args_list[0]
         ctx = call_args[1]["ctx"]
         assert isinstance(ctx, CallContext)
         assert ctx.session_id == "test-session"
