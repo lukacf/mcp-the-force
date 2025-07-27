@@ -2,7 +2,7 @@
 
 import logging
 from typing import Any, Dict, List, Optional
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 
 import litellm
 from litellm import aresponses
@@ -18,7 +18,7 @@ litellm.set_verbose = False
 litellm.drop_params = True  # Drop unknown parameters
 
 
-class LiteLLMBaseAdapter(ABC):
+class LiteLLMBaseAdapter:
     """Base class for LiteLLM-based adapters.
 
     This provides common functionality for adapters that use LiteLLM's
@@ -96,9 +96,7 @@ class LiteLLMBaseAdapter(ABC):
 
         return conversation_input
 
-    async def _load_session_history(
-        self, session_id: str
-    ) -> List[Dict[str, Any]]:
+    async def _load_session_history(self, session_id: str) -> List[Dict[str, Any]]:
         """Load session history from cache.
 
         Args:
@@ -224,6 +222,7 @@ class LiteLLMBaseAdapter(ABC):
         tool_dispatcher: ToolDispatcher,
         conversation_input: List[Dict[str, Any]],
         request_params: Dict[str, Any],
+        ctx: CallContext,
     ) -> tuple[Any, List[Dict[str, Any]]]:
         """Handle tool calls in the response.
 
@@ -239,54 +238,69 @@ class LiteLLMBaseAdapter(ABC):
         final_response = response
         updated_conversation = list(conversation_input)
 
-        # Handle tool calls
-        while hasattr(response, "choices") and response.choices:
-            choice = response.choices[0]
-            message = choice.message
+        # Handle tool calls in Responses API format
+        while True:
+            # Extract content and tool calls from response.output
+            tool_calls = []
+            final_content = ""
 
-            if hasattr(message, "tool_calls") and message.tool_calls:
-                # Add assistant message with tool calls
-                assistant_msg = {
+            if hasattr(response, "output"):
+                for item in response.output:
+                    if item.type == "message" and hasattr(item, "content"):
+                        if isinstance(item.content, str):
+                            final_content = item.content
+                        elif isinstance(item.content, list):
+                            for content_item in item.content:
+                                if hasattr(content_item, "text"):
+                                    final_content = content_item.text
+                    elif item.type == "function_call":
+                        tool_calls.append(item)
+
+            # If no tool calls, we're done
+            if not tool_calls:
+                break
+
+            logger.debug(f"Processing {len(tool_calls)} tool calls")
+
+            # Add assistant message to conversation
+            updated_conversation.append(
+                {
                     "type": "message",
                     "role": "assistant",
-                    "content": [{"type": "text", "text": message.content or ""}],
-                    "tool_calls": [
-                        {
-                            "type": "function",
-                            "id": tc.id,
-                            "function": {
-                                "name": tc.function.name,
-                                "arguments": tc.function.arguments,
-                            },
-                        }
-                        for tc in message.tool_calls
-                    ],
+                    "content": [{"type": "text", "text": final_content or ""}],
                 }
-                updated_conversation.append(assistant_msg)
+            )
 
-                # Execute tools
-                for tool_call in message.tool_calls:
-                    result = await tool_dispatcher.execute_tool(
-                        tool_call.function.name,
-                        tool_call.function.arguments,
+            # Execute tool calls
+            for tool_call in tool_calls:
+                logger.debug(f"Executing tool: {tool_call.name}")
+                try:
+                    result = await tool_dispatcher.execute(
+                        tool_name=tool_call.name,
+                        tool_args=tool_call.arguments,
+                        context=ctx,
                     )
-
-                    # Add tool result
                     updated_conversation.append(
                         {
                             "type": "function_call_output",
-                            "call_id": tool_call.id,
-                            "output": result,
+                            "call_id": tool_call.call_id,
+                            "output": str(result),
+                        }
+                    )
+                except Exception as e:
+                    logger.error(f"Tool {tool_call.name} failed: {e}")
+                    updated_conversation.append(
+                        {
+                            "type": "function_call_output",
+                            "call_id": tool_call.call_id,
+                            "output": f"Error: {str(e)}",
                         }
                     )
 
-                # Continue conversation with tool results
-                request_params["input"] = updated_conversation
-                response = await aresponses(**request_params)
-                final_response = response
-            else:
-                # No more tool calls
-                break
+            # Continue conversation with tool results
+            request_params["input"] = updated_conversation
+            response = await aresponses(**request_params)
+            final_response = response
 
         return final_response, updated_conversation
 
@@ -309,25 +323,27 @@ class LiteLLMBaseAdapter(ABC):
             # Use updated conversation if available (includes tool calls)
             final_conversation = updated_conversation or conversation_input
 
-            # Add the final assistant response
-            if hasattr(response, "choices") and response.choices:
-                final_message = response.choices[0].message
+            # Extract final content and add assistant response if not already included
+            final_content = self._extract_content(response)
+            if final_content and (
+                not final_conversation
+                or final_conversation[-1].get("role") != "assistant"
+            ):
                 assistant_msg = {
                     "type": "message",
                     "role": "assistant",
-                    "content": [{"type": "text", "text": final_message.content}],
+                    "content": [{"type": "text", "text": final_content}],
                 }
                 final_conversation.append(assistant_msg)
 
             # Save to cache
-            await unified_session_cache.save_history(
+            await unified_session_cache.set_history(
                 ctx.session_id,
                 final_conversation,
-                model_name=self.model_name,
             )
 
     def _extract_content(self, response: Any) -> str:
-        """Extract content from LiteLLM response.
+        """Extract content from LiteLLM Responses API response.
 
         Args:
             response: LiteLLM response object
@@ -335,9 +351,19 @@ class LiteLLMBaseAdapter(ABC):
         Returns:
             Extracted content string
         """
-        if hasattr(response, "choices") and response.choices:
-            return response.choices[0].message.content
-        return ""
+        final_content = ""
+
+        if hasattr(response, "output"):
+            for item in response.output:
+                if item.type == "message" and hasattr(item, "content"):
+                    if isinstance(item.content, str):
+                        final_content = item.content
+                    elif isinstance(item.content, list):
+                        for content_item in item.content:
+                            if hasattr(content_item, "text"):
+                                final_content = content_item.text
+
+        return final_content
 
     async def generate(
         self,
@@ -399,7 +425,7 @@ class LiteLLMBaseAdapter(ABC):
 
             # Handle tool calls if present
             final_response, updated_conversation = await self._handle_tool_calls(
-                response, tool_dispatcher, conversation_input, request_params
+                response, tool_dispatcher, conversation_input, request_params, ctx
             )
 
             # Save session state
@@ -413,9 +439,7 @@ class LiteLLMBaseAdapter(ABC):
 
             # Add any provider-specific response data
             if hasattr(self, "_add_provider_specific_data"):
-                result.update(
-                    self._add_provider_specific_data(final_response, params)
-                )
+                result.update(self._add_provider_specific_data(final_response, params))
 
             return result
 
