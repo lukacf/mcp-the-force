@@ -10,7 +10,6 @@ from . import definitions  # noqa: F401
 
 # Import service registrations
 from . import local_service  # noqa: F401
-from . import logging_service  # noqa: F401
 
 # Autogen is now imported lazily by registry._ensure_populated() to avoid circular imports
 

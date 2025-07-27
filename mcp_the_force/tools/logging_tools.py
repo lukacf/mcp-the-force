@@ -4,7 +4,7 @@ from typing import Any
 from .base import ToolSpec
 from .registry import tool
 from .descriptors import Route
-from .logging_service import LoggingService
+from ..local_services.logging import LoggingService
 
 LOGSQL_POCKET_GUIDE = """
 LogsQL pocket guide
