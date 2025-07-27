@@ -112,6 +112,34 @@ class FeaturesConfig(BaseModel):
     pass
 
 
+class SecurityConfig(BaseModel):
+    """Security configuration."""
+
+    path_blacklist: list[str] = Field(
+        default_factory=lambda: [
+            "/etc",
+            "/usr",
+            "/bin",
+            "/sbin",
+            "/boot",
+            "/sys",
+            "/proc",
+            "/dev",
+            "/root",
+            # macOS specific
+            "/System",
+            "/private/etc",
+            "/private/var",
+            "~/Library",
+            # Windows specific (will be ignored on Unix)
+            "C:\\Windows",
+            "C:\\Program Files",
+            "C:\\Program Files (x86)",
+        ],
+        description="Paths that are blocked from access"
+    )
+
+
 class Settings(BaseSettings):
     """Unified settings for mcp-the-force server."""
 
@@ -133,6 +161,7 @@ class Settings(BaseSettings):
     session: SessionConfig = Field(default_factory=SessionConfig)
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
     features: FeaturesConfig = Field(default_factory=FeaturesConfig)
+    security: SecurityConfig = Field(default_factory=SecurityConfig)
 
     # Testing
     adapter_mock: bool = Field(False, description="Use mock adapters for testing")
