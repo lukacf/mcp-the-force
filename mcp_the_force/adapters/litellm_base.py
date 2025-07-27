@@ -9,6 +9,7 @@ from litellm import aresponses
 
 from .protocol import CallContext, ToolDispatcher
 from .capabilities import AdapterCapabilities
+from .errors import ToolExecutionException, AdapterException, ErrorCategory
 from ..unified_session_cache import unified_session_cache
 
 logger = logging.getLogger(__name__)
@@ -288,7 +289,12 @@ class LiteLLMBaseAdapter:
                         }
                     )
                 except Exception as e:
-                    logger.error(f"Tool {tool_call.name} failed: {e}")
+                    tool_error = ToolExecutionException(
+                        tool_name=tool_call.name,
+                        error=e,
+                        provider=self.display_name
+                    )
+                    logger.error(str(tool_error))
                     updated_conversation.append(
                         {
                             "type": "function_call_output",

@@ -9,6 +9,7 @@ from typing import Any, Dict, List
 
 import litellm
 
+from ..errors import InvalidModelException
 from ..litellm_base import LiteLLMBaseAdapter
 from ..protocol import CallContext, ToolDispatcher
 from .definitions import GrokToolParams, GROK_MODEL_CAPABILITIES
@@ -37,9 +38,10 @@ class GrokAdapter(LiteLLMBaseAdapter):
             ValueError: If model is not supported
         """
         if model not in GROK_MODEL_CAPABILITIES:
-            raise ValueError(
-                f"Unknown Grok model: {model}. "
-                f"Supported models: {list(GROK_MODEL_CAPABILITIES.keys())}"
+            raise InvalidModelException(
+                model=model,
+                supported_models=list(GROK_MODEL_CAPABILITIES.keys()),
+                provider="Grok"
             )
 
         self.model_name = model
