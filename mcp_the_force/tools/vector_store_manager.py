@@ -3,8 +3,7 @@
 import asyncio
 import logging
 from typing import List, Optional, Dict, Tuple
-from ..utils.vector_store import create_vector_store, delete_vector_store
-from ..utils.vector_store_files import add_files_to_vector_store
+from ..utils.vector_store import create_vector_store, delete_vector_store, add_files_to_vector_store
 from ..utils.loiter_killer_client import LoiterKillerClient
 
 logger = logging.getLogger(__name__)

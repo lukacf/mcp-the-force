@@ -1,6 +1,6 @@
 """Base class for tool specifications."""
 
-from typing import Dict, Any, Type, get_type_hints, get_origin, get_args, Optional
+from typing import Dict, Any, Type, get_type_hints, get_origin, get_args
 from typing_extensions import dataclass_transform
 from .descriptors import RouteDescriptor, Route, _NO_DEFAULT
 
@@ -25,7 +25,7 @@ class ToolSpec:
 
     # Model configuration (to be overridden by subclasses)
     model_name: str = ""
-    adapter_class: str = ""
+    adapter_class: str | None = ""
     context_window: int = 0
     timeout: int = 600  # Default timeout 10 minutes
     description: str = ""
