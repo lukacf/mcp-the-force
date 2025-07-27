@@ -564,6 +564,210 @@ mcp:
         assert settings.mcp.port == 8000  # default, not from YAML
 
 
+class TestMissingValidationCases:
+    """Additional validation tests based on Gemini's review."""
+
+    def setup_method(self):
+        """Clear settings cache before each test."""
+        get_settings.cache_clear()
+
+    def test_port_validation_with_clear_errors(self):
+        """Test port validation with descriptive error messages."""
+        # Invalid port numbers
+        test_cases = [
+            ("0", "Port must be between 1 and 65535"),
+            ("65536", "Port must be between 1 and 65535"),
+            ("not-a-number", "Port must be an integer"),
+            ("-1", "Port must be between 1 and 65535"),
+        ]
+
+        for port_value, expected_msg in test_cases:
+            with patch.dict(os.environ, {"PORT": port_value}, clear=True):
+                with pytest.raises(ValueError) as exc_info:
+                    Settings()
+                assert expected_msg in str(exc_info.value)
+
+    def test_required_values_validation(self, tmp_path, monkeypatch):
+        """Test validation of required values based on enabled providers."""
+        # OpenAI enabled without API key
+        config_yaml = tmp_path / "config.yaml"
+        config_yaml.write_text("""
+providers:
+  openai:
+    enabled: true
+""")
+        monkeypatch.setenv("MCP_CONFIG_FILE", str(config_yaml))
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        monkeypatch.delenv("OPENAI__API_KEY", raising=False)
+
+        with pytest.raises(ValueError) as exc_info:
+            Settings()
+        assert "OpenAI API key is required when OpenAI provider is enabled" in str(
+            exc_info.value
+        )
+
+    def test_file_permission_errors(self, tmp_path, monkeypatch):
+        """Test handling of file permission errors."""
+        # Create a file with no read permissions
+        config_yaml = tmp_path / "config.yaml"
+        config_yaml.write_text("mcp:\n  port: 8000")
+        config_yaml.chmod(0o000)  # No permissions
+
+        monkeypatch.setenv("MCP_CONFIG_FILE", str(config_yaml))
+
+        with pytest.raises(PermissionError) as exc_info:
+            Settings()
+        assert "Permission denied" in str(exc_info.value)
+
+    def test_empty_string_vs_null_handling(self, tmp_path, monkeypatch):
+        """Test distinction between empty strings and null values."""
+        # Test empty string in env var
+        monkeypatch.setenv("OPENAI_API_KEY", "")
+
+        # YAML with actual value
+        config_yaml = tmp_path / "config.yaml"
+        config_yaml.write_text("""
+providers:
+  openai:
+    api_key: yaml-key
+""")
+        monkeypatch.setenv("MCP_CONFIG_FILE", str(config_yaml))
+
+        settings = Settings()
+
+        # Empty string should be treated as "not set" and fall back to YAML
+        assert settings.openai.api_key == "yaml-key"
+
+    def test_complex_type_override_behavior(self, tmp_path, monkeypatch):
+        """Test that complex types (lists/dicts) are replaced, not merged."""
+        # YAML with list
+        config_yaml = tmp_path / "config.yaml"
+        config_yaml.write_text("""
+security:
+  path_blacklist:
+    - /etc
+    - /usr
+    - /bin
+""")
+        monkeypatch.setenv("MCP_CONFIG_FILE", str(config_yaml))
+
+        # Env var completely replaces the list
+        monkeypatch.setenv("SECURITY__PATH_BLACKLIST", '["/home", "/tmp"]')
+
+        settings = Settings()
+
+        # Should be complete replacement
+        assert settings.security.path_blacklist == ["/home", "/tmp"]
+        assert len(settings.security.path_blacklist) == 2
+
+    def test_settings_deep_immutability(self):
+        """Test that settings and all nested objects are immutable."""
+        from types import FrozenInstanceError
+
+        settings = Settings()
+
+        # Root level immutability
+        with pytest.raises((FrozenInstanceError, AttributeError)):
+            settings.new_field = "value"
+
+        # First level immutability
+        with pytest.raises((FrozenInstanceError, AttributeError)):
+            settings.mcp.port = 9999
+
+        # Deep immutability
+        with pytest.raises((FrozenInstanceError, AttributeError)):
+            settings.providers.openai.api_key = "new-key"
+
+        # List immutability
+        if hasattr(settings.security, "path_blacklist"):
+            with pytest.raises((FrozenInstanceError, AttributeError)):
+                settings.security.path_blacklist.append("/new")
+
+    def test_invalid_yaml_with_clear_errors(self, tmp_path, monkeypatch):
+        """Test YAML parsing errors with descriptive messages."""
+        config_yaml = tmp_path / "config.yaml"
+        config_yaml.write_text("""
+mcp:
+  port: [unclosed
+  host: 0.0.0.0
+invalid: : syntax
+""")
+        monkeypatch.setenv("MCP_CONFIG_FILE", str(config_yaml))
+
+        with pytest.raises(ValueError) as exc_info:
+            Settings()
+        error_msg = str(exc_info.value)
+        assert "YAML parsing error" in error_msg
+        assert str(config_yaml) in error_msg
+
+    def test_env_var_list_parsing_options(self, monkeypatch):
+        """Test flexible list parsing from environment variables."""
+        # Python list syntax
+        monkeypatch.setenv("SECURITY__PATH_BLACKLIST", '["/etc", "/usr", "/bin"]')
+        settings = Settings()
+        assert settings.security.path_blacklist == ["/etc", "/usr", "/bin"]
+
+        # Comma-separated (more user-friendly)
+        get_settings.cache_clear()
+        monkeypatch.setenv("SECURITY__PATH_BLACKLIST", "/etc,/usr,/bin")
+        settings = Settings()
+        assert settings.security.path_blacklist == ["/etc", "/usr", "/bin"]
+
+        # Colon-separated (PATH-style)
+        get_settings.cache_clear()
+        monkeypatch.setenv("SECURITY__PATH_BLACKLIST", "/etc:/usr:/bin")
+        settings = Settings()
+        assert settings.security.path_blacklist == ["/etc", "/usr", "/bin"]
+
+    def test_missing_mcp_json_file_error(self, monkeypatch):
+        """Test clear error when MCP JSON file doesn't exist."""
+        monkeypatch.setenv("MCP_CONFIG_JSON_FILE", "/non/existent/mcp-config.json")
+
+        with pytest.raises(FileNotFoundError) as exc_info:
+            Settings()
+        error_msg = str(exc_info.value)
+        assert "MCP configuration file not found" in error_msg
+        assert "/non/existent/mcp-config.json" in error_msg
+
+    def test_value_constraint_validation(self, monkeypatch):
+        """Test validation of value constraints."""
+        # Context percentage must be between 0.1 and 0.95
+        for invalid_pct in ["0.05", "0.99", "1.5", "-0.1"]:
+            get_settings.cache_clear()
+            monkeypatch.setenv("CONTEXT_PERCENTAGE", invalid_pct)
+
+            with pytest.raises(ValueError) as exc_info:
+                Settings()
+            assert "context_percentage must be between 0.1 and 0.95" in str(
+                exc_info.value
+            )
+
+        # Temperature must be between 0.0 and 2.0
+        for invalid_temp in ["-0.1", "2.5", "3.0"]:
+            get_settings.cache_clear()
+            monkeypatch.setenv("DEFAULT_TEMPERATURE", invalid_temp)
+
+            with pytest.raises(ValueError) as exc_info:
+                Settings()
+            assert "temperature must be between 0.0 and 2.0" in str(exc_info.value)
+
+    def test_type_coercion_errors(self):
+        """Test clear errors for failed type coercion."""
+        test_cases = [
+            ("PORT", "not-a-number", "Port must be an integer"),
+            ("DEFAULT_TEMPERATURE", "not-a-float", "Temperature must be a number"),
+            ("MEMORY__ENABLED", "maybe", "must be a boolean (true/false)"),
+            ("SESSION__TTL_SECONDS", "1.5hours", "TTL must be an integer (seconds)"),
+        ]
+
+        for env_var, value, expected_msg in test_cases:
+            get_settings.cache_clear()
+            with patch.dict(os.environ, {env_var: value}, clear=True):
+                with pytest.raises(ValueError) as exc_info:
+                    Settings()
+                assert expected_msg in str(exc_info.value)
+
+
 # Future considerations for the ideal system:
 # 1. Runtime config reloading (watch files, reload on SIGHUP)
 # 2. Config validation on startup with clear error messages
