@@ -13,7 +13,7 @@ from .operation_manager import operation_manager  # noqa: F401, E402
 
 # Patch cancellation handler to prevent double responses
 # This is THE fix for the double response issue when operations are cancelled
-# from . import patch_cancellation_handler  # noqa: F401, E402  # Testing if FastMCP 2.10.6 fixes the issue
+# from . import patch_cancellation_handler  # noqa: F401, E402  # No longer needed with mcp@d4e14a4
 
 # NOW import FastMCP after patches are applied
 from fastmcp import FastMCP  # noqa: E402

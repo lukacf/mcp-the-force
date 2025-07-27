@@ -8,7 +8,7 @@ requires-python = ">=3.13"
 
 dependencies = [
     "fastmcp>=2.10.6",
-    "mcp>=1.10.1",
+    "mcp @ git+https://github.com/modelcontextprotocol/python-sdk.git@d4e14a4",
     "openai>=1.62.0",
     "google-genai>=0.8.0",
     "google-api-core>=2.0.0",
