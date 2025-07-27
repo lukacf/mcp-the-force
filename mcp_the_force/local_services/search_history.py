@@ -94,16 +94,58 @@ class SearchHistoryService:
 
     def _redact_content(self, content: str) -> str:
         """Redact sensitive information from content."""
-        project_root = scope_manager.get_project_root()
+        # Get project root from scope manager
+        project_root = getattr(scope_manager, "project_root", None)
         if project_root:
-            content = redact_secrets(content, str(project_root))
+            content = redact_secrets(content)
         return content
+
+    async def execute(self, **kwargs: Any) -> str:
+        """Execute search with parameters matching the tool interface."""
+        query = kwargs.get("query", "")
+        max_results = kwargs.get("max_results", 40)
+        store_types = kwargs.get("store_types", None)
+
+        # Convert single query to list for the search method
+        queries = [query] if query else []
+
+        # Call the search method
+        result = await self.search(
+            queries=queries, max_results=max_results, store_types=store_types
+        )
+
+        # Format results as a string
+        return self._format_results(result)
+
+    def _format_results(self, result: Dict[str, Any]) -> str:
+        """Format search results for display."""
+        formatted = []
+
+        results = result.get("results", [])
+        # metadata = result.get("metadata", {})
+
+        if not results:
+            return "No results found in project history."
+
+        formatted.append(f"Found {len(results)} results in project history:\n")
+
+        for idx, item in enumerate(results, 1):
+            formatted.append(f"\n--- Result {idx} ---")
+            formatted.append(f"Type: {item.get('store_type', 'unknown')}")
+            relative_time = item.get("metadata", {}).get("relative_time", "unknown")
+            formatted.append(f"Time: {relative_time}")
+            if item.get("metadata", {}).get("author"):
+                formatted.append(f"Author: {item['metadata']['author']}")
+            formatted.append(f"\nContent:\n{item.get('content', '')}")
+            formatted.append("-" * 40)
+
+        return "\n".join(formatted)
 
     async def search(
         self,
         queries: List[str],
         max_results: int = 40,
-        store_types: List[str] = None,
+        store_types: Optional[List[str]] = None,
         session_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Search across all configured vector stores.
@@ -128,19 +170,24 @@ class SearchHistoryService:
 
         # Determine which stores to search
         for store_type in store_types:
-            if store_type == "conversation" and self.memory_config.vs_id_conversation:
-                stores_to_search.append(
-                    ("conversation", self.memory_config.vs_id_conversation)
-                )
-            elif store_type == "commit" and self.memory_config.vs_id_commit:
-                stores_to_search.append(("commit", self.memory_config.vs_id_commit))
+            if store_type == "conversation":
+                store_id = self.memory_config.get_active_conversation_store()
+                if store_id:
+                    stores_to_search.append(("conversation", store_id))
+            elif store_type == "commit":
+                store_id = self.memory_config.get_active_commit_store()
+                if store_id:
+                    stores_to_search.append(("commit", store_id))
             # Add more store types as needed
 
         if not stores_to_search:
             logger.warning(
                 f"[SEARCH_HISTORY] No valid stores found for types: {store_types}"
             )
-            return {"results": [], "metadata": {"total_results": 0, "stores_searched": 0}}
+            return {
+                "results": [],
+                "metadata": {"total_results": 0, "stores_searched": 0},
+            }
 
         # Search each store concurrently
         async with search_semaphore:
@@ -164,33 +211,35 @@ class SearchHistoryService:
                 continue
 
             store_type = stores_to_search[i // len(queries)][0]
-            for item in result:
-                # Deduplicate by content
-                content_key = item["content"][:200]  # Use first 200 chars as key
-                if content_key in seen_contents:
-                    continue
-                seen_contents.add(content_key)
+            if not isinstance(result, Exception):
+                for item in result:
+                    # Deduplicate by content
+                    content = str(item.get("content", ""))
+                    content_key = content[:200]  # Use first 200 chars as key
+                    if content_key in seen_contents:
+                        continue
+                    seen_contents.add(content_key)
 
-                # Redact sensitive information
-                item["content"] = self._redact_content(item["content"])
+                    # Redact sensitive information
+                    item["content"] = self._redact_content(str(item.get("content", "")))
 
-                # Add relative time if timestamp is available
-                if "metadata" in item and isinstance(item["metadata"], dict):
-                    timestamp = item["metadata"].get("timestamp")
-                    if timestamp:
-                        item["metadata"]["relative_time"] = _calculate_relative_time(
-                            timestamp
-                        )
+                    # Add relative time if timestamp is available
+                    if "metadata" in item and isinstance(item["metadata"], dict):
+                        timestamp = item["metadata"].get("timestamp")
+                        if timestamp:
+                            item["metadata"]["relative_time"] = (
+                                _calculate_relative_time(timestamp)
+                            )
 
-                formatted_results.append(
-                    {
-                        "content": item["content"],
-                        "store_type": store_type,
-                        "store_id": item["store_id"],
-                        "score": item.get("score", 0),
-                        "metadata": item.get("metadata", {}),
-                    }
-                )
+                    formatted_results.append(
+                        {
+                            "content": item["content"],
+                            "store_type": store_type,
+                            "store_id": item["store_id"],
+                            "score": item.get("score", 0),
+                            "metadata": item.get("metadata", {}),
+                        }
+                    )
 
         # Sort by score
         formatted_results.sort(key=lambda x: x["score"], reverse=True)
@@ -224,7 +273,7 @@ class SearchHistoryService:
         """Get a hash key for deduplication."""
         # Use first 500 chars of content as the deduplication key
         # This allows similar but not identical content to be deduplicated
-        content = result.get("content", "")
+        content = str(result.get("content", ""))
         return content[:500]
 
     async def _search_single_store(
@@ -240,8 +289,10 @@ class SearchHistoryService:
             loop = asyncio.get_event_loop()
             response = await loop.run_in_executor(
                 executor,
-                lambda: self.client.beta.vector_stores.file_batches.search(
-                    vector_store_id=store_id, query=query, limit=max_results
+                lambda: self.client.vector_stores.search(
+                    vector_store_id=store_id,
+                    query=query,
+                    max_num_results=max_results,
                 ),
             )
 

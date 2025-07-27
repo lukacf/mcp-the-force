@@ -4,7 +4,6 @@ import os
 import logging
 from typing import Any, Dict, List
 
-from litellm import aresponses
 
 from ..litellm_base import LiteLLMBaseAdapter
 from ..protocol import CallContext, ToolDispatcher
@@ -97,7 +96,10 @@ class GeminiAdapter(LiteLLMBaseAdapter):
             logger.info(f"[GEMINI] Using reasoning_effort: {params.reasoning_effort}")
 
         # Add structured output schema
-        if hasattr(params, "structured_output_schema") and params.structured_output_schema:
+        if (
+            hasattr(params, "structured_output_schema")
+            and params.structured_output_schema
+        ):
             request_params["response_format"] = {
                 "type": "json_object",
                 "response_schema": params.structured_output_schema,
@@ -111,115 +113,6 @@ class GeminiAdapter(LiteLLMBaseAdapter):
                 request_params[key] = kwargs[key]
 
         return request_params
-
-    async def _handle_tool_calls(
-        self,
-        response: Any,
-        tool_dispatcher: ToolDispatcher,
-        conversation_input: List[Dict[str, Any]],
-        request_params: Dict[str, Any],
-    ) -> tuple[Any, List[Dict[str, Any]]]:
-        """Handle Gemini-specific tool calls in the response.
-        
-        Gemini uses a different response format than the base implementation.
-        """
-        final_response = response
-        updated_conversation = list(conversation_input)
-
-        # Extract tool calls from Gemini response format
-        tool_calls = []
-        final_content = ""
-        
-        if hasattr(response, "output"):
-            for item in response.output:
-                if item.type == "message" and hasattr(item, "content"):
-                    if isinstance(item.content, str):
-                        final_content = item.content
-                    elif isinstance(item.content, list):
-                        for content_item in item.content:
-                            if hasattr(content_item, "text"):
-                                final_content = content_item.text
-                elif item.type == "function_call":
-                    tool_calls.append(item)
-
-        # Process tool calls if present
-        if tool_calls:
-            logger.info(f"[GEMINI] Processing {len(tool_calls)} tool calls")
-
-            # Add assistant message to conversation
-            updated_conversation.append(
-                {
-                    "type": "message",
-                    "role": "assistant",
-                    "content": [{"type": "text", "text": final_content or ""}],
-                }
-            )
-
-            # Execute tool calls and add results
-            for tool_call in tool_calls:
-                logger.info(f"[GEMINI] Executing tool: {tool_call.name}")
-                try:
-                    result = await tool_dispatcher.execute_tool(
-                        tool_call.name,
-                        tool_call.arguments,
-                    )
-                    updated_conversation.append(
-                        {
-                            "type": "function_call_output",
-                            "call_id": tool_call.call_id,
-                            "output": str(result),
-                        }
-                    )
-                except Exception as e:
-                    logger.error(f"[GEMINI] Tool {tool_call.name} failed: {e}")
-                    updated_conversation.append(
-                        {
-                            "type": "function_call_output",
-                            "call_id": tool_call.call_id,
-                            "output": f"Error: {str(e)}",
-                        }
-                    )
-
-            # Add minimal user message to continue (Gemini requires text)
-            updated_conversation.append(
-                {
-                    "type": "message",
-                    "role": "user",
-                    "content": [{"type": "text", "text": " "}],  # Single space
-                }
-            )
-
-            # Continue conversation with tool results
-            follow_up_params = {
-                "model": request_params["model"],
-                "input": updated_conversation,
-            }
-
-            # Copy auth params
-            for key in ["vertex_project", "vertex_location", "api_key"]:
-                if key in request_params:
-                    follow_up_params[key] = request_params[key]
-
-            logger.info("[GEMINI] Sending tool results")
-            final_response = await aresponses(**follow_up_params)
-
-        return final_response, updated_conversation
-
-    def _extract_content(self, response: Any) -> str:
-        """Extract content from Gemini-specific response format."""
-        final_content = ""
-        
-        if hasattr(response, "output"):
-            for item in response.output:
-                if item.type == "message" and hasattr(item, "content"):
-                    if isinstance(item.content, str):
-                        final_content = item.content
-                    elif isinstance(item.content, list):
-                        for content_item in item.content:
-                            if hasattr(content_item, "text"):
-                                final_content = content_item.text
-                                
-        return final_content
 
     async def generate(
         self,
@@ -242,7 +135,7 @@ class GeminiAdapter(LiteLLMBaseAdapter):
             tool_dispatcher=tool_dispatcher,
             **kwargs,
         )
-        
+
         # Ensure we don't return citations for Gemini
         result["citations"] = None
         return result

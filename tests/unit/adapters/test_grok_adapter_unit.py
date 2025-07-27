@@ -44,7 +44,7 @@ class TestGrokAdapterUnit:
     ):
         """Unit test: Simple conversation without tool calls."""
         # Mock litellm.aresponses
-        with patch("mcp_the_force.adapters.xai.adapter.aresponses") as mock_aresponses:
+        with patch("litellm.aresponses") as mock_aresponses:
             mock_aresponses.return_value = mock_litellm_response
 
             # Mock unified session cache to isolate the adapter
@@ -117,7 +117,7 @@ class TestGrokAdapterUnit:
         mock_final_response.output = [message_item]
 
         # Mock litellm.aresponses with side_effect
-        with patch("mcp_the_force.adapters.xai.adapter.aresponses") as mock_aresponses:
+        with patch("litellm.aresponses") as mock_aresponses:
             mock_aresponses.side_effect = [mock_tool_call_response, mock_final_response]
 
             # Mock session cache
@@ -177,7 +177,7 @@ class TestGrokAdapterUnit:
         mock_response.output = [message_item]
 
         # Mock litellm.aresponses
-        with patch("mcp_the_force.adapters.xai.adapter.aresponses") as mock_aresponses:
+        with patch("litellm.aresponses") as mock_aresponses:
             mock_aresponses.return_value = mock_response
 
             # Mock session cache to verify calls

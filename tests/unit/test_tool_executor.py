@@ -162,7 +162,9 @@ class TestToolExecutor:
             from mcp_the_force.tools.registry import get_tool
 
             metadata = get_tool("chat_with_gemini25_flash")
-            with pytest.raises(fastmcp.exceptions.ToolError, match="Adapter error"):
+            with pytest.raises(
+                fastmcp.exceptions.ToolError, match="Failed to initialize adapter"
+            ):
                 await executor.execute(
                     metadata,
                     instructions="Test",
