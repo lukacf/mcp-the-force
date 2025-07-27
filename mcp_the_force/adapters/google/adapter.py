@@ -4,7 +4,7 @@ import os
 import logging
 from typing import Any, Dict, List
 
-
+from ..errors import InvalidModelException, ConfigurationException
 from ..litellm_base import LiteLLMBaseAdapter
 from ..protocol import CallContext, ToolDispatcher
 from .definitions import GeminiToolParams, GEMINI_MODEL_CAPABILITIES
@@ -29,7 +29,11 @@ class GeminiAdapter(LiteLLMBaseAdapter):
             model: Model name (e.g., "gemini-2.5-pro", "gemini-2.5-flash")
         """
         if model not in GEMINI_MODEL_CAPABILITIES:
-            raise ValueError(f"Unsupported Gemini model: {model}")
+            raise InvalidModelException(
+                model=model,
+                supported_models=list(GEMINI_MODEL_CAPABILITIES.keys()),
+                provider="Gemini"
+            )
 
         self.model_name = model
         self.display_name = f"Gemini {model} (LiteLLM)"
@@ -47,9 +51,10 @@ class GeminiAdapter(LiteLLMBaseAdapter):
         elif os.getenv("GEMINI_API_KEY"):
             logger.info("Using Gemini API key")
         else:
-            logger.warning(
+            raise ConfigurationException(
                 "No Gemini/Vertex AI credentials found. Set either "
-                "VERTEX_PROJECT/VERTEX_LOCATION or GEMINI_API_KEY"
+                "VERTEX_PROJECT/VERTEX_LOCATION or GEMINI_API_KEY",
+                provider="Gemini"
             )
 
     def _get_model_prefix(self) -> str:
