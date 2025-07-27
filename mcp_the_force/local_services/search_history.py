@@ -103,7 +103,7 @@ class SearchHistoryService:
     async def execute(self, **kwargs: Any) -> str:
         """Execute search with parameters matching the tool interface."""
         query = kwargs.get("query", "")
-        max_results = kwargs.get("max_results", 40)
+        max_results = int(kwargs.get("max_results", 40))
         store_types = kwargs.get("store_types", None)
 
         # Convert single query to list for the search method
@@ -159,6 +159,9 @@ class SearchHistoryService:
         Returns:
             Dictionary with search results organized by store
         """
+        # Ensure max_results is an integer
+        max_results = int(max_results)
+        
         if store_types is None:
             store_types = ["conversation", "commit"]
 
@@ -212,6 +215,7 @@ class SearchHistoryService:
 
             store_type = stores_to_search[i // len(queries)][0]
             if not isinstance(result, Exception):
+                logger.debug(f"Processing result type: {type(result)}, length: {len(result) if hasattr(result, '__len__') else 'N/A'}")
                 for item in result:
                     # Deduplicate by content
                     content = str(item.get("content", ""))
