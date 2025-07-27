@@ -45,5 +45,28 @@ memory:
   summary_char_limit: 1000  # Max chars for conversation summaries
   max_files_per_commit: 20  # Max files to list in commit summaries
 
+# Security configuration
+security:
+  # Paths that are blocked from access
+  # Default list includes common system directories
+  path_blacklist:
+    - "/etc"
+    - "/usr"
+    - "/bin"
+    - "/sbin"
+    - "/boot"
+    - "/sys"
+    - "/proc"
+    - "/dev"
+    - "/root"
+    - "/System"  # macOS
+    - "/private/etc"  # macOS
+    - "/private/var"  # macOS
+    - "~/Library"  # macOS
+    - "C:\\Windows"  # Windows
+    - "C:\\Program Files"  # Windows
+    # Add custom paths to block:
+    # - "/path/to/sensitive/data"
+
 # Testing
 adapter_mock: false  # Set to true to use mock adapters
