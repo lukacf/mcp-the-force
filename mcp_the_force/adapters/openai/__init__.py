@@ -7,7 +7,7 @@ directly since LiteLLM's purpose is to translate TO OpenAI format.
 
 from .adapter import OpenAIProtocolAdapter
 from .errors import AdapterException, ErrorCategory
-from . import cancel_aware_flow  # Apply cancellation patch  # noqa: F401
+# from . import cancel_aware_flow  # Apply cancellation patch  # noqa: F401  # Testing if FastMCP 2.10.6 fixes the issue
 
 # Import definitions to trigger blueprint registration
 from . import definitions  # noqa: F401
