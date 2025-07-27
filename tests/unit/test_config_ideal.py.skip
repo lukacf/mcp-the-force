@@ -22,6 +22,8 @@ import pytest
 from unittest.mock import patch
 from mcp_the_force.config import Settings, get_settings
 
+pytestmark = pytest.mark.skip(reason="Aspirational TDD - not yet implemented")
+
 
 class TestIdealConfigurationHierarchy:
     """Test the ideal 4-level configuration hierarchy."""
