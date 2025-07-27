@@ -9,6 +9,7 @@ from typing import Any, Dict, List
 
 import litellm
 
+from ..litellm_base import LiteLLMBaseAdapter
 from ..protocol import CallContext, ToolDispatcher
 from .definitions import GrokToolParams, GROK_MODEL_CAPABILITIES
 
@@ -19,7 +20,7 @@ litellm.set_verbose = False
 litellm.drop_params = True
 
 
-class GrokAdapter:
+class GrokAdapter(LiteLLMBaseAdapter):
     """Grok adapter implementing MCPAdapter protocol.
 
     This adapter uses LiteLLM's Responses API internally and supports
@@ -64,6 +65,24 @@ class GrokAdapter:
                 "XAI_API_KEY not configured. Please add your xAI API key to "
                 "secrets.yaml or set XAI_API_KEY environment variable."
             )
+
+    def _get_model_prefix(self) -> str:
+        """Get the LiteLLM model prefix for this provider."""
+        return "xai"
+
+    def _snake_case_params(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Convert camelCase keys to snake_case for Grok API."""
+        result = {}
+        for key, value in params.items():
+            # Convert camelCase to snake_case
+            snake_key = ""
+            for i, char in enumerate(key):
+                if i > 0 and char.isupper():
+                    snake_key += "_" + char.lower()
+                else:
+                    snake_key += char.lower()
+            result[snake_key] = value
+        return result
 
     def _convert_messages_to_input(
         self, messages: List[Dict[str, Any]]

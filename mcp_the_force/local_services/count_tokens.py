@@ -24,7 +24,7 @@ class CountTokensService:
         """
         items = kwargs.get("items", [])
         top_n = kwargs.get("top_n", 10)
-        
+
         tool = CountProjectTokens()
         tool.items = items
         tool.top_n = top_n
