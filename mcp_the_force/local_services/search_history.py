@@ -161,7 +161,7 @@ class SearchHistoryService:
         """
         # Ensure max_results is an integer
         max_results = int(max_results)
-        
+
         if store_types is None:
             store_types = ["conversation", "commit"]
 
@@ -215,7 +215,9 @@ class SearchHistoryService:
 
             store_type = stores_to_search[i // len(queries)][0]
             if not isinstance(result, Exception):
-                logger.debug(f"Processing result type: {type(result)}, length: {len(result) if hasattr(result, '__len__') else 'N/A'}")
+                logger.debug(
+                    f"Processing result type: {type(result)}, length: {len(result) if hasattr(result, '__len__') else 'N/A'}"
+                )
                 for item in result:
                     # Deduplicate by content
                     content = str(item.get("content", ""))
