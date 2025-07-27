@@ -60,7 +60,9 @@ class TimeoutException(AdapterException):
 class GatewayTimeoutException(AdapterException):
     """Specific exception for gateway timeouts (504, 524)."""
 
-    def __init__(self, status_code: int, model_name: str, provider: Optional[str] = None):
+    def __init__(
+        self, status_code: int, model_name: str, provider: Optional[str] = None
+    ):
         message = (
             f"Gateway timeout ({status_code}) after ~100-180s of idle time. "
             f"Model: {model_name}. This happens when non-streaming requests "
@@ -68,9 +70,7 @@ class GatewayTimeoutException(AdapterException):
             f"server-side. For {model_name}, background mode should have been "
             f"used automatically - this error suggests a configuration issue."
         )
-        super().__init__(
-            ErrorCategory.TIMEOUT, message, status_code, provider=provider
-        )
+        super().__init__(ErrorCategory.TIMEOUT, message, status_code, provider=provider)
         self.model_name = model_name
 
 
@@ -84,9 +84,7 @@ class ToolExecutionException(AdapterException):
         provider: Optional[str] = None,
     ):
         message = f"Tool '{tool_name}' failed: {error}"
-        super().__init__(
-            ErrorCategory.TOOL_EXECUTION, message, provider=provider
-        )
+        super().__init__(ErrorCategory.TOOL_EXECUTION, message, provider=provider)
         self.tool_name = tool_name
         self.original_error = error
 

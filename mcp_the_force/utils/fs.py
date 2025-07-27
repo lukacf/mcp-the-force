@@ -238,44 +238,46 @@ def _is_safe_path(base: Path, target: Path) -> bool:
     - We want to allow full filesystem access except for sensitive system paths
     """
     from ..config import get_settings
-    
+
     settings = get_settings()
     blacklist = settings.security.path_blacklist
-    
+
     # Expand ~ in the target path first
     if isinstance(target, Path):
         target_str = str(target)
     else:
         target_str = target
     expanded_target = os.path.expanduser(target_str)
-    
+
     # Resolve the target path
     try:
         resolved_target = Path(expanded_target).resolve()
     except Exception:
         # If we can't resolve, err on the side of caution
         return False
-    
+
     # Convert to string for comparison
     target_str = str(resolved_target)
-    
+
     # Check if the target starts with any blacklisted path
     for blocked_path in blacklist:
         # Expand ~ in the blocked path
         expanded_blocked = os.path.expanduser(blocked_path)
         # Normalize the path for comparison
         normalized_blocked = os.path.normpath(expanded_blocked)
-        
+
         # Ensure the blocked path ends with a separator to avoid partial matches
         # e.g., /home shouldn't block /home/user/project
         if not normalized_blocked.endswith(os.sep):
             normalized_blocked += os.sep
-        
+
         # Check if target starts with the blocked path
-        if target_str.startswith(normalized_blocked) or target_str == normalized_blocked.rstrip(os.sep):
+        if target_str.startswith(
+            normalized_blocked
+        ) or target_str == normalized_blocked.rstrip(os.sep):
             logger.debug(f"Path {target} blocked by blacklist entry: {blocked_path}")
             return False
-    
+
     return True
 
 
