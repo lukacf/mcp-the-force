@@ -4,15 +4,12 @@ This adapter implements the MCPAdapter protocol without inheritance,
 following the architectural design in docs/litellm-refactor.md.
 """
 
-import asyncio
 import logging
 from typing import Any, Dict, List
 
 import litellm
-from litellm import aresponses
 
 from ..protocol import CallContext, ToolDispatcher
-from ...unified_session_cache import unified_session_cache
 from .definitions import GrokToolParams, GROK_MODEL_CAPABILITIES
 
 logger = logging.getLogger(__name__)
@@ -99,19 +96,85 @@ class GrokAdapter:
 
         return conversation_input
 
-    def _snake_case_params(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        """Convert camelCase keys to snake_case for Grok API."""
-        result = {}
-        for key, value in params.items():
-            # Convert camelCase to snake_case
-            snake_key = ""
-            for i, char in enumerate(key):
-                if i > 0 and char.isupper():
-                    snake_key += "_" + char.lower()
-                else:
-                    snake_key += char.lower()
-            result[snake_key] = value
-        return result
+    def _build_request_params(
+        self,
+        conversation_input: List[Dict[str, Any]],
+        params: GrokToolParams,
+        tools: List[Dict[str, Any]],
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
+        """Build Grok-specific request parameters."""
+        # Build base parameters
+        request_params = {
+            "model": f"{self._get_model_prefix()}/{self.model_name}",
+            "input": conversation_input,
+            "api_key": self.api_key,
+            "temperature": getattr(params, "temperature", 0.7),
+        }
+
+        # Add reasoning effort for supported models
+        # Note: Grok only supports "low" or "high", not "medium"
+        if self.capabilities.supports_reasoning_effort and getattr(
+            params, "reasoning_effort", None
+        ):
+            # Map medium to high for Grok
+            effort = getattr(params, "reasoning_effort", None)
+            if effort == "medium":
+                effort = "high"
+            request_params["reasoning_effort"] = effort
+
+        # Add Live Search parameters for xAI
+        search_params = {}
+        search_mode = getattr(params, "search_mode", None)
+        if search_mode:
+            search_params["mode"] = search_mode
+            logger.info(f"Grok Live Search enabled: mode={search_mode}")
+        search_parameters = getattr(params, "search_parameters", None)
+        if search_parameters:
+            search_params.update(self._snake_case_params(search_parameters))
+        if search_params:
+            request_params["search_parameters"] = search_params
+            logger.info(f"Grok Live Search parameters: {search_params}")
+
+        # Add structured output
+        structured_output_schema = getattr(params, "structured_output_schema", None)
+        if structured_output_schema:
+            request_params["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "structured_response",
+                    "schema": structured_output_schema,
+                    "strict": True,
+                },
+            }
+
+        # Add tools if any
+        if tools:
+            request_params["tools"] = tools
+            request_params["tool_choice"] = kwargs.get("tool_choice", "auto")
+            logger.info(f"[GROK_TOOLS] Passing {len(tools)} tools to LiteLLM")
+            for tool in tools:
+                tool_name = tool.get(
+                    "name", tool.get("function", {}).get("name", "unknown")
+                )
+                logger.info(f"[GROK_TOOL] - {tool_name}")
+
+        return request_params
+
+    def _add_provider_specific_data(
+        self, response: Any, params: GrokToolParams
+    ) -> Dict[str, Any]:
+        """Add Grok-specific data to the response."""
+        # Extract citations if requested
+        citations: List[Any] = []
+        if getattr(params, "return_citations", True) and getattr(
+            params, "search_mode", None
+        ):
+            # TODO: Extract citations from response metadata
+            # Grok returns citations in the response somewhere
+            pass
+
+        return {"citations": citations if citations else None}
 
     async def generate(
         self,
@@ -124,238 +187,12 @@ class GrokAdapter:
     ) -> Dict[str, Any]:
         """Generate response using LiteLLM's Responses API.
 
-        Args:
-            prompt: User prompt
-            params: Validated GrokToolParams instance
-            ctx: Call context with session_id and vector_store_ids
-            tool_dispatcher: Tool execution interface
-            **kwargs: Additional parameters (e.g., messages for continuation)
-
-        Returns:
-            Dict with "content" and optionally "citations"
+        Uses the base implementation from LiteLLMBaseAdapter.
         """
-        try:
-            # Initialize conversation_input in Responses API format
-            conversation_input = []
-
-            # Load session history if continuing
-            if ctx.session_id:
-                history = await unified_session_cache.get_history(ctx.session_id)
-                if history:
-                    # History is already in Responses API format
-                    conversation_input = history
-                    logger.debug(
-                        f"Loaded {len(history)} items from session {ctx.session_id}"
-                    )
-
-            # Add new messages
-            messages = kwargs.get("messages")
-            if messages:
-                # Convert provided messages to Responses API format
-                conversation_input.extend(self._convert_messages_to_input(messages))
-                # Add new user message
-                conversation_input.append(
-                    {
-                        "type": "message",
-                        "role": "user",
-                        "content": [{"type": "text", "text": prompt}],
-                    }
-                )
-            else:
-                # Build new conversation
-                system_instruction = kwargs.get("system_instruction")
-                if system_instruction:
-                    conversation_input.append(
-                        {
-                            "type": "message",
-                            "role": "system",
-                            "content": [{"type": "text", "text": system_instruction}],
-                        }
-                    )
-                conversation_input.append(
-                    {
-                        "type": "message",
-                        "role": "user",
-                        "content": [{"type": "text", "text": prompt}],
-                    }
-                )
-
-            # Build request parameters for Responses API
-            request_params: Dict[str, Any] = {
-                "model": f"xai/{self.model_name}",  # LiteLLM needs provider prefix
-                "input": conversation_input,  # Responses API uses 'input'
-                "api_key": self.api_key,
-                "temperature": getattr(params, "temperature", 0.7),
-            }
-
-            # Add reasoning effort for supported models
-            # Note: Grok only supports "low" or "high", not "medium"
-            if self.capabilities.supports_reasoning_effort and getattr(
-                params, "reasoning_effort", None
-            ):
-                # Map medium to high for Grok
-                effort = getattr(params, "reasoning_effort", None)
-                if effort == "medium":
-                    effort = "high"
-                request_params["reasoning_effort"] = effort
-
-            # Add Live Search parameters for xAI
-            search_params = {}
-            search_mode = getattr(params, "search_mode", None)
-            if search_mode:
-                search_params["mode"] = search_mode
-                logger.info(f"Grok Live Search enabled: mode={search_mode}")
-            search_parameters = getattr(params, "search_parameters", None)
-            if search_parameters:
-                search_params.update(self._snake_case_params(search_parameters))
-            if search_params:
-                request_params["search_parameters"] = search_params
-                logger.info(f"Grok Live Search parameters: {search_params}")
-
-            # Add structured output
-            structured_output_schema = getattr(params, "structured_output_schema", None)
-            if structured_output_schema:
-                request_params["response_format"] = {
-                    "type": "json_schema",
-                    "json_schema": {
-                        "name": "structured_response",
-                        "schema": structured_output_schema,
-                        "strict": True,
-                    },
-                }
-
-            # Add tools if needed
-            tools = []
-
-            # Get built-in tools (including search_project_history)
-            disable_memory_search = (
-                getattr(params, "disable_memory_search", False)
-                if hasattr(params, "disable_memory_search")
-                else False
-            )
-            built_in_tools = tool_dispatcher.get_tool_declarations(
-                capabilities=self.capabilities,
-                disable_memory_search=disable_memory_search,
-            )
-            tools.extend(built_in_tools)
-
-            # Add any extra tools passed in
-            extra_tools = kwargs.get("tools", [])
-            tools.extend(extra_tools)
-
-            if tools:
-                request_params["tools"] = tools
-                request_params["tool_choice"] = kwargs.get("tool_choice", "auto")
-                logger.info(f"[GROK_TOOLS] Passing {len(tools)} tools to LiteLLM")
-                for tool in tools:
-                    # Tools from prepare_tool_declarations have format: {"type": "function", "name": ...}
-                    tool_name = tool.get(
-                        "name", tool.get("function", {}).get("name", "unknown")
-                    )
-                    logger.info(f"[GROK_TOOL] - {tool_name}")
-
-            # Tool calling loop for Responses API
-            final_content = ""
-
-            while True:
-                # Make request
-                response = await aresponses(**request_params)
-
-                # Process response (Responses API format)
-                tool_calls = []
-
-                if hasattr(response, "output"):
-                    for item in response.output:
-                        if item.type == "message":
-                            # Extract content from message
-                            if hasattr(item, "content"):
-                                if isinstance(item.content, str):
-                                    final_content = item.content
-                                elif isinstance(item.content, list):
-                                    # Handle list of content items
-                                    for content_item in item.content:
-                                        if hasattr(content_item, "text"):
-                                            final_content = content_item.text
-                                        elif (
-                                            hasattr(content_item, "type")
-                                            and content_item.type == "text"
-                                        ):
-                                            final_content = content_item.text
-                                # Add assistant message to conversation_input
-                                conversation_input.append(
-                                    {
-                                        "type": "message",
-                                        "role": "assistant",
-                                        "content": [
-                                            {"type": "text", "text": final_content}
-                                        ],
-                                    }
-                                )
-                        elif item.type == "function_call":
-                            tool_calls.append(item)
-
-                # Save the full conversation history in Responses API format
-                if ctx.session_id:
-                    await unified_session_cache.set_history(
-                        ctx.session_id, conversation_input
-                    )
-                    # Store that we're using responses API format
-                    await unified_session_cache.set_api_format(
-                        ctx.session_id, "responses"
-                    )
-                    logger.debug(
-                        f"Saved session {ctx.session_id} with {len(conversation_input)} items"
-                    )
-
-                # If no tool calls, we're done
-                if not tool_calls:
-                    break
-
-                # Execute tool calls
-                logger.debug(f"Executing {len(tool_calls)} tool calls")
-
-                for tool_call in tool_calls:
-                    tool_name = tool_call.name
-                    logger.info(f"[GROK_EXEC] Executing tool: {tool_name}")
-                    tool_args = tool_call.arguments  # Already a string
-
-                    try:
-                        output = await tool_dispatcher.execute(
-                            tool_name=tool_name, tool_args=tool_args, context=ctx
-                        )
-                    except Exception as e:
-                        output = f"Error executing tool '{tool_name}': {e}"
-                        logger.error(f"Tool execution error: {e}")
-
-                    # Add tool result to conversation_input for next iteration
-                    tool_result_item = {
-                        "type": "function_call_output",
-                        "call_id": tool_call.call_id,
-                        "output": str(output),
-                    }
-                    conversation_input.append(tool_result_item)
-
-                # Continue the loop with tool results
-                # Update params with new conversation_input
-                request_params["input"] = conversation_input
-
-            # Extract citations if requested
-            citations: List[Any] = []
-            if getattr(params, "return_citations", True) and getattr(
-                params, "search_mode", None
-            ):
-                # TODO: Extract citations from response metadata
-                # Grok returns citations in the response somewhere
-                pass
-
-            return {
-                "content": final_content,
-                "citations": citations if citations else None,
-            }
-
-        except asyncio.CancelledError:
-            logger.info("Grok request cancelled")
-            raise
-        except Exception as e:
-            logger.error(f"Grok adapter error: {e}")
-            raise RuntimeError(f"Grok generation failed: {str(e)}") from e
+        return await super().generate(
+            prompt=prompt,
+            params=params,
+            ctx=ctx,
+            tool_dispatcher=tool_dispatcher,
+            **kwargs,
+        )
