@@ -4,6 +4,8 @@ This provides a unified way for all models (OpenAI and Gemini) to search
 across project history stores without the 2-store limitation.
 """
 
+from typing import List
+
 from .base import ToolSpec
 from .descriptors import Route
 from .registry import tool
@@ -29,12 +31,12 @@ class SearchProjectHistory(ToolSpec):
     timeout = 30  # 30 second timeout for searches
 
     # Parameters
-    query = Route.prompt(description="Search query or semicolon-separated queries")
-    max_results = Route.prompt(
+    query: str = Route.prompt(description="Search query or semicolon-separated queries")  # type: ignore[assignment]
+    max_results: int = Route.prompt(  # type: ignore[assignment]
         description="Maximum results to return (default: 40)",
         default=40,
     )
-    store_types = Route.prompt(
+    store_types: List[str] = Route.prompt(  # type: ignore[assignment]
         description="Types of stores to search (default: ['conversation', 'commit'])",
         default_factory=lambda: ["conversation", "commit"],
     )

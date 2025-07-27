@@ -1,6 +1,6 @@
 """MCP tool: run raw LogsQL queries against VictoriaLogs."""
 
-from typing import Any
+# Removed unused import
 from .base import ToolSpec
 from .registry import tool
 from .descriptors import Route
@@ -142,6 +142,6 @@ Examples
     timeout = 30
 
     # Single parameter: the raw LogsQL query
-    query: Any = Route.adapter(
+    query: str = Route.adapter(  # type: ignore[assignment]
         description="Full LogsQL query string. Will be sent unmodified to VictoriaLogs.",
     )
