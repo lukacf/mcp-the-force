@@ -116,7 +116,7 @@ def make_chat_tool(bp: ToolBlueprint) -> Type[ToolSpec]:
 
     # Create and register the class
     cls = type(class_name, (ToolSpec,), attrs)
-    registered_cls = tool(cls)
+    registered_cls: Type[ToolSpec] = tool(cls)
 
     # After registration, update the metadata with capabilities
     if hasattr(registered_cls, "_tool_metadata"):
@@ -179,7 +179,7 @@ def make_research_tool(bp: ToolBlueprint) -> Type[ToolSpec]:
 
     # Create and register the class
     cls = type(class_name, (ToolSpec,), attrs)
-    registered_cls = tool(cls)
+    registered_cls: Type[ToolSpec] = tool(cls)
 
     # After registration, update the metadata with capabilities
     if hasattr(registered_cls, "_tool_metadata"):
