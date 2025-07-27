@@ -123,14 +123,19 @@ class BaseFlowStrategy(ABC):
             tools.append({"type": capability.web_search_tool})
 
         if self.context.request.vector_store_ids:
-            tools.append({"type": "file_search"})
+            tools.append(
+                {
+                    "type": "file_search",
+                    "vector_store_ids": self.context.request.vector_store_ids,
+                }
+            )
 
         return tools
 
     def _extract_content_from_output(self, response: Any) -> str:
         """Extract text content from the response object's output array."""
         if hasattr(response, "output_text"):
-            return response.output_text
+            return str(response.output_text)
 
         text_parts = []
         if hasattr(response, "output"):
@@ -374,7 +379,9 @@ class FlowOrchestrator:
             if hasattr(e, "status_code"):
                 status = e.status_code
                 if status in [504, 524]:
-                    raise GatewayTimeoutException(status, request_data.get("model"))
+                    raise GatewayTimeoutException(
+                        status, request_data.get("model", "unknown")
+                    )
                 if status == 429:
                     raise AdapterException(ErrorCategory.RATE_LIMIT, str(e), status)
                 if status >= 500:

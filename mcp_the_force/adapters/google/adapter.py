@@ -1,6 +1,5 @@
 """Protocol-based Gemini adapter using LiteLLM."""
 
-import os
 import logging
 from typing import Any, Dict, List
 
@@ -8,6 +7,7 @@ from ..errors import InvalidModelException, ConfigurationException
 from ..litellm_base import LiteLLMBaseAdapter
 from ..protocol import CallContext, ToolDispatcher
 from .definitions import GeminiToolParams, GEMINI_MODEL_CAPABILITIES
+from ...config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ class GeminiAdapter(LiteLLMBaseAdapter):
             raise InvalidModelException(
                 model=model,
                 supported_models=list(GEMINI_MODEL_CAPABILITIES.keys()),
-                provider="Gemini"
+                provider="Gemini",
             )
 
         self.model_name = model
@@ -44,17 +44,19 @@ class GeminiAdapter(LiteLLMBaseAdapter):
 
     def _validate_environment(self):
         """Ensure required environment variables are set."""
+        settings = get_settings()
+
         # Check for Vertex AI configuration
-        if os.getenv("VERTEX_PROJECT") and os.getenv("VERTEX_LOCATION"):
+        if settings.vertex.project and settings.vertex.location:
             logger.info("Using Vertex AI configuration")
         # Check for direct Gemini API key
-        elif os.getenv("GEMINI_API_KEY"):
+        elif settings.gemini.api_key if hasattr(settings, "gemini") else None:
             logger.info("Using Gemini API key")
         else:
             raise ConfigurationException(
                 "No Gemini/Vertex AI credentials found. Set either "
                 "VERTEX_PROJECT/VERTEX_LOCATION or GEMINI_API_KEY",
-                provider="Gemini"
+                provider="Gemini",
             )
 
     def _get_model_prefix(self) -> str:
@@ -77,14 +79,15 @@ class GeminiAdapter(LiteLLMBaseAdapter):
         }
 
         # Add Vertex AI configuration
-        if os.getenv("VERTEX_PROJECT"):
-            request_params["vertex_project"] = os.getenv("VERTEX_PROJECT")
-        if os.getenv("VERTEX_LOCATION"):
-            request_params["vertex_location"] = os.getenv("VERTEX_LOCATION")
+        settings = get_settings()
+        if settings.vertex.project:
+            request_params["vertex_project"] = settings.vertex.project
+        if settings.vertex.location:
+            request_params["vertex_location"] = settings.vertex.location
 
         # Add API key if using direct Gemini API
-        if os.getenv("GEMINI_API_KEY"):
-            request_params["api_key"] = os.getenv("GEMINI_API_KEY")
+        if hasattr(settings, "gemini") and settings.gemini.api_key:
+            request_params["api_key"] = settings.gemini.api_key
 
         # Add instructions if provided
         if hasattr(params, "instructions") and params.instructions:
