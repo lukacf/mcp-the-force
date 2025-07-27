@@ -130,13 +130,22 @@ class SecurityConfig(BaseModel):
             "/System",
             "/private/etc",
             "/private/var",
-            "~/Library",
+            # Block sensitive Library subdirectories but allow iCloud Drive
+            "~/Library/Keychains",
+            "~/Library/Cookies",
+            "~/Library/Mail",
+            "~/Library/Messages",
+            "~/Library/Safari",
+            "~/Library/Accounts",
+            "~/Library/Autosave Information",
+            "~/Library/IdentityServices",
+            "~/Library/PersonalizationPortrait",
             # Windows specific (will be ignored on Unix)
             "C:\\Windows",
             "C:\\Program Files",
             "C:\\Program Files (x86)",
         ],
-        description="Paths that are blocked from access"
+        description="Paths that are blocked from access",
     )
 
 
