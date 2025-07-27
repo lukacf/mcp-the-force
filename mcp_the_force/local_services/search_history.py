@@ -218,34 +218,37 @@ class SearchHistoryService:
                 logger.debug(
                     f"Processing result type: {type(result)}, length: {len(result) if hasattr(result, '__len__') else 'N/A'}"
                 )
-                for item in result:
-                    # Deduplicate by content
-                    content = str(item.get("content", ""))
-                    content_key = content[:200]  # Use first 200 chars as key
-                    if content_key in seen_contents:
-                        continue
-                    seen_contents.add(content_key)
+                if isinstance(result, list):
+                    for item in result:
+                        # Deduplicate by content
+                        content = str(item.get("content", ""))
+                        content_key = content[:200]  # Use first 200 chars as key
+                        if content_key in seen_contents:
+                            continue
+                        seen_contents.add(content_key)
 
-                    # Redact sensitive information
-                    item["content"] = self._redact_content(str(item.get("content", "")))
+                        # Redact sensitive information
+                        item["content"] = self._redact_content(
+                            str(item.get("content", ""))
+                        )
 
-                    # Add relative time if timestamp is available
-                    if "metadata" in item and isinstance(item["metadata"], dict):
-                        timestamp = item["metadata"].get("timestamp")
-                        if timestamp:
-                            item["metadata"]["relative_time"] = (
-                                _calculate_relative_time(timestamp)
-                            )
+                        # Add relative time if timestamp is available
+                        if "metadata" in item and isinstance(item["metadata"], dict):
+                            timestamp = item["metadata"].get("timestamp")
+                            if timestamp:
+                                item["metadata"]["relative_time"] = (
+                                    _calculate_relative_time(timestamp)
+                                )
 
-                    formatted_results.append(
-                        {
-                            "content": item["content"],
-                            "store_type": store_type,
-                            "store_id": item["store_id"],
-                            "score": item.get("score", 0),
-                            "metadata": item.get("metadata", {}),
-                        }
-                    )
+                        formatted_results.append(
+                            {
+                                "content": item["content"],
+                                "store_type": store_type,
+                                "store_id": item["store_id"],
+                                "score": item.get("score", 0),
+                                "metadata": item.get("metadata", {}),
+                            }
+                        )
 
         # Sort by score
         formatted_results.sort(key=lambda x: x["score"], reverse=True)

@@ -41,7 +41,7 @@ class GrokAdapter(LiteLLMBaseAdapter):
             raise InvalidModelException(
                 model=model,
                 supported_models=list(GROK_MODEL_CAPABILITIES.keys()),
-                provider="Grok"
+                provider="Grok",
             )
 
         self.model_name = model
