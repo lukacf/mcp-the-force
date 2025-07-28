@@ -1,6 +1,9 @@
 """Protocol-based Gemini adapter using LiteLLM."""
 
 import logging
+import os
+import subprocess
+from pathlib import Path
 from typing import Any, Dict, List
 
 from ..errors import InvalidModelException, ConfigurationException
@@ -10,6 +13,86 @@ from .definitions import GeminiToolParams, GEMINI_MODEL_CAPABILITIES
 from ...config import get_settings
 
 logger = logging.getLogger(__name__)
+
+
+def setup_project_adc() -> str:
+    """Set up Application Default Credentials for the current project.
+
+    Returns:
+        Path to the created ADC credentials file
+    """
+    # Get the project root (where config.yaml is)
+    settings = get_settings()
+    config_path = getattr(settings, "_config_path", None)
+    if config_path:
+        project_root = Path(config_path).parent
+    else:
+        project_root = Path.cwd()
+
+    # Create .gcp directory if it doesn't exist
+    gcp_dir = project_root / ".gcp"
+    gcp_dir.mkdir(exist_ok=True)
+
+    # ADC file path
+    adc_path = gcp_dir / "adc-credentials.json"
+
+    # Check if ADC already exists
+    if adc_path.exists():
+        logger.info(f"ADC already exists at {adc_path}")
+        return str(adc_path)
+
+    # Run gcloud auth to create ADC
+    logger.info("Setting up Application Default Credentials...")
+    logger.info("This will open a browser for authentication.")
+
+    try:
+        # Run gcloud auth application-default login
+        result = subprocess.run(
+            ["gcloud", "auth", "application-default", "login"],
+            capture_output=True,
+            text=True,
+        )
+
+        if result.returncode != 0:
+            raise ConfigurationException(
+                f"Failed to set up ADC: {result.stderr}", provider="Gemini"
+            )
+
+        # Copy the default ADC to project-specific location
+        default_adc = (
+            Path.home() / ".config" / "gcloud" / "application_default_credentials.json"
+        )
+        if default_adc.exists():
+            import shutil
+
+            shutil.copy2(default_adc, adc_path)
+            logger.info(f"ADC credentials saved to {adc_path}")
+
+            # Update config.yaml to include the ADC path
+            config_yaml_path = project_root / "config.yaml"
+            if config_yaml_path.exists():
+                logger.info(f"Please add the following to your {config_yaml_path}:")
+                logger.info("providers:")
+                logger.info("  vertex:")
+                logger.info("    adc_credentials_path: .gcp/adc-credentials.json")
+
+            return str(adc_path)
+        else:
+            raise ConfigurationException(
+                "ADC setup completed but credentials file not found at expected location",
+                provider="Gemini",
+            )
+
+    except FileNotFoundError:
+        raise ConfigurationException(
+            "gcloud CLI not found. Please install Google Cloud SDK: "
+            "https://cloud.google.com/sdk/docs/install",
+            provider="Gemini",
+        )
+    except Exception as e:
+        raise ConfigurationException(
+            f"Failed to set up ADC: {str(e)}", provider="Gemini"
+        )
 
 
 class GeminiAdapter(LiteLLMBaseAdapter):
@@ -131,19 +214,63 @@ class GeminiAdapter(LiteLLMBaseAdapter):
         tool_dispatcher: ToolDispatcher,
         **kwargs: Any,
     ) -> Dict[str, Any]:
-        """Generate a response using LiteLLM.
+        """Generate a response using LiteLLM with ADC error handling.
 
         Uses the base implementation with Gemini-specific overrides.
         """
-        # Gemini doesn't support citations, so we override the result
-        result = await super().generate(
-            prompt=prompt,
-            params=params,
-            ctx=ctx,
-            tool_dispatcher=tool_dispatcher,
-            **kwargs,
-        )
+        try:
+            # Gemini doesn't support citations, so we override the result
+            result = await super().generate(
+                prompt=prompt,
+                params=params,
+                ctx=ctx,
+                tool_dispatcher=tool_dispatcher,
+                **kwargs,
+            )
 
-        # Ensure we don't return citations for Gemini
-        result["citations"] = None
-        return result
+            # Ensure we don't return citations for Gemini
+            result["citations"] = None
+            return result
+        except Exception as e:
+            error_str = str(e).lower()
+            # Check for various authentication-related errors
+            if any(
+                indicator in error_str
+                for indicator in [
+                    "permission denied",
+                    "permission_denied",
+                    "iam_permission_denied",
+                    "aiplatform.endpoints.predict",
+                    "403",
+                    "unauthorized",
+                    "authentication",
+                    "credentials",
+                ]
+            ):
+                # Check if this is an ADC issue
+                settings = get_settings()
+                if settings.vertex.project and not os.environ.get(
+                    "GOOGLE_APPLICATION_CREDENTIALS"
+                ):
+                    logger.error("ADC authentication failed. No credentials found.")
+                    logger.info(
+                        "Would you like to set up Application Default Credentials?"
+                    )
+                    logger.info("Run: gcloud auth application-default login")
+                    logger.info("Or use the setup_project_adc() helper function")
+
+                    # Provide helpful error message
+                    raise ConfigurationException(
+                        "Google Cloud authentication failed. ADC not configured.\n"
+                        "To fix this:\n"
+                        "1. Run: gcloud auth application-default login\n"
+                        "2. Add to config.yaml:\n"
+                        "   providers:\n"
+                        "     vertex:\n"
+                        "       adc_credentials_path: .gcp/adc-credentials.json\n"
+                        "3. Restart the server",
+                        provider="Gemini",
+                    ) from e
+
+            # Re-raise other errors
+            raise
