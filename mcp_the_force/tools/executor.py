@@ -364,6 +364,11 @@ class ToolExecutor:
 
                 # Execute the service
                 result = await service.execute(**adapter_params)
+                # Convert dict results to JSON for MCP compatibility
+                if isinstance(result, dict):
+                    import json
+
+                    return json.dumps(result)
                 return str(result)
 
             # Otherwise, get AI adapter from registry
