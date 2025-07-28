@@ -238,6 +238,16 @@ def mock_openai_client():
     mock.vector_stores.delete = AsyncMock()
     mock.beta.vector_stores.delete = AsyncMock()
 
+    # Mock vector store search for SearchHistoryService
+    mock_search_response = MagicMock()
+    mock_search_response.data = []
+    mock.vector_stores.search = MagicMock(return_value=mock_search_response)
+
+    # Mock vector store retrieve for memory config
+    mock_vs_retrieve = MagicMock()
+    mock_vs_retrieve.id = "vs_test123"
+    mock.vector_stores.retrieve = AsyncMock(return_value=mock_vs_retrieve)
+
     return mock
 
 
@@ -257,6 +267,10 @@ def mock_openai_factory(mock_openai_client):
         patch(
             "mcp_the_force.adapters.openai.client.OpenAIClientFactory.get_instance",
             new=mock_get_instance,
+        ),
+        patch(
+            "mcp_the_force.local_services.search_history.OpenAI",
+            return_value=mock_openai_client,
         ),
     ):
         yield mock_openai_client

@@ -37,3 +37,11 @@ repos:
         stages: [pre-push]
         pass_filenames: false
         always_run: true
+        
+      - id: pytest-integration
+        name: pytest (integration tests)
+        entry: make test-integration
+        language: system
+        stages: [pre-push]
+        pass_filenames: false
+        always_run: true
