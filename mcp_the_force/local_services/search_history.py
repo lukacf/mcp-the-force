@@ -52,14 +52,36 @@ def _calculate_relative_time(timestamp: int) -> str:
 class SearchHistoryService:
     """Local service for searching project history stores."""
 
-    # Class-level SQLite deduplicator (singleton)
+    # Class-level singletons
+    _client: Optional[OpenAI] = None
+    _memory_config: Optional[Any] = None  # AsyncMemoryConfig
     _deduplicator = None
     _deduplicator_lock = asyncio.Lock()
+    _init_lock = asyncio.Lock()
 
-    def __init__(self):
-        settings = get_settings()
-        self.client = OpenAI(api_key=settings.openai_api_key)
-        self.memory_config = get_async_memory_config()
+    def __init__(
+        self,
+        client: Optional[OpenAI] = None,
+        memory_config: Optional[Any] = None,
+        deduplicator: Optional[Any] = None,
+    ):
+        self.client = client
+        self.memory_config = memory_config
+
+        # Use provided dependencies if given (for tests)
+        if client and memory_config:
+            self._deduplicator = deduplicator
+            return
+
+        # Otherwise, initialize singletons once
+        if SearchHistoryService._client is None:
+            settings = get_settings()
+            SearchHistoryService._client = OpenAI(api_key=settings.openai_api_key)
+        if SearchHistoryService._memory_config is None:
+            SearchHistoryService._memory_config = get_async_memory_config()
+
+        self.client = SearchHistoryService._client
+        self.memory_config = SearchHistoryService._memory_config
         self._ensure_deduplicator()
 
     def _ensure_deduplicator(self):
@@ -174,13 +196,15 @@ class SearchHistoryService:
         # Determine which stores to search
         for store_type in store_types:
             if store_type == "conversation":
-                store_id = await self.memory_config.get_active_conversation_store()
-                if store_id:
-                    stores_to_search.append(("conversation", store_id))
+                if self.memory_config:
+                    store_id = await self.memory_config.get_active_conversation_store()
+                    if store_id:
+                        stores_to_search.append(("conversation", store_id))
             elif store_type == "commit":
-                store_id = await self.memory_config.get_active_commit_store()
-                if store_id:
-                    stores_to_search.append(("commit", store_id))
+                if self.memory_config:
+                    store_id = await self.memory_config.get_active_commit_store()
+                    if store_id:
+                        stores_to_search.append(("commit", store_id))
             # Add more store types as needed
 
         if not stores_to_search:
@@ -296,14 +320,17 @@ class SearchHistoryService:
 
             # Run synchronous OpenAI call in thread pool
             loop = asyncio.get_event_loop()
-            response = await loop.run_in_executor(
-                executor,
-                lambda: self.client.vector_stores.search(
-                    vector_store_id=store_id,
-                    query=query,
-                    max_num_results=max_results,
-                ),
-            )
+            response = None
+            if self.client:
+                client = self.client  # Capture for lambda
+                response = await loop.run_in_executor(
+                    executor,
+                    lambda: client.vector_stores.search(
+                        vector_store_id=store_id,
+                        query=query,
+                        max_num_results=max_results,
+                    ),
+                )
 
             results = []
             if response and hasattr(response, "data"):
