@@ -144,13 +144,33 @@ class TestNoEnvironmentBypassesAllowed:
 
     def test_test_flags_in_settings(self):
         """Test flags should be in settings."""
-        settings = Settings()
+        # Clear the cache to ensure fresh settings
+        get_settings.cache_clear()
 
-        # Test/dev flags should be configurable
-        assert hasattr(settings.dev, "adapter_mock")
-        assert hasattr(settings.dev, "ci_e2e")
-        assert settings.dev.adapter_mock is False  # default
-        assert settings.dev.ci_e2e is False  # default
+        # Save current env vars if they exist
+        saved_adapter_mock = os.environ.get("MCP_ADAPTER_MOCK")
+        saved_ci_e2e = os.environ.get("CI_E2E")
+
+        try:
+            # Clear env vars to test defaults
+            if "MCP_ADAPTER_MOCK" in os.environ:
+                del os.environ["MCP_ADAPTER_MOCK"]
+            if "CI_E2E" in os.environ:
+                del os.environ["CI_E2E"]
+
+            settings = Settings()
+
+            # Test/dev flags should be configurable
+            assert hasattr(settings.dev, "adapter_mock")
+            assert hasattr(settings.dev, "ci_e2e")
+            assert settings.dev.adapter_mock is False  # default
+            assert settings.dev.ci_e2e is False  # default
+        finally:
+            # Restore env vars
+            if saved_adapter_mock is not None:
+                os.environ["MCP_ADAPTER_MOCK"] = saved_adapter_mock
+            if saved_ci_e2e is not None:
+                os.environ["CI_E2E"] = saved_ci_e2e
 
 
 class TestCompleteConfigurationCoverage:
