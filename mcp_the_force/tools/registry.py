@@ -144,7 +144,7 @@ def tool(
                 logger.debug(f"Registered alias: {alias} -> {tool_id}")
 
         # Store metadata on the class for easy access
-        cls._tool_metadata = metadata  # type: ignore[attr-defined]
+        cls._tool_metadata = metadata
 
         return cls
 

@@ -98,9 +98,18 @@ class ParameterValidator:
                 elif not self._validate_type(value, param_info.type):
                     expected = getattr(param_info, "type_str", str(param_info.type))
                     actual = type(value).__name__
-                    raise TypeError(
-                        f"Parameter '{name}' expected {expected}, got {actual}"
-                    )
+
+                    # Provide more helpful error message for list parameters
+                    if get_origin(param_info.type) is list and isinstance(value, str):
+                        raise TypeError(
+                            f"Parameter '{name}' expected {expected}, got {actual}. "
+                            f"List parameters must be provided as JSON arrays, not strings. "
+                            f"Example: {name}=['item1', 'item2'] or {name}='[\"item1\", \"item2\"]'"
+                        )
+                    else:
+                        raise TypeError(
+                            f"Parameter '{name}' expected {expected}, got {actual}"
+                        )
 
             # Set on instance (descriptor will handle storage)
             setattr(tool_instance, name, value)
