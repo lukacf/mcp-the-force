@@ -143,5 +143,12 @@ Examples
 
     # Single parameter: the raw LogsQL query
     query: str = Route.adapter(  # type: ignore[assignment]
-        description="Full LogsQL query string. Will be sent unmodified to VictoriaLogs.",
+        description=(
+            "(Required) A raw LogsQL query string to execute against the VictoriaLogs database. "
+            "This provides direct, powerful access to the logging system for advanced debugging. "
+            "Requires developer mode to be enabled. The query is sent unmodified to VictoriaLogs. "
+            "Always start queries with a time filter (e.g., _time:1h) for optimal performance. "
+            "Syntax: A valid LogsQL query string following the syntax described in the tool description. "
+            "Example: '_time:1h {app=\"mcp-the-force\"} error OR critical | sort by (_time desc) | head 50'"
+        ),
     )

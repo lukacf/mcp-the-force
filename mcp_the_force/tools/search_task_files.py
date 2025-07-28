@@ -34,12 +34,12 @@ class SearchTaskFiles(ToolSpec):
     timeout = 20  # 20 second timeout for searches
 
     # Parameters
-    query = Route.prompt(description="Search query or semicolon-separated queries")
-    max_results = Route.prompt(
+    query = Route.prompt(description="Search query or semicolon-separated queries")  # type: ignore[assignment]
+    max_results = Route.prompt(  # type: ignore[assignment]
         description="Maximum results to return (default: 20)",
         default=20,
     )
-    vector_store_ids = Route.vector_store_ids(
+    vector_store_ids = Route.vector_store_ids(  # type: ignore[assignment]
         default_factory=list,
         description="IDs of vector stores to search",
     )

@@ -1,0 +1,52 @@
+# Type stub for descriptors module to work around mypy's lack of descriptor field support
+# This can be removed once mypy implements https://github.com/python/mypy/issues/14868
+
+from typing import Any, TypeVar, Generic, overload, Optional, Callable
+from enum import Enum
+
+T = TypeVar("T")
+
+class RouteType(Enum):
+    PROMPT = "prompt"
+    ADAPTER = "adapter"
+    VECTOR_STORE = "vector_store"
+    SESSION = "session"
+    VECTOR_STORE_IDS = "vector_store_ids"
+    STRUCTURED_OUTPUT = "structured_output"
+
+class RouteDescriptor(Generic[T]):
+    route: RouteType
+    position: Optional[int]
+    default: Any
+    default_factory: Optional[Callable[[], T]]
+    description: Optional[str]
+    requires_capability: Optional[Callable[[Any], bool]]
+    field_name: str
+
+    @property
+    def has_default(self) -> bool: ...
+    @overload
+    def __get__(
+        self, obj: None, objtype: type[object] | None = ...
+    ) -> "RouteDescriptor[T]": ...
+    @overload
+    def __get__(self, obj: object, objtype: type[object] | None = ...) -> T: ...
+
+class Route:
+    @staticmethod
+    def prompt(*args: Any, **kwargs: Any) -> Any: ...
+    @staticmethod
+    def adapter(*args: Any, **kwargs: Any) -> Any: ...
+    @staticmethod
+    def vector_store(*args: Any, **kwargs: Any) -> Any: ...
+    @staticmethod
+    def session(*args: Any, **kwargs: Any) -> Any: ...
+    @staticmethod
+    def vector_store_ids(*args: Any, **kwargs: Any) -> Any: ...
+    @staticmethod
+    def structured_output(*args: Any, **kwargs: Any) -> Any: ...
+
+# Re-export sentinel
+_NO_DEFAULT: Any
+
+__all__ = ["RouteType", "RouteDescriptor", "Route", "_NO_DEFAULT"]

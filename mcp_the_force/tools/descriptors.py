@@ -1,7 +1,7 @@
 """Route descriptors for parameter routing in tool definitions."""
 
 from __future__ import annotations
-from typing import Any, Optional, TypeVar, Type, Callable, Generic, overload, cast
+from typing import Any, Optional, TypeVar, Type, Callable, Generic, overload
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -60,15 +60,23 @@ class RouteDescriptor(Generic[T]):
         """Store the field name when the descriptor is bound to a class."""
         self.field_name = name
 
-    def __get__(self, obj: Any, objtype: Optional[Type] = None) -> T:
+    @overload
+    def __get__(
+        self, obj: None, objtype: type[object] | None = ...
+    ) -> "RouteDescriptor[T]": ...
+
+    @overload
+    def __get__(self, obj: object, objtype: type[object] | None = ...) -> T: ...
+
+    def __get__(self, obj: Any, objtype: Optional[Type] = None) -> Any:
         """Return the descriptor itself when accessed on the class."""
         if obj is None:
-            return self  # type: ignore[return-value]
+            return self
 
         # Check if value has been set
         stored_value = getattr(obj, f"_{self.field_name}", None)
         if stored_value is not None:
-            return stored_value  # type: ignore[no-any-return]
+            return stored_value
 
         # Return default value
         if self.default_factory is not None:
@@ -76,10 +84,10 @@ class RouteDescriptor(Generic[T]):
             return self.default_factory()
         elif self.default is not _NO_DEFAULT:
             # For immutable defaults, return directly (including None)
-            return cast(T, self.default)
+            return self.default
         else:
             # No default - could be required field
-            return None  # type: ignore[return-value]
+            return None
 
     def __set__(self, obj: Any, value: T) -> None:
         """Store the value on the instance."""

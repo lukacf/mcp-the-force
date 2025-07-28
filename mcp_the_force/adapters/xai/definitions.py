@@ -19,47 +19,96 @@ from ...tools.blueprint_registry import register_blueprints
 # ====================================================================
 
 
-class GrokToolParams(BaseToolParams):
+class GrokToolParams(BaseToolParams):  # type: ignore[misc]
     """Grok-specific parameters with capability requirements."""
 
     # Live Search parameters
-    search_mode: str = Route.adapter(
+    search_mode: str = Route.adapter(  # type: ignore[assignment]
         default="auto",
-        description="Live Search mode: 'auto', 'on', 'off'",
+        description=(
+            "(Optional) Controls the integrated 'Live Search' feature, which uses real-time web data "
+            "(from X/Twitter and other sources). 'on' forces web search for every query, 'off' disables "
+            "it completely, and 'auto' allows the model to decide based on the query. Live Search is "
+            "particularly useful for current events, recent developments, and up-to-date information. "
+            "Syntax: A string, one of 'auto', 'on', or 'off'. "
+            "Default: 'auto'. "
+            "Example: search_mode='on'"
+        ),
         requires_capability=lambda c: c.supports_live_search,
     )
 
-    search_parameters: Optional[Dict[str, Any]] = Route.adapter(
+    search_parameters: Optional[Dict[str, Any]] = Route.adapter(  # type: ignore[assignment]
         default=None,
-        description="Live Search parameters (allowedWebsites, maxSearchResults, etc.)",
+        description=(
+            "(Optional) A dictionary of parameters to customize the Live Search behavior. Provides "
+            "fine-grained control over web search functionality. Common parameters include: "
+            "'allowedWebsites' (list of domains to restrict search to), 'maxSearchResults' (integer "
+            "limiting result count), and other provider-specific options. "
+            "Syntax: A JSON object with string keys and appropriate values. "
+            "Example: {'allowedWebsites': ['github.com', 'stackoverflow.com'], 'maxSearchResults': 10}"
+        ),
         requires_capability=lambda c: c.supports_live_search,
     )
 
-    return_citations: bool = Route.adapter(
+    return_citations: bool = Route.adapter(  # type: ignore[assignment]
         default=True,
-        description="Include citations from Live Search",
+        description=(
+            "(Optional) If true, the model's response will include citations for information retrieved "
+            "from web search. Citations appear as references allowing you to verify the sources of "
+            "information. Useful for fact-checking and understanding where information comes from. "
+            "Syntax: A boolean (true or false). "
+            "Default: true. "
+            "Example: return_citations=false"
+        ),
         requires_capability=lambda c: c.supports_live_search,
     )
 
-    temperature: float = Route.adapter(
+    temperature: float = Route.adapter(  # type: ignore[assignment]
         default=0.7,
-        description="Sampling temperature",
+        description=(
+            "(Optional) Controls the randomness of the model's output. Higher values result in more "
+            "creative and varied responses, while lower values produce more deterministic output. "
+            "Grok models use a moderate default (0.7) balancing creativity and consistency. "
+            "Syntax: A float, typically between 0.0 and 2.0. "
+            "Default: 0.7. "
+            "Example: temperature=0.3"
+        ),
         requires_capability=lambda c: c.supports_temperature,
     )
 
-    reasoning_effort: Optional[str] = Route.adapter(
+    reasoning_effort: Optional[str] = Route.adapter(  # type: ignore[assignment]
         default=None,
-        description="Reasoning effort for Grok mini models (low/high only)",
+        description=(
+            "(Optional) Adjusts reasoning effort for Grok mini models only. Unlike other models that "
+            "support 'low', 'medium', and 'high', Grok mini models only support 'low' or 'high'. "
+            "This parameter is not applicable to standard Grok models (grok-3-beta, grok-4). "
+            "Syntax: A string, either 'low' or 'high'. "
+            "Default: None (uses model default). "
+            "Example: reasoning_effort='high'"
+        ),
         requires_capability=lambda c: c.supports_reasoning_effort,
     )
 
-    disable_memory_search: bool = Route.adapter(
+    disable_memory_search: bool = Route.adapter(  # type: ignore[assignment]
         default=False,
-        description="Disable search_project_history tool",
+        description=(
+            "(Optional) If true, prevents the model from being able to use the search_project_history tool. "
+            "This forces the model to rely only on the provided context, its own internal knowledge, "
+            "and Live Search (if enabled), without accessing the project's historical conversations and commits. "
+            "Syntax: A boolean (true or false). "
+            "Default: false. "
+            "Example: disable_memory_search=true"
+        ),
     )
 
-    structured_output_schema: Optional[Dict[str, Any]] = Route.structured_output(
-        description="JSON schema for structured output",
+    structured_output_schema: Optional[Dict[str, Any]] = Route.structured_output(  # type: ignore[assignment, misc]
+        description=(
+            "(Optional) A JSON schema that the model's output must conform to. Forces the model to generate "
+            "a response that is a valid JSON object matching the provided schema. Grok models support "
+            "flexible JSON Schema validation similar to Gemini models, allowing for complex nested structures. "
+            "Syntax: A JSON object representing a valid JSON Schema. "
+            "Example: {'type': 'object', 'properties': {'recommendation': {'type': 'string'}, 'sources': {'type': 'array', 'items': {'type': 'string'}}}}"
+        ),
         requires_capability=lambda c: c.supports_structured_output,
     )
 
