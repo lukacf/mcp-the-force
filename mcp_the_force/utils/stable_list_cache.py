@@ -17,12 +17,12 @@ class StableListCache(BaseSQLiteCache):
     """SQLite-backed cache for stable inline lists and sent file tracking."""
 
     def __init__(self, db_path: Optional[str] = None, ttl: Optional[int] = None):
+        settings = get_settings()
         if db_path is None:
-            # Check for environment variable first (for testing)
-            db_path = os.getenv("STABLE_LIST_DB_PATH", ".stable_list_cache.sqlite3")
+            # Use the session DB path from settings (unified database)
+            db_path = settings.session.db_path
         if ttl is None:
-            settings = get_settings()
-            ttl = settings.session_ttl_seconds
+            ttl = settings.session.ttl_seconds
 
         # Create stable_inline_lists table SQL
         create_table_sql = """
@@ -39,7 +39,7 @@ class StableListCache(BaseSQLiteCache):
             ttl=ttl,
             table_name="stable_inline_lists",  # Primary table for cleanup
             create_table_sql=create_table_sql,
-            purge_probability=get_settings().session_cleanup_probability,
+            purge_probability=settings.session.cleanup_probability,
         )
 
         # Create additional tables for sent files tracking
