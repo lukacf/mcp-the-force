@@ -364,8 +364,8 @@ class ToolExecutor:
 
                 # Execute the service
                 result = await service.execute(**adapter_params)
-                # Convert dict results to JSON for MCP compatibility
-                if isinstance(result, dict):
+                # Convert dict/list results to JSON for MCP compatibility
+                if isinstance(result, (dict, list)):
                     import json
 
                     return json.dumps(result)
