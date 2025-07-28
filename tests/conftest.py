@@ -57,6 +57,8 @@ def isolate_test_databases(tmp_path, monkeypatch):
     test_db_map = {}
     for db_name in PRODUCTION_DBS:
         test_path = tmp_path / f"test_{db_name}"
+        # Ensure parent directory exists
+        test_path.parent.mkdir(parents=True, exist_ok=True)
         test_db_map[db_name] = str(test_path)
 
     # Store the original sqlite3.connect
@@ -171,6 +173,7 @@ def mock_env(monkeypatch):
         "VERTEX_LOCATION": "us-central1",
         "CONTEXT_PERCENTAGE": "0.85",
         "LOG_LEVEL": "WARNING",  # Reduce noise in tests
+        "VICTORIA_LOGS_URL": "",  # Disable VictoriaLogs in tests
     }
     for key, value in test_env.items():
         monkeypatch.setenv(key, value)
@@ -219,8 +222,11 @@ def mock_openai_client():
     mock.files.create = AsyncMock(return_value=mock_file)
 
     # Mock vector store operations (async)
+    # Use a unique ID per test to avoid database conflicts
+    import uuid
+
     mock_vs = MagicMock()
-    mock_vs.id = "vs_test123"
+    mock_vs.id = f"vs_test_{uuid.uuid4().hex[:8]}"
     mock_vs.status = "completed"
 
     # Mock both paths - some code uses client.vector_stores, some uses client.beta.vector_stores
@@ -244,16 +250,45 @@ def mock_openai_client():
     mock.vector_stores.search = MagicMock(return_value=mock_search_response)
 
     # Mock vector store retrieve for memory config
-    mock_vs_retrieve = MagicMock()
-    mock_vs_retrieve.id = "vs_test123"
-    mock.vector_stores.retrieve = AsyncMock(return_value=mock_vs_retrieve)
+    # This should return the same store that was created
+    def mock_retrieve(store_id):
+        mock_retrieved = MagicMock()
+        mock_retrieved.id = store_id
+        return mock_retrieved
+
+    mock.vector_stores.retrieve = AsyncMock(side_effect=mock_retrieve)
 
     return mock
 
 
 @pytest.fixture
-def mock_openai_factory(mock_openai_client):
+def mock_openai_factory(mock_openai_client, tmp_path, monkeypatch):
     """Patch OpenAIClientFactory to return the mock client."""
+
+    # First, ensure we're using test databases for memory config
+    test_db_path = tmp_path / "test_memory.db"
+    monkeypatch.setenv("SESSION_DB_PATH", str(test_db_path))
+
+    # Clear any cached settings
+    from mcp_the_force.config import get_settings
+
+    get_settings.cache_clear()
+
+    # Clear any existing memory config instances
+    from mcp_the_force.memory import config as memory_config_module
+    from mcp_the_force.memory import async_config as async_config_module
+
+    if hasattr(memory_config_module, "_memory_config"):
+        memory_config_module._memory_config = None
+    if hasattr(async_config_module, "_async_memory_config"):
+        async_config_module._async_memory_config = None
+
+    # Clear SearchHistoryService singletons
+    from mcp_the_force.local_services.search_history import SearchHistoryService
+
+    SearchHistoryService._client = None
+    SearchHistoryService._memory_config = None
+    SearchHistoryService._deduplicator = None
 
     # Create an async mock that returns the client
     async def mock_get_instance(*args, **kwargs):
@@ -271,6 +306,13 @@ def mock_openai_factory(mock_openai_client):
         patch(
             "mcp_the_force.local_services.search_history.OpenAI",
             return_value=mock_openai_client,
+        ),
+        patch(
+            "mcp_the_force.local_services.search_history.get_async_memory_config",
+            return_value=Mock(
+                get_active_conversation_store=AsyncMock(return_value="test_store_conv"),
+                get_active_commit_store=AsyncMock(return_value="test_store_commit"),
+            ),
         ),
     ):
         yield mock_openai_client
