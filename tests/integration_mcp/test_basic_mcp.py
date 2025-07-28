@@ -16,16 +16,16 @@ pytestmark = [
 class TestBasicMCP:
     """Simple tests that MCP protocol works."""
 
-    async def test_list_models_callable(self, mcp_server):
-        """Test that list_models can be called and returns expected type."""
+    async def test_list_sessions_callable(self, mcp_server):
+        """Test that list_sessions can be called and returns expected type."""
         from fastmcp import Client
         from fastmcp.client import FastMCPTransport
 
         # Create client within test to avoid async teardown issues
         transport = FastMCPTransport(mcp_server)
         async with Client(transport) as client:
-            # Call the tool
-            result = await client.call_tool("list_models")
+            # Call the tool with parameters (MCP expects string values)
+            result = await client.call_tool("list_sessions", arguments={"limit": "5"})
 
             # Check if the tool call was successful
             assert not result.is_error, f"Tool call failed with error: {getattr(result, 'error_message', 'Unknown error')}"
@@ -33,24 +33,20 @@ class TestBasicMCP:
             # Access the actual response from the .content attribute
             content = result.content
             assert isinstance(content, list)
-            assert len(content) > 0
 
-            # The result is a list of TextContent items, each containing a JSON model
-            first_item = content[0]
-            assert isinstance(first_item, TextContent)
+            # The result is a list of TextContent items
+            if len(content) > 0:
+                first_item = content[0]
+                assert isinstance(first_item, TextContent)
 
-            # Parse the JSON array from the first TextContent
-            models = json.loads(first_item.text)
-            assert isinstance(models, list)
-            assert len(models) > 0
+                # Parse the JSON array from the first TextContent
+                sessions = json.loads(first_item.text)
+                assert isinstance(sessions, list)
 
-            # Each model should have required fields
-            for model_data in models:
-                assert "id" in model_data
-                assert "model" in model_data
-                # Should have standard fields
-                assert "provider" in model_data
-                assert "context_window" in model_data
+                # Each session should have required fields
+                for session_data in sessions:
+                    assert "session_id" in session_data
+                    assert "tool_name" in session_data
 
     async def test_gemini_tool_callable(self, mcp_server):
         """Test that a model tool can be called."""

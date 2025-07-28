@@ -118,6 +118,15 @@ class MemoryConfig(BaseModel):
     max_files_per_commit: int = Field(50, description="Max files per commit", ge=1)
 
 
+class ToolsConfig(BaseModel):
+    """Configuration for built-in local service tools."""
+
+    default_summarization_model: str = Field(
+        "chat_with_gemini25_flash",
+        description="The default model used by describe_session for summarization.",
+    )
+
+
 class FeaturesConfig(BaseModel):
     """Feature flags configuration."""
 
@@ -198,6 +207,7 @@ class Settings(BaseSettings):
     # Feature configs
     session: SessionConfig = Field(default_factory=SessionConfig)
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
+    tools: ToolsConfig = Field(default_factory=ToolsConfig)
     features: FeaturesConfig = Field(default_factory=FeaturesConfig)
     security: SecurityConfig = Field(default_factory=SecurityConfig)
     services: ServicesConfig = Field(default_factory=ServicesConfig)

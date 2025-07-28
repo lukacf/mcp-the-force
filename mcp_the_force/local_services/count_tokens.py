@@ -1,7 +1,6 @@
 """Local service for counting tokens in project files and directories."""
 
 from typing import Dict, Any
-from ..tools.token_count import CountProjectTokens
 
 
 class CountTokensService:
@@ -24,6 +23,9 @@ class CountTokensService:
         """
         items = kwargs.get("items", [])
         top_n = kwargs.get("top_n", 10)
+
+        # Import here to avoid circular dependency
+        from ..tools.token_count import CountProjectTokens
 
         tool = CountProjectTokens()
         tool.items = items
