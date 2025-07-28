@@ -788,7 +788,6 @@ class TestIntegrationScenarios:
     async def test_context_overflow_scenario(self):
         """Test the context overflow use case."""
         from mcp_the_force.vectorstores.manager import VectorStoreManager
-        from mcp_the_force.vectorstores.in_memory import InMemoryClient
 
         # Use real in-memory client instead of mocks
         manager = VectorStoreManager(provider="inmemory")
@@ -875,7 +874,7 @@ class TestIntegrationScenarios:
         await manager.store_files_with_updates(
             session_id="test-session", files=files_v2, store_info=store_info
         )
-        
+
         # Basic verification that it worked
         assert store_info is not None
         assert "store_id" in store_info
