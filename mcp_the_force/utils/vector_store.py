@@ -1,4 +1,4 @@
-from typing import List, BinaryIO, Sequence, Tuple
+from typing import List, BinaryIO, Sequence, Tuple, Any
 from pathlib import Path
 from ..config import get_settings
 import logging
@@ -180,10 +180,10 @@ async def _upload_batch_with_retry(
                 )
 
                 # Upload sub-batches in parallel
-                sub_results = await asyncio.gather(
+                sub_results: List[Any] = await asyncio.gather(
                     *[
                         _upload_single_batch(
-                            client, vector_store_id, sub_batch, f"{batch_num}.{i+1}"
+                            client, vector_store_id, sub_batch, f"{batch_num}.{i + 1}"
                         )
                         for i, sub_batch in enumerate(sub_batches)
                     ],
@@ -197,7 +197,7 @@ async def _upload_batch_with_retry(
                 for i, result in enumerate(sub_results):
                     if isinstance(result, Exception):
                         logger.error(
-                            f"Sub-batch {batch_num}.{i+1} failed with exception: {result}"
+                            f"Sub-batch {batch_num}.{i + 1} failed with exception: {result}"
                         )
                         failed_files.extend(sub_batches[i])
                     elif isinstance(result, dict):
