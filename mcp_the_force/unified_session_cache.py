@@ -27,6 +27,8 @@ class UnifiedSession:
     - deployment_id: For LiteLLM router deployments
     """
 
+    project: str
+    tool: str
     session_id: str
     updated_at: int
     history: List[Dict[str, Any]] = field(default_factory=list)
@@ -37,12 +39,19 @@ class _SQLiteUnifiedSessionCache(BaseSQLiteCache):
     """SQLite-backed unified session cache for all providers."""
 
     def __init__(self, db_path: str, ttl: int):
+        # New schema with composite key
         create_table_sql = """CREATE TABLE IF NOT EXISTS unified_sessions(
-            session_id          TEXT PRIMARY KEY,
+            project             TEXT NOT NULL,
+            tool                TEXT NOT NULL,
+            session_id          TEXT NOT NULL,
             history             TEXT,
             provider_metadata   TEXT,
-            updated_at          INTEGER NOT NULL
+            updated_at          INTEGER NOT NULL,
+            PRIMARY KEY (project, tool, session_id)
         )"""
+
+        # Migration: check if old schema exists and migrate if needed
+        self._migrate_if_needed(db_path)
         super().__init__(
             db_path=db_path,
             ttl=ttl,
@@ -51,7 +60,58 @@ class _SQLiteUnifiedSessionCache(BaseSQLiteCache):
             purge_probability=get_settings().session_cleanup_probability,
         )
 
-    async def get_session(self, session_id: str) -> Optional[UnifiedSession]:
+    def _migrate_if_needed(self, db_path: str):
+        """Check if old schema exists and migrate to new schema if needed."""
+        import sqlite3
+
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+
+        try:
+            # Check if table exists and get its schema
+            cursor.execute("PRAGMA table_info(unified_sessions)")
+            columns = cursor.fetchall()
+
+            if columns:
+                # Check if we have the old schema (no project/tool columns)
+                column_names = [col[1] for col in columns]
+                if "project" not in column_names and "tool" not in column_names:
+                    logger.info("Migrating unified_sessions table to new schema")
+
+                    # Create new table with new schema
+                    cursor.execute("""
+                        CREATE TABLE IF NOT EXISTS unified_sessions_new(
+                            project             TEXT NOT NULL,
+                            tool                TEXT NOT NULL,
+                            session_id          TEXT NOT NULL,
+                            history             TEXT,
+                            provider_metadata   TEXT,
+                            updated_at          INTEGER NOT NULL,
+                            PRIMARY KEY (project, tool, session_id)
+                        )
+                    """)
+
+                    # Migrate existing data with default values
+                    cursor.execute("""
+                        INSERT INTO unified_sessions_new (project, tool, session_id, history, provider_metadata, updated_at)
+                        SELECT 'default', 'unknown', session_id, history, provider_metadata, updated_at
+                        FROM unified_sessions
+                    """)
+
+                    # Drop old table and rename new one
+                    cursor.execute("DROP TABLE unified_sessions")
+                    cursor.execute(
+                        "ALTER TABLE unified_sessions_new RENAME TO unified_sessions"
+                    )
+
+                    conn.commit()
+                    logger.info("Migration completed successfully")
+        finally:
+            conn.close()
+
+    async def get_session(
+        self, project: str, tool: str, session_id: str
+    ) -> Optional[UnifiedSession]:
         """
         Retrieves a complete session (history and metadata) from the database.
         Returns None if the session is not found or is expired.
@@ -60,8 +120,8 @@ class _SQLiteUnifiedSessionCache(BaseSQLiteCache):
         now = int(time.time())
 
         rows = await self._execute_async(
-            "SELECT history, provider_metadata, updated_at FROM unified_sessions WHERE session_id = ?",
-            (session_id,),
+            "SELECT history, provider_metadata, updated_at FROM unified_sessions WHERE project = ? AND tool = ? AND session_id = ?",
+            (project, tool, session_id),
         )
 
         if not rows:
@@ -72,7 +132,7 @@ class _SQLiteUnifiedSessionCache(BaseSQLiteCache):
 
         # Check if expired
         if now - updated_at >= self.ttl:
-            await self.delete_session(session_id)
+            await self.delete_session(project, tool, session_id)
             logger.debug(f"Session {session_id} expired")
             return None
 
@@ -81,6 +141,8 @@ class _SQLiteUnifiedSessionCache(BaseSQLiteCache):
         metadata = orjson.loads(metadata_json) if metadata_json else {}
 
         return UnifiedSession(
+            project=project,
+            tool=tool,
             session_id=session_id,
             updated_at=updated_at,
             history=history,
@@ -106,22 +168,29 @@ class _SQLiteUnifiedSessionCache(BaseSQLiteCache):
         )
 
         await self._execute_async(
-            "REPLACE INTO unified_sessions(session_id, history, provider_metadata, updated_at) VALUES(?,?,?,?)",
-            (session.session_id, history_json, metadata_json, now),
+            "REPLACE INTO unified_sessions(project, tool, session_id, history, provider_metadata, updated_at) VALUES(?,?,?,?,?,?)",
+            (
+                session.project,
+                session.tool,
+                session.session_id,
+                history_json,
+                metadata_json,
+                now,
+            ),
             fetch=False,
         )
 
         logger.debug(f"Saved session {session.session_id}")
         await self._probabilistic_cleanup()
 
-    async def delete_session(self, session_id: str):
+    async def delete_session(self, project: str, tool: str, session_id: str):
         """Explicitly deletes a session from the cache."""
         await self._execute_async(
-            "DELETE FROM unified_sessions WHERE session_id = ?",
-            (session_id,),
+            "DELETE FROM unified_sessions WHERE project = ? AND tool = ? AND session_id = ?",
+            (project, tool, session_id),
             fetch=False,
         )
-        logger.debug(f"Deleted session {session_id}")
+        logger.debug(f"Deleted session {project}/{tool}/{session_id}")
 
 
 # Singleton pattern
@@ -152,9 +221,11 @@ class UnifiedSessionCache:
     """Public proxy for the unified session cache with convenience methods."""
 
     @staticmethod
-    async def get_session(session_id: str) -> Optional[UnifiedSession]:
+    async def get_session(
+        project: str, tool: str, session_id: str
+    ) -> Optional[UnifiedSession]:
         """Get complete session data."""
-        return await _get_instance().get_session(session_id)
+        return await _get_instance().get_session(project, tool, session_id)
 
     @staticmethod
     async def set_session(session: UnifiedSession) -> None:
@@ -162,29 +233,40 @@ class UnifiedSessionCache:
         await _get_instance().set_session(session)
 
     @staticmethod
-    async def delete_session(session_id: str) -> None:
+    async def delete_session(project: str, tool: str, session_id: str) -> None:
         """Delete a session."""
-        await _get_instance().delete_session(session_id)
+        await _get_instance().delete_session(project, tool, session_id)
 
     # Convenience methods for history
     @staticmethod
-    async def get_history(session_id: str) -> List[Dict[str, Any]]:
+    async def get_history(
+        project: str, tool: str, session_id: str
+    ) -> List[Dict[str, Any]]:
         """Get conversation history in LiteLLM format."""
-        session = await _get_instance().get_session(session_id)
+        session = await _get_instance().get_session(project, tool, session_id)
         return session.history if session else []
 
     @staticmethod
-    async def set_history(session_id: str, history: List[Dict[str, Any]]) -> None:
+    async def set_history(
+        project: str, tool: str, session_id: str, history: List[Dict[str, Any]]
+    ) -> None:
         """Update conversation history, preserving metadata."""
-        session = await _get_instance().get_session(session_id)
+        session = await _get_instance().get_session(project, tool, session_id)
         if not session:
-            session = UnifiedSession(session_id=session_id, updated_at=int(time.time()))
+            session = UnifiedSession(
+                project=project,
+                tool=tool,
+                session_id=session_id,
+                updated_at=int(time.time()),
+            )
 
         session.history = history
         await _get_instance().set_session(session)
 
     @staticmethod
-    async def append_message(session_id: str, message: Dict[str, Any]) -> None:
+    async def append_message(
+        project: str, tool: str, session_id: str, message: Dict[str, Any]
+    ) -> None:
         """Append a complete message to history (preserves all fields).
 
         For Chat Completions API:
@@ -193,23 +275,30 @@ class UnifiedSessionCache:
         For Responses API:
             {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "Hello"}]}
         """
-        session = await _get_instance().get_session(session_id)
+        session = await _get_instance().get_session(project, tool, session_id)
         if not session:
-            session = UnifiedSession(session_id=session_id, updated_at=int(time.time()))
+            session = UnifiedSession(
+                project=project,
+                tool=tool,
+                session_id=session_id,
+                updated_at=int(time.time()),
+            )
 
         session.history.append(message)
         await _get_instance().set_session(session)
 
     @staticmethod
     async def append_chat_message(
-        session_id: str, role: str, content: str, **kwargs
+        project: str, tool: str, session_id: str, role: str, content: str, **kwargs
     ) -> None:
         """Convenience method to append a Chat Completions API message."""
         message = {"role": role, "content": content, **kwargs}
-        await UnifiedSessionCache.append_message(session_id, message)
+        await UnifiedSessionCache.append_message(project, tool, session_id, message)
 
     @staticmethod
-    async def append_responses_message(session_id: str, role: str, text: str) -> None:
+    async def append_responses_message(
+        project: str, tool: str, session_id: str, role: str, text: str
+    ) -> None:
         """Convenience method to append a Responses API text message."""
         message = {
             "type": "message",
@@ -221,23 +310,32 @@ class UnifiedSessionCache:
                 }
             ],
         }
-        await UnifiedSessionCache.append_message(session_id, message)
+        await UnifiedSessionCache.append_message(project, tool, session_id, message)
 
     # Convenience methods for OpenAI response_id
     @staticmethod
-    async def get_response_id(session_id: str) -> Optional[str]:
+    async def get_response_id(
+        project: str, tool: str, session_id: str
+    ) -> Optional[str]:
         """Get OpenAI response_id from metadata."""
-        session = await _get_instance().get_session(session_id)
+        session = await _get_instance().get_session(project, tool, session_id)
         if session:
             return session.provider_metadata.get("response_id")
         return None
 
     @staticmethod
-    async def set_response_id(session_id: str, response_id: str) -> None:
+    async def set_response_id(
+        project: str, tool: str, session_id: str, response_id: str
+    ) -> None:
         """Set OpenAI response_id in metadata, preserving history."""
-        session = await _get_instance().get_session(session_id)
+        session = await _get_instance().get_session(project, tool, session_id)
         if not session:
-            session = UnifiedSession(session_id=session_id, updated_at=int(time.time()))
+            session = UnifiedSession(
+                project=project,
+                tool=tool,
+                session_id=session_id,
+                updated_at=int(time.time()),
+            )
 
         session.provider_metadata["response_id"] = response_id
         await _get_instance().set_session(session)
@@ -245,7 +343,12 @@ class UnifiedSessionCache:
     # Methods for Responses API format
     @staticmethod
     async def append_function_call(
-        session_id: str, name: str, arguments: str, call_id: str
+        project: str,
+        tool: str,
+        session_id: str,
+        name: str,
+        arguments: str,
+        call_id: str,
     ) -> None:
         """Append a Responses API function call."""
         item = {
@@ -254,45 +357,58 @@ class UnifiedSessionCache:
             "arguments": arguments,
             "call_id": call_id,
         }
-        await UnifiedSessionCache.append_message(session_id, item)
+        await UnifiedSessionCache.append_message(project, tool, session_id, item)
 
     @staticmethod
     async def append_function_output(
-        session_id: str, call_id: str, output: str
+        project: str, tool: str, session_id: str, call_id: str, output: str
     ) -> None:
         """Append a Responses API function output."""
         item = {"type": "function_call_output", "call_id": call_id, "output": output}
-        await UnifiedSessionCache.append_message(session_id, item)
+        await UnifiedSessionCache.append_message(project, tool, session_id, item)
 
     # Convenience method for provider metadata
     @staticmethod
-    async def get_metadata(session_id: str, key: str) -> Any:
+    async def get_metadata(project: str, tool: str, session_id: str, key: str) -> Any:
         """Get specific metadata value."""
-        session = await _get_instance().get_session(session_id)
+        session = await _get_instance().get_session(project, tool, session_id)
         if session:
             return session.provider_metadata.get(key)
         return None
 
     @staticmethod
-    async def set_metadata(session_id: str, key: str, value: Any) -> None:
+    async def set_metadata(
+        project: str, tool: str, session_id: str, key: str, value: Any
+    ) -> None:
         """Set specific metadata value, preserving other data."""
-        session = await _get_instance().get_session(session_id)
+        session = await _get_instance().get_session(project, tool, session_id)
         if not session:
-            session = UnifiedSession(session_id=session_id, updated_at=int(time.time()))
+            session = UnifiedSession(
+                project=project,
+                tool=tool,
+                session_id=session_id,
+                updated_at=int(time.time()),
+            )
 
         session.provider_metadata[key] = value
         await _get_instance().set_session(session)
 
     @staticmethod
-    async def get_api_format(session_id: str) -> Optional[str]:
+    async def get_api_format(project: str, tool: str, session_id: str) -> Optional[str]:
         """Get the API format being used ('chat' or 'responses')."""
-        result = await UnifiedSessionCache.get_metadata(session_id, "api_format")
+        result = await UnifiedSessionCache.get_metadata(
+            project, tool, session_id, "api_format"
+        )
         return str(result) if result is not None else None
 
     @staticmethod
-    async def set_api_format(session_id: str, api_format: str) -> None:
+    async def set_api_format(
+        project: str, tool: str, session_id: str, api_format: str
+    ) -> None:
         """Set the API format being used."""
-        await UnifiedSessionCache.set_metadata(session_id, "api_format", api_format)
+        await UnifiedSessionCache.set_metadata(
+            project, tool, session_id, "api_format", api_format
+        )
 
     @staticmethod
     def close() -> None:

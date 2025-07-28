@@ -10,6 +10,8 @@ class CallContext:
     """Context passed to adapters during generation."""
 
     session_id: str
+    project: str
+    tool: str
     vector_store_ids: Optional[List[str]] = None
     tool_call_id: Optional[str] = None
     # Add more context as needed

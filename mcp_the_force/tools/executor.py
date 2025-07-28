@@ -205,16 +205,28 @@ class ToolExecutor:
             # Build messages in OpenAI format - ALL adapters will handle this
             from ..prompts import get_developer_prompt
             from ..unified_session_cache import unified_session_cache
+            import os
 
             model_name = metadata.model_config["model_name"]
             developer_prompt = get_developer_prompt(model_name)
+
+            # Get project name from config or current directory
+            project_path = settings.logging.project_path
+            project = (
+                os.path.basename(project_path)
+                if project_path
+                else os.path.basename(os.getcwd())
+            )
+            tool = metadata.id  # Use tool ID as the tool name
 
             # Load conversation history if we have a session
             messages = []
             if session_id:
                 # Load existing conversation history
                 try:
-                    history = await unified_session_cache.get_history(session_id)
+                    history = await unified_session_cache.get_history(
+                        project, tool, session_id
+                    )
                     if history:
                         messages.extend(history)
                         logger.debug(
@@ -228,7 +240,9 @@ class ToolExecutor:
                     # Try to use UnifiedSessionCache directly
                     from ..unified_session_cache import UnifiedSessionCache
 
-                    history = await UnifiedSessionCache.get_history(session_id)
+                    history = await UnifiedSessionCache.get_history(
+                        project, tool, session_id
+                    )
                     if history:
                         messages.extend(history)
                         logger.debug(
@@ -533,6 +547,8 @@ class ToolExecutor:
 
             call_context = CallContext(
                 session_id=session_id or "",
+                project=project,
+                tool=tool,
                 vector_store_ids=vector_store_ids,
             )
 
