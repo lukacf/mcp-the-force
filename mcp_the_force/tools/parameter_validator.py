@@ -259,5 +259,19 @@ class ParameterValidator:
             if isinstance(value, int):
                 return float(value)
 
+        # Handle int coercion
+        if expected_type is int:
+            if isinstance(value, int):
+                return value
+            if isinstance(value, str):
+                try:
+                    # Ensure it's not a float string
+                    if "." not in value:
+                        return int(value)
+                except ValueError:
+                    pass
+            if isinstance(value, float) and value.is_integer():
+                return int(value)
+
         # No coercion performed
         return None
