@@ -24,28 +24,57 @@ _MAX_BUDGET_FLASH = 24576
 # ====================================================================
 
 
-class GeminiToolParams(BaseToolParams):
+class GeminiToolParams(BaseToolParams):  # type: ignore[misc]
     """Gemini-specific parameters with capability requirements."""
 
-    temperature: float = Route.adapter(
+    temperature: float = Route.adapter(  # type: ignore[assignment]
         default=1.0,
-        description="Model temperature for response creativity",
+        description=(
+            "(Optional) Controls the randomness of the model's output. Higher values result in more "
+            "creative and varied responses, while lower values produce more deterministic output. "
+            "Gemini models support a wider default temperature (1.0) compared to OpenAI models. "
+            "Syntax: A float between 0.0 and 2.0. "
+            "Default: 1.0. "
+            "Example: temperature=0.5"
+        ),
         requires_capability=lambda c: c.supports_temperature,
     )
 
-    reasoning_effort: str = Route.adapter(
+    reasoning_effort: str = Route.adapter(  # type: ignore[assignment]
         default="medium",
-        description="Reasoning effort level mapped to thinking budget",
+        description=(
+            "(Optional) Controls the 'thinking budget' allocated to the model for reasoning. Maps to "
+            "a specific token budget for the model's internal reasoning process, affecting the depth "
+            "of analysis. For Gemini 2.5 Pro: 'low'=13107 tokens, 'medium'=19660 tokens, 'high'=32768 tokens. "
+            "For Gemini 2.5 Flash: 'low'=9830 tokens, 'medium'=14745 tokens, 'high'=24576 tokens. "
+            "Syntax: A string, one of 'low', 'medium', or 'high'. "
+            "Default: 'medium'. "
+            "Example: reasoning_effort='high'"
+        ),
         requires_capability=lambda c: c.supports_reasoning_effort,
     )
 
-    disable_memory_search: bool = Route.adapter(
+    disable_memory_search: bool = Route.adapter(  # type: ignore[assignment]
         default=False,
-        description="Disable automatic memory search",
+        description=(
+            "(Optional) If true, prevents the model from being able to use the search_project_history tool. "
+            "Forces the model to rely only on the provided context and its own internal knowledge, "
+            "without accessing the project's historical conversations and commits. "
+            "Syntax: A boolean (true or false). "
+            "Default: false. "
+            "Example: disable_memory_search=true"
+        ),
     )
 
-    structured_output_schema: Optional[Dict[str, Any]] = Route.structured_output(
-        description="JSON schema for structured output",
+    structured_output_schema: Optional[Dict[str, Any]] = Route.structured_output(  # type: ignore[assignment, misc]
+        description=(
+            "(Optional) A JSON schema that the model's output must conform to. Forces the model to generate "
+            "a response that is a valid JSON object matching the provided schema. Gemini models have more "
+            "flexible schema validation compared to OpenAI models - 'required' and 'additionalProperties' "
+            "are not mandatory. Supports complex nested schemas and various JSON Schema features. "
+            "Syntax: A JSON object representing a valid JSON Schema. "
+            "Example: {'type': 'object', 'properties': {'analysis': {'type': 'string'}, 'confidence': {'type': 'number'}}}"
+        ),
         requires_capability=lambda c: c.supports_structured_output,
     )
 
