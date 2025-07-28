@@ -91,10 +91,6 @@ warn_unused_configs = true
 disallow_untyped_defs = false
 ignore_missing_imports = true
 
-# Ignore descriptor-related type errors in definitions.py
-[[tool.mypy.overrides]]
-module = "mcp_the_force.tools.definitions"
-disable_error_code = ["assignment"]
 
 [tool.ruff]
 target-version = "py313"

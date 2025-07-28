@@ -19,28 +19,58 @@ from ...tools.blueprint_registry import register_blueprints
 # ====================================================================
 
 
-class OpenAIToolParams(BaseToolParams):
+class OpenAIToolParams(BaseToolParams):  # type: ignore[misc]
     """OpenAI-specific parameters with capability requirements."""
 
-    temperature: float = Route.adapter(
+    temperature: float = Route.adapter(  # type: ignore[assignment]
         default=0.2,
-        description="Model temperature for response creativity",
+        description=(
+            "(Optional) Controls the randomness of the model's output. Higher values result in more "
+            "creative and varied responses, while lower values produce more deterministic and focused output. "
+            "Only supported by GPT-4 models. O-series models (o3, o3-pro, o4-mini) do not support this parameter. "
+            "Syntax: A float between 0.0 and 2.0. "
+            "Default: 0.2. "
+            "Example: temperature=0.8"
+        ),
         requires_capability=lambda c: c.supports_temperature,
     )
 
-    reasoning_effort: str = Route.adapter(
+    reasoning_effort: str = Route.adapter(  # type: ignore[assignment]
         default="medium",
-        description="Reasoning effort level (low/medium/high)",
+        description=(
+            "(Optional) Controls the amount of internal 'thinking' the model does before providing an answer. "
+            "Higher effort results in more thorough and accurate reasoning but may increase latency. "
+            "'low' is faster but may be less accurate for complex problems. "
+            "Only supported by o-series models (o3, o3-pro, o4-mini). Not supported by GPT-4 models. "
+            "Syntax: A string, one of 'low', 'medium', or 'high'. "
+            "Default: 'medium' (or 'high' for o3-pro). "
+            "Example: reasoning_effort='high'"
+        ),
         requires_capability=lambda c: c.supports_reasoning_effort,
     )
 
-    disable_memory_search: bool = Route.adapter(
+    disable_memory_search: bool = Route.adapter(  # type: ignore[assignment]
         default=False,
-        description="Disable automatic memory search",
+        description=(
+            "(Optional) If true, prevents the model from being able to use the search_project_history tool "
+            "in its response. Use this to force the model to rely only on the provided context and its own "
+            "internal knowledge, preventing it from accessing potentially outdated historical information. "
+            "Syntax: A boolean (true or false). "
+            "Default: false. "
+            "Example: disable_memory_search=true"
+        ),
     )
 
-    structured_output_schema: Optional[Dict[str, Any]] = Route.structured_output(
-        description="JSON schema for structured output",
+    structured_output_schema: Optional[Dict[str, Any]] = Route.structured_output(  # type: ignore[assignment, misc]
+        description=(
+            "(Optional) A JSON schema that the model's output must conform to. Forces the model to generate "
+            "a response that is a valid JSON object matching the provided schema. For OpenAI models, the "
+            "schema is strictly validated: all object properties must be listed in a 'required' array, and "
+            "'additionalProperties' must be set to false. This ensures deterministic output structure. "
+            "Syntax: A JSON object representing a valid JSON Schema. "
+            "Example: {'type': 'object', 'properties': {'status': {'type': 'string'}, 'score': {'type': 'number'}}, "
+            "'required': ['status', 'score'], 'additionalProperties': false}"
+        ),
         requires_capability=lambda c: c.supports_structured_output,
     )
 
