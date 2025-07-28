@@ -40,7 +40,7 @@ async def check_relationship():
     print("\n" + "=" * 60)
     files_response = await client.files.list(purpose="assistants", limit=100)
     print(
-        f"\nTotal assistant files: {len(files_response.data)}{'+'if files_response.has_more else ''}"
+        f"\nTotal assistant files: {len(files_response.data)}{'+' if files_response.has_more else ''}"
     )
 
 

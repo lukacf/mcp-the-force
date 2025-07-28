@@ -6,6 +6,7 @@ import random
 import threading
 import logging
 from typing import Optional, Any, List
+from pathlib import Path
 from .utils.thread_pool import run_in_thread_pool
 
 logger = logging.getLogger(__name__)
@@ -38,6 +39,10 @@ class BaseSQLiteCache:
         self._lock = threading.RLock()
 
         try:
+            # Ensure parent directory exists
+            db_path_obj = Path(db_path)
+            db_path_obj.parent.mkdir(parents=True, exist_ok=True)
+
             # check_same_thread=False allows other threads to reuse connection
             self._conn = sqlite3.connect(
                 db_path, detect_types=sqlite3.PARSE_DECLTYPES, check_same_thread=False

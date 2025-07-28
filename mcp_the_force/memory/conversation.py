@@ -11,11 +11,9 @@ import tempfile
 from typing import List, Dict, Any, Optional, TypedDict
 from xml.etree import ElementTree as ET
 
-from ..adapters.openai.client import OpenAIClientFactory
 from ..config import get_settings
 from ..utils.redaction import redact_dict
 from .async_config import get_async_memory_config
-from ..tools.registry import get_tool
 
 logger = logging.getLogger(__name__)
 
@@ -24,26 +22,15 @@ async def store_conversation_memory(
     session_id: str, tool_name: str, messages: List[Dict[str, Any]], response: str
 ) -> None:
     """Store conversation summary in vector store after tool call."""
-    # Check if tool writes to memory using capability flag
-    tool_metadata = get_tool(tool_name)
-    if not tool_metadata:
-        logger.warning(
-            f"No metadata found for tool {tool_name}, skipping memory storage"
-        )
-        return
-
-    if not tool_metadata.capabilities.get("writes_memory"):
-        logger.info(
-            f"Tool {tool_name} does not have writes_memory capability, skipping memory storage"
-        )
-        return
-
+    # Memory storage is applied universally to all chat tools
     logger.info(
-        f"Tool {tool_name} has writes_memory capability, proceeding with storage"
+        f"Storing conversation memory for tool {tool_name}, session {session_id}"
     )
 
     try:
-        # Get async client
+        # Get async client (lazy import to avoid circular dependency)
+        from ..adapters.openai.client import OpenAIClientFactory
+
         settings = get_settings()
         client = await OpenAIClientFactory.get_instance(api_key=settings.openai_api_key)
 
@@ -220,7 +207,7 @@ async def create_conversation_summary(
 
     # Try to use Gemini Flash for summarization
     try:
-        from ..adapters import get_adapter
+        from ..adapters.registry import get_adapter_class
         from ..config import get_settings
 
         settings = get_settings()
@@ -261,15 +248,32 @@ Conversation to summarize:
 """
 
         # Use the central adapter factory instead of direct instantiation
-        adapter, error = get_adapter("vertex", "gemini-2.5-flash")
-        if not adapter:
-            logger.warning(f"Failed to get Vertex adapter for summarization: {error}")
+        try:
+            adapter_cls = get_adapter_class("google")
+            adapter = adapter_cls("gemini-2.5-flash")
+        except Exception as e:
+            logger.warning(f"Failed to get Vertex adapter for summarization: {e}")
             # Fall back to structured summary
             return _create_fallback_summary(user_components, response, tool_name)
 
-        summary = await adapter.generate(
-            prompt=summarization_prompt, vector_store_ids=None, temperature=0.3
+        # Create minimal params for MCPAdapter protocol
+        from types import SimpleNamespace
+        from ..adapters.protocol import CallContext
+        from ..adapters.tool_dispatcher import ToolDispatcher
+
+        params = SimpleNamespace(temperature=0.3)
+        ctx = CallContext(session_id="", vector_store_ids=None)
+        tool_dispatcher = ToolDispatcher(vector_store_ids=None)
+
+        result = await adapter.generate(
+            prompt=summarization_prompt,
+            params=params,
+            ctx=ctx,
+            tool_dispatcher=tool_dispatcher,
         )
+
+        # Extract content from result
+        summary = result.get("content", "") if isinstance(result, dict) else str(result)
 
         # Add metadata header
         return f"""## AI Consultation Session

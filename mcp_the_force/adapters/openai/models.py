@@ -1,223 +1,194 @@
-"""Pydantic models for OpenAI adapter configuration and validation."""
+"""OpenAI model capabilities using Pattern B (dataclass inheritance).
 
-from pydantic import BaseModel, field_validator, model_validator
-from typing import Dict, List, Any, Optional
+This module defines capabilities for all OpenAI models at compile time
+using simple dataclass inheritance.
+"""
+
+from dataclasses import dataclass
+from typing import Optional, List, Dict, Any, Union
+from pydantic import BaseModel, Field
+
+from ..capabilities import AdapterCapabilities
 
 
-class ModelCapability(BaseModel):
-    """Defines the schema for a single model's capabilities."""
+@dataclass
+class OpenAIBaseCapabilities(AdapterCapabilities):
+    """Base capabilities shared by all OpenAI models."""
 
-    supports_streaming: bool
-    force_background: bool
-    supports_web_search: bool = False
-    web_search_tool: str = "web_search"  # Tool name for web search
-    supports_custom_tools: bool = True  # Whether model supports custom tools
-    supports_reasoning: bool = False
-    supports_reasoning_effort: bool = (
-        False  # Whether model supports reasoning_effort parameter
+    native_file_search: bool = True
+    supports_functions: bool = True
+    supports_streaming: bool = True
+    supports_vision: bool = False
+    supports_live_search: bool = False
+    supports_reasoning_effort: bool = False
+    provider: str = "openai"
+    model_family: str = "openai"
+    supports_temperature: bool = True  # Most models support temperature
+
+    # OpenAI-specific capabilities
+    supports_structured_output: bool = True
+    supports_previous_response_id: bool = True
+    web_search_tool: str = "web_search"
+    supports_custom_tools: bool = True  # Can use custom function tools
+    supports_web_search: bool = False  # Base models don't support web search
+    force_background: bool = False  # Most models can use either mode
+    default_reasoning_effort: Optional[str] = None  # No default effort
+
+
+@dataclass
+class OSeriesCapabilities(OpenAIBaseCapabilities):
+    """Capabilities for O-series reasoning models."""
+
+    model_family: str = "o_series"
+    supports_reasoning_effort: bool = True
+    supports_live_search: bool = True  # via web_search tool
+    supports_web_search: bool = True  # Override base to enable web search
+    force_background: bool = False  # Can use streaming or background
+    default_reasoning_effort: Optional[str] = None
+    supports_temperature: bool = False  # O-series doesn't support temperature
+
+
+@dataclass
+class O3Capabilities(OSeriesCapabilities):
+    """OpenAI o3 model capabilities."""
+
+    max_context_window: int = 200_000
+    description: str = "Chain-of-thought reasoning with web search (200k context)"
+    parallel_function_calls: int = -1  # Unlimited
+
+
+@dataclass
+class O3ProCapabilities(OSeriesCapabilities):
+    """OpenAI o3-pro model capabilities."""
+
+    max_context_window: int = 200_000
+    description: str = (
+        "Deep analysis and formal reasoning with web search (200k context)"
     )
-    supports_parallel_tool_calls: bool = True
-    context_window: int = 200000
-    default_temperature: Optional[float] = None
-    default_reasoning_effort: Optional[str] = (
-        None  # Default reasoning effort for models that support it
+    force_background: bool = True  # Always use background mode
+    supports_streaming: bool = False  # No streaming for o3-pro
+    default_reasoning_effort: str = "high"
+    parallel_function_calls: int = -1  # Unlimited
+
+
+@dataclass
+class O4MiniCapabilities(OSeriesCapabilities):
+    """OpenAI o4-mini model capabilities."""
+
+    max_context_window: int = 200_000
+    description: str = "Fast reasoning model (200k context)"
+    parallel_function_calls: int = -1  # Unlimited
+
+
+@dataclass
+class GPT4Capabilities(OpenAIBaseCapabilities):
+    """GPT-4 series capabilities."""
+
+    model_family: str = "gpt4"
+    supports_live_search: bool = True  # via web_search tool
+    supports_web_search: bool = True  # GPT-4 models support web search
+
+
+@dataclass
+class GPT41Capabilities(GPT4Capabilities):
+    """GPT-4.1 model capabilities."""
+
+    max_context_window: int = 1_000_000
+    description: str = "Fast long-context processing with web search (1M context)"
+    web_search_tool: str = "web_search"
+    parallel_function_calls: int = -1  # Unlimited
+
+
+@dataclass
+class DeepResearchCapabilities(OSeriesCapabilities):
+    """Deep research model capabilities."""
+
+    model_family: str = "research"
+    force_background: bool = True  # Always background
+    supports_streaming: bool = False
+    supports_live_search: bool = True
+    description: str = "Ultra-deep research with autonomous web search (30-60+ min)"
+
+
+@dataclass
+class O3DeepResearchCapabilities(DeepResearchCapabilities):
+    """o3-deep-research model capabilities."""
+
+    max_context_window: int = 200_000
+    description: str = (
+        "Ultra-deep research with extensive web search (200k context, 10-60 min)"
     )
 
-    @field_validator("context_window")
-    def validate_context_window(cls, v: int) -> int:
-        if v <= 0:
-            raise ValueError("context_window must be positive")
-        return v
 
-    @model_validator(mode="after")
-    def validate_reasoning_temperature_exclusion(self) -> "ModelCapability":
-        """Ensure models with reasoning support don't have temperature and vice versa."""
-        if self.supports_reasoning and self.default_temperature is not None:
-            raise ValueError(
-                "Models with reasoning support should not have a default_temperature"
-            )
-        return self
+@dataclass
+class O4MiniDeepResearchCapabilities(DeepResearchCapabilities):
+    """o4-mini-deep-research model capabilities."""
+
+    max_context_window: int = 200_000
+    description: str = "Fast research with web search (200k context, 2-10 min)"
 
 
-# Model capabilities are now defined directly in code using Pydantic models.
-# This provides type safety and removes the need for YAML parsing.
-model_capabilities: Dict[str, ModelCapability] = {
-    "o3": ModelCapability(
-        supports_streaming=True,
-        force_background=False,
-        supports_web_search=True,  # Now supports web search!
-        context_window=200000,
-        supports_reasoning=True,
-        supports_reasoning_effort=True,  # Regular o3 supports reasoning_effort
-        default_reasoning_effort="medium",
-        supports_parallel_tool_calls=True,
-    ),
-    "o3-pro": ModelCapability(
-        supports_streaming=False,
-        force_background=True,
-        supports_web_search=True,  # Now supports web search!
-        context_window=200000,
-        supports_reasoning=True,
-        supports_reasoning_effort=True,  # Regular o3-pro supports reasoning_effort
-        default_reasoning_effort="high",
-        supports_parallel_tool_calls=True,
-    ),
-    "gpt-4.1": ModelCapability(
-        supports_streaming=True,
-        force_background=False,
-        supports_web_search=True,
-        context_window=1000000,  # GPT-4.1 has a context window of 1M tokens (May 2025)
-        supports_reasoning=False,
-        supports_parallel_tool_calls=True,
-    ),
-    "o4-mini": ModelCapability(
-        supports_streaming=True,
-        force_background=False,
-        supports_web_search=False,
-        context_window=200000,
-        supports_reasoning=False,
-        supports_parallel_tool_calls=True,
-    ),
-    # New deep research models
-    "o3-deep-research": ModelCapability(
-        supports_streaming=False,
-        force_background=True,
-        supports_web_search=True,
-        web_search_tool="web_search_preview",  # Deep research uses preview
-        supports_custom_tools=False,  # Deep research models don't support custom tools
-        context_window=200000,
-        supports_reasoning=True,
-        supports_reasoning_effort=False,  # Deep research models don't support reasoning_effort
-        default_reasoning_effort="high",  # Will be ignored, but kept for consistency
-        supports_parallel_tool_calls=True,
-    ),
-    "o4-mini-deep-research": ModelCapability(
-        supports_streaming=False,  # Deep research models don't support streaming
-        force_background=True,  # Deep research models must use background mode
-        supports_web_search=True,
-        web_search_tool="web_search_preview",  # Deep research uses preview
-        supports_custom_tools=False,  # Deep research models don't support custom tools
-        context_window=200000,
-        supports_reasoning=True,
-        supports_reasoning_effort=False,  # Deep research models don't support reasoning_effort
-        default_reasoning_effort="medium",  # Will be ignored, but kept for consistency
-        supports_parallel_tool_calls=True,
-    ),
+# Model registry
+OPENAI_MODEL_CAPABILITIES = {
+    "o3": O3Capabilities(),
+    "o3-pro": O3ProCapabilities(),
+    "o4-mini": O4MiniCapabilities(),
+    "gpt-4.1": GPT41Capabilities(),
+    "o3-deep-research": O3DeepResearchCapabilities(),
+    "o4-mini-deep-research": O4MiniDeepResearchCapabilities(),
 }
+
+# Export capabilities for other modules
+__all__ = ["OpenAIRequest", "OPENAI_MODEL_CAPABILITIES"]
 
 
 class OpenAIRequest(BaseModel):
-    """Validated request parameters for OpenAI API calls."""
+    """Validated request parameters for OpenAI Responses API."""
 
     model: str
-    messages: List[Dict[str, Any]]
+    input: Union[str, List[Dict[str, Any]]]
+    instructions: Optional[str] = None
+    previous_response_id: Optional[str] = None
     stream: bool = False
     background: bool = False
-    reasoning_effort: Optional[str] = None
+    # This field is now internal and will be transformed into the 'reasoning' dict.
+    reasoning_effort: Optional[str] = Field(default=None, exclude=True)
     temperature: Optional[float] = None
-    previous_response_id: Optional[str] = None
     tools: Optional[List[Dict[str, Any]]] = None
-    parallel_tool_calls: Optional[bool] = None
-    timeout: float = 300.0  # Default timeout in seconds
-    vector_store_ids: Optional[List[str]] = None
-    return_debug: bool = False
-    structured_output_schema: Optional[Dict[str, Any]] = None
-    disable_memory_search: bool = False
+    metadata: Optional[Dict[str, Any]] = None
+    parallel_tool_calls: bool = Field(default=True, alias="parallel_tool_calls")
 
-    @field_validator("model")
-    def model_is_defined(cls, v: str) -> str:
-        """Ensure the model exists in our capabilities."""
-        if v not in model_capabilities:
-            raise ValueError(
-                f"Model '{v}' is not defined in model_capabilities. "
-                f"Available models: {list(model_capabilities.keys())}"
-            )
-        return v
-
-    @field_validator("stream")
-    def validate_stream_capability(cls, v: bool, values) -> bool:
-        """Ensure streaming is only used with capable models."""
-        if not v:
-            return v
-
-        model_name = values.data.get("model")
-        if model_name:
-            capability = model_capabilities.get(model_name)
-            if capability and not capability.supports_streaming:
-                raise ValueError(
-                    f"Model '{model_name}' does not support streaming. "
-                    "Please use background mode instead."
-                )
-        return v
-
-    @field_validator("reasoning_effort")
-    def validate_reasoning_support(cls, v: Optional[str], values) -> Optional[str]:
-        """Ensure reasoning parameters are only used with capable models."""
-        if not v:
-            return v
-
-        model_name = values.data.get("model")
-        if model_name:
-            capability = model_capabilities.get(model_name)
-            if capability and not capability.supports_reasoning:
-                raise ValueError(
-                    f"Model '{model_name}' does not support reasoning parameters."
-                )
-        return v
+    # Internal fields not sent to OpenAI API
+    vector_store_ids: Optional[List[str]] = Field(default=None, exclude=True)
+    structured_output_schema: Optional[Dict[str, Any]] = Field(
+        default=None, exclude=True
+    )
+    disable_memory_search: bool = Field(default=False, exclude=True)
+    return_debug: bool = Field(default=False, exclude=True)
+    max_output_tokens: Optional[int] = Field(default=None, exclude=True)
+    timeout: float = Field(default=300.0, exclude=True)
 
     def to_api_format(self) -> Dict[str, Any]:
-        """Prepares the request for the OpenAI SDK, stripping unsupported fields.
+        """Convert to OpenAI API format, handling nested reasoning and structured outputs."""
+        # The `reasoning_effort` field is now excluded by `exclude=True` in its definition
+        api_data = self.model_dump(by_alias=True, exclude_none=True)
 
-        Returns:
-            Dictionary ready for the OpenAI API call.
-        """
-        data: Dict[str, Any] = self.model_dump(exclude_none=True)
+        # Manually construct the 'reasoning' parameter if effort is specified.
+        if self.reasoning_effort:
+            # Check if the model actually supports it to avoid sending invalid params.
+            capability = OPENAI_MODEL_CAPABILITIES.get(self.model)
+            if capability and capability.supports_reasoning_effort:
+                api_data["reasoning"] = {"effort": self.reasoning_effort}
 
-        capability = model_capabilities.get(self.model)
-        if capability:
-            # Remove reasoning if not supported
-            if (
-                not capability.supports_reasoning
-                or not capability.supports_reasoning_effort
-            ):
-                data.pop("reasoning_effort", None)
-
-            # Remove temperature if model supports reasoning (reasoning models don't support temperature)
-            if capability.supports_reasoning:
-                data.pop("temperature", None)
-
-            # Remove parallel_tool_calls if not supported
-            if not capability.supports_parallel_tool_calls:
-                data.pop("parallel_tool_calls", None)
-
-        # Remove internal-only parameters that should not be sent to the API
-        data.pop("return_debug", None)
-        data.pop("timeout", None)
-        data.pop("vector_store_ids", None)
-        data.pop("disable_memory_search", None)
-
-        # Handle structured output schema
-        if "structured_output_schema" in data:
-            schema = data.pop("structured_output_schema")
-            data["text"] = {
+        # Include structured output schema if provided
+        # The actual schema transformation will be done in flow.py
+        if self.structured_output_schema:
+            api_data["text"] = {
                 "format": {
                     "type": "json_schema",
-                    "name": "structured_response",  # Required by OpenAI API
-                    "schema": schema,
-                    "strict": True,
+                    "name": "structured_output",
+                    "schema": self.structured_output_schema,
                 }
             }
 
-        # Transform messages format if needed
-        if "messages" in data:
-            data["input"] = data.pop("messages")
-
-        return data
-
-
-def get_context_window(model: str) -> int:
-    """Get context window for a model, with fallback."""
-    capability = model_capabilities.get(model)
-    if capability:
-        return capability.context_window
-    return 32_000  # Conservative fallback for unknown models
+        return api_data

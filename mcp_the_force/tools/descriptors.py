@@ -34,6 +34,9 @@ class RouteDescriptor(Generic[T]):
     default: Any = field(default=_NO_DEFAULT)  # Use sentinel to detect no default
     default_factory: Optional[Callable[[], T]] = field(default=None)
     description: Optional[str] = None
+    requires_capability: Optional[Callable[[Any], bool]] = (
+        None  # Lambda for capability validation
+    )
 
     @property
     def has_default(self) -> bool:
@@ -138,6 +141,7 @@ class Route:
         default: Any = _NO_DEFAULT,
         description: Optional[str] = None,
         default_factory: Optional[Callable[[], Any]] = None,
+        requires_capability: Optional[Callable[[Any], bool]] = None,
     ) -> RouteDescriptor:
         """Parameter that goes directly to the model adapter."""
         return RouteDescriptor(
@@ -145,6 +149,7 @@ class Route:
             default=default,
             default_factory=default_factory,
             description=description,
+            requires_capability=requires_capability,
         )
 
     @staticmethod
@@ -190,6 +195,7 @@ class Route:
     def structured_output(
         description: Optional[str] = None,
         default_factory: Optional[Callable[[], Any]] = None,
+        requires_capability: Optional[Callable[[Any], bool]] = None,
     ) -> RouteDescriptor:
         """Parameter for structured output schema.
 
@@ -202,4 +208,5 @@ class Route:
             default=_NO_DEFAULT,
             default_factory=default_factory,
             description=description,
+            requires_capability=requires_capability,
         )

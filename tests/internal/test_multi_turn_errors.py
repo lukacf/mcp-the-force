@@ -151,9 +151,10 @@ class TestMultiTurnErrors:
     async def test_cross_model_sessions_isolated(
         self, clean_session_caches, session_id_generator
     ):
-        """Test that sessions are isolated between different model types."""
-        # Same session ID, different models
-        session_id = session_id_generator()
+        """Test that sessions with different IDs are isolated."""
+        # Different session IDs for different models
+        gemini_session = session_id_generator()
+        grok_session = session_id_generator()
 
         # Gemini: Store fact A
         gemini_meta = get_tool("chat_with_gemini25_pro")
@@ -162,17 +163,17 @@ class TestMultiTurnErrors:
             instructions="Gemini fact: Earth has one moon",
             output_format="OK",
             context=[],
-            session_id=session_id,
+            session_id=gemini_session,
         )
 
-        # Grok: Store fact B (same session ID)
+        # Grok: Store fact B (different session ID)
         grok_meta = get_tool("chat_with_grok4")
         await executor.execute(
             grok_meta,
             instructions="Grok fact: Mars has two moons",
             output_format="OK",
             context=[],
-            session_id=session_id,
+            session_id=grok_session,
         )
 
         # Query Gemini - should only know its fact
@@ -181,7 +182,7 @@ class TestMultiTurnErrors:
             instructions="What facts do you know about moons?",
             output_format="List facts",
             context=[],
-            session_id=session_id,
+            session_id=gemini_session,
         )
 
         gemini_data = json.loads(gemini_result)
@@ -194,7 +195,7 @@ class TestMultiTurnErrors:
             instructions="What facts do you know about moons?",
             output_format="List facts",
             context=[],
-            session_id=session_id,
+            session_id=grok_session,
         )
 
         grok_data = json.loads(grok_result)

@@ -159,9 +159,9 @@ class TestSessionManagement:
         assert data1["model"] == "o3"
 
         # Continue with gpt4
-        gpt4_metadata = get_tool("chat_with_gpt4_1")
+        gpt4_metadata = get_tool("chat_with_gpt41")
         if not gpt4_metadata:
-            raise ValueError("Tool chat_with_gpt4_1 not found")
+            raise ValueError("Tool chat_with_gpt41 not found")
         result2 = await executor.execute(
             gpt4_metadata,
             instructions="Continue conversation",
@@ -180,15 +180,15 @@ class TestSessionManagement:
     @pytest.mark.asyncio
     async def test_session_expiration(self, parse_response, mock_openai_client):
         """Test that sessions expire after TTL."""
-        from mcp_the_force.session_cache import _SQLiteSessionCache
+        from mcp_the_force.unified_session_cache import _SQLiteUnifiedSessionCache
         from unittest.mock import patch
         import tempfile
 
         # Create cache with very short TTL for testing
         db_path = tempfile.mktemp(suffix=".db")
-        cache = _SQLiteSessionCache(db_path=db_path, ttl=0.1)  # 100ms TTL
+        cache = _SQLiteUnifiedSessionCache(db_path=db_path, ttl=0.1)  # 100ms TTL
 
-        with patch("mcp_the_force.session_cache.session_cache", cache):
+        with patch("mcp_the_force.unified_session_cache.unified_session_cache", cache):
             response = Mock(id="resp_expire", output_text="Initial response")
             mock_openai_client.responses.create.return_value = response
 
@@ -242,7 +242,10 @@ class TestSessionManagement:
         data1 = parse_response(result1)
         assert data1["mock"] is True
         msgs1 = data1["adapter_kwargs"].get("messages")
-        assert msgs1 and len(msgs1) == 1
+        # First turn should have developer message + user message
+        assert msgs1 and len(msgs1) == 2
+        assert msgs1[0]["role"] == "developer"
+        assert msgs1[1]["role"] == "user"
 
         result2 = await executor.execute(
             tool_metadata,

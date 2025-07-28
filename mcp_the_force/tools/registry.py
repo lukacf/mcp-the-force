@@ -1,10 +1,11 @@
 """Tool registry and decorator for automatic tool registration."""
 
-from typing import Type, Dict, Any, Callable, TypeVar, List
+from typing import Type, Dict, Any, Callable, TypeVar, List, Optional
 from dataclasses import dataclass, field
 import logging
 from .base import ToolSpec
 from .descriptors import RouteType
+from ..adapters.capabilities import AdapterCapabilities
 
 logger = logging.getLogger(__name__)
 
@@ -14,12 +15,22 @@ T = TypeVar("T", bound=ToolSpec)
 TOOL_REGISTRY: Dict[str, "ToolMetadata"] = {}
 
 
+_autogen_loaded = False
+
+
 def _ensure_populated() -> None:
     """Ensure tools are registered by importing definitions if needed."""
-    if TOOL_REGISTRY:  # already loaded
-        return
-    # Importing this module registers every tool class via the @tool decorator
-    from . import definitions  # noqa: F401
+    global _autogen_loaded
+
+    if not TOOL_REGISTRY:
+        # Importing this module registers every tool class via the @tool decorator
+        from . import definitions  # noqa: F401
+
+    if not _autogen_loaded:
+        # Import autogen to generate dynamic tools
+        from . import autogen  # noqa: F401
+
+        _autogen_loaded = True
 
 
 @dataclass
@@ -34,6 +45,7 @@ class ParameterInfo:
     default: Any
     required: bool
     description: str | None
+    requires_capability: Callable[[Any], bool] | None = None
 
 
 @dataclass
@@ -45,7 +57,7 @@ class ToolMetadata:
     parameters: Dict[str, ParameterInfo]
     model_config: Dict[str, Any]
     aliases: List[str] = field(default_factory=list)
-    capabilities: Dict[str, Any] = field(default_factory=dict)
+    capabilities: Optional[AdapterCapabilities] = None
 
 
 def tool(
@@ -72,10 +84,15 @@ def tool(
 
         # Get model configuration
         model_config = cls.get_model_config()
-        if not model_config["model_name"]:
-            raise ValueError(f"{cls.__name__} must define model_name")
-        if not model_config["adapter_class"]:
-            raise ValueError(f"{cls.__name__} must define adapter_class")
+        # Allow local tools to signal via explicit adapter_class=None
+        adapter_value = model_config.get("adapter_class")
+        explicit_adapter = "adapter_class" in cls.__dict__
+        # For non-local tools, enforce both model_name and adapter_class are defined
+        if not (explicit_adapter and adapter_value is None):
+            if not model_config.get("model_name"):
+                raise ValueError(f"{cls.__name__} must define model_name")
+            if not adapter_value:
+                raise ValueError(f"{cls.__name__} must define adapter_class")
 
         # Extract parameters
         parameters = {}
@@ -101,6 +118,7 @@ def tool(
                 default=param_info["default"],
                 required=param_info["required"],
                 description=param_info["description"],
+                requires_capability=param_info.get("requires_capability"),
             )
 
         # Create metadata
@@ -110,21 +128,8 @@ def tool(
             parameters=parameters,
             model_config=model_config,
             aliases=aliases or [],
-            capabilities={},
+            capabilities=None,  # Will be set during blueprint processing
         )
-
-        # Set memory capability based on model
-        model_name = model_config.get("model_name", "")
-        if model_name in [
-            "o3",
-            "o3-pro",
-            "gpt-4.1",
-            "gemini-2.5-pro",
-            "gemini-2.5-flash",
-            "grok-4",
-            "grok-3-beta",
-        ]:
-            metadata.capabilities["writes_memory"] = True
 
         # Register the tool
         TOOL_REGISTRY[tool_id] = metadata

@@ -24,6 +24,23 @@ def create_tool_function(metadata: ToolMetadata):
     params_list.sort(key=lambda p: (p.position is None, p.position or 0))
 
     for param in params_list:
+        # Check if parameter has capability requirements
+        if param.requires_capability and metadata.capabilities:
+            try:
+                # Check if the model supports this parameter
+                if not param.requires_capability(metadata.capabilities):
+                    # Skip this parameter - not supported by model
+                    logger.debug(
+                        f"Skipping parameter {param.name} for {metadata.id} - not supported by model"
+                    )
+                    continue
+            except Exception as e:
+                # If capability check fails, skip the parameter
+                logger.debug(
+                    f"Capability check failed for {param.name} in {metadata.id}: {e}, skipping"
+                )
+                continue
+
         # Determine parameter kind
         param_kind = (
             Parameter.POSITIONAL_OR_KEYWORD
@@ -97,41 +114,45 @@ def create_tool_function(metadata: ToolMetadata):
         original_annotation = sig_param.annotation
 
         # Fix for FastMCP's strict validation
-        # Check if the original type hint is a boolean, float, or Optional[bool/float]
+        # Check if the original type hint is a boolean, float, dict, or Optional[bool/float/dict]
         is_bool_type = False
         is_float_type = False
+        is_dict_type = False
         is_list_str_type = False
         origin = get_origin(original_annotation)
 
         if (
             origin is Union
-        ):  # Handles Optional[bool], Optional[float], and Optional[List[str]]
+        ):  # Handles Optional[bool], Optional[float], Optional[Dict], and Optional[List[str]]
             args = get_args(original_annotation)
             if bool in args:
                 is_bool_type = True
             elif float in args:
                 is_float_type = True
-            # Check for List[str] in Optional
+            # Check for Dict or List in Optional
             for arg in args:
-                if get_origin(arg) is list:
+                if get_origin(arg) is dict:
+                    is_dict_type = True
+                elif get_origin(arg) is list:
                     list_args = get_args(arg)
                     if list_args and list_args[0] is str:
                         is_list_str_type = True
-                        break
         elif original_annotation is bool:
             is_bool_type = True
         elif original_annotation is float:
             is_float_type = True
+        elif origin is dict:
+            is_dict_type = True
         elif origin is list:
             # Direct List[str]
             list_args = get_args(original_annotation)
             if list_args and list_args[0] is str:
                 is_list_str_type = True
 
-        if is_bool_type or is_float_type:
-            # If it's a boolean or float, tell FastMCP to expect Optional[str]
-            # This allows string values "true"/"false" or numeric strings like "0.5"
-            # to pass Pydantic validation.
+        if is_bool_type or is_float_type or is_dict_type:
+            # If it's a boolean, float, or dict, tell FastMCP to expect Optional[str]
+            # This allows string values "true"/"false", numeric strings like "0.5",
+            # or JSON strings like '{"key": "value"}' to pass Pydantic validation.
             # Our internal ParameterValidator will then correctly coerce the string to the expected type.
             annotations[sig_param.name] = Optional[str]
         elif is_list_str_type:
@@ -203,6 +224,7 @@ def _register_developer_tools(mcp: FastMCP) -> None:
 
 def create_list_models_tool(mcp: FastMCP) -> None:
     """Create the list_models utility tool."""
+    from ..local_services.list_models import ListModelsService
 
     @mcp.tool()
     async def list_models() -> List[Dict[str, Any]]:
@@ -211,42 +233,8 @@ def create_list_models_tool(mcp: FastMCP) -> None:
         Returns:
             List of model information including names, providers, and capabilities
         """
-        models = []
-        tools = list_tools()
-
-        for tool_id, metadata in tools.items():
-            # Skip aliases
-            if (
-                metadata.spec_class.__doc__
-                and "Alias for" in metadata.spec_class.__doc__
-            ):
-                continue
-
-            model_info = {
-                "id": tool_id,
-                "provider": metadata.model_config["adapter_class"],
-                "model": metadata.model_config["model_name"],
-                "context_window": metadata.model_config["context_window"],
-                "timeout": metadata.model_config["timeout"],
-                "description": metadata.model_config["description"],
-                "parameters": [],
-            }
-
-            # Add parameter information
-            for param_name, param_info in metadata.parameters.items():
-                model_info["parameters"].append(
-                    {
-                        "name": param_name,
-                        "type": param_info.type_str,
-                        "required": param_info.required,
-                        "route": param_info.route,
-                        "description": param_info.description,
-                    }
-                )
-
-            models.append(model_info)
-
-        return models
+        service = ListModelsService()
+        return await service.execute()
 
 
 def create_vector_store_tool(mcp: FastMCP) -> None:
@@ -280,6 +268,7 @@ def create_vector_store_tool(mcp: FastMCP) -> None:
 
 def create_count_project_tokens_tool(mcp: FastMCP) -> None:
     """Create the count_project_tokens utility tool."""
+    from ..local_services.count_tokens import CountTokensService
 
     @mcp.tool()
     async def count_project_tokens(
@@ -299,9 +288,5 @@ def create_count_project_tokens_tool(mcp: FastMCP) -> None:
             - largest_files: List of top N files by token count
             - largest_directories: List of top N directories by aggregated token count
         """
-        from .token_count import CountProjectTokens
-
-        tool = CountProjectTokens()
-        tool.items = items
-        tool.top_n = top_n
-        return await tool.generate()
+        service = CountTokensService()
+        return await service.execute(items=items, top_n=top_n)

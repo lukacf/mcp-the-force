@@ -52,7 +52,7 @@ class TestGrokMultiTurn:
         self, clean_session_caches, session_id_generator
     ):
         """Test Grok 3 reasoning model multi-turn."""
-        metadata = get_tool("chat_with_grok3_reasoning")
+        metadata = get_tool("chat_with_grok3_beta")
         session_id = session_id_generator()
 
         # First turn: Present a problem
@@ -136,19 +136,19 @@ class TestGrokMultiTurn:
 
         # The test should verify that the system prompt with priority instructions
         # is being sent to the API (not saved in conversation history)
-        messages = data["messages"]
+        messages = data["adapter_kwargs"]["messages"]
 
-        # Find the system message in the request
-        system_message = None
+        # Find the developer message in the request (Grok uses developer role like OpenAI)
+        developer_message = None
         for msg in messages:
-            if msg.get("role") == "system":
-                system_message = msg.get("content", "")
+            if msg.get("role") == "developer":
+                developer_message = msg.get("content", "")
                 break
 
-        # Verify priority instructions are in the system prompt
-        assert system_message is not None, "System message should be present"
-        assert "Information priority:" in system_message
-        assert "Current conversation" in system_message
+        # Verify priority instructions are in the developer prompt
+        assert developer_message is not None, "Developer message should be present"
+        assert "Information priority" in developer_message
+        assert "Current conversation" in developer_message
 
     @pytest.mark.asyncio
     async def test_grok_session_isolation(
