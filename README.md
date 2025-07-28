@@ -15,7 +15,11 @@ mcp-config init
 # Edit secrets.yaml and add your OpenAI API keys
 
 # 4. Set up Google Cloud authentication (for Gemini models)
+# Option A: Use global ADC (default)
 gcloud auth application-default login
+
+# Option B: Use project-specific ADC (recommended for multiple accounts)
+# See "Per-Project ADC Configuration" section below
 
 # 5. Validate your configuration
 mcp-config validate
@@ -160,6 +164,8 @@ mcp-config export-client          # Generate mcp-config.json for Claude
 ### For Local Development (Recommended)
 
 **Google Cloud Application Default Credentials (ADC)**:
+
+#### Option 1: Global ADC (Simple)
 ```bash
 # Install gcloud CLI
 curl https://sdk.cloud.google.com | bash
@@ -170,6 +176,36 @@ gcloud auth application-default login
 # Set project (optional)
 gcloud config set project your-project-id
 ```
+
+#### Option 2: Per-Project ADC (Multiple Accounts)
+If you work with multiple Google Cloud accounts/projects, you can configure project-specific ADC credentials:
+
+1. **Generate project-specific credentials**:
+```bash
+# Create a .gcp directory in your project
+mkdir .gcp
+
+# Generate ADC for this specific project
+GOOGLE_APPLICATION_CREDENTIALS=.gcp/adc-credentials.json \
+  gcloud auth application-default login
+
+# This creates credentials in .gcp/adc-credentials.json instead of the global location
+```
+
+2. **Configure in config.yaml**:
+```yaml
+providers:
+  vertex:
+    project: your-project-id
+    location: us-central1
+    adc_credentials_path: .gcp/adc-credentials.json
+```
+
+3. **Benefits**:
+- Each project can use different Google Cloud accounts
+- No need to switch global gcloud configurations
+- Credentials are project-local (already in .gitignore)
+- Works seamlessly with Docker/CI (mount the .gcp directory)
 
 ### For Production & CI/CD
 
