@@ -49,30 +49,10 @@ class PromptEngine:
         # Handle the current special case for context
         # Convert list of paths to string if needed
         if "context" in prompt_params and isinstance(prompt_params["context"], list):
-            if prompt_params["context"]:
-                # Use the existing build_prompt utility for now
-                # This maintains backward compatibility
-                from ..utils.prompt_builder import build_prompt
-
-                instructions = prompt_params.get("instructions", "")
-                output_format = prompt_params.get("output_format", "")
-                context = prompt_params.get("context", [])
-
-                # Get model name from spec_class if available
-                model_name = getattr(spec_class, "model_name", None)
-
-                # Call build_prompt directly without asyncio.to_thread
-                # build_prompt is fast enough to not need threading
-                prompt, _ = build_prompt(
-                    instructions,
-                    output_format,
-                    context,
-                    None,  # Attachments handled separately via vector store
-                    model_name,  # Pass model name for context limits
-                )
-                return prompt
-            else:
-                prompt_params["context"] = ""
+            # Context is handled by the executor via build_context_with_stable_list
+            # This should never be reached with the current architecture
+            logger.warning("Unexpected list context in prompt_engine - this is a bug")
+            prompt_params["context"] = ""
 
         # Format the template with available parameters
         try:
@@ -87,13 +67,28 @@ class PromptEngine:
             prompt = template.format(**safe_params)
 
             # Handle any extra parameters not in template
-            extra_params = {k: v for k, v in prompt_params.items() if k not in template}
+            extra_params = {
+                k: v for k, v in prompt_params.items() if k not in safe_params
+            }
             if extra_params:
-                # Append as XML tags for backward compatibility
-                extra_text = "\n".join(
-                    f"<{k}>{v}</{k}>" for k, v in extra_params.items()
-                )
-                prompt = f"{prompt}\n{extra_text}"
+                # Use lxml to create proper XML for extra parameters
+                try:
+                    from lxml import etree
+
+                    extras_root = etree.Element("extra_parameters")
+                    for k, v in extra_params.items():
+                        elem = etree.SubElement(extras_root, k)
+                        elem.text = str(v)
+                    extra_text = etree.tostring(
+                        extras_root, encoding="unicode", pretty_print=True
+                    )
+                    prompt = f"{prompt}\n{extra_text}"
+                except ImportError:
+                    # Fallback if lxml not available
+                    extra_text = "\n".join(
+                        f"<{k}>{v}</{k}>" for k, v in extra_params.items()
+                    )
+                    prompt = f"{prompt}\n{extra_text}"
 
             return prompt
 

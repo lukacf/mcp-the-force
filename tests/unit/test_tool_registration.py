@@ -23,7 +23,7 @@ class TestToolRegistration:
             "chat_with_gemini25_flash",
             "chat_with_o3",
             "chat_with_o3_pro",
-            "chat_with_gpt4_1",
+            "chat_with_gpt41",
         ]
 
         for tool_name in expected_tools:
@@ -32,14 +32,26 @@ class TestToolRegistration:
         # Verify each tool has proper metadata
         for tool_id, metadata in tools.items():
             if tool_id == metadata.id:  # Skip aliases
-                assert metadata.model_config[
-                    "model_name"
-                ], f"Tool {tool_id} missing model_name"
-                assert metadata.model_config[
-                    "adapter_class"
-                ], f"Tool {tool_id} missing adapter_class"
+                # Local services have service_cls instead of adapter_class
+                if metadata.model_config.get("service_cls"):
+                    # This is a local service, different validation
+                    assert metadata.model_config[
+                        "model_name"
+                    ], f"Tool {tool_id} missing model_name"
+                else:
+                    # This is an AI model tool
+                    assert metadata.model_config[
+                        "model_name"
+                    ], f"Tool {tool_id} missing model_name"
+                    assert metadata.model_config[
+                        "adapter_class"
+                    ], f"Tool {tool_id} missing adapter_class"
                 # Description might be optional for test tools
-                if not (tool_id.startswith("test_") or tool_id.startswith("tool")):
+                if not (
+                    tool_id.startswith("test_")
+                    or tool_id.startswith("tool")
+                    or tool_id == "my_tool"
+                ):
                     assert metadata.model_config.get(
                         "description"
                     ), f"Tool {tool_id} missing description"

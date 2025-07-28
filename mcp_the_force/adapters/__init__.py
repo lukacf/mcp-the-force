@@ -1,131 +1,17 @@
-"""Adapter module for AI model integrations."""
+"""Adapter module for AI model integrations.
 
-from typing import Dict, Tuple, Type, Optional
-from .base import BaseAdapter
-from .openai import OpenAIAdapter
-from .vertex import VertexAdapter
-from .grok import GrokAdapter
-import logging
+This module contains protocol-based adapters for various AI providers.
+The old BaseAdapter system has been replaced with a protocol-based architecture.
 
+Adapters are registered in registry.py and accessed via get_adapter_class().
+"""
 
-logger = logging.getLogger(__name__)
-
-# Adapter registry
-ADAPTER_REGISTRY: Dict[str, Type[BaseAdapter]] = {
-    "openai": OpenAIAdapter,
-    "vertex": VertexAdapter,
-    "xai": GrokAdapter,
-}
-
-
-# Adapter instance cache
-_ADAPTER_CACHE: Dict[Tuple[str, str], BaseAdapter] = {}
-
-
-def get_adapter(
-    adapter_key: str, model_name: str
-) -> Tuple[Optional[BaseAdapter], Optional[str]]:
-    """Get or create an adapter instance.
-
-    Args:
-        adapter_key: Key identifying the adapter type (e.g., "openai", "vertex")
-        model_name: Name of the model (e.g., "o3", "gemini-2.5-pro")
-
-    Returns:
-        Tuple of (adapter instance, error message)
-    """
-    # Check if we should use mock adapter
-    from ..config import get_settings
-
-    if get_settings().adapter_mock:
-        # Use MockAdapter for all adapters when in mock mode
-        from .mock_adapter import MockAdapter
-
-        cache_key = (adapter_key, model_name)
-        if cache_key in _ADAPTER_CACHE:
-            return _ADAPTER_CACHE[cache_key], None
-
-        adapter = MockAdapter(model_name)
-        _ADAPTER_CACHE[cache_key] = adapter  # type: ignore[assignment]
-        logger.debug(f"Created MockAdapter for {model_name} (adapter_mock=True)")
-        return adapter, None
-
-    # Lazy load search adapters to break circular imports
-    if adapter_key == "SearchHistoryAdapter" and adapter_key not in ADAPTER_REGISTRY:
-        try:
-            from ..tools.search_history import SearchHistoryAdapter
-
-            register_adapter("SearchHistoryAdapter", SearchHistoryAdapter)
-            logger.debug("Lazily registered SearchHistoryAdapter")
-        except ImportError as e:
-            logger.error(f"Failed to lazy-load SearchHistoryAdapter: {e}")
-            return (
-                None,
-                f"Adapter {adapter_key} could not be loaded due to an import error.",
-            )
-    if adapter_key == "SearchTaskFilesAdapter" and adapter_key not in ADAPTER_REGISTRY:
-        try:
-            from ..tools.search_task_files import SearchTaskFilesAdapter
-
-            register_adapter("SearchTaskFilesAdapter", SearchTaskFilesAdapter)
-            logger.debug("Lazily registered SearchTaskFilesAdapter")
-        except ImportError as e:
-            logger.error(f"Failed to lazy-load SearchTaskFilesAdapter: {e}")
-            return (
-                None,
-                f"Adapter {adapter_key} could not be loaded due to an import error.",
-            )
-    if adapter_key == "LoggingAdapter" and adapter_key not in ADAPTER_REGISTRY:
-        try:
-            from .logging_adapter import LoggingAdapter
-
-            register_adapter("LoggingAdapter", LoggingAdapter)
-            logger.debug("Lazily registered LoggingAdapter")
-        except ImportError as e:
-            logger.error(f"Failed to lazy-load LoggingAdapter: {e}")
-            return (
-                None,
-                f"Adapter {adapter_key} could not be loaded due to an import error.",
-            )
-
-    cache_key = (adapter_key, model_name)
-
-    # Check cache first
-    if cache_key in _ADAPTER_CACHE:
-        return _ADAPTER_CACHE[cache_key], None
-
-    # Get adapter class
-    adapter_class = ADAPTER_REGISTRY.get(adapter_key)
-    if not adapter_class:
-        return None, f"Unknown adapter: {adapter_key}"
-
-    try:
-        # Create adapter instance
-        adapter = adapter_class(model_name)  # type: ignore
-        _ADAPTER_CACHE[cache_key] = adapter  # type: ignore
-        logger.debug(f"Created {adapter_key} adapter for {model_name}")
-        return adapter, None
-    except Exception as e:
-        logger.error(f"Failed to create {adapter_key} adapter: {e}")
-        return None, str(e)
-
-
-def register_adapter(key: str, adapter_class: Type[BaseAdapter]):
-    """Register a new adapter type.
-
-    Args:
-        key: Unique key for the adapter
-        adapter_class: Adapter class that inherits from BaseAdapter
-    """
-    ADAPTER_REGISTRY[key] = adapter_class
-    logger.debug(f"Registered adapter: {key}")
-
+# Re-export registry functions for convenience
+from .registry import get_adapter_class, list_adapters
+from .litellm_base import LiteLLMBaseAdapter
 
 __all__ = [
-    "BaseAdapter",
-    "OpenAIAdapter",
-    "VertexAdapter",
-    "GrokAdapter",
-    "get_adapter",
-    "register_adapter",
+    "get_adapter_class",
+    "list_adapters",
+    "LiteLLMBaseAdapter",
 ]

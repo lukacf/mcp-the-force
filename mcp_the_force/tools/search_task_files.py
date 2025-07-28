@@ -11,7 +11,7 @@ import asyncio
 from openai import AsyncOpenAI
 import fastmcp.exceptions
 
-from ..adapters.base import BaseAdapter
+# No longer need BaseAdapter - this is a local service
 from ..adapters.openai.client import OpenAIClientFactory
 from .base import ToolSpec
 from .descriptors import Route
@@ -45,8 +45,8 @@ class SearchTaskFiles(ToolSpec):
     )
 
 
-class SearchTaskFilesAdapter(BaseAdapter):
-    """Adapter for searching task files in vector stores."""
+class SearchTaskFilesAdapter:
+    """Local service for searching task files in vector stores."""
 
     model_name = "task_files_search"
     context_window = 0  # Not applicable
@@ -68,6 +68,17 @@ class SearchTaskFilesAdapter(BaseAdapter):
         """Clear the deduplication cache."""
         await cls._deduplicator.clear_cache()
 
+    async def execute(self, **kwargs) -> str:
+        """Execute method for local service compatibility."""
+        # Extract the necessary parameters for generate
+        query = kwargs.get("query", "")
+        vector_store_ids = kwargs.get("vector_store_ids", [])
+
+        # Call generate with the appropriate parameters
+        return await self.generate(
+            prompt=query, vector_store_ids=vector_store_ids, **kwargs
+        )
+
     async def generate(
         self,
         prompt: str,
@@ -81,6 +92,11 @@ class SearchTaskFilesAdapter(BaseAdapter):
         # Extract search parameters
         query = kwargs.get("query", prompt)
         max_results = kwargs.get("max_results", 20)
+
+        logger.info(
+            f"[SEARCH_TASK_FILES] Query: '{query}', Max results: {max_results}, "
+            f"Vector stores: {len(vector_store_ids) if vector_store_ids else 0}"
+        )
 
         if not query:
             raise fastmcp.exceptions.ToolError("Search query is required")
@@ -131,7 +147,8 @@ class SearchTaskFilesAdapter(BaseAdapter):
                     all_results.extend(result)
 
             logger.info(
-                f"Search completed. Total results: {len(all_results)}, Errors: {errors}"
+                f"[SEARCH_TASK_FILES] Search completed. Total results: {len(all_results)}, "
+                f"Errors: {errors}, Queries: {queries}"
             )
 
             # Sort by relevance score
@@ -146,8 +163,9 @@ class SearchTaskFilesAdapter(BaseAdapter):
             # Format response
             if not deduplicated_results:
                 logger.warning(
-                    f"No results after deduplication. Total results before: {len(all_results)}, "
-                    f"Duplicate count: {duplicate_count}, Query: '{query}'"
+                    f"[SEARCH_TASK_FILES] No results after deduplication. "
+                    f"Total before: {len(all_results)}, Duplicates: {duplicate_count}, "
+                    f"Query: '{query}'"
                 )
                 return f"No results found in task files for query: '{query}'"
 
@@ -231,7 +249,8 @@ class SearchTaskFilesAdapter(BaseAdapter):
                     results.append(result)
 
                 logger.info(
-                    f"Store {store_id} returned {len(results)} results for query '{query}'"
+                    f"[SEARCH_TASK_FILES] Store {store_id} returned {len(results)} results "
+                    f"for query: '{query}'"
                 )
                 return results
 

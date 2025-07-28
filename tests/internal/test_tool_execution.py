@@ -109,7 +109,7 @@ class TestToolExecutionIntegration:
                 ),
             ):
                 result = await run_tool(
-                    "chat_with_gpt4_1",
+                    "chat_with_gpt41",
                     instructions="Analyze this large codebase",
                     output_format="summary",
                     context=[str(temp_project)],
@@ -144,7 +144,7 @@ class TestToolExecutionIntegration:
         )
 
         result = await run_tool(
-            "chat_with_gpt4_1",
+            "chat_with_gpt41",
             instructions="Test with all param types",
             output_format="json",
             context=[str(test_file)],  # context with real file
