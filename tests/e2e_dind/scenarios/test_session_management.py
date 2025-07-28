@@ -13,7 +13,7 @@ from json_utils import safe_json
 def generate_random_protocol():
     """Generate a random protocol name like ALPHA-X7K."""
     prefix = random.choice(["ALPHA", "BETA", "GAMMA", "DELTA", "EPSILON"])
-    suffix = ''.join(random.choices(string.ascii_uppercase + string.digits, k=3))
+    suffix = "".join(random.choices(string.ascii_uppercase + string.digits, k=3))
     return f"{prefix}-{suffix}"
 
 
@@ -29,7 +29,7 @@ class TestSessionManagement:
         """Test memory storage, recall, and persistence between sessions."""
 
         session_id_a = f"session-mgmt-test-{random.randint(1000, 9999)}"
-        
+
         # Generate random test data
         protocol_name = generate_random_protocol()
         port_number = generate_random_port()
@@ -72,8 +72,12 @@ class TestSessionManagement:
         result = safe_json(response)
         assert result is not None, f"Failed to parse JSON: {response}"
         assert result["information_stored"] is True, f"Storage failed: {result}"
-        assert protocol_name in result["stored_content"], f"Protocol not stored: {result}"
-        assert str(port_number) in result["stored_content"], f"Port not stored: {result}"
+        assert (
+            protocol_name in result["stored_content"]
+        ), f"Protocol not stored: {result}"
+        assert (
+            str(port_number) in result["stored_content"]
+        ), f"Port not stored: {result}"
 
         # Step 2: Test immediate recall in same session
         response = call_claude_tool(
@@ -123,14 +127,14 @@ class TestSessionManagement:
         """Test simple two-turn conversation with GPT-4.1 and memory search disabled."""
 
         session_id = f"simple-gpt41-session-{random.randint(1000, 9999)}"
-        
+
         # Generate random code
         code_parts = [
-            ''.join(random.choices(string.ascii_uppercase, k=3)),
+            "".join(random.choices(string.ascii_uppercase, k=3)),
             str(random.randint(100, 999)),
-            ''.join(random.choices(string.ascii_uppercase, k=3))
+            "".join(random.choices(string.ascii_uppercase, k=3)),
         ]
-        test_code = '-'.join(code_parts)
+        test_code = "-".join(code_parts)
 
         # Define simple schemas without pattern constraints
         storage_schema = {
@@ -187,15 +191,13 @@ class TestSessionManagement:
         result = safe_json(response)
         assert result is not None, f"Failed to parse JSON: {response}"
         assert result["found"] is True, f"Value not found: {result}"
-        assert (
-            test_code in result["recalled_value"]
-        ), f"Wrong code recalled: {result}"
+        assert test_code in result["recalled_value"], f"Wrong code recalled: {result}"
 
     def test_cross_model_history_search(self, call_claude_tool):
         """Test that one model can search project history to find another model's conversations."""
 
         session_id = f"cross-model-history-test-{random.randint(1000, 9999)}"
-        
+
         # Generate unique test data that won't conflict with other tests
         protocol_name = generate_random_protocol()
         port_number = generate_random_port()
@@ -229,8 +231,12 @@ class TestSessionManagement:
         )
 
         # Simple validation that it was stored
-        assert protocol_name in response, f"Protocol not mentioned in response: {response}"
-        assert str(port_number) in response, f"Port not mentioned in response: {response}"
+        assert (
+            protocol_name in response
+        ), f"Protocol not mentioned in response: {response}"
+        assert (
+            str(port_number) in response
+        ), f"Port not mentioned in response: {response}"
 
         # Give memory storage time to complete
         import time
@@ -254,6 +260,8 @@ class TestSessionManagement:
         assert (
             result["found_protocol"] is True
         ), f"Protocol not found in history: {result}"
-        assert protocol_name in result["protocol_name"], f"Wrong protocol found: {result}"
+        assert (
+            protocol_name in result["protocol_name"]
+        ), f"Wrong protocol found: {result}"
         assert result["port_number"] == port_number, f"Wrong port found: {result}"
         assert result["results_count"] > 0, f"No search results returned: {result}"
