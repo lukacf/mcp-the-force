@@ -8,7 +8,7 @@ from pathlib import Path
 
 from openai import OpenAI
 
-from ..memory.config import get_memory_config
+from ..memory.async_config import get_async_memory_config
 from ..utils.redaction import redact_secrets
 from ..utils.thread_pool import get_shared_executor
 from ..config import get_settings
@@ -59,7 +59,7 @@ class SearchHistoryService:
     def __init__(self):
         settings = get_settings()
         self.client = OpenAI(api_key=settings.openai_api_key)
-        self.memory_config = get_memory_config()
+        self.memory_config = get_async_memory_config()
         self._ensure_deduplicator()
 
     def _ensure_deduplicator(self):
@@ -174,11 +174,11 @@ class SearchHistoryService:
         # Determine which stores to search
         for store_type in store_types:
             if store_type == "conversation":
-                store_id = self.memory_config.get_active_conversation_store()
+                store_id = await self.memory_config.get_active_conversation_store()
                 if store_id:
                     stores_to_search.append(("conversation", store_id))
             elif store_type == "commit":
-                store_id = self.memory_config.get_active_commit_store()
+                store_id = await self.memory_config.get_active_commit_store()
                 if store_id:
                     stores_to_search.append(("commit", store_id))
             # Add more store types as needed
