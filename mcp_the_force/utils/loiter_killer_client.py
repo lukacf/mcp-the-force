@@ -1,7 +1,6 @@
 """Client for communicating with the Loiter Killer service."""
 
 import logging
-import os
 from typing import Optional, Tuple, List
 import httpx
 
@@ -12,14 +11,16 @@ class LoiterKillerClient:
     """Client for the Loiter Killer vector store management service."""
 
     def __init__(self):
-        # Allow overriding the URL for E2E tests
-        self.base_url = os.getenv("LOITER_KILLER_URL", "http://localhost:9876")
+        # Get settings for configuration
+        from ..config import get_settings
+
+        settings = get_settings()
+
+        self.base_url = settings.services.loiter_killer_url
         self.enabled = False
 
         # Check if we're in mock mode
-        from ..config import get_settings
-
-        if get_settings().adapter_mock:
+        if settings.dev.adapter_mock:
             # In mock mode, pretend loiter killer is not available
             logger.info("[LOITER_KILLER] Mock mode - service disabled")
             self.enabled = False

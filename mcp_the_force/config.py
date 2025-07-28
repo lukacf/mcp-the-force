@@ -35,6 +35,12 @@ class LoggingConfig(BaseModel):
     developer_mode: DeveloperLoggingConfig = Field(
         default_factory=DeveloperLoggingConfig
     )
+    victoria_logs_url: str = Field(
+        "http://localhost:9428", description="Victoria Logs URL"
+    )
+    victoria_logs_enabled: bool = Field(True, description="Enable Victoria Logs")
+    loki_app_tag: str = Field("mcp-the-force", description="Loki app tag")
+    project_path: Optional[str] = Field(None, description="Project path for logging")
 
     @field_validator("level")
     @classmethod
@@ -62,6 +68,10 @@ class ProviderConfig(BaseModel):
     max_function_calls: Optional[int] = Field(
         default=500,
         description="Maximum function call rounds (agentic systems do many calls)",
+    )
+    max_parallel_tool_exec: int = Field(
+        default=8,
+        description="Maximum parallel tool executions for OpenAI",
     )
 
 
@@ -149,6 +159,21 @@ class SecurityConfig(BaseModel):
     )
 
 
+class ServicesConfig(BaseModel):
+    """External services configuration."""
+
+    loiter_killer_url: str = Field(
+        "http://localhost:9876", description="Loiter killer service URL"
+    )
+
+
+class DevConfig(BaseModel):
+    """Development and testing configuration."""
+
+    adapter_mock: bool = Field(False, description="Use mock adapters for testing")
+    ci_e2e: bool = Field(False, description="Running in CI E2E test environment")
+
+
 class Settings(BaseSettings):
     """Unified settings for mcp-the-force server."""
 
@@ -165,15 +190,21 @@ class Settings(BaseSettings):
     )
     anthropic: ProviderConfig = Field(default_factory=ProviderConfig)
     xai: ProviderConfig = Field(default_factory=ProviderConfig)
+    litellm: ProviderConfig = Field(default_factory=ProviderConfig)
 
     # Feature configs
     session: SessionConfig = Field(default_factory=SessionConfig)
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
     features: FeaturesConfig = Field(default_factory=FeaturesConfig)
     security: SecurityConfig = Field(default_factory=SecurityConfig)
+    services: ServicesConfig = Field(default_factory=ServicesConfig)
+    dev: DevConfig = Field(default_factory=DevConfig)
 
-    # Testing
-    adapter_mock: bool = Field(False, description="Use mock adapters for testing")
+    # Testing - backward compatibility alias
+    @property
+    def adapter_mock(self) -> bool:
+        """Backward compatibility for adapter_mock."""
+        return self.dev.adapter_mock
 
     model_config = SettingsConfigDict(
         env_nested_delimiter="__",  # Allows OPENAI__API_KEY env var
@@ -223,13 +254,13 @@ class Settings(BaseSettings):
                 return cls._legacy_env_source()
 
         # Precedence (left to right - first source wins):
-        # init_settings < env_settings < legacy_env < yaml < file_secrets
-        # This means env vars override YAML, which is the expected behavior
+        # env_settings > legacy_env > yaml > defaults
+        # This means env vars (including those from MCP JSON) override YAML
         return (
             init_settings,
-            env_settings,  # Standard nested env vars (e.g., OPENAI__API_KEY)
+            env_settings,  # Standard nested env vars (e.g., OPENAI__API_KEY) - highest priority
             LegacyEnvVars(settings_cls),  # Flat legacy env vars (e.g., OPENAI_API_KEY)
-            YamlConfigSource(settings_cls),
+            YamlConfigSource(settings_cls),  # YAML files (lower priority)
             file_secret_settings,
         )
 
@@ -314,9 +345,17 @@ class Settings(BaseSettings):
             "DEFAULT_TEMPERATURE": ("mcp", "default_temperature"),
             # Logging
             "LOG_LEVEL": ("logging", "level"),
+            "VICTORIA_LOGS_URL": ("logging", "victoria_logs_url"),
+            "DISABLE_VICTORIA_LOGS": (
+                "logging",
+                "victoria_logs_enabled",
+            ),  # Note: inverted logic
+            "LOKI_APP_TAG": ("logging", "loki_app_tag"),
+            "MCP_PROJECT_PATH": ("logging", "project_path"),
             # Session settings
             "SESSION_TTL_SECONDS": ("session", "ttl_seconds"),
             "SESSION_DB_PATH": ("session", "db_path"),
+            "STABLE_LIST_DB_PATH": ("session", "db_path"),  # Use same DB as sessions
             "SESSION_CLEANUP_PROBABILITY": ("session", "cleanup_probability"),
             # Memory settings
             "MEMORY_ENABLED": ("memory", "enabled"),
@@ -324,8 +363,13 @@ class Settings(BaseSettings):
             "MEMORY_SESSION_CUTOFF_HOURS": ("memory", "session_cutoff_hours"),
             "MEMORY_SUMMARY_CHAR_LIMIT": ("memory", "summary_char_limit"),
             "MEMORY_MAX_FILES_PER_COMMIT": ("memory", "max_files_per_commit"),
-            # Testing
-            "MCP_ADAPTER_MOCK": ("adapter_mock",),
+            # Services
+            "LOITER_KILLER_URL": ("services", "loiter_killer_url"),
+            # Dev/Testing
+            "MCP_ADAPTER_MOCK": ("dev", "adapter_mock"),
+            "CI_E2E": ("dev", "ci_e2e"),
+            # OpenAI specific
+            "MAX_PARALLEL_TOOL_EXEC": ("openai", "max_parallel_tool_exec"),
         }
 
         # Check both uppercase and lowercase versions for case insensitivity
@@ -344,7 +388,12 @@ class Settings(BaseSettings):
                     current = current[key]
 
                 # Set the final value
-                current[path[-1]] = value
+                # Special handling for inverted boolean flags
+                if env_key == "DISABLE_VICTORIA_LOGS":
+                    # Invert the boolean value
+                    current[path[-1]] = value.lower() not in ("1", "true", "yes")
+                else:
+                    current[path[-1]] = value
 
         return config_data
 
@@ -444,8 +493,18 @@ class Settings(BaseSettings):
             "MEMORY_SESSION_CUTOFF_HOURS": str(self.memory.session_cutoff_hours),
             "MEMORY_SUMMARY_CHAR_LIMIT": str(self.memory.summary_char_limit),
             "MEMORY_MAX_FILES_PER_COMMIT": str(self.memory.max_files_per_commit),
-            # Testing
-            "MCP_ADAPTER_MOCK": str(self.adapter_mock).lower(),
+            # Logging extras
+            "VICTORIA_LOGS_URL": self.logging.victoria_logs_url,
+            "VICTORIA_LOGS_ENABLED": str(self.logging.victoria_logs_enabled).lower(),
+            "LOKI_APP_TAG": self.logging.loki_app_tag,
+            "MCP_PROJECT_PATH": self.logging.project_path or "",
+            # Services
+            "LOITER_KILLER_URL": self.services.loiter_killer_url,
+            # Testing/Dev
+            "MCP_ADAPTER_MOCK": str(self.dev.adapter_mock).lower(),
+            "CI_E2E": str(self.dev.ci_e2e).lower(),
+            # OpenAI specific
+            "MAX_PARALLEL_TOOL_EXEC": str(self.openai.max_parallel_tool_exec),
         }
 
         # Filter out empty values
