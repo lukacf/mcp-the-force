@@ -137,6 +137,7 @@ def create_tool_function(metadata: ToolMetadata):
         is_float_type = False
         is_dict_type = False
         is_list_str_type = False
+        is_int_type = False
         origin = get_origin(actual_type)
 
         if origin is Union:  # Handles Optional[bool], Optional[float], etc.
@@ -145,6 +146,8 @@ def create_tool_function(metadata: ToolMetadata):
                 is_bool_type = True
             elif float in args:
                 is_float_type = True
+            elif int in args:
+                is_int_type = True
             # Check for Dict or List in Optional
             for arg in args:
                 if get_origin(arg) is dict:
@@ -157,6 +160,8 @@ def create_tool_function(metadata: ToolMetadata):
             is_bool_type = True
         elif actual_type is float:
             is_float_type = True
+        elif actual_type is int:
+            is_int_type = True
         elif origin is dict:
             is_dict_type = True
         elif origin is list:
@@ -165,9 +170,9 @@ def create_tool_function(metadata: ToolMetadata):
             if list_args and list_args[0] is str:
                 is_list_str_type = True
 
-        if is_bool_type or is_float_type or is_dict_type:
-            # If it's a boolean, float, or dict, tell FastMCP to expect Optional[str]
-            # This allows string values "true"/"false", numeric strings like "0.5",
+        if is_bool_type or is_float_type or is_dict_type or is_int_type:
+            # If it's a boolean, float, int, or dict, tell FastMCP to expect Optional[str]
+            # This allows string values "true"/"false", numeric strings like "0.5" or "123",
             # or JSON strings like '{"key": "value"}' to pass Pydantic validation.
             # Our internal ParameterValidator will then correctly coerce the string to the expected type.
 
@@ -297,50 +302,3 @@ def create_vector_store_tool(mcp: FastMCP) -> None:
         except Exception as e:
             logger.error(f"Error creating vector store: {e}")
             return {"vector_store_id": "", "status": "error", "error": str(e)}
-
-
-def create_count_project_tokens_tool(mcp: FastMCP) -> None:
-    """Create the count_project_tokens utility tool."""
-    from ..local_services.count_tokens import CountTokensService
-
-    @mcp.tool()
-    async def count_project_tokens(
-        items: Annotated[
-            List[str],
-            Field(description="A list of file and/or directory paths to analyze"),
-        ],
-        top_n: Annotated[
-            Optional[int],
-            Field(
-                description="The number of top files and directories to include in the report"
-            ),
-        ] = 10,
-    ) -> Dict[str, Any]:
-        """Count tokens for specified files or directories using the same
-        filtering logic as context/attachments parameters.
-
-        Args:
-            items: (Required) A list of file and/or directory paths to analyze. The tool will
-                recursively scan the provided paths, count the tokens in all text files
-                (respecting .gitignore), and return an aggregated report. Uses the same file
-                filtering logic as the context parameter - skips binaries, respects size limits
-                (500KB/file, 50MB total), and supports 60+ text file types.
-                Syntax: A JSON-formatted list of strings, where each string is an absolute path.
-                Example: ['/Users/luka/src/project/main.py', '/Users/luka/src/project/utils/']
-
-            top_n: (Optional) The number of top files and directories to include in the
-                'largest_files' and 'largest_directories' sections of the report. Helps identify
-                which files/directories consume the most tokens in your context window.
-                Syntax: An integer.
-                Default: 10.
-                Example: top_n=20
-
-        Returns:
-            Dictionary containing:
-            - total_tokens: Total token count across all files
-            - total_files: Total number of files analyzed
-            - largest_files: List of top N files by token count
-            - largest_directories: List of top N directories by aggregated token count
-        """
-        service = CountTokensService()
-        return await service.execute(items=items, top_n=top_n)
