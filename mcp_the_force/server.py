@@ -23,7 +23,6 @@ from .tools import definitions  # noqa: F401, E402 # This import triggers the @t
 from .tools import search_history  # noqa: F401, E402 # Import search_project_history tool
 from .tools.integration import (  # noqa: E402
     register_all_tools,
-    create_list_models_tool,
 )
 
 logger = logging.getLogger(__name__)
@@ -37,8 +36,6 @@ logger.debug("Registering dataclass-based tools...")
 logger.info("TEST: MCP The-Force server starting up...")
 register_all_tools(mcp)
 
-# Register utility tools
-create_list_models_tool(mcp)
 # Note: create_vector_store_tool is intentionally not registered to hide it from MCP clients
 # Note: count_project_tokens is now registered as a ToolSpec-based tool
 

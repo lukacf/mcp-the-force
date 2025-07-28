@@ -270,3 +270,62 @@ async def test_session_metadata():
     assert response_id == "resp_123"
     assert api_format == "responses"
     assert deployment_id == "deploy_456"
+
+
+@pytest.mark.asyncio
+class TestSessionCacheSummary:
+    """Tests for summary caching functionality."""
+
+    async def test_get_summary_for_non_existent_session(self, isolate_test_databases):
+        """Test get_summary returns None for non-existent session."""
+        result = await unified_session_cache.get_summary(
+            "test-project", "test-tool", "non-existent-session"
+        )
+        assert result is None
+
+    async def test_set_and_get_summary(self, isolate_test_databases):
+        """Test setting and getting a summary."""
+        project = "test-project"
+        tool = "test-tool"
+        session_id = "summary-test"
+        summary = "This is a test summary of the conversation."
+
+        # Set the summary
+        await unified_session_cache.set_summary(project, tool, session_id, summary)
+
+        # Get it back
+        result = await unified_session_cache.get_summary(project, tool, session_id)
+        assert result == summary
+
+    async def test_set_history_invalidates_summary(self, isolate_test_databases):
+        """Test that updating session history invalidates the summary."""
+        project = "test-project"
+        tool = "test-tool"
+        session_id = "invalidation-test"
+
+        # Create a session and set a summary
+        await unified_session_cache.set_history(
+            project, tool, session_id, [{"role": "user", "content": "Initial message"}]
+        )
+        await unified_session_cache.set_summary(
+            project, tool, session_id, "Initial summary"
+        )
+
+        # Verify summary exists
+        summary = await unified_session_cache.get_summary(project, tool, session_id)
+        assert summary == "Initial summary"
+
+        # Update the session (add new message)
+        await unified_session_cache.set_history(
+            project,
+            tool,
+            session_id,
+            [
+                {"role": "user", "content": "Initial message"},
+                {"role": "assistant", "content": "Response"},
+            ],
+        )
+
+        # Summary should be invalidated (None)
+        summary = await unified_session_cache.get_summary(project, tool, session_id)
+        assert summary is None
