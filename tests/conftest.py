@@ -6,7 +6,6 @@ Shared test fixtures and configuration for MCP The-Force tests.
 # When pytest is detected and no explicit config files are set,
 # default config.yaml/secrets.yaml files are skipped
 import os
-
 import sys
 from pathlib import Path
 import pytest
@@ -15,6 +14,17 @@ from unittest.mock import MagicMock, Mock, AsyncMock, patch
 import asyncio
 import time
 import contextlib
+
+# Production database names that must be isolated in tests
+# WARNING: If you add a new SQLite database to the project, you MUST add it here!
+# The test_database_isolation_coverage.py test will fail if you forget.
+PRODUCTION_DBS = {
+    ".mcp_sessions.sqlite3",
+    ".stable_list_cache.sqlite3",
+    ".mcp_logs.sqlite3",
+    ".mcp_vector_stores.db",
+    "session_cache.db",
+}
 
 # Note: Adapter mocking is controlled by MCP_ADAPTER_MOCK environment variable
 
@@ -45,13 +55,7 @@ def isolate_test_databases(tmp_path, monkeypatch):
     import sqlite3
     import shutil
 
-    # Define production database names to redirect
-    PRODUCTION_DBS = {
-        ".mcp_sessions.sqlite3",
-        ".stable_list_cache.sqlite3",
-        ".mcp_logs.sqlite3",
-        ".mcp_vector_stores.db",
-    }
+    # Use the module-level PRODUCTION_DBS set defined at top of file
 
     # Create test database mapping
     test_db_map = {}
