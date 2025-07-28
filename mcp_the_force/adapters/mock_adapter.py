@@ -189,7 +189,9 @@ class MockAdapter:
             from ..unified_session_cache import UnifiedSessionCache
 
             # Save the conversation history to the unified cache
-            await UnifiedSessionCache.set_history(session_id, history)
+            await UnifiedSessionCache.set_history(
+                ctx.project, ctx.tool, session_id, history
+            )
 
         # Return dict format as per MCPAdapter protocol
         return {"content": mock_response}

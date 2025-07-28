@@ -24,6 +24,8 @@ async def test_basic_set_get():
 
         # Set a response ID
         session = UnifiedSession(
+            project="test-project",
+            tool="test-tool",
             session_id="test_session",
             updated_at=int(time.time()),
             provider_metadata={"response_id": "test_response"},
@@ -31,12 +33,12 @@ async def test_basic_set_get():
         await cache.set_session(session)
 
         # Get it back
-        result = await cache.get_session("test_session")
+        result = await cache.get_session("test-project", "test-tool", "test_session")
         assert result is not None
         assert result.provider_metadata.get("response_id") == "test_response"
 
         # Non-existent session returns None
-        result = await cache.get_session("nonexistent")
+        result = await cache.get_session("test-project", "test-tool", "nonexistent")
         assert result is None
 
         cache.close()
@@ -54,6 +56,8 @@ async def test_persistence():
         # First instance
         cache1 = _SQLiteUnifiedSessionCache(db_path=db_path, ttl=3600)
         session = UnifiedSession(
+            project="test-project",
+            tool="test-tool",
             session_id="persist_test",
             updated_at=int(time.time()),
             provider_metadata={"response_id": "persist_value"},
@@ -63,7 +67,7 @@ async def test_persistence():
 
         # Second instance should see the data
         cache2 = _SQLiteUnifiedSessionCache(db_path=db_path, ttl=3600)
-        result = await cache2.get_session("persist_test")
+        result = await cache2.get_session("test-project", "test-tool", "persist_test")
         assert result is not None
         assert result.provider_metadata.get("response_id") == "persist_value"
         cache2.close()
@@ -84,6 +88,8 @@ async def test_expiration(monkeypatch):
 
         with mock_clock(monkeypatch) as tick:
             session = UnifiedSession(
+                project="test-project",
+                tool="test-tool",
                 session_id="expire_test",
                 updated_at=int(time.time()),
                 provider_metadata={"response_id": "expire_value"},
@@ -91,7 +97,7 @@ async def test_expiration(monkeypatch):
             await cache.set_session(session)
 
             # Should exist immediately
-            result = await cache.get_session("expire_test")
+            result = await cache.get_session("test-project", "test-tool", "expire_test")
             assert result is not None
             assert result.provider_metadata.get("response_id") == "expire_value"
 
@@ -99,7 +105,7 @@ async def test_expiration(monkeypatch):
             tick(1.1)
 
             # Should be expired
-            result = await cache.get_session("expire_test")
+            result = await cache.get_session("test-project", "test-tool", "expire_test")
             assert result is None
 
         cache.close()
@@ -119,6 +125,8 @@ async def test_concurrent_access():
         async def write_many(prefix, count):
             for i in range(count):
                 session = UnifiedSession(
+                    project="test-project",
+                    tool="test-tool",
                     session_id=f"{prefix}_{i}",
                     updated_at=int(time.time()),
                     provider_metadata={"value": f"value_{i}"},
@@ -128,7 +136,9 @@ async def test_concurrent_access():
         async def read_many(prefix, count):
             results = []
             for i in range(count):
-                result = await cache.get_session(f"{prefix}_{i}")
+                result = await cache.get_session(
+                    "test-project", "test-tool", f"{prefix}_{i}"
+                )
                 results.append(result)
             return results
 
@@ -167,13 +177,15 @@ async def test_long_ids_rejected():
         # Session ID too long
         with pytest.raises(ValueError, match="session_id too long"):
             session = UnifiedSession(
+                project="test-project",
+                tool="test-tool",
                 session_id="x" * 1025,
                 updated_at=int(time.time()),
             )
             await cache.set_session(session)
 
         with pytest.raises(ValueError, match="session_id too long"):
-            await cache.get_session("x" * 1025)
+            await cache.get_session("test-project", "test-tool", "x" * 1025)
 
         cache.close()
     finally:
@@ -191,24 +203,35 @@ async def test_proxy_interface():
     append_session = f"append_test_{uuid.uuid4()}"
 
     # The unified_session_cache proxy should work with await
-    await unified_session_cache.set_response_id(proxy_session, "proxy_value")
-    result = await unified_session_cache.get_response_id(proxy_session)
+    await unified_session_cache.set_response_id(
+        "test-project", "test-tool", proxy_session, "proxy_value"
+    )
+    result = await unified_session_cache.get_response_id(
+        "test-project", "test-tool", proxy_session
+    )
     assert result == "proxy_value"
 
     # Test history methods
     await unified_session_cache.set_history(
-        history_session, [{"role": "user", "content": "Hello"}]
+        "test-project",
+        "test-tool",
+        history_session,
+        [{"role": "user", "content": "Hello"}],
     )
-    history = await unified_session_cache.get_history(history_session)
+    history = await unified_session_cache.get_history(
+        "test-project", "test-tool", history_session
+    )
     assert len(history) == 1
     assert history[0]["role"] == "user"
     assert history[0]["content"] == "Hello"
 
     # Test append methods
     await unified_session_cache.append_chat_message(
-        append_session, "assistant", "Hi there!"
+        "test-project", "test-tool", append_session, "assistant", "Hi there!"
     )
-    history = await unified_session_cache.get_history(append_session)
+    history = await unified_session_cache.get_history(
+        "test-project", "test-tool", append_session
+    )
     assert len(history) == 1
     assert history[0]["role"] == "assistant"
     assert history[0]["content"] == "Hi there!"
@@ -223,20 +246,27 @@ async def test_session_metadata():
     session_id = "metadata_test"
 
     # Set multiple metadata fields
-    session = UnifiedSession(
-        session_id=session_id,
-        updated_at=int(time.time()),
-        provider_metadata={
-            "response_id": "resp_123",
-            "api_format": "responses",
-            "deployment_id": "deploy_456",
-        },
+    # Use metadata methods instead of direct session access
+    await unified_session_cache.set_metadata(
+        "test-project", "test-tool", session_id, "response_id", "resp_123"
     )
-    await unified_session_cache.set_session(session)
+    await unified_session_cache.set_metadata(
+        "test-project", "test-tool", session_id, "api_format", "responses"
+    )
+    await unified_session_cache.set_metadata(
+        "test-project", "test-tool", session_id, "deployment_id", "deploy_456"
+    )
 
     # Get back and verify
-    result = await unified_session_cache.get_session(session_id)
-    assert result is not None
-    assert result.provider_metadata["response_id"] == "resp_123"
-    assert result.provider_metadata["api_format"] == "responses"
-    assert result.provider_metadata["deployment_id"] == "deploy_456"
+    response_id = await unified_session_cache.get_metadata(
+        "test-project", "test-tool", session_id, "response_id"
+    )
+    api_format = await unified_session_cache.get_metadata(
+        "test-project", "test-tool", session_id, "api_format"
+    )
+    deployment_id = await unified_session_cache.get_metadata(
+        "test-project", "test-tool", session_id, "deployment_id"
+    )
+    assert response_id == "resp_123"
+    assert api_format == "responses"
+    assert deployment_id == "deploy_456"

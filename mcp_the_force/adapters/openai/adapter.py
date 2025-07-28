@@ -86,7 +86,7 @@ class OpenAIProtocolAdapter:
             previous_response_id = None
             if ctx.session_id:
                 previous_response_id = await UnifiedSessionCache.get_response_id(
-                    ctx.session_id
+                    ctx.project, ctx.tool, ctx.session_id
                 )
                 if previous_response_id:
                     logger.info(
@@ -129,11 +129,11 @@ class OpenAIProtocolAdapter:
             # Store response_id in session for continuity
             if ctx.session_id and "response_id" in result:
                 await UnifiedSessionCache.set_response_id(
-                    ctx.session_id, result["response_id"]
+                    ctx.project, ctx.tool, ctx.session_id, result["response_id"]
                 )
                 # Also store that we're using OpenAI native format
                 await UnifiedSessionCache.set_api_format(
-                    ctx.session_id, "openai_native"
+                    ctx.project, ctx.tool, ctx.session_id, "openai_native"
                 )
                 logger.debug(
                     f"Saved response_id {result['response_id']} for session {ctx.session_id}"
