@@ -62,6 +62,9 @@ class ProviderConfig(BaseModel):
     oauth_client_id: Optional[str] = None
     oauth_client_secret: Optional[str] = None
     user_refresh_token: Optional[str] = None
+    adc_credentials_path: Optional[str] = Field(
+        None, description="Path to Application Default Credentials JSON file"
+    )
     max_output_tokens: int = Field(
         default=65536, description="Default max output tokens"
     )
@@ -205,6 +208,30 @@ class Settings(BaseSettings):
     def adapter_mock(self) -> bool:
         """Backward compatibility for adapter_mock."""
         return self.dev.adapter_mock
+
+    def __init__(self, **kwargs):
+        """Initialize settings and set up ADC if configured."""
+        super().__init__(**kwargs)
+
+        # Set GOOGLE_APPLICATION_CREDENTIALS if adc_credentials_path is configured
+        if self.vertex.adc_credentials_path:
+            # Resolve path relative to config file location
+            config_file = Path(os.getenv("MCP_CONFIG_FILE", str(CONFIG_FILE))).resolve()
+            config_dir = config_file.parent
+
+            adc_path = Path(self.vertex.adc_credentials_path).expanduser()
+            if not adc_path.is_absolute():
+                abs_path = (config_dir / adc_path).resolve()
+            else:
+                abs_path = adc_path.resolve()
+
+            if not abs_path.exists():
+                raise FileNotFoundError(f"ADC credentials file not found: {abs_path}")
+            if not os.access(str(abs_path), os.R_OK):
+                raise PermissionError(f"ADC credentials file not readable: {abs_path}")
+
+            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(abs_path)
+            logger.debug(f"Set GOOGLE_APPLICATION_CREDENTIALS to {abs_path}")
 
     model_config = SettingsConfigDict(
         env_nested_delimiter="__",  # Allows OPENAI__API_KEY env var
