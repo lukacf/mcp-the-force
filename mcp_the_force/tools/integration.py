@@ -278,8 +278,20 @@ def create_count_project_tokens_tool(mcp: FastMCP) -> None:
         filtering logic as context/attachments parameters.
 
         Args:
-            items: List of file paths or directory paths to count tokens for
-            top_n: Number of top files/directories to list (default: 10)
+            items: (Required) A list of file and/or directory paths to analyze. The tool will
+                recursively scan the provided paths, count the tokens in all text files
+                (respecting .gitignore), and return an aggregated report. Uses the same file
+                filtering logic as the context parameter - skips binaries, respects size limits
+                (500KB/file, 50MB total), and supports 60+ text file types.
+                Syntax: A JSON-formatted list of strings, where each string is an absolute path.
+                Example: ['/Users/luka/src/project/main.py', '/Users/luka/src/project/utils/']
+
+            top_n: (Optional) The number of top files and directories to include in the
+                'largest_files' and 'largest_directories' sections of the report. Helps identify
+                which files/directories consume the most tokens in your context window.
+                Syntax: An integer.
+                Default: 10.
+                Example: top_n=20
 
         Returns:
             Dictionary containing:

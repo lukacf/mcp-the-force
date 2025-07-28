@@ -38,6 +38,7 @@ class BaseSQLiteCache:
         self.purge_probability = purge_probability
         self._lock = threading.RLock()
 
+        self._conn: Optional[sqlite3.Connection] = None
         try:
             # Ensure parent directory exists
             db_path_obj = Path(db_path)
@@ -54,6 +55,9 @@ class BaseSQLiteCache:
 
     def _init_db(self, create_table_sql: str):
         """Initialize database with common pragmas and table creation."""
+        if self._conn is None:
+            raise RuntimeError("Database connection is not initialized")
+
         with self._conn:
             # Execute pragmas first
             self._conn.execute("PRAGMA journal_mode=WAL")
@@ -83,7 +87,10 @@ class BaseSQLiteCache:
             Query results if fetch=True, None otherwise
         """
 
-        def _sync_execute():
+        def _sync_execute() -> Optional[List[Any]]:
+            if self._conn is None:
+                raise RuntimeError("Database connection is closed")
+
             with self._lock, self._conn:
                 cursor = self._conn.execute(query, params)
                 if fetch:
@@ -92,7 +99,7 @@ class BaseSQLiteCache:
 
         # Run in shared thread pool to avoid blocking event loop
         result = await run_in_thread_pool(_sync_execute)
-        return result  # type: ignore[no-any-return]
+        return result
 
     async def _probabilistic_cleanup(self):
         """Run cleanup with configured probability."""
@@ -118,7 +125,7 @@ class BaseSQLiteCache:
                 # The connection object might already be None if close() is called multiple times
                 if hasattr(self, "_conn") and self._conn:
                     self._conn.close()
-                    self._conn = None  # type: ignore[assignment] # Prevent reuse after closing
+                    self._conn = None  # Prevent reuse after closing
                     logger.info(f"Closed SQLite connection to {self.db_path}")
             except sqlite3.Error as e:
                 # Log the specific error instead of silently passing.

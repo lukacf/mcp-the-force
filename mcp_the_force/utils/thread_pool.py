@@ -4,9 +4,11 @@ import asyncio
 import threading
 import atexit
 from concurrent.futures import ThreadPoolExecutor
-from typing import Optional
+from typing import Optional, TypeVar, Callable, Any
 
 from ..config import get_settings
+
+R = TypeVar("R")
 
 # Thread-safe singleton implementation
 _shared_executor: Optional[ThreadPoolExecutor] = None
@@ -35,7 +37,7 @@ def get_shared_executor(max_workers: Optional[int] = None) -> ThreadPoolExecutor
     return _shared_executor
 
 
-async def run_in_thread_pool(func, *args, **kwargs):
+async def run_in_thread_pool(func: Callable[..., R], *args: Any, **kwargs: Any) -> R:
     """Run a function in the shared thread pool.
 
     Args:
