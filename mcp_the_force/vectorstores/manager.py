@@ -198,7 +198,7 @@ class VectorStoreManager:
             # The StableListCache needs methods to track file hash -> vector_file_id mappings
             # For now, we'll just add all files without update detection
             pass
-            
+
         # For now, always add all files (no update detection)
         if True:  # Was: else:
             # No cache - just add all files
