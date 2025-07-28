@@ -1,10 +1,11 @@
 """Integration layer between dataclass tools and FastMCP."""
 
-from typing import Any, Dict, List, Optional, get_origin, get_args, Union
+from typing import Any, Dict, List, Optional, get_origin, get_args, Union, Annotated
 from inspect import Parameter, Signature
 from fastmcp import FastMCP
 import fastmcp.exceptions
 import logging
+from pydantic import Field
 from .registry import list_tools, ToolMetadata
 from .executor import executor
 from ..utils.scope_manager import scope_manager
@@ -54,10 +55,22 @@ def create_tool_function(metadata: ToolMetadata):
         else:
             default = param.default
 
-        # Create parameter
+        # Create parameter with description if available
+        param_type = param.type
+        if param.description:
+            # Use Annotated type with pydantic Field to include description
+            annotated_type: Any = Annotated[
+                param_type, Field(description=param.description)
+            ]
+        else:
+            annotated_type = param_type
+
         sig_params.append(
             Parameter(
-                name=param.name, kind=param_kind, default=default, annotation=param.type
+                name=param.name,
+                kind=param_kind,
+                default=default,
+                annotation=annotated_type,
             )
         )
 
@@ -111,20 +124,23 @@ def create_tool_function(metadata: ToolMetadata):
     annotations: Dict[str, Any] = {"return": str}
 
     for sig_param in sig_params:
-        original_annotation = sig_param.annotation
+        # Get the actual type from the parameter's annotation
+        # If it's Annotated, we need to extract the actual type
+        if get_origin(sig_param.annotation) is Annotated:
+            # Get the actual type from Annotated[type, description]
+            actual_type = get_args(sig_param.annotation)[0]
+        else:
+            actual_type = sig_param.annotation
 
-        # Fix for FastMCP's strict validation
-        # Check if the original type hint is a boolean, float, dict, or Optional[bool/float/dict]
+        # Check the actual type for special handling
         is_bool_type = False
         is_float_type = False
         is_dict_type = False
         is_list_str_type = False
-        origin = get_origin(original_annotation)
+        origin = get_origin(actual_type)
 
-        if (
-            origin is Union
-        ):  # Handles Optional[bool], Optional[float], Optional[Dict], and Optional[List[str]]
-            args = get_args(original_annotation)
+        if origin is Union:  # Handles Optional[bool], Optional[float], etc.
+            args = get_args(actual_type)
             if bool in args:
                 is_bool_type = True
             elif float in args:
@@ -137,15 +153,15 @@ def create_tool_function(metadata: ToolMetadata):
                     list_args = get_args(arg)
                     if list_args and list_args[0] is str:
                         is_list_str_type = True
-        elif original_annotation is bool:
+        elif actual_type is bool:
             is_bool_type = True
-        elif original_annotation is float:
+        elif actual_type is float:
             is_float_type = True
         elif origin is dict:
             is_dict_type = True
         elif origin is list:
             # Direct List[str]
-            list_args = get_args(original_annotation)
+            list_args = get_args(actual_type)
             if list_args and list_args[0] is str:
                 is_list_str_type = True
 
@@ -154,14 +170,25 @@ def create_tool_function(metadata: ToolMetadata):
             # This allows string values "true"/"false", numeric strings like "0.5",
             # or JSON strings like '{"key": "value"}' to pass Pydantic validation.
             # Our internal ParameterValidator will then correctly coerce the string to the expected type.
-            annotations[sig_param.name] = Optional[str]
+
+            # If original annotation had a Field description, preserve it
+            if get_origin(sig_param.annotation) is Annotated:
+                # Extract the Field metadata from the Annotated type
+                args = get_args(sig_param.annotation)
+                if len(args) > 1 and hasattr(args[1], "description"):
+                    # Preserve the Field with description
+                    annotations[sig_param.name] = Annotated[Optional[str], args[1]]
+                else:
+                    annotations[sig_param.name] = Optional[str]
+            else:
+                annotations[sig_param.name] = Optional[str]
         elif is_list_str_type:
             # Keep List[str] as-is - don't convert to Optional[str]
             # MCP clients should pass lists correctly
-            annotations[sig_param.name] = original_annotation
+            annotations[sig_param.name] = sig_param.annotation
         else:
-            # For all other types, use the original annotation
-            annotations[sig_param.name] = original_annotation
+            # For all other types, use the annotation (which may include description)
+            annotations[sig_param.name] = sig_param.annotation
 
     tool_function.__annotations__ = annotations
 
@@ -242,7 +269,13 @@ def create_vector_store_tool(mcp: FastMCP) -> None:
 
     @mcp.tool()
     async def create_vector_store_tool(
-        files: List[str], name: Optional[str] = None
+        files: Annotated[
+            List[str],
+            Field(description="List of file paths to include in the vector store"),
+        ],
+        name: Annotated[
+            Optional[str], Field(description="Optional name for the vector store")
+        ] = None,
     ) -> Dict[str, str]:
         """Create a vector store from files and return its ID.
 
@@ -272,7 +305,16 @@ def create_count_project_tokens_tool(mcp: FastMCP) -> None:
 
     @mcp.tool()
     async def count_project_tokens(
-        items: List[str], top_n: Optional[int] = 10
+        items: Annotated[
+            List[str],
+            Field(description="A list of file and/or directory paths to analyze"),
+        ],
+        top_n: Annotated[
+            Optional[int],
+            Field(
+                description="The number of top files and directories to include in the report"
+            ),
+        ] = 10,
     ) -> Dict[str, Any]:
         """Count tokens for specified files or directories using the same
         filtering logic as context/attachments parameters.
