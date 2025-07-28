@@ -67,6 +67,7 @@ gcp-service-account-key.json
 
 # Project-specific credentials
 .gcloud/
+.gcp/
 
 # Temporary files
 *.tmp
