@@ -129,7 +129,9 @@ async def test_format_preservation_through_full_cycle():
             mock_aresponses.return_value = mock_response
 
             # Execute
-            ctx = CallContext(session_id="test-session")
+            ctx = CallContext(
+                session_id="test-session", project="test-project", tool="test-tool"
+            )
             params = TestParams()
             tool_dispatcher = Mock()
             tool_dispatcher.get_tool_declarations.return_value = []
@@ -164,7 +166,9 @@ async def test_format_preservation_through_full_cycle():
 
             # Verify saved conversation preserves format
             assert mock_cache.set_history.called
-            saved_messages = mock_cache.set_history.call_args[0][1]
+            saved_messages = mock_cache.set_history.call_args[0][
+                3
+            ]  # Now 4th argument after project, tool, session_id
 
             # Should have all messages plus assistant response
             assert len(saved_messages) == 7
@@ -211,7 +215,9 @@ async def test_no_format_assumptions():
                 ]
                 mock_aresponses.return_value = mock_response
 
-                ctx = CallContext(session_id="edge-test")
+                ctx = CallContext(
+                    session_id="edge-test", project="test-project", tool="test-tool"
+                )
                 params = TestParams()
 
                 await adapter.generate(
@@ -245,7 +251,7 @@ async def test_round_trip_integrity():
                 mock_cache.get_history = AsyncMock(return_value=conversation.copy())
                 saved_conversation = None
 
-                def capture_save(session_id, messages):
+                def capture_save(project, tool, session_id, messages):
                     nonlocal saved_conversation
                     saved_conversation = messages.copy()
                     return AsyncMock()()
@@ -259,7 +265,9 @@ async def test_round_trip_integrity():
                 ]
                 mock_aresponses.return_value = mock_response
 
-                ctx = CallContext(session_id="round-trip")
+                ctx = CallContext(
+                    session_id="round-trip", project="test-project", tool="test-tool"
+                )
                 params = TestParams()
 
                 await adapter.generate(
@@ -331,7 +339,9 @@ async def test_tool_call_format_preservation():
             tool_dispatcher.get_tool_declarations.return_value = []
             tool_dispatcher.execute = AsyncMock(return_value="Found 3 files")
 
-            ctx = CallContext(session_id="tool-test")
+            ctx = CallContext(
+                session_id="tool-test", project="test-project", tool="test-tool"
+            )
             params = TestParams()
 
             await adapter.generate(
@@ -403,7 +413,9 @@ async def test_content_type_variations():
                 mock_response.output = [Mock(type="message", content=[Mock(text="OK")])]
                 mock_aresponses.return_value = mock_response
 
-                ctx = CallContext(session_id="content-test")
+                ctx = CallContext(
+                    session_id="content-test", project="test-project", tool="test-tool"
+                )
 
                 await adapter.generate(
                     prompt="Test",

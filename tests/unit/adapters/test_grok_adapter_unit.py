@@ -69,7 +69,11 @@ class TestGrokAdapterUnit:
                     structured_output_schema=None,
                 )
 
-                ctx = CallContext(session_id="test-session-simple")
+                ctx = CallContext(
+                    session_id="test-session-simple",
+                    project="test-project",
+                    tool="chat_with_grok4",
+                )
 
                 # Mock tool dispatcher with empty tools
                 mock_dispatcher = MagicMock()
@@ -86,7 +90,7 @@ class TestGrokAdapterUnit:
 
                 # Verify adapter called session cache correctly
                 mock_cache_class.get_history.assert_called_once_with(
-                    "test-session-simple"
+                    "test-project", "chat_with_grok4", "test-session-simple"
                 )
                 mock_cache_class.set_history.assert_called_once()
 
@@ -144,7 +148,9 @@ class TestGrokAdapterUnit:
                     structured_output_schema=None,
                 )
 
-                ctx = CallContext(session_id="")
+                ctx = CallContext(
+                    session_id="", project="test-project", tool="chat_with_grok4"
+                )
 
                 # Mock tool dispatcher that doesn't have the unknown tool
                 mock_dispatcher = MagicMock()
@@ -204,7 +210,11 @@ class TestGrokAdapterUnit:
                     structured_output_schema=None,
                 )
 
-                ctx = CallContext(session_id="test-session-123")
+                ctx = CallContext(
+                    session_id="test-session-123",
+                    project="test-project",
+                    tool="chat_with_grok4",
+                )
 
                 # Mock tool dispatcher with empty tools
                 mock_dispatcher = MagicMock()
@@ -218,10 +228,17 @@ class TestGrokAdapterUnit:
                 )
 
                 # Verify session cache was called with correct session ID
-                mock_cache_class.get_history.assert_called_once_with("test-session-123")
+                mock_cache_class.get_history.assert_called_once_with(
+                    "test-project", "chat_with_grok4", "test-session-123"
+                )
                 mock_cache_class.set_history.assert_called_once()
 
                 # Check that history was stored with correct session ID
                 call_args = mock_cache_class.set_history.call_args
-                session_id_arg = call_args[0][0]
+                # Arguments are now: project, tool, session_id, history
+                project_arg = call_args[0][0]
+                tool_arg = call_args[0][1]
+                session_id_arg = call_args[0][2]
+                assert project_arg == "test-project"
+                assert tool_arg == "chat_with_grok4"
                 assert session_id_arg == "test-session-123"
