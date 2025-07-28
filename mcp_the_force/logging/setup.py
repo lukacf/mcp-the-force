@@ -46,8 +46,8 @@ def setup_logging():
     if app_logger.hasHandlers():
         app_logger.handlers.clear()
 
-    # Check if we should disable VictoriaLogs
-    if os.getenv("DISABLE_VICTORIA_LOGS", "").lower() in ("1", "true", "yes"):
+    # Check if VictoriaLogs is disabled
+    if not settings.logging.victoria_logs_enabled:
         # Add stderr handler so we can still see critical messages
         stderr_handler = logging.StreamHandler(sys.stderr)
         stderr_handler.setLevel(logging.WARNING)
@@ -55,7 +55,7 @@ def setup_logging():
             logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
         )
         app_logger.addHandler(stderr_handler)
-        app_logger.warning("VictoriaLogs DISABLED via DISABLE_VICTORIA_LOGS env var")
+        app_logger.warning("VictoriaLogs DISABLED via configuration")
         return
 
     # Generate instance ID once for this session
@@ -69,11 +69,10 @@ def setup_logging():
         log_queue = queue.Queue(-1)  # -1 means unlimited size
 
         # Create our custom handler with timeout
-        # Allow overriding the VictoriaLogs URL for E2E tests
-        victoria_logs_url = os.getenv("VICTORIA_LOGS_URL", "http://localhost:9428")
+        victoria_logs_url = settings.logging.victoria_logs_url
 
         # Debug log the URL in E2E mode
-        if os.getenv("CI_E2E") == "1":
+        if settings.dev.ci_e2e:
             print(
                 f"E2E: VictoriaLogs URL configured as: {victoria_logs_url}",
                 file=sys.stderr,
@@ -82,9 +81,9 @@ def setup_logging():
         loki_handler = TimeoutLokiHandler(
             url=f"{victoria_logs_url}/insert/loki/api/v1/push?_stream_fields=app,instance_id",
             tags={
-                "app": os.getenv("LOKI_APP_TAG", "mcp-the-force"),
+                "app": settings.logging.loki_app_tag,
                 "instance_id": instance_id,
-                "project": os.getenv("MCP_PROJECT_PATH", os.getcwd()),
+                "project": settings.logging.project_path or os.getcwd(),
             },
             version="1",
             timeout=10.0,  # 10 second timeout to prevent stale connection hangs

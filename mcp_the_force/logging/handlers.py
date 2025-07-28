@@ -31,9 +31,11 @@ class TimeoutLokiHandler(LokiHandler):
     def emit(self, record):
         """Emit a record with timeout protection."""
         # In E2E mode, check if we should skip localhost connections
-        import os
+        from ..config import get_settings
 
-        if os.getenv("CI_E2E") == "1":
+        settings = get_settings()
+
+        if settings.dev.ci_e2e:
             # Check if the handler URL is still pointing to localhost
             if "localhost:9428" in self.handler_url:
                 # Skip emission - the handler was created with localhost URL
@@ -85,14 +87,16 @@ class TimeoutLokiHandler(LokiHandler):
         except requests.exceptions.RequestException as e:
             # Suppress localhost connection errors in E2E tests
             import sys
-            import os
+            from ..config import get_settings
+
+            settings = get_settings()
 
             error_str = str(e)
             is_localhost_error = "localhost" in error_str and "9428" in error_str
-            is_e2e_test = os.getenv("CI_E2E") == "1"
+            is_e2e_test = settings.dev.ci_e2e
 
             # In E2E mode with proper VictoriaLogs URL, suppress localhost errors completely
-            victoria_url = os.getenv("VICTORIA_LOGS_URL", "")
+            victoria_url = settings.logging.victoria_logs_url
             has_proper_url = victoria_url and "host.docker.internal" in victoria_url
 
             if not (is_localhost_error and is_e2e_test and has_proper_url):
