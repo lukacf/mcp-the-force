@@ -1,8 +1,21 @@
 """Base class for tool specifications."""
 
-from typing import Dict, Any, Type, get_type_hints, get_origin, get_args
+from typing import (
+    Dict,
+    Any,
+    Type,
+    get_type_hints,
+    get_origin,
+    get_args,
+    ClassVar,
+    Optional,
+    TYPE_CHECKING,
+)
 from typing_extensions import dataclass_transform
 from .descriptors import RouteDescriptor, Route, _NO_DEFAULT
+
+if TYPE_CHECKING:
+    from .registry import ToolMetadata
 
 
 @dataclass_transform(
@@ -25,7 +38,7 @@ class ToolSpec:
 
     # Model configuration (to be overridden by subclasses)
     model_name: str = ""
-    adapter_class: str | None = ""
+    adapter_class: str | None = None
     context_window: int = 0
     timeout: int = 600  # Default timeout 10 minutes
     description: str = ""
@@ -35,6 +48,9 @@ class ToolSpec:
 
     # Prompt template (optional, uses default if not provided)
     prompt_template: str | None = None
+
+    # Tool metadata (set by @tool decorator)
+    _tool_metadata: ClassVar[Optional["ToolMetadata"]] = None
 
     @classmethod
     def get_model_config(cls) -> Dict[str, Any]:
@@ -48,7 +64,7 @@ class ToolSpec:
         }
         # Include service_cls if defined (for LocalService pattern)
         if hasattr(cls, "service_cls") and cls.service_cls is not None:
-            config["service_cls"] = cls.service_cls
+            config["service_cls"] = cls.service_cls  # type: ignore[assignment]
         return config
 
     @classmethod
@@ -56,8 +72,11 @@ class ToolSpec:
         """Extract parameter information from type annotations and descriptors."""
         parameters = {}
 
-        # Get type hints for the class
-        hints = get_type_hints(cls)
+        # Import here to avoid circular import
+        from .registry import ToolMetadata
+
+        # Get type hints for the class, providing ToolMetadata in localns
+        hints = get_type_hints(cls, localns={"ToolMetadata": ToolMetadata})
 
         # Iterate through all class attributes
         for name, value in cls.__dict__.items():
