@@ -1,10 +1,10 @@
 """Safe wrapper for memory storage operations that prevents response conflicts."""
 
 import logging
-import os
 from typing import List, Dict, Any
 
 from ..memory import store_conversation_memory
+from ..config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,8 @@ async def safe_store_conversation_memory(
     )
 
     # Skip memory storage in mock adapter mode (for tests)
-    if os.getenv("MCP_ADAPTER_MOCK") == "1":
+    settings = get_settings()
+    if settings.dev.adapter_mock:
         logger.debug("[MEMORY] Skipping memory storage in mock adapter mode")
         return
 
