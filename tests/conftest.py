@@ -6,7 +6,6 @@ Shared test fixtures and configuration for MCP The-Force tests.
 # When pytest is detected and no explicit config files are set,
 # default config.yaml/secrets.yaml files are skipped
 import os
-
 import sys
 from pathlib import Path
 import pytest
@@ -15,6 +14,17 @@ from unittest.mock import MagicMock, Mock, AsyncMock, patch
 import asyncio
 import time
 import contextlib
+
+# Production database names that must be isolated in tests
+# WARNING: If you add a new SQLite database to the project, you MUST add it here!
+# The test_database_isolation_coverage.py test will fail if you forget.
+PRODUCTION_DBS = {
+    ".mcp_sessions.sqlite3",
+    ".stable_list_cache.sqlite3",
+    ".mcp_logs.sqlite3",
+    ".mcp_vector_stores.db",
+    "session_cache.db",
+}
 
 # Note: Adapter mocking is controlled by MCP_ADAPTER_MOCK environment variable
 
@@ -30,6 +40,98 @@ import contextlib
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
+
+
+@pytest.fixture(autouse=True)
+def isolate_test_databases(tmp_path, monkeypatch):
+    """Ensure tests use isolated databases, not production ones.
+
+    This fixture intercepts SQLite connections to redirect production database
+    paths to temporary test databases. This approach is safe because:
+    - No global state is modified
+    - Monkeypatch automatically cleans up on test failure
+    - Only specific database paths are redirected
+    """
+    import sqlite3
+    import shutil
+
+    # Use the module-level PRODUCTION_DBS set defined at top of file
+
+    # Create test database mapping
+    test_db_map = {}
+    for db_name in PRODUCTION_DBS:
+        test_path = tmp_path / f"test_{db_name}"
+        # Ensure parent directory exists
+        test_path.parent.mkdir(parents=True, exist_ok=True)
+        test_db_map[db_name] = str(test_path)
+
+    # Store the original sqlite3.connect
+    original_connect = sqlite3.connect
+
+    def mock_connect(database, *args, **kwargs):
+        """Redirect production database paths to test paths."""
+        # Skip special SQLite databases
+        if database == ":memory:" or not isinstance(database, str):
+            return original_connect(database, *args, **kwargs)
+
+        # Convert to Path for easier handling
+        db_path = Path(database)
+        db_name = db_path.name
+
+        # Check if this is a production database (by name)
+        if db_name in PRODUCTION_DBS:
+            # Redirect to test database
+            database = test_db_map[db_name]
+
+        # Also check if the full path ends with production database name
+        elif any(database.endswith(prod_db) for prod_db in PRODUCTION_DBS):
+            # Extract the production db name and redirect
+            for prod_db in PRODUCTION_DBS:
+                if database.endswith(prod_db):
+                    database = test_db_map[prod_db]
+                    break
+
+        # Call original connect with potentially redirected path
+        return original_connect(database, *args, **kwargs)
+
+    # Patch sqlite3.connect
+    monkeypatch.setattr(sqlite3, "connect", mock_connect)
+
+    # Clear any existing singleton instances before test
+    from mcp_the_force import unified_session_cache as usc_module
+
+    if hasattr(usc_module, "_instance") and usc_module._instance is not None:
+        try:
+            usc_module._instance.close()
+        except Exception:
+            pass  # Ignore errors during cleanup
+        usc_module._instance = None
+
+    yield
+
+    # Cleanup after test
+    try:
+        # Close and clear singleton
+        if hasattr(usc_module, "_instance") and usc_module._instance is not None:
+            try:
+                usc_module._instance.close()
+            except Exception:
+                pass  # Ignore errors during cleanup
+            usc_module._instance = None
+
+        # Also try to close via the public interface
+        from mcp_the_force.unified_session_cache import unified_session_cache
+
+        try:
+            unified_session_cache.close()
+        except Exception:
+            pass  # Ignore errors during cleanup
+
+    finally:
+        # Remove test databases - tmp_path is automatically cleaned up by pytest
+        # but we can be explicit about it
+        if tmp_path.exists():
+            shutil.rmtree(tmp_path, ignore_errors=True)
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -75,6 +177,7 @@ def mock_env(monkeypatch):
         "VERTEX_LOCATION": "us-central1",
         "CONTEXT_PERCENTAGE": "0.85",
         "LOG_LEVEL": "WARNING",  # Reduce noise in tests
+        "VICTORIA_LOGS_URL": "",  # Disable VictoriaLogs in tests
     }
     for key, value in test_env.items():
         monkeypatch.setenv(key, value)
@@ -123,8 +226,11 @@ def mock_openai_client():
     mock.files.create = AsyncMock(return_value=mock_file)
 
     # Mock vector store operations (async)
+    # Use a unique ID per test to avoid database conflicts
+    import uuid
+
     mock_vs = MagicMock()
-    mock_vs.id = "vs_test123"
+    mock_vs.id = f"vs_test_{uuid.uuid4().hex[:8]}"
     mock_vs.status = "completed"
 
     # Mock both paths - some code uses client.vector_stores, some uses client.beta.vector_stores
@@ -142,12 +248,51 @@ def mock_openai_client():
     mock.vector_stores.delete = AsyncMock()
     mock.beta.vector_stores.delete = AsyncMock()
 
+    # Mock vector store search for SearchHistoryService
+    mock_search_response = MagicMock()
+    mock_search_response.data = []
+    mock.vector_stores.search = MagicMock(return_value=mock_search_response)
+
+    # Mock vector store retrieve for memory config
+    # This should return the same store that was created
+    def mock_retrieve(store_id):
+        mock_retrieved = MagicMock()
+        mock_retrieved.id = store_id
+        return mock_retrieved
+
+    mock.vector_stores.retrieve = AsyncMock(side_effect=mock_retrieve)
+
     return mock
 
 
 @pytest.fixture
-def mock_openai_factory(mock_openai_client):
+def mock_openai_factory(mock_openai_client, tmp_path, monkeypatch):
     """Patch OpenAIClientFactory to return the mock client."""
+
+    # First, ensure we're using test databases for memory config
+    test_db_path = tmp_path / "test_memory.db"
+    monkeypatch.setenv("SESSION_DB_PATH", str(test_db_path))
+
+    # Clear any cached settings
+    from mcp_the_force.config import get_settings
+
+    get_settings.cache_clear()
+
+    # Clear any existing memory config instances
+    from mcp_the_force.memory import config as memory_config_module
+    from mcp_the_force.memory import async_config as async_config_module
+
+    if hasattr(memory_config_module, "_memory_config"):
+        memory_config_module._memory_config = None
+    if hasattr(async_config_module, "_async_memory_config"):
+        async_config_module._async_memory_config = None
+
+    # Clear SearchHistoryService singletons
+    from mcp_the_force.local_services.search_history import SearchHistoryService
+
+    SearchHistoryService._client = None
+    SearchHistoryService._memory_config = None
+    SearchHistoryService._deduplicator = None
 
     # Create an async mock that returns the client
     async def mock_get_instance(*args, **kwargs):
@@ -155,16 +300,23 @@ def mock_openai_factory(mock_openai_client):
 
     with (
         patch(
-            "mcp_the_force.utils.vector_store.OpenAIClientFactory.get_instance",
-            new=mock_get_instance,
-        ),
-        patch(
-            "mcp_the_force.utils.vector_store_files.OpenAIClientFactory.get_instance",
-            new=mock_get_instance,
+            "mcp_the_force.utils.vector_store.get_client",
+            return_value=mock_openai_client,
         ),
         patch(
             "mcp_the_force.adapters.openai.client.OpenAIClientFactory.get_instance",
             new=mock_get_instance,
+        ),
+        patch(
+            "mcp_the_force.local_services.search_history.OpenAI",
+            return_value=mock_openai_client,
+        ),
+        patch(
+            "mcp_the_force.local_services.search_history.get_async_memory_config",
+            return_value=Mock(
+                get_active_conversation_store=AsyncMock(return_value="test_store_conv"),
+                get_active_commit_store=AsyncMock(return_value="test_store_commit"),
+            ),
         ),
     ):
         yield mock_openai_client

@@ -24,10 +24,10 @@ def test_smoke_all_models(claude, call_claude_tool, parse_response):
     tool_ids = result.get("tool_ids", [])
 
     # Check that expected tools are present
-    assert "chat_with_gpt4_1" in tool_ids, f"Missing chat_with_gpt4_1 in: {tool_ids}"
-    assert (
-        "chat_with_gemini25_flash" in tool_ids
-    ), f"Missing chat_with_gemini25_flash in: {tool_ids}"
+    assert "chat_with_gpt41" in tool_ids, f"Missing chat_with_gpt41 in: {tool_ids}"
+    assert "chat_with_gemini25_flash" in tool_ids, (
+        f"Missing chat_with_gemini25_flash in: {tool_ids}"
+    )
     assert "chat_with_o3" in tool_ids, f"Missing chat_with_o3 in: {tool_ids}"
     logger.info(f"✓ Model listing works, found {len(tool_ids)} tools")
 
@@ -43,7 +43,7 @@ def test_smoke_all_models(claude, call_claude_tool, parse_response):
         ("chat_with_o3", "O3"),
         ("chat_with_gemini25_flash", "Gemini Flash"),
         ("chat_with_gemini25_pro", "Gemini Pro"),
-        ("chat_with_gpt4_1", "GPT-4.1"),
+        ("chat_with_gpt41", "GPT-4.1"),
         ("chat_with_grok4", "Grok"),
     ]
 
@@ -61,9 +61,9 @@ def test_smoke_all_models(claude, call_claude_tool, parse_response):
 
         # Parse and validate JSON response
         result = parse_response(response)
-        assert (
-            result is not None
-        ), f"{display_name} didn't return valid JSON: {response}"
+        assert result is not None, (
+            f"{display_name} didn't return valid JSON: {response}"
+        )
         assert result["result"] == 4, f"{display_name} gave wrong answer: {result}"
         logger.info(f"✓ {display_name} works with structured output")
 

@@ -1,10 +1,25 @@
-"""OpenAI adapter package.
+"""OpenAI adapter package - Protocol-based implementation.
 
-This package provides an adapter for OpenAI models using the Responses API.
+This package provides a protocol-based adapter for OpenAI models using the native OpenAI SDK.
+Unlike other adapters that use LiteLLM for translation, this adapter uses the OpenAI SDK
+directly since LiteLLM's purpose is to translate TO OpenAI format.
 """
 
-from .adapter import OpenAIAdapter
-from .errors import AdapterException, ErrorCategory
-from . import cancel_aware_flow  # Apply cancellation patch  # noqa: F401
+from .adapter import OpenAIProtocolAdapter
+# from . import cancel_aware_flow  # Apply cancellation patch  # noqa: F401  # No longer needed with mcp@d4e14a4
 
-__all__ = ["OpenAIAdapter", "AdapterException", "ErrorCategory"]
+# Import definitions to trigger blueprint registration
+from . import definitions  # noqa: F401
+
+# Re-export from definitions
+from .definitions import OPENAI_MODEL_CAPABILITIES
+
+# Re-export errors from shared module for backward compatibility
+from ..errors import AdapterException, ErrorCategory
+
+__all__ = [
+    "OpenAIProtocolAdapter",
+    "OPENAI_MODEL_CAPABILITIES",
+    "AdapterException",
+    "ErrorCategory",
+]

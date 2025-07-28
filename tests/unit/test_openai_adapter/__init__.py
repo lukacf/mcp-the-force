@@ -1,1 +1,0 @@
-# OpenAI adapter unit tests

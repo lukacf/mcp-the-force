@@ -16,6 +16,13 @@ repos:
 
   - repo: local
     hooks:
+      - id: backup-databases
+        name: Backup SQLite databases
+        entry: scripts/backup_databases.sh
+        language: system
+        pass_filenames: false
+        always_run: true
+        
       - id: pytest-fast
         name: pytest (fast unit tests only)
         entry: make test
@@ -26,6 +33,14 @@ repos:
       - id: pytest-unit-full
         name: pytest (all unit tests)
         entry: make test-unit
+        language: system
+        stages: [pre-push]
+        pass_filenames: false
+        always_run: true
+        
+      - id: pytest-integration
+        name: pytest (integration tests)
+        entry: make test-integration
         language: system
         stages: [pre-push]
         pass_filenames: false

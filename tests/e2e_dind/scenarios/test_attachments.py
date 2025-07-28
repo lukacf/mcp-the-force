@@ -94,9 +94,9 @@ class TestContextOverflowAndRag:
             f"📄 Created large file (should overflow): {large_file} ({len(large_content)} bytes)"
         )
 
-        # Call chat_with_gpt4_1 with both files in context
+        # Call chat_with_gpt41 with both files in context
         response = call_claude_tool(
-            "chat_with_gpt4_1",
+            "chat_with_gpt41",
             instructions=f"Search for and quote the exact sentences containing these tokens: '{INLINE_TOKEN}' and '{OVERFLOW_TOKEN}'. For each token, state whether you found it and quote the containing sentence.",
             output_format="For each token, state: 1) Found/Not found 2) The exact sentence containing it (if found)",
             context=[small_file, large_file],
@@ -106,12 +106,12 @@ class TestContextOverflowAndRag:
         print(f"✅ Response: {response}")
 
         # Verify model can find content from both files
-        assert (
-            INLINE_TOKEN in response
-        ), f"Model failed to find inline token '{INLINE_TOKEN}' from small file"
-        assert (
-            OVERFLOW_TOKEN in response
-        ), f"Model failed to find overflow token '{OVERFLOW_TOKEN}' from vector store"
+        assert INLINE_TOKEN in response, (
+            f"Model failed to find inline token '{INLINE_TOKEN}' from small file"
+        )
+        assert OVERFLOW_TOKEN in response, (
+            f"Model failed to find overflow token '{OVERFLOW_TOKEN}' from vector store"
+        )
 
         # Verify the model actually found both tokens (not just echoed them)
         response_lower = response.lower()
@@ -199,7 +199,7 @@ class TestContextOverflowAndRag:
 
         # Call with priority_context to force inline inclusion
         response = call_claude_tool(
-            "chat_with_gpt4_1",
+            "chat_with_gpt41",
             instructions=f"Without using any search or retrieval, directly quote any sentences you can see that contain the token '{PRIORITY_TOKEN}'. If you cannot directly see this token in the provided context, say 'Token not in direct context'.",
             output_format="Either quote the sentence with the token or state it's not in direct context",
             context=[large_regular_file],
@@ -210,14 +210,14 @@ class TestContextOverflowAndRag:
         print(f"✅ Response: {response}")
 
         # Verify the priority file content is accessible directly (not via search)
-        assert (
-            PRIORITY_TOKEN in response
-        ), f"Model failed to find priority token '{PRIORITY_TOKEN}' that should be inline"
+        assert PRIORITY_TOKEN in response, (
+            f"Model failed to find priority token '{PRIORITY_TOKEN}' that should be inline"
+        )
 
         # Verify it's not reporting "not in direct context"
-        assert (
-            "not in direct context" not in response.lower()
-        ), "Priority file was not included inline as expected"
+        assert "not in direct context" not in response.lower(), (
+            "Priority file was not included inline as expected"
+        )
 
         print("✅ Priority context override test passed!")
 
@@ -247,7 +247,7 @@ class TestContextOverflowAndRag:
 
         # First call - establishes the stable list
         response1 = call_claude_tool(
-            "chat_with_gpt4_1",
+            "chat_with_gpt41",
             instructions="List all the test markers you can find (format: test-X-marker)",
             output_format="List of all markers found",
             context=files,
@@ -260,7 +260,7 @@ class TestContextOverflowAndRag:
 
         # Second call - should use the same stable list
         response2 = call_claude_tool(
-            "chat_with_gpt4_1",
+            "chat_with_gpt41",
             instructions="Again, list all the test markers you can find",
             output_format="List of all markers found",
             context=files,

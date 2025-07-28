@@ -7,8 +7,8 @@ readme = "README.md"
 requires-python = ">=3.13"
 
 dependencies = [
-    "fastmcp>=2.10.5",
-    "mcp>=1.10.1",
+    "fastmcp>=2.10.6",
+    "mcp @ git+https://github.com/modelcontextprotocol/python-sdk.git@d4e14a4",
     "openai>=1.62.0",
     "google-genai>=0.8.0",
     "google-api-core>=2.0.0",
@@ -24,6 +24,7 @@ dependencies = [
     "pyzmq>=25.0.0",
     "orjson>=3.9.0",
     "python-logging-loki>=0.3.1",
+    "litellm>=1.74.8",
 ]
 
 [project.scripts]

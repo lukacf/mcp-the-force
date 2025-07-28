@@ -104,15 +104,18 @@ pytest tests/e2e_dind -v               # Docker-in-Docker E2E tests
 ### Core Components
 
 1. **Adapters** (`mcp_the_force/adapters/`)
-   - `base.py`: Abstract `BaseAdapter` defining the interface
-   - `openai/`: OpenAI models integration (o3, o3-pro, gpt-4.1) via Responses API
-   - `vertex/`: Google Vertex AI integration (Gemini 2.5 pro/flash) via google-genai SDK
+   - **Protocol-based design**: All adapters implement `MCPAdapter` protocol
+   - **Central Registry** (`registry.py`): Single source of truth for adapter listing
+   - **Self-contained packages**: Each adapter owns its definitions, capabilities, and implementation
+   - Current adapters: OpenAI, Google Gemini, xAI Grok
 
 2. **Tool System** (`mcp_the_force/tools/`)
-   - `descriptors.py`: Route descriptors for parameter routing
+   - `descriptors.py`: Route descriptors with capability requirements
    - `base.py`: ToolSpec base class with dataclass-like definitions
-   - `definitions.py`: Tool definitions for all models
-   - `executor.py`: Orchestrates tool execution with component delegation
+   - `autogen.py`: Automatic tool generation from adapter blueprints
+   - `executor.py`: Orchestrates tool execution with capability validation
+   - `capability_validator.py`: Validates parameters against model capabilities
+   - `factories.py`: Dynamic tool class generation
    - `integration.py`: FastMCP integration layer
 
 3. **Server** (`mcp_the_force/server.py`)
@@ -125,6 +128,35 @@ pytest tests/e2e_dind -v               # Docker-in-Docker E2E tests
    - `prompt_builder.py`: Smart context inlining vs vector store routing
    - `vector_store.py`: OpenAI vector store integration for RAG
    - `token_counter.py`: Token counting for context management
+
+### Protocol-Based Adapter Architecture
+
+The system uses a protocol-based architecture with capability-aware validation:
+
+```python
+# Each adapter implements this protocol
+class MCPAdapter(Protocol):
+    param_class: Type[Any]           # Links to parameter class
+    capabilities: AdapterCapabilities # What the model can do
+    
+    async def generate(
+        self,
+        prompt: str,
+        params: Any,              # Instance of param_class
+        ctx: CallContext,
+        *,
+        tool_dispatcher: ToolDispatcher,
+        **kwargs: Any
+    ) -> Dict[str, Any]:
+        """Generate response from the model."""
+        ...
+```
+
+**Key Design Principles:**
+1. **ONE central registry**: Only `adapters/registry.py` lists adapters
+2. **Self-contained adapters**: Each adapter package owns its complete definition
+3. **Type-safe validation**: Lambda-based capability requirements, no magic strings
+4. **Single source of truth**: Each adapter has one `definitions.py` file
 
 ### Configuration System
 
@@ -228,58 +260,208 @@ else:
 
 ## 🔧 Extending the System
 
-### Adding a New Tool
-
-Create a new tool by defining a class with the `@tool` decorator:
-
-```python
-@tool
-class ChatWithMyModel(ToolSpec):
-    """Description of what this tool does."""
-    
-    # Model configuration
-    model_name = "gpt-4"
-    adapter_class = "openai"
-    context_window = 100_000
-    timeout = 300
-    
-    # Define parameters with routing
-    instructions: str = Route.prompt(pos=0, description="Task instructions")
-    output_format: str = Route.prompt(pos=1)
-    context: List[str] = Route.prompt(pos=2)
-    temperature: float = Route.adapter(default=0.7)
-    session_id: Optional[str] = Route.session()
-```
-
 ### Adding a New Adapter
 
-1. Create adapter class inheriting from `BaseAdapter`
-2. Implement the `generate()` method
-3. Add configuration in Settings model
-4. Register adapter class in the tool definition
+Adding support for a new AI provider (e.g., Anthropic Claude) involves creating a self-contained adapter package:
 
-Example:
+#### 1. Create the adapter package structure
+```
+mcp_the_force/adapters/anthropic/
+├── __init__.py
+├── adapter.py          # MCPAdapter implementation
+└── definitions.py      # Single source of truth
+```
+
+#### 2. Create `definitions.py` (Single source of truth)
 ```python
-class MyAdapter(BaseAdapter):
+# adapters/anthropic/definitions.py
+
+from typing import Dict, Any, Optional
+from dataclasses import dataclass
+
+from ..params import BaseToolParams
+from ..capabilities import AdapterCapabilities
+from ...tools.descriptors import Route
+from ...tools.blueprint import ToolBlueprint
+from ...tools.blueprint_registry import register_blueprints
+
+# Parameter class with capability requirements
+class AnthropicToolParams(BaseToolParams):
+    """Anthropic-specific parameters."""
+    
+    temperature: float = Route.adapter(
+        default=0.7,
+        description="Model temperature",
+        requires_capability=lambda c: c.supports_temperature,
+    )
+    
+    max_tokens: int = Route.adapter(
+        default=4096,
+        description="Maximum tokens to generate",
+    )
+
+# Capability definitions
+@dataclass
+class ClaudeCapabilities(AdapterCapabilities):
+    provider: str = "anthropic"
+    model_family: str = "claude"
+    supports_temperature: bool = True
+    supports_tools: bool = True
+    max_context_window: int = 200_000
+
+@dataclass
+class Claude3OpusCapabilities(ClaudeCapabilities):
+    model_name: str = "claude-3-opus"
+    description: str = "Most capable Claude model"
+
+# Model registry
+ANTHROPIC_MODEL_CAPABILITIES = {
+    "claude-3-opus": Claude3OpusCapabilities(),
+}
+
+# Auto-generate and register blueprints
+def _generate_and_register_blueprints():
+    blueprints = []
+    for model_name, capabilities in ANTHROPIC_MODEL_CAPABILITIES.items():
+        blueprint = ToolBlueprint(
+            model_name=model_name,
+            adapter_key="anthropic",
+            param_class=AnthropicToolParams,
+            description=capabilities.description,
+            timeout=600,
+            context_window=capabilities.max_context_window,
+            tool_type="chat",
+        )
+        blueprints.append(blueprint)
+    register_blueprints(blueprints)
+
+_generate_and_register_blueprints()
+```
+
+#### 3. Implement the adapter
+```python
+# adapters/anthropic/adapter.py
+
+from ..protocol import CallContext, ToolDispatcher
+from .definitions import AnthropicToolParams, ANTHROPIC_MODEL_CAPABILITIES
+
+class AnthropicAdapter:
+    """Anthropic adapter implementing MCPAdapter protocol."""
+    
+    param_class = AnthropicToolParams
+    
     def __init__(self, model_name: str):
+        if model_name not in ANTHROPIC_MODEL_CAPABILITIES:
+            raise ValueError(f"Unknown model: {model_name}")
+            
         self.model_name = model_name
-        self.client = MyAPIClient()
+        self.capabilities = ANTHROPIC_MODEL_CAPABILITIES[model_name]
+        self.display_name = f"Anthropic {model_name}"
     
     async def generate(
         self,
         prompt: str,
-        temperature: float = 0.7,
-        session_id: Optional[str] = None,
-        structured_output_schema: Optional[Dict] = None,
+        params: AnthropicToolParams,
+        ctx: CallContext,
+        *,
+        tool_dispatcher: ToolDispatcher,
         **kwargs
-    ) -> str:
+    ) -> Dict[str, Any]:
         # Implement your API call
-        response = await self.client.generate(
-            prompt=prompt,
+        response = await self.client.messages.create(
             model=self.model_name,
-            temperature=temperature
+            messages=[{"role": "user", "content": prompt}],
+            temperature=params.temperature,
+            max_tokens=params.max_tokens,
         )
-        return response.text
+        return {"content": response.content}
+```
+
+#### 4. Set up the package `__init__.py`
+```python
+# adapters/anthropic/__init__.py
+
+from .adapter import AnthropicAdapter
+# This import triggers blueprint registration!
+from . import definitions  # noqa: F401
+from .definitions import ANTHROPIC_MODEL_CAPABILITIES
+
+__all__ = ["AnthropicAdapter", "ANTHROPIC_MODEL_CAPABILITIES"]
+```
+
+#### 5. Add ONE line to the central registry
+```python
+# adapters/registry.py
+_ADAPTER_REGISTRY: Dict[str, Tuple[str, str]] = {
+    "openai": ("mcp_the_force.adapters.openai.adapter", "OpenAIProtocolAdapter"),
+    "google": ("mcp_the_force.adapters.google.adapter", "GeminiAdapter"),
+    "xai": ("mcp_the_force.adapters.xai.adapter", "GrokAdapter"),
+    "anthropic": ("mcp_the_force.adapters.anthropic.adapter", "AnthropicAdapter"),  # ADD THIS
+}
+```
+
+**That's it!** The system automatically generates tool classes and validates parameters.
+
+### Adding Models to Existing Adapters
+
+To add a new model (e.g., GPT-5) to an existing adapter, only edit `definitions.py`:
+
+```python
+# adapters/openai/definitions.py
+
+# Add capability class
+@dataclass
+class GPT5Capabilities(OpenAIBaseCapabilities):
+    model_name: str = "gpt-5"
+    max_context_window: int = 2_000_000
+    description: str = "Next generation GPT"
+    supports_reasoning_effort: bool = True
+
+# Add to registry
+OPENAI_MODEL_CAPABILITIES = {
+    # ... existing models ...
+    "gpt-5": GPT5Capabilities(),
+}
+```
+
+### Adding New Parameters
+
+Add parameters with capability requirements in `definitions.py`:
+
+```python
+class OpenAIToolParams(BaseToolParams):
+    # ... existing parameters ...
+    
+    new_param: str = Route.adapter(
+        default="value",
+        description="New parameter description",
+        requires_capability=lambda c: c.supports_new_feature,
+    )
+```
+
+Then update capability classes to define `supports_new_feature`.
+
+### How Tools Are Generated
+
+Tools are automatically generated from blueprints:
+
+1. **At startup**: `tools/autogen.py` imports all adapters
+2. **Blueprint registration**: Each adapter's `definitions.py` registers blueprints
+3. **Tool generation**: `factories.py` creates tool classes like `ChatWithClaude3Opus`
+4. **Capability extraction**: Capabilities are retrieved from the adapter's definitions
+5. **Registration**: Tools are registered with the MCP server
+
+### Parameter Validation Flow
+
+```
+User provides parameters
+    ↓
+ParameterValidator (type checking)
+    ↓
+CapabilityValidator (model-specific checks)
+    ↓
+Clear error if unsupported:
+"Parameter 'temperature' is not supported by model 'o3' because its 'supports_temperature' is False"
 ```
 
 ### Adding Memory Sources

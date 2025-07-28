@@ -150,7 +150,9 @@ class TestBasicMCP:
             assert len(data["largest_files"]) == 1
             assert any("pyproject.toml" in f["path"] for f in data["largest_files"])
 
-    async def test_search_project_history_callable(self, mcp_server, mock_env):
+    async def test_search_project_history_callable(
+        self, mcp_server, mock_env, mock_openai_factory
+    ):
         """Test search_project_history tool via MCP."""
         from fastmcp import Client
         from fastmcp.client import FastMCPTransport

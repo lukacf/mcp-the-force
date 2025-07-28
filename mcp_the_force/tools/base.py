@@ -25,10 +25,13 @@ class ToolSpec:
 
     # Model configuration (to be overridden by subclasses)
     model_name: str = ""
-    adapter_class: str = ""
+    adapter_class: str | None = ""
     context_window: int = 0
-    timeout: int = 300
+    timeout: int = 600  # Default timeout 10 minutes
     description: str = ""
+
+    # LocalService class (optional, for utility tools)
+    service_cls: type | None = None
 
     # Prompt template (optional, uses default if not provided)
     prompt_template: str | None = None
@@ -36,13 +39,17 @@ class ToolSpec:
     @classmethod
     def get_model_config(cls) -> Dict[str, Any]:
         """Get model configuration from class attributes."""
-        return {
+        config = {
             "model_name": cls.model_name,
             "adapter_class": cls.adapter_class,
             "context_window": cls.context_window,
             "timeout": cls.timeout,
-            "description": cls.description or cls.__doc__ or "",
+            "description": cls.description,
         }
+        # Include service_cls if defined (for LocalService pattern)
+        if hasattr(cls, "service_cls") and cls.service_cls is not None:
+            config["service_cls"] = cls.service_cls
+        return config
 
     @classmethod
     def get_parameters(cls) -> Dict[str, Dict[str, Any]]:
@@ -62,6 +69,7 @@ class ToolSpec:
                     "default": None if value.default is _NO_DEFAULT else value.default,
                     "description": value.description,
                     "type": hints.get(name, Any),
+                    "requires_capability": value.requires_capability,
                 }
 
                 # Extract type information
