@@ -258,7 +258,9 @@ class TestDescribeSessionService:
         temp_session = mock_set_session.call_args[0][0]
         assert temp_session.session_id.startswith("temp-summary-")
         assert temp_session.project == project_name
-        assert temp_session.tool == "chat_with_o3"
+        assert (
+            temp_session.tool == "chat_with_gemini25_flash"
+        )  # Should use summarization model
 
         # Verify executor was called with the temp session and model
         mock_executor.assert_called_once()
