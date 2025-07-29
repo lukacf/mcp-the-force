@@ -97,7 +97,9 @@ class MCPConfig(BaseModel):
 class SessionConfig(BaseModel):
     """Session management configuration."""
 
-    ttl_seconds: int = Field(3600, description="Session TTL in seconds", ge=60)
+    ttl_seconds: int = Field(
+        15552000, description="Session TTL in seconds (default: 6 months)", ge=60
+    )
     db_path: str = Field(".mcp_sessions.sqlite3", description="Session database path")
     cleanup_probability: float = Field(
         0.01, description="Cleanup probability", ge=0.0, le=1.0

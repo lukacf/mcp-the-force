@@ -3,6 +3,7 @@
 import pytest
 import time
 import os
+import json
 from mcp_the_force.local_services.list_sessions import ListSessionsService
 from mcp_the_force.unified_session_cache import UnifiedSession, UnifiedSessionCache
 
@@ -239,9 +240,17 @@ class TestDescribeSessionService:
             "mcp_the_force.unified_session_cache.UnifiedSessionCache.set_summary"
         )
 
-        # Mock executor to return a summary
+        # Mock executor to return a JSON summary
         mock_executor = mocker.patch("mcp_the_force.tools.executor.executor.execute")
-        mock_executor.return_value = "This is a generated summary of the session."
+        mock_json_summary = json.dumps(
+            {
+                "one_liner": "Generated summary of test session",
+                "summary": "This is a generated summary of the session.",
+                "session_type": "minimal",
+                "custom": "Being concise as requested",
+            }
+        )
+        mock_executor.return_value = mock_json_summary
 
         service = DescribeSessionService()
         result = await service.execute(
@@ -250,8 +259,8 @@ class TestDescribeSessionService:
             extra_instructions="Be concise",
         )
 
-        # Should return the generated summary
-        assert result == "This is a generated summary of the session."
+        # Should return the generated JSON summary
+        assert result == mock_json_summary
 
         # Verify set_session was called with a temp session
         mock_set_session.assert_called_once()
@@ -274,7 +283,7 @@ class TestDescribeSessionService:
             project_name,
             "chat_with_o3",
             "test-session-1",
-            "This is a generated summary of the session.",
+            mock_json_summary,
         )
 
     async def test_describe_session_uses_temp_session_for_history(
@@ -296,7 +305,14 @@ class TestDescribeSessionService:
 
         # Spy on the executor
         mock_executor = mocker.patch("mcp_the_force.tools.executor.executor.execute")
-        mock_executor.return_value = "Summary"
+        mock_executor.return_value = json.dumps(
+            {
+                "one_liner": "Summary",
+                "summary": "A test summary",
+                "session_type": "minimal",
+                "custom": "",
+            }
+        )
 
         service = DescribeSessionService()
         await service.execute(session_id="test-session-1")
@@ -310,7 +326,7 @@ class TestDescribeSessionService:
         assert (
             "Hello" not in instructions
         ), "Conversation history should NOT be in instructions"
-        assert "Summarize this conversation" in instructions
+        assert "Generate a structured JSON summary" in instructions
 
         # Verify a temp session was created with the history
         mock_set_session.assert_called()
@@ -335,7 +351,14 @@ class TestDescribeSessionService:
 
         # Spy on executor
         mock_executor = mocker.patch("mcp_the_force.tools.executor.executor.execute")
-        mock_executor.return_value = "Summary"
+        mock_executor.return_value = json.dumps(
+            {
+                "one_liner": "Summary",
+                "summary": "A test summary",
+                "session_type": "minimal",
+                "custom": "",
+            }
+        )
 
         service = DescribeSessionService()
         await service.execute(session_id="test-session-1")
@@ -347,3 +370,63 @@ class TestDescribeSessionService:
         # THE KEY TEST: Verify context parameter exists
         assert "context" in kwargs, "Missing required parameter: context"
         assert isinstance(kwargs["context"], list), "Context should be a list"
+
+    async def test_describe_session_rejects_non_gemini_models(
+        self, populated_session_db, mocker
+    ):
+        """Test that describe_session only accepts Gemini models for summarization."""
+        from mcp_the_force.local_services.describe_session import DescribeSessionService
+
+        service = DescribeSessionService()
+
+        # Test with OpenAI model
+        result = await service.execute(
+            session_id="test-session-1", summarization_model="chat_with_o3"
+        )
+        assert (
+            result
+            == "Error: Only Gemini models are supported for summarization. Got 'chat_with_o3'"
+        )
+
+        # Test with GPT model
+        result = await service.execute(
+            session_id="test-session-1", summarization_model="chat_with_gpt41"
+        )
+        assert (
+            result
+            == "Error: Only Gemini models are supported for summarization. Got 'chat_with_gpt41'"
+        )
+
+        # Test with Grok model
+        result = await service.execute(
+            session_id="test-session-1", summarization_model="chat_with_grok4"
+        )
+        assert (
+            result
+            == "Error: Only Gemini models are supported for summarization. Got 'chat_with_grok4'"
+        )
+
+        # Test that Gemini models are accepted (mock to avoid actual call)
+        # Mock get_summary to return None (cache miss)
+        mock_get_summary = mocker.patch(
+            "mcp_the_force.unified_session_cache.UnifiedSessionCache.get_summary"
+        )
+        mock_get_summary.return_value = None
+
+        # Mock executor to return a summary
+        mock_executor = mocker.patch("mcp_the_force.tools.executor.executor.execute")
+        test_summary = json.dumps(
+            {
+                "one_liner": "Test summary",
+                "summary": "Test",
+                "session_type": "minimal",
+                "custom": "",
+            }
+        )
+        mock_executor.return_value = test_summary
+
+        result = await service.execute(
+            session_id="test-session-1", summarization_model="chat_with_gemini25_pro"
+        )
+        assert not result.startswith("Error: Only Gemini models are supported")
+        assert result == test_summary
