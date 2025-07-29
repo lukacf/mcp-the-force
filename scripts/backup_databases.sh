@@ -1,7 +1,15 @@
 #!/bin/bash
 # Backup SQLite databases to prevent data loss
 
-BACKUP_DIR="$HOME/.mcp_backups"
+# Get backup directory from config, with fallback
+BACKUP_DIR_FROM_CONFIG=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && python -c "
+try:
+    from mcp_the_force.config import get_settings
+    print(get_settings().backup.path)
+except:
+    pass
+" 2>/dev/null)
+BACKUP_DIR="${BACKUP_DIR_FROM_CONFIG:-$HOME/.mcp_backups}"
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # Create backup directory if it doesn't exist

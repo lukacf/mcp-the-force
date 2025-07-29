@@ -136,6 +136,15 @@ class FeaturesConfig(BaseModel):
     pass
 
 
+class BackupConfig(BaseModel):
+    """Configuration for backup scripts."""
+
+    path: str = Field(
+        default_factory=lambda: str(Path.home() / ".mcp_backups"),
+        description="Directory for database backups",
+    )
+
+
 class SecurityConfig(BaseModel):
     """Security configuration."""
 
@@ -211,6 +220,7 @@ class Settings(BaseSettings):
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
     tools: ToolsConfig = Field(default_factory=ToolsConfig)
     features: FeaturesConfig = Field(default_factory=FeaturesConfig)
+    backup: BackupConfig = Field(default_factory=BackupConfig)
     security: SecurityConfig = Field(default_factory=SecurityConfig)
     services: ServicesConfig = Field(default_factory=ServicesConfig)
     dev: DevConfig = Field(default_factory=DevConfig)
