@@ -122,6 +122,19 @@ class O3Capabilities(OSeriesCapabilities):
 
 
 @dataclass
+class CodexMiniCapabilities(OSeriesCapabilities):
+    """OpenAI codex-mini model capabilities (o4-mini optimized for coding)."""
+
+    model_name: str = "codex-mini-latest"
+    max_context_window: int = 200_000
+    description: str = "Fast coding-specialized reasoning model (200k context)"
+    parallel_function_calls: int = -1  # Unlimited
+    supports_web_search: bool = False  # Codex-mini doesn't support web search
+    supports_live_search: bool = False  # Codex-mini doesn't support live search
+    web_search_tool: str = ""  # No web search tool for codex-mini
+
+
+@dataclass
 class O3ProCapabilities(OSeriesCapabilities):
     """OpenAI o3-pro model capabilities."""
 
@@ -133,16 +146,6 @@ class O3ProCapabilities(OSeriesCapabilities):
     force_background: bool = True  # Always use background mode
     supports_streaming: bool = False  # No streaming for o3-pro
     default_reasoning_effort: str = "high"
-    parallel_function_calls: int = -1  # Unlimited
-
-
-@dataclass
-class O4MiniCapabilities(OSeriesCapabilities):
-    """OpenAI o4-mini model capabilities."""
-
-    model_name: str = "o4-mini"
-    max_context_window: int = 200_000
-    description: str = "Fast reasoning model (200k context)"
     parallel_function_calls: int = -1  # Unlimited
 
 
@@ -204,7 +207,7 @@ class O4MiniDeepResearchCapabilities(DeepResearchCapabilities):
 OPENAI_MODEL_CAPABILITIES = {
     "o3": O3Capabilities(),
     "o3-pro": O3ProCapabilities(),
-    "o4-mini": O4MiniCapabilities(),
+    "codex-mini": CodexMiniCapabilities(),
     "gpt-4.1": GPT41Capabilities(),
     "o3-deep-research": O3DeepResearchCapabilities(),
     "o4-mini-deep-research": O4MiniDeepResearchCapabilities(),
@@ -241,6 +244,11 @@ def _generate_and_register_blueprints():
         else:
             tool_type = "chat"
 
+        # Use friendly name for codex-mini
+        tool_name = None
+        if model_name == "codex-mini":
+            tool_name = "codex_mini"  # Keep the friendly name
+
         blueprint = ToolBlueprint(
             model_name=model_name,
             adapter_key="openai",
@@ -249,6 +257,7 @@ def _generate_and_register_blueprints():
             timeout=_calculate_timeout(model_name),
             context_window=capabilities.max_context_window,
             tool_type=tool_type,
+            tool_name=tool_name,
         )
         blueprints.append(blueprint)
 

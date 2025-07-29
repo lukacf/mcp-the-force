@@ -106,7 +106,7 @@ class OpenAIProtocolAdapter:
 
             # Build request data for FlowOrchestrator using Responses API format
             request_data = {
-                "model": self.model_name,
+                "model": self.capabilities.model_name,  # Use the actual model name from capabilities
                 "input": prompt,
                 "instructions": instructions,
                 "previous_response_id": previous_response_id,

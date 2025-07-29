@@ -16,6 +16,9 @@ The server looks for configuration files in different locations depending on how
 - **Files**: `./config.yaml` and `./secrets.yaml`
 - **Note**: This is the default when no environment variables are set
 
+### Development Mode Detection
+When running from source with `uv run -- mcp-the-force`, the server automatically detects if it's in a development environment by checking for `config.yaml` in the current directory or up to 3 parent directories. If found, it will use the local configuration files instead of the XDG config directory. This allows developers to use project-specific configuration without setting environment variables.
+
 ### Custom locations
 - Set `MCP_CONFIG_FILE` and `MCP_SECRETS_FILE` environment variables to use any location
 - These environment variables always take precedence over defaults
@@ -96,14 +99,21 @@ Direct Gemini API configuration (alternative to Vertex AI).
 | `xai.max_output_tokens` | `MCP__XAI__MAX_OUTPUT_TOKENS` | `int` | `65536` | Default maximum number of tokens the model can generate. |
 | `xai.max_function_calls` | `MCP__XAI__MAX_FUNCTION_CALLS` | `int` | `500` | Maximum number of function call rounds for agentic workflows. |
 
-### Other Providers (`anthropic`, `litellm`)
-
-The configuration structure for `anthropic` and `litellm` is identical to the other providers, based on the `ProviderConfig` model.
+### Anthropic (`anthropic`)
 
 | YAML Path | Environment Variable | Type | Default Value | Description |
 | :--- | :--- | :--- | :--- | :--- |
-| `anthropic.enabled` | `MCP__ANTHROPIC__ENABLED` | `bool` | `True` | Enable or disable the Anthropic provider. |
-| `anthropic.api_key`| `MCP__ANTHROPIC__API_KEY` or `ANTHROPIC_API_KEY` | `string` | `null` | **Secret.** Your Anthropic API key. |
+| `anthropic.enabled` | `MCP__ANTHROPIC__ENABLED` | `bool` | `True` | Enable or disable the Anthropic Claude provider. |
+| `anthropic.api_key` | `MCP__ANTHROPIC__API_KEY` or `ANTHROPIC_API_KEY` | `string` | `null` | **Secret.** Your Anthropic API key. |
+| `anthropic.max_output_tokens` | `MCP__ANTHROPIC__MAX_OUTPUT_TOKENS` | `int` | `65536` | Default maximum number of tokens the model can generate. |
+| `anthropic.max_function_calls` | `MCP__ANTHROPIC__MAX_FUNCTION_CALLS` | `int` | `500` | Maximum number of function call rounds for agentic workflows. |
+
+### LiteLLM (`litellm`)
+
+The configuration structure for `litellm` is identical to the other providers, based on the `ProviderConfig` model.
+
+| YAML Path | Environment Variable | Type | Default Value | Description |
+| :--- | :--- | :--- | :--- | :--- |
 | `litellm.enabled` | `MCP__LITELLM__ENABLED` | `bool` | `True` | Enable or disable the LiteLLM provider. |
 | `litellm.api_key` | `MCP__LITELLM__API_KEY` | `string` | `null` | **Secret.** Your LiteLLM API key. |
 

@@ -67,7 +67,7 @@ class ToolHandler:
         async with scope_manager.scope(scope_id):
             try:
                 if tool_name == "search_project_history":
-                    return await self._execute_memory_search(tool_args)
+                    return await self._execute_memory_search(tool_args, session_id)
                 elif tool_name == "search_task_files":
                     return await self._execute_task_files_search(
                         tool_args, vector_store_ids
@@ -80,12 +80,15 @@ class ToolHandler:
                 logger.error(f"Tool '{tool_name}' execution failed: {e}", exc_info=True)
                 raise
 
-    async def _execute_memory_search(self, tool_args: Dict[str, Any]) -> str:
+    async def _execute_memory_search(
+        self, tool_args: Dict[str, Any], session_id: Optional[str] = None
+    ) -> str:
         """Execute project history search tool."""
         from ..tools.search_history import SearchHistoryService
 
         history_service = SearchHistoryService()
-        return await history_service.execute(**tool_args)
+        # Pass session_id for deduplication
+        return await history_service.execute(session_id=session_id, **tool_args)
 
     async def _execute_task_files_search(
         self, tool_args: Dict[str, Any], vector_store_ids: Optional[List[str]]

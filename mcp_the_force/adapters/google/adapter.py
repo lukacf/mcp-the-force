@@ -124,8 +124,25 @@ class GeminiAdapter(LiteLLMBaseAdapter):
     def _validate_environment(self):
         """Validate Gemini/Vertex AI authentication in the correct order."""
         settings = get_settings()
+        logger.debug(f"[DEBUG] Settings ID: {id(settings)}, Working dir: {os.getcwd()}")
+
+        # Debug logging
+        logger.debug("[DEBUG] Validating Gemini environment:")
+        logger.debug(
+            f"[DEBUG] vertex.adc_credentials_path = {settings.vertex.adc_credentials_path}"
+        )
+        logger.debug(f"[DEBUG] vertex.project = {settings.vertex.project}")
+        logger.debug(f"[DEBUG] vertex.location = {settings.vertex.location}")
+        logger.debug(f"[DEBUG] Has gemini attr? {hasattr(settings, 'gemini')}")
+        if hasattr(settings, "gemini"):
+            logger.debug(
+                f"[DEBUG] gemini.api_key = {'SET' if settings.gemini.api_key else 'NOT SET'}"
+            )
 
         # 1. Service Account (via adc_credentials_path)
+        logger.debug(
+            f"[DEBUG] Checking service account: adc={bool(settings.vertex.adc_credentials_path)}, project={bool(settings.vertex.project)}, location={bool(settings.vertex.location)}"
+        )
         if (
             settings.vertex.adc_credentials_path
             and settings.vertex.project
@@ -134,6 +151,7 @@ class GeminiAdapter(LiteLLMBaseAdapter):
             self._auth_method = "service_account"
             logger.info("Using Vertex AI with specified ADC credentials.")
             return
+        logger.debug("[DEBUG] Service account check failed, moving to next method")
 
         # 2. Gemini API Key
         if settings.gemini and settings.gemini.api_key:

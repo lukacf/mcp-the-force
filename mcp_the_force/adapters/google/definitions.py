@@ -161,6 +161,18 @@ def _calculate_timeout(model_name: str) -> int:
         return 300  # Default 5 minutes
 
 
+def _get_friendly_name(model_name: str) -> str:
+    """Generate a friendly tool name from the model name.
+
+    Examples:
+    - 'gemini-2.5-pro' -> 'chat_with_gemini25_pro'
+    - 'gemini-2.5-flash' -> 'chat_with_gemini25_flash'
+    """
+    # Replace dots and hyphens with underscores
+    clean_name = model_name.replace(".", "").replace("-", "_")
+    return f"chat_with_{clean_name}"
+
+
 def _generate_and_register_blueprints():
     """Generate and register blueprints for all Gemini models."""
     blueprints = []
@@ -168,6 +180,7 @@ def _generate_and_register_blueprints():
     for model_name, capabilities in GEMINI_MODEL_CAPABILITIES.items():
         blueprint = ToolBlueprint(
             model_name=model_name,
+            tool_name=_get_friendly_name(model_name),
             adapter_key="google",
             param_class=GeminiToolParams,
             description=capabilities.description,

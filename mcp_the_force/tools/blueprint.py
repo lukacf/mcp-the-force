@@ -15,3 +15,4 @@ class ToolBlueprint:
     timeout: int
     context_window: int
     tool_type: str = "chat"  # or "research"
+    tool_name: str | None = None  # Optional friendly name for the tool

@@ -98,30 +98,49 @@ def make_chat_tool(bp: ToolBlueprint) -> Type[ToolSpec]:
                 if name not in attrs:
                     attrs[name] = value
 
-    # Generate class name (e.g., ChatWithGPT4_1)
-    # Clean up model name for valid Python identifier
-    clean_model_name = (
-        bp.model_name.replace("-", "_").replace(".", "_").replace(" ", "_")
-    )
-    # Convert to title case but preserve existing uppercase
-    parts = clean_model_name.split("_")
-    formatted_parts = []
-    for part in parts:
-        if part.isupper():  # Keep fully uppercase parts (like GPT)
-            formatted_parts.append(part)
+    # Generate class name from tool_name if provided, otherwise from model_name
+    if bp.tool_name:
+        # If tool_name is provided, use it directly as the base for class name
+        # Remove prefix like "chat_with_" to get the core name
+        if bp.tool_name.startswith("chat_with_"):
+            core_name = bp.tool_name[10:]  # Remove "chat_with_"
         else:
-            formatted_parts.append(part.title())
-
-    class_name = f"ChatWith{''.join(formatted_parts)}"
+            core_name = bp.tool_name
+        # Convert to CamelCase
+        parts = core_name.split("_")
+        formatted_parts = []
+        for part in parts:
+            if part.isupper():  # Keep fully uppercase parts
+                formatted_parts.append(part)
+            else:
+                formatted_parts.append(part.title())
+        class_name = f"ChatWith{''.join(formatted_parts)}"
+    else:
+        # Fallback to original logic using model_name
+        clean_model_name = (
+            bp.model_name.replace("-", "_").replace(".", "_").replace(" ", "_")
+        )
+        parts = clean_model_name.split("_")
+        formatted_parts = []
+        for part in parts:
+            if part.isupper():  # Keep fully uppercase parts (like GPT)
+                formatted_parts.append(part)
+            else:
+                formatted_parts.append(part.title())
+        class_name = f"ChatWith{''.join(formatted_parts)}"
 
     # Create and register the class
     cls = type(class_name, (ToolSpec,), attrs)
-    registered_cls: Type[ToolSpec] = tool(cls)
+    registered_cls: Type[ToolSpec] = tool(cls)  # type: ignore[assignment]
+
+    # Ensure it's a proper type for mypy
+    assert isinstance(registered_cls, type) and issubclass(registered_cls, ToolSpec)
 
     # After registration, update the metadata with capabilities
     if hasattr(registered_cls, "_tool_metadata"):
         capabilities = _get_model_capabilities(bp.adapter_key, bp.model_name)
-        registered_cls._tool_metadata.capabilities = capabilities
+        if registered_cls._tool_metadata is not None:
+            registered_cls._tool_metadata.capabilities = capabilities
 
     return registered_cls
 
@@ -163,27 +182,48 @@ def make_research_tool(bp: ToolBlueprint) -> Type[ToolSpec]:
                 if name not in attrs:
                     attrs[name] = value
 
-    # Generate class name (e.g., ResearchWithO3DeepResearch)
-    clean_model_name = (
-        bp.model_name.replace("-", "_").replace(".", "_").replace(" ", "_")
-    )
-    parts = clean_model_name.split("_")
-    formatted_parts = []
-    for part in parts:
-        if part.isupper():
-            formatted_parts.append(part)
+    # Generate class name from tool_name if provided, otherwise from model_name
+    if bp.tool_name:
+        # If tool_name is provided, use it directly as the base for class name
+        # Remove prefix like "research_with_" to get the core name
+        if bp.tool_name.startswith("research_with_"):
+            core_name = bp.tool_name[14:]  # Remove "research_with_"
         else:
-            formatted_parts.append(part.title())
-
-    class_name = f"ResearchWith{''.join(formatted_parts)}"
+            core_name = bp.tool_name
+        # Convert to CamelCase
+        parts = core_name.split("_")
+        formatted_parts = []
+        for part in parts:
+            if part.isupper():
+                formatted_parts.append(part)
+            else:
+                formatted_parts.append(part.title())
+        class_name = f"ResearchWith{''.join(formatted_parts)}"
+    else:
+        # Fallback to original logic using model_name
+        clean_model_name = (
+            bp.model_name.replace("-", "_").replace(".", "_").replace(" ", "_")
+        )
+        parts = clean_model_name.split("_")
+        formatted_parts = []
+        for part in parts:
+            if part.isupper():
+                formatted_parts.append(part)
+            else:
+                formatted_parts.append(part.title())
+        class_name = f"ResearchWith{''.join(formatted_parts)}"
 
     # Create and register the class
     cls = type(class_name, (ToolSpec,), attrs)
-    registered_cls: Type[ToolSpec] = tool(cls)
+    registered_cls: Type[ToolSpec] = tool(cls)  # type: ignore[assignment]
+
+    # Ensure it's a proper type for mypy
+    assert isinstance(registered_cls, type) and issubclass(registered_cls, ToolSpec)
 
     # After registration, update the metadata with capabilities
     if hasattr(registered_cls, "_tool_metadata"):
         capabilities = _get_model_capabilities(bp.adapter_key, bp.model_name)
-        registered_cls._tool_metadata.capabilities = capabilities
+        if registered_cls._tool_metadata is not None:
+            registered_cls._tool_metadata.capabilities = capabilities
 
     return registered_cls

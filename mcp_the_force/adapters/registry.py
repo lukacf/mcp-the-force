@@ -7,6 +7,7 @@ _ADAPTER_REGISTRY: Dict[str, Tuple[str, str]] = {
     "openai": ("mcp_the_force.adapters.openai.adapter", "OpenAIProtocolAdapter"),
     "google": ("mcp_the_force.adapters.google.adapter", "GeminiAdapter"),
     "xai": ("mcp_the_force.adapters.xai.adapter", "GrokAdapter"),
+    "anthropic": ("mcp_the_force.adapters.anthropic.adapter", "AnthropicAdapter"),
 }
 
 
@@ -26,7 +27,7 @@ def get_adapter_class(key: str) -> Type[Any]:
 
     module_path, class_name = _ADAPTER_REGISTRY[key]
     module = importlib.import_module(module_path)
-    return getattr(module, class_name)
+    return getattr(module, class_name)  # type: ignore[no-any-return]
 
 
 def list_adapters() -> list[str]:
