@@ -127,13 +127,17 @@ class SearchHistoryService:
         query = kwargs.get("query", "")
         max_results = int(kwargs.get("max_results", 40))
         store_types = kwargs.get("store_types", None)
+        session_id = kwargs.get("session_id", None)
 
         # Convert single query to list for the search method
         queries = [query] if query else []
 
         # Call the search method
         result = await self.search(
-            queries=queries, max_results=max_results, store_types=store_types
+            queries=queries,
+            max_results=max_results,
+            store_types=store_types,
+            session_id=session_id,
         )
 
         # Format results as a string
@@ -279,14 +283,19 @@ class SearchHistoryService:
 
         # Apply session-based deduplication if session_id is provided
         if session_id and SearchHistoryService._deduplicator:
-            original_count = len(formatted_results)
-            formatted_results = await SearchHistoryService._deduplicator.filter_results(
-                session_id, formatted_results, self._get_content_hash
+            # Call deduplicate_results with proper parameters
+            deduplicated, duplicate_count = (
+                SearchHistoryService._deduplicator.deduplicate_results(
+                    all_results=formatted_results,
+                    max_results=max_results,
+                    session_id=session_id,
+                    query=" AND ".join(queries) if queries else "",
+                )
             )
-            dedup_count = original_count - len(formatted_results)
-            if dedup_count > 0:
+            formatted_results = deduplicated
+            if duplicate_count > 0:
                 logger.info(
-                    f"[SEARCH_HISTORY] Deduplicated {dedup_count} results for session {session_id}"
+                    f"[SEARCH_HISTORY] Deduplicated {duplicate_count} results for session {session_id}"
                 )
 
         # Limit total results

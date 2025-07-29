@@ -173,6 +173,7 @@ def mock_env(monkeypatch):
     test_env = {
         "OPENAI_API_KEY": "test-openai-key",
         "XAI_API_KEY": "test-xai-key",
+        "ANTHROPIC_API_KEY": "test-anthropic-key",
         "VERTEX_PROJECT": "test-project",
         "VERTEX_LOCATION": "us-central1",
         "CONTEXT_PERCENTAGE": "0.85",
