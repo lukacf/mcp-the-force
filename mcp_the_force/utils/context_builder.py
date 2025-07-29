@@ -15,8 +15,9 @@ logger = logging.getLogger(__name__)
 def estimate_tokens(size_bytes: int) -> int:
     """Estimate token count from file size.
 
-    Uses a conservative heuristic of 2 bytes per token to account for
-    dense coding languages like JavaScript/TypeScript/Python.
+    Uses a heuristic of 3.5 bytes per token which is more accurate
+    for typical code files (Go, Python, JS, etc). The previous 2 bytes
+    per token was too conservative and caused unnecessary overflow.
 
     Args:
         size_bytes: File size in bytes
@@ -24,8 +25,9 @@ def estimate_tokens(size_bytes: int) -> int:
     Returns:
         Estimated token count
     """
-    # Conservative estimate: ~2 bytes per token (better for code files)
-    return max(1, size_bytes // 2)
+    # More accurate estimate: ~3.5 bytes per token for typical code
+    # This prevents unnecessary overflow when files actually fit
+    return max(1, int(size_bytes / 3.5))
 
 
 def sort_files_for_stable_list(file_paths: List[str]) -> List[str]:
