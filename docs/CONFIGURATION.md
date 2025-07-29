@@ -16,6 +16,9 @@ The server looks for configuration files in different locations depending on how
 - **Files**: `./config.yaml` and `./secrets.yaml`
 - **Note**: This is the default when no environment variables are set
 
+### Development Mode Detection
+When running from source with `uv run -- mcp-the-force`, the server automatically detects if it's in a development environment by checking for `config.yaml` in the current directory or up to 3 parent directories. If found, it will use the local configuration files instead of the XDG config directory. This allows developers to use project-specific configuration without setting environment variables.
+
 ### Custom locations
 - Set `MCP_CONFIG_FILE` and `MCP_SECRETS_FILE` environment variables to use any location
 - These environment variables always take precedence over defaults

@@ -27,7 +27,7 @@ class AnthropicBaseCapabilities(AdapterCapabilities):
 class Claude4OpusCapabilities(AnthropicBaseCapabilities):
     """Capabilities for Claude 4 Opus."""
 
-    model_name: str = "claude-4-opus"
+    model_name: str = "claude-opus-4-20250514"
     max_context_window: int = 200_000
     max_output_tokens: int = 32_000
     supports_reasoning_effort: bool = True
@@ -38,7 +38,7 @@ class Claude4OpusCapabilities(AnthropicBaseCapabilities):
 class Claude4SonnetCapabilities(AnthropicBaseCapabilities):
     """Capabilities for Claude 4 Sonnet."""
 
-    model_name: str = "claude-4-sonnet"
+    model_name: str = "claude-sonnet-4-20250514"
     max_context_window: int = 200_000
     max_output_tokens: int = 64_000
     supports_reasoning_effort: bool = True
@@ -51,7 +51,7 @@ class Claude4SonnetCapabilities(AnthropicBaseCapabilities):
 class Claude3OpusCapabilities(AnthropicBaseCapabilities):
     """Capabilities for Claude 3 Opus."""
 
-    model_name: str = "claude-3-opus"
+    model_name: str = "claude-3-opus-20240229"
     max_context_window: int = 200_000
     max_output_tokens: int = 8_000
     supports_reasoning_effort: bool = (
@@ -62,7 +62,7 @@ class Claude3OpusCapabilities(AnthropicBaseCapabilities):
 
 # Map of model names to their capability instances
 ANTHROPIC_MODEL_CAPABILITIES: Dict[str, AnthropicBaseCapabilities] = {
-    "claude-4-opus": Claude4OpusCapabilities(),
-    "claude-4-sonnet": Claude4SonnetCapabilities(),
-    "claude-3-opus": Claude3OpusCapabilities(),
+    "claude-opus-4-20250514": Claude4OpusCapabilities(),
+    "claude-sonnet-4-20250514": Claude4SonnetCapabilities(),
+    "claude-3-opus-20240229": Claude3OpusCapabilities(),
 }

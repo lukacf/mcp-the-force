@@ -16,7 +16,7 @@ class AnthropicAdapter(LiteLLMBaseAdapter):
 
     param_class = AnthropicToolParams
 
-    def __init__(self, model: str = "claude-4-opus"):
+    def __init__(self, model: str = "claude-opus-4-20250514"):
         """Initialize Anthropic adapter."""
         if model not in ANTHROPIC_MODEL_CAPABILITIES:
             raise ValueError(
@@ -62,7 +62,7 @@ class AnthropicAdapter(LiteLLMBaseAdapter):
         # Get base request params
         request_params: Dict[str, Any] = {
             "model": f"{self._get_model_prefix()}/{self.model_name}",
-            "messages": conversation_input,
+            "input": conversation_input,
         }
 
         # Add tools if provided
