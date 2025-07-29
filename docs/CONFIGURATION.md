@@ -2,6 +2,24 @@
 
 This document provides a comprehensive reference for all configuration settings available in the `mcp-the-force` server. Settings are managed via `config.yaml` and an optional `secrets.yaml` file, with environment variables taking the highest precedence.
 
+## Configuration File Locations
+
+The server looks for configuration files in different locations depending on how it's run:
+
+### When installed via uvx (recommended for users)
+- **Location**: `~/.config/mcp-the-force/` (follows XDG Base Directory specification)
+- **Files**: `config.yaml` and `secrets.yaml`
+- **Note**: The uvx wrapper automatically sets environment variables to point to this location
+
+### When running from source (for developers)
+- **Location**: Current working directory
+- **Files**: `./config.yaml` and `./secrets.yaml`
+- **Note**: This is the default when no environment variables are set
+
+### Custom locations
+- Set `MCP_CONFIG_FILE` and `MCP_SECRETS_FILE` environment variables to use any location
+- These environment variables always take precedence over defaults
+
 ## General Notes
 
 *   **Configuration Files**:
@@ -295,3 +313,13 @@ When a setting is defined in multiple places, the following precedence applies (
 2. **secrets.yaml** - Overrides config.yaml
 3. **config.yaml** - Overrides defaults
 4. **Built-in defaults** - Used when nothing else is specified
+
+### Important Note on File Locations
+
+The location of `config.yaml` and `secrets.yaml` depends on how you run the server:
+
+- **Via uvx (`mcp-the-force`)**: Always uses `~/.config/mcp-the-force/` regardless of local files
+- **Direct execution**: Uses files in current directory unless overridden by environment variables
+- **Custom**: Use `MCP_CONFIG_FILE` and `MCP_SECRETS_FILE` to specify any location
+
+This means if you have both `~/.config/mcp-the-force/config.yaml` and `./config.yaml`, which one is used depends on whether you run via uvx or directly.
