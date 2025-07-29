@@ -300,7 +300,7 @@ def mock_openai_factory(mock_openai_client, tmp_path, monkeypatch):
 
     with (
         patch(
-            "mcp_the_force.utils.vector_store.get_client",
+            "mcp_the_force.vectorstores.openai.client.get_openai_client",
             return_value=mock_openai_client,
         ),
         patch(
