@@ -60,6 +60,9 @@ class _SQLiteUnifiedSessionCache(BaseSQLiteCache):
             purge_probability=get_settings().session_cleanup_probability,
         )
 
+        # Create the session_summaries table
+        self._create_summaries_table()
+
     def _migrate_if_needed(self, db_path: str):
         """Check if old schema exists and migrate to new schema if needed."""
         import sqlite3
@@ -109,6 +112,23 @@ class _SQLiteUnifiedSessionCache(BaseSQLiteCache):
         finally:
             conn.close()
 
+    def _create_summaries_table(self):
+        """Create the session_summaries table for caching summaries."""
+        if self._conn is None:
+            raise RuntimeError("Database connection is not initialized")
+
+        with self._conn:
+            self._conn.execute("""
+                CREATE TABLE IF NOT EXISTS session_summaries (
+                    project TEXT NOT NULL,
+                    tool TEXT NOT NULL,
+                    session_id TEXT NOT NULL,
+                    summary TEXT NOT NULL,
+                    created_at INTEGER NOT NULL,
+                    PRIMARY KEY (project, tool, session_id)
+                )
+            """)
+
     async def get_session(
         self, project: str, tool: str, session_id: str
     ) -> Optional[UnifiedSession]:
@@ -157,6 +177,13 @@ class _SQLiteUnifiedSessionCache(BaseSQLiteCache):
         self._validate_session_id(session.session_id)
         now = int(time.time())
 
+        # Invalidate any cached summary when session is updated
+        await self._execute_async(
+            "DELETE FROM session_summaries WHERE project = ? AND tool = ? AND session_id = ?",
+            (session.project, session.tool, session.session_id),
+            fetch=False,
+        )
+
         # Serialize to JSON
         history_json = (
             orjson.dumps(session.history).decode("utf-8") if session.history else None
@@ -190,7 +217,29 @@ class _SQLiteUnifiedSessionCache(BaseSQLiteCache):
             (project, tool, session_id),
             fetch=False,
         )
-        logger.debug(f"Deleted session {project}/{tool}/{session_id}")
+
+    async def get_summary(
+        self, project: str, tool: str, session_id: str
+    ) -> Optional[str]:
+        """Get cached summary for a session."""
+        rows = await self._execute_async(
+            "SELECT summary FROM session_summaries WHERE project = ? AND tool = ? AND session_id = ?",
+            (project, tool, session_id),
+        )
+        return rows[0][0] if rows else None
+
+    async def set_summary(
+        self, project: str, tool: str, session_id: str, summary: str
+    ) -> None:
+        """Set cached summary for a session."""
+        await self._execute_async(
+            """
+            REPLACE INTO session_summaries (project, tool, session_id, summary, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (project, tool, session_id, summary, int(time.time())),
+            fetch=False,
+        )
 
 
 # Singleton pattern
@@ -236,6 +285,18 @@ class UnifiedSessionCache:
     async def delete_session(project: str, tool: str, session_id: str) -> None:
         """Delete a session."""
         await _get_instance().delete_session(project, tool, session_id)
+
+    @staticmethod
+    async def get_summary(project: str, tool: str, session_id: str) -> Optional[str]:
+        """Get cached summary for a session."""
+        return await _get_instance().get_summary(project, tool, session_id)
+
+    @staticmethod
+    async def set_summary(
+        project: str, tool: str, session_id: str, summary: str
+    ) -> None:
+        """Set cached summary for a session."""
+        await _get_instance().set_summary(project, tool, session_id, summary)
 
     # Convenience methods for history
     @staticmethod
