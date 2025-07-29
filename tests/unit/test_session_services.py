@@ -274,3 +274,58 @@ class TestDescribeSessionService:
             "test-session-1",
             "This is a generated summary of the session.",
         )
+
+    async def test_describe_session_passes_history_in_instructions(
+        self, populated_session_db, mocker
+    ):
+        """Test that describe_session includes conversation history in the instructions."""
+        from mcp_the_force.local_services.describe_session import DescribeSessionService
+
+        # Mock get_summary to return None (cache miss)
+        mock_get_summary = mocker.patch(
+            "mcp_the_force.unified_session_cache.UnifiedSessionCache.get_summary"
+        )
+        mock_get_summary.return_value = None
+
+        # Don't mock the executor - let's spy on it instead
+        mock_executor = mocker.patch("mcp_the_force.tools.executor.executor.execute")
+        mock_executor.return_value = "Summary"
+
+        service = DescribeSessionService()
+        await service.execute(session_id="test-session-1")
+
+        # Verify executor was called
+        mock_executor.assert_called_once()
+        kwargs = mock_executor.call_args[1]
+
+        # THE KEY TEST: Verify the instructions contain the conversation history
+        instructions = kwargs.get("instructions", "")
+        assert "Hello" in instructions, "Conversation history not found in instructions"
+        assert "Summarize the following conversation" in instructions
+
+    async def test_describe_session_includes_context_parameter(
+        self, populated_session_db, mocker
+    ):
+        """Test that describe_session includes the required context parameter."""
+        from mcp_the_force.local_services.describe_session import DescribeSessionService
+
+        # Mock get_summary to return None
+        mock_get_summary = mocker.patch(
+            "mcp_the_force.unified_session_cache.UnifiedSessionCache.get_summary"
+        )
+        mock_get_summary.return_value = None
+
+        # Spy on executor
+        mock_executor = mocker.patch("mcp_the_force.tools.executor.executor.execute")
+        mock_executor.return_value = "Summary"
+
+        service = DescribeSessionService()
+        await service.execute(session_id="test-session-1")
+
+        # Verify executor was called with context parameter
+        mock_executor.assert_called_once()
+        kwargs = mock_executor.call_args[1]
+
+        # THE KEY TEST: Verify context parameter exists
+        assert "context" in kwargs, "Missing required parameter: context"
+        assert isinstance(kwargs["context"], list), "Context should be a list"
