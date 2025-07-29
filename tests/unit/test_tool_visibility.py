@@ -16,8 +16,9 @@ class TestToolVisibility:
 
     async def test_internal_vector_store_creation_still_works(self):
         """Internal vector store creation should still work even if not exposed."""
-        # This tests that we can still import the vector store creation function
-        from mcp_the_force.utils.vector_store import create_vector_store
+        # This tests that we can still import the vector store manager
+        from mcp_the_force.vectorstores.manager import vector_store_manager
 
-        # Just verify the function exists - actual creation requires API keys
-        assert create_vector_store is not None
+        # Just verify the manager exists and has the create method
+        assert vector_store_manager is not None
+        assert hasattr(vector_store_manager, "create")

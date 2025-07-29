@@ -92,6 +92,9 @@ class MCPConfig(BaseModel):
     thread_pool_workers: int = Field(
         10, description="Max workers for shared thread pool", ge=1, le=100
     )
+    default_vector_store_provider: str = Field(
+        "openai", description="Default provider for vector stores"
+    )
 
 
 class SessionConfig(BaseModel):
@@ -134,6 +137,15 @@ class FeaturesConfig(BaseModel):
 
     # No feature flags currently - the stable inline list is now always enabled
     pass
+
+
+class BackupConfig(BaseModel):
+    """Configuration for backup scripts."""
+
+    path: str = Field(
+        default_factory=lambda: str(Path.home() / ".mcp_backups"),
+        description="Directory for database backups",
+    )
 
 
 class SecurityConfig(BaseModel):
@@ -211,6 +223,7 @@ class Settings(BaseSettings):
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
     tools: ToolsConfig = Field(default_factory=ToolsConfig)
     features: FeaturesConfig = Field(default_factory=FeaturesConfig)
+    backup: BackupConfig = Field(default_factory=BackupConfig)
     security: SecurityConfig = Field(default_factory=SecurityConfig)
     services: ServicesConfig = Field(default_factory=ServicesConfig)
     dev: DevConfig = Field(default_factory=DevConfig)

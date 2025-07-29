@@ -300,7 +300,7 @@ def mock_openai_factory(mock_openai_client, tmp_path, monkeypatch):
 
     with (
         patch(
-            "mcp_the_force.utils.vector_store.get_client",
+            "mcp_the_force.vectorstores.openai.openai_vectorstore.AsyncOpenAI",
             return_value=mock_openai_client,
         ),
         patch(
@@ -407,15 +407,17 @@ def mock_adapter_error():
     return _factory
 
 
+# Configure tests to use inmemory vector store provider
+@pytest.fixture(autouse=True)
+def use_inmemory_vectorstore(monkeypatch):
+    """Ensure all tests use the in-memory vector store provider by default."""
+    monkeypatch.setenv("MCP__DEFAULT_VECTOR_STORE_PROVIDER", "inmemory")
+
+
 # Keep vector store mocking since it's a separate concern
 @pytest.fixture(autouse=True)
 def mock_vector_store_client(monkeypatch, mock_openai_client):
     """Mock vector store client to prevent real API calls."""
-    # This mock handles vector stores created for ad-hoc 'attachments'.
-    import mcp_the_force.utils.vector_store as vs_utils
-
-    monkeypatch.setattr(vs_utils, "get_client", Mock(return_value=mock_openai_client))
-
     # This is the most critical patch. It replaces the store_conversation_memory
     # function inside the executor module with a harmless AsyncMock. This prevents
     # the function from running at all, thus avoiding any real API calls for
@@ -423,14 +425,6 @@ def mock_vector_store_client(monkeypatch, mock_openai_client):
     monkeypatch.setattr(
         "mcp_the_force.memory.conversation.store_conversation_memory",
         AsyncMock(return_value=None),
-    )
-
-    # (Optional but good practice) You can also mock where the client is created
-    # for the memory system itself, though the patch above is sufficient.
-    import mcp_the_force.memory.config as memory_config
-
-    monkeypatch.setattr(
-        memory_config, "get_client", Mock(return_value=mock_openai_client)
     )
 
 

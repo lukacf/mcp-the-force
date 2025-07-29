@@ -8,7 +8,7 @@ from typing import List, Optional, Tuple, Dict
 from datetime import datetime, timezone
 
 from ..config import get_settings
-from ..utils.vector_store import get_client
+from ..vectorstores.manager import vector_store_manager
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +22,6 @@ class MemoryConfig:
         # SQLite database path (defaults to session cache DB)
         self.db_path = db_path or Path(settings.session_db_path)
 
-        self._client = get_client()
         self._lock = threading.RLock()
         self._rollover_limit = settings.memory_rollover_limit
 
@@ -97,9 +96,19 @@ class MemoryConfig:
         name = f"project-{store_type}s-{store_num:03d}"
         # Create with 365 day expiration as backup protection
         # (cleanup tools should skip based on name prefix anyway)
-        store = self._client.vector_stores.create(
-            name=name, expires_after={"anchor": "last_active_at", "days": 365}
-        )
+        # Note: The abstraction doesn't support expires_after yet, so we'll use the provider directly
+        import asyncio
+
+        async def create_store():
+            client = vector_store_manager._get_client(vector_store_manager.provider)
+            return await client.create(name=name)
+
+        # Run in event loop
+        loop = asyncio.new_event_loop()
+        try:
+            store = loop.run_until_complete(create_store())
+        finally:
+            loop.close()
         store_id: str = store.id
         return store_id
 
