@@ -277,9 +277,9 @@ def create_vector_store_tool(mcp: FastMCP) -> None:
             Dictionary with vector_store_id
         """
         try:
-            from ..utils.vector_store import create_vector_store
+            from ..vectorstores.manager import vector_store_manager
 
-            vs_id = await create_vector_store(files)
+            vs_id = await vector_store_manager.create(files)
             if vs_id:
                 return {"vector_store_id": vs_id, "status": "created"}
             else:

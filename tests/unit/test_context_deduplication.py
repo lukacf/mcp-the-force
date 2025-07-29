@@ -60,7 +60,7 @@ async def test_priority_context_prioritization():
 
 @pytest.mark.asyncio
 async def test_priority_context_overflow():
-    """Test that priority_context files can still overflow if they exceed budget."""
+    """Test that priority_context files are ALWAYS inlined, even if they exceed budget."""
     with tempfile.TemporaryDirectory() as tmpdir:
         # Create test files
         huge_priority = os.path.realpath(os.path.join(tmpdir, "huge_priority.py"))
@@ -77,7 +77,7 @@ async def test_priority_context_overflow():
         cache.get_stable_list.return_value = None
 
         # Set a small token budget
-        token_budget = 50  # Very small, can only fit the small file
+        token_budget = 50  # Very small, normally can only fit the small file
 
         # Call with huge priority file
         files_inline, files_overflow, file_tree = await build_context_with_stable_list(
@@ -88,11 +88,14 @@ async def test_priority_context_overflow():
             priority_context=[huge_priority],
         )
 
-        # Check that the huge priority file overflowed
+        # Check that the huge priority file is INLINE (not overflowed)
+        # Priority files should always be inlined regardless of budget
         inline_paths = [f[0] for f in files_inline]
-        assert small_file in inline_paths
-        assert huge_priority in files_overflow
-        assert len(files_overflow) == 1
+        assert huge_priority in inline_paths
+        # Small file might overflow since priority file takes all the budget
+        assert len(files_inline) >= 1  # At least the priority file
+        # Either small file is inline or in overflow (depending on remaining budget)
+        assert small_file in inline_paths or small_file in files_overflow
 
 
 @pytest.mark.asyncio

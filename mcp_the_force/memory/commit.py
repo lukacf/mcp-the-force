@@ -10,7 +10,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, List
 
-from ..utils.vector_store import get_client
+from ..vectorstores.manager import vector_store_manager
+from ..vectorstores.protocol import VSFile
 from ..utils.redaction import redact_dict, redact_secrets
 from .config import get_memory_config
 
@@ -109,15 +110,34 @@ def store_commit_memory(commit_sha: Optional[str] = None) -> None:
             tmp_path = tmp_file.name
 
         try:
-            # Upload to vector store (fire-and-forget to prevent hangs)
-            client = get_client()
-            with open(tmp_path, "rb") as f:
-                # First upload file to OpenAI
-                file_obj = client.files.create(file=f, purpose="assistants")
-                # Then add to vector store
-                client.vector_stores.files.create(
-                    vector_store_id=store_id, file_id=file_obj.id
+            # Upload to vector store using the abstraction
+            import asyncio
+
+            async def upload_file():
+                # Read the file content
+                with open(tmp_path, "r") as f:
+                    content = f.read()
+
+                # Create VSFile
+                vs_file = VSFile(
+                    path=f"commits/{commit_sha}.json",
+                    content=content,
+                    metadata={"type": "commit", "sha": commit_sha},
                 )
+
+                # Get the vector store
+                client = vector_store_manager._get_client(vector_store_manager.provider)
+                store = await client.get(store_id)
+
+                # Add the file
+                await store.add_files([vs_file])
+
+            # Run in event loop
+            loop = asyncio.new_event_loop()
+            try:
+                loop.run_until_complete(upload_file())
+            finally:
+                loop.close()
 
             # Increment count
             config.increment_commit_count()
