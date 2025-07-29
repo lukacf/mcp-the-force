@@ -121,7 +121,7 @@ class BaseFlowStrategy(ABC):
             if self.context.request.tools:
                 tools.extend(self.context.request.tools)
 
-        if capability.supports_web_search:
+        if capability.supports_web_search and capability.web_search_tool:
             tools.append({"type": capability.web_search_tool})
 
         if self.context.request.vector_store_ids:
