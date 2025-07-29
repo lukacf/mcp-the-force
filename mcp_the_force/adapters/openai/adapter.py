@@ -118,6 +118,8 @@ class OpenAIProtocolAdapter:
                     params, "disable_memory_search", False
                 ),
                 "session_id": ctx.session_id,
+                "project": ctx.project,
+                "tool": ctx.tool,
                 "_api_key": self._api_key,
                 **kwargs,  # Pass through any other kwargs like timeout, etc.
             }
