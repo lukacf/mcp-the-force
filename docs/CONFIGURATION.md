@@ -55,6 +55,20 @@ providers:
 | `vertex.max_output_tokens` | `MCP__VERTEX__MAX_OUTPUT_TOKENS` | `int` | `65536` | Default maximum number of tokens the model can generate. |
 | `vertex.max_function_calls` | `MCP__VERTEX__MAX_FUNCTION_CALLS` | `int` | `500` | Maximum number of function call rounds for agentic workflows. |
 
+### Google Gemini API (`gemini`)
+
+Direct Gemini API configuration (alternative to Vertex AI).
+
+| YAML Path | Environment Variable | Type | Default Value | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `gemini.enabled` | `MCP__GEMINI__ENABLED` | `bool` | `True` | Enable or disable the Gemini API provider. |
+| `gemini.api_key` | `MCP__GEMINI__API_KEY` or `GEMINI_API_KEY` | `string` | `null` | **Secret.** Your Google AI Studio API key for direct Gemini API access. |
+
+**Note**: The Gemini adapter supports three authentication methods with the following precedence:
+1. **Service Account** (via `vertex.adc_credentials_path`) - highest priority
+2. **Gemini API Key** (via `gemini.api_key`) - direct API authentication
+3. **Application Default Credentials (ADC)** - for local development with `vertex.project` and `vertex.location`
+
 ### X AI (`xai`)
 
 | YAML Path | Environment Variable | Type | Default Value | Description |
@@ -263,6 +277,8 @@ memory:
 providers:
   openai:
     api_key: sk-...
+  gemini:
+    api_key: AIza...  # Google AI Studio API key
   xai:
     api_key: xai-...
   anthropic:
