@@ -59,12 +59,14 @@ class DescribeSessionService:
 
         project, tool = session_context
 
-        # Check if we have a cached summary
-        cached_summary = await UnifiedSessionCache.get_summary(
-            project, tool, session_id
-        )
-        if cached_summary:
-            return cached_summary
+        # Check if we have a cached summary (unless clear_cache is True)
+        clear_cache = kwargs.get("clear_cache", False)
+        if not clear_cache:
+            cached_summary = await UnifiedSessionCache.get_summary(
+                project, tool, session_id
+            )
+            if cached_summary:
+                return cached_summary
 
         # Cache miss - need to generate summary
         # 1. Get the original session

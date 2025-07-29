@@ -430,3 +430,68 @@ class TestDescribeSessionService:
         )
         assert not result.startswith("Error: Only Gemini models are supported")
         assert result == test_summary
+
+    async def test_describe_session_clear_cache_forces_regeneration(
+        self, populated_session_db, mocker
+    ):
+        """Test that clear_cache=True forces regeneration even with cached summary."""
+        from mcp_the_force.local_services.describe_session import DescribeSessionService
+        from mcp_the_force.config import get_settings
+
+        # Get project name
+        settings = get_settings()
+        project_name = os.path.basename(settings.logging.project_path or os.getcwd())
+
+        # First, set up a cached summary
+        await UnifiedSessionCache.set_summary(
+            project_name,
+            "chat_with_o3",
+            "test-session-1",
+            json.dumps(
+                {
+                    "one_liner": "Cached summary",
+                    "summary": "This is a cached summary",
+                    "session_type": "minimal",
+                    "custom": "",
+                }
+            ),
+        )
+
+        # Mock executor to return a new summary
+        mock_executor = mocker.patch("mcp_the_force.tools.executor.executor.execute")
+        new_summary = json.dumps(
+            {
+                "one_liner": "Fresh regenerated summary",
+                "summary": "This is a newly generated summary",
+                "session_type": "minimal",
+                "custom": "",
+            }
+        )
+        mock_executor.return_value = new_summary
+
+        # Mock set_summary to verify it's called
+        mock_set_summary = mocker.patch(
+            "mcp_the_force.unified_session_cache.UnifiedSessionCache.set_summary"
+        )
+
+        service = DescribeSessionService()
+
+        # First call without clear_cache should return cached summary
+        result = await service.execute(session_id="test-session-1")
+        assert "Cached summary" in result
+        mock_executor.assert_not_called()
+
+        # Now call with clear_cache=True
+        result = await service.execute(session_id="test-session-1", clear_cache=True)
+
+        # Should return the new summary
+        assert result == new_summary
+        assert "Fresh regenerated summary" in result
+
+        # Verify executor was called this time
+        mock_executor.assert_called_once()
+
+        # Verify new summary was cached
+        mock_set_summary.assert_called_with(
+            project_name, "chat_with_o3", "test-session-1", new_summary
+        )

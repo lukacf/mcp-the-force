@@ -40,3 +40,8 @@ class DescribeSession(ToolSpec):
         default=None,
         description="Additional instructions for the AI when generating the summary (e.g., 'Focus on technical decisions', 'Highlight action items')",
     )
+
+    clear_cache: Optional[bool] = Route.adapter(  # type: ignore[assignment]
+        default=False,
+        description="If true, clears any cached summary and forces regeneration",
+    )
