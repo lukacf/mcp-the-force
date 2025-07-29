@@ -172,39 +172,28 @@ async def build_context_with_stable_list(
 
         file_data = trimmed_data
 
-        # Check if we actually have overflow
-        if overflow_paths:
-            # Save the stable list
-            await cache.save_stable_list(session_id, inline_paths)
-            logger.info(f"Saved stable list with {len(inline_paths)} inline files")
+        # Always save the stable list to establish a baseline for subsequent calls
+        await cache.save_stable_list(session_id, inline_paths)
+        logger.info(
+            f"Saved stable list with {len(inline_paths)} inline files for session {session_id}"
+        )
 
-            # On first call, send all inline files
-            files_to_send = [(p, c, t) for p, c, t in file_data if p in inline_paths]
+        # On first call, send all inline files
+        files_to_send = file_data
 
-            # Update sent file info
-            for file_path, _, _ in files_to_send:
-                try:
-                    stat = os.stat(file_path)
-                    await cache.update_sent_file_info(
-                        session_id, file_path, int(stat.st_size), int(stat.st_mtime_ns)
-                    )
-                except OSError:
-                    pass
-        else:
-            # No overflow, send everything inline
-            logger.info("All files fit inline, no stable list needed")
-            files_to_send = file_data
-            overflow_paths = []
+        # Batch update the mtime/size info for all sent files for future change detection
+        files_to_update = []
+        for file_path, _, _ in files_to_send:
+            try:
+                stat = os.stat(file_path)
+                files_to_update.append(
+                    (file_path, int(stat.st_size), int(stat.st_mtime_ns))
+                )
+            except OSError as e:
+                logger.warning(f"Could not stat file {file_path} for cache update: {e}")
 
-            # Record baseline for change detection even when no overflow
-            for file_path, _, _ in files_to_send:
-                try:
-                    stat = os.stat(file_path)
-                    await cache.update_sent_file_info(
-                        session_id, file_path, int(stat.st_size), int(stat.st_mtime_ns)
-                    )
-                except OSError:
-                    pass
+        if files_to_update:
+            await cache.batch_update_sent_files(session_id, files_to_update)
     else:
         # Subsequent call - only send changed files
         logger.info(f"Using existing stable list for session {session_id}")
@@ -238,8 +227,12 @@ async def build_context_with_stable_list(
                             pass
                 # else: file hasn't changed, skip it
             else:
-                # This file goes to vector store
-                overflow_paths.append(file_path)
+                # This file wasn't in the stable list originally
+                # Only add to overflow if it's a new file that wasn't tracked before
+                if await cache.file_changed_since_last_send(session_id, file_path):
+                    # New file that wasn't in the original stable list
+                    overflow_paths.append(file_path)
+                # else: file exists but hasn't changed, skip it entirely
 
         logger.info(f"Sending {len(files_to_send)} changed files inline")
 
