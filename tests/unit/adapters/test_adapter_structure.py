@@ -7,27 +7,30 @@ Note: Actual cancellation behavior testing requires integration tests with real 
 """
 
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
+from mcp_the_force.config import Settings, ProviderConfig
 
 
 @pytest.fixture(autouse=True)
-def mock_gemini_settings():
-    """Auto-mock Gemini settings for all tests to avoid credential errors."""
-    mock_settings = MagicMock()
-    mock_settings.vertex.project = "test-project"
-    mock_settings.vertex.location = "test-location"
-    mock_settings.openai_api_key = "test-key"
-    mock_settings.xai_api_key = "test-key"
+def mock_settings_for_adapters():
+    """Auto-mock settings for all adapter structure tests."""
+    mock_settings = Settings(
+        vertex=ProviderConfig(project="test-project", location="us-central1"),
+        gemini=ProviderConfig(api_key=None),
+        xai=ProviderConfig(api_key="test-key"),
+        openai=ProviderConfig(api_key="test-key"),
+    )
 
-    # Add thread pool settings
-    mock_settings.mcp.thread_pool_workers = 5
-
-    # Add gemini settings
-    mock_settings.gemini.api_key = None
-
-    # Patch get_settings at the config module level since adapters import it locally
-    with patch("mcp_the_force.config.get_settings", return_value=mock_settings):
-        yield
+    # Patch get_settings at multiple locations since adapters may import it differently
+    with (
+        patch("mcp_the_force.config.get_settings") as mock_get_settings1,
+        patch(
+            "mcp_the_force.adapters.google.adapter.get_settings"
+        ) as mock_get_settings2,
+    ):
+        mock_get_settings1.return_value = mock_settings
+        mock_get_settings2.return_value = mock_settings
+        yield mock_settings
 
 
 @pytest.mark.unit

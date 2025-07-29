@@ -47,38 +47,6 @@ def main():
     import asyncio
     import signal
     import errno
-    from typing import Iterator
-
-    def _iter_leaves(exc: BaseException) -> Iterator[BaseException]:
-        """Depth-first walk that yields every non-group exception."""
-        if sys.version_info >= (3, 11) and type(exc).__name__ == "ExceptionGroup":
-            for child in exc.exceptions:
-                yield from _iter_leaves(child)
-        else:
-            yield exc
-
-    # DISABLED: Testing if custom selector is causing race conditions
-    # # macOS-specific workaround for KqueueSelector stdio hang bug
-    # # See: https://github.com/python/cpython/issues/104344
-    # # BUT: SelectSelector has a 1024 file descriptor limit that causes hangs
-    # # with many concurrent file operations (e.g., vector store uploads).
-    # # Using PollSelector instead which has no FD limit while still avoiding
-    # # the KqueueSelector stdio issues.
-    # if sys.platform == "darwin":
-
-    #     class PollSelectorPolicy(asyncio.DefaultEventLoopPolicy):
-    #         def new_event_loop(self):
-    #             # poll(2) has no FD_SETSIZE limit unlike select(2)
-    #             selector = selectors.PollSelector()
-    #             return asyncio.SelectorEventLoop(selector)
-
-    #     asyncio.set_event_loop_policy(PollSelectorPolicy())
-    #     logger.info(
-    #         "Using PollSelector on macOS to avoid both KqueueSelector stdio hangs "
-    #         "and SelectSelector's 1024 FD limit"
-    #     )
-
-    logger.warning("Custom PollSelector DISABLED - using default event loop selector")
 
     # Ignore SIGPIPE to prevent crashes on broken pipes (Unix only)
     if sys.platform != "win32":
@@ -144,10 +112,6 @@ def main():
     try:
         logger.info("Starting MCP server (stdio transport)...")
 
-        # DISABLED: Docker manager may be causing event loop issues
-        # Skip Docker initialization to test if it's the cause of hangs
-        logger.warning("Docker service initialization DISABLED for debugging")
-
         # Clear any existing event loop so FastMCP can create its own
         asyncio.set_event_loop(None)
 
@@ -180,141 +144,42 @@ def main():
     except Exception as e:
         # Special handling for Python 3.11+ ExceptionGroup
         if sys.version_info >= (3, 11) and isinstance(e, BaseExceptionGroup):
-            # Debug log all leaves for analysis
-            import os
-            from datetime import datetime
-
-            try:
-                debug_file = os.path.join(os.getcwd(), "mcp_cancellation_debug.log")
-                with open(debug_file, "a") as f:
-                    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-                    f.write(f"[{timestamp}] SERVER MAIN: Caught ExceptionGroup\n")
-                    # Log all leaf exceptions
-                    for i, leaf in enumerate(_iter_leaves(e)):
-                        f.write(
-                            f"[{timestamp}] EXG-leaf-{i}: {type(leaf).__name__}: {leaf}\n"
-                        )
-                        f.write(f"[{timestamp}] EXG-leaf-{i}-repr: {repr(leaf)}\n")
-                        f.write(f"[{timestamp}] EXG-leaf-{i}-str: {str(leaf)}\n")
-                    f.flush()
-            except Exception:
-                pass
-
-            # Define what constitutes a benign disconnect error
+            # Check if all exceptions in the group are benign disconnect errors
             import anyio
-            import fastmcp
 
-            def is_benign(exc: BaseException) -> bool:
-                """Check if exception is benign and should be suppressed."""
-                # Check type name as string to handle import/namespace issues
-                exc_type_name = type(exc).__name__
-                exc_module = type(exc).__module__ or ""
+            benign_types = (
+                asyncio.CancelledError,
+                BrokenPipeError,
+                ConnectionError,
+                EOFError,
+                anyio.ClosedResourceError,
+                anyio.BrokenResourceError,
+                anyio.EndOfStream,
+            )
 
-                return (
-                    isinstance(
-                        exc,
-                        (
-                            asyncio.CancelledError,
-                            BrokenPipeError,
-                            ConnectionError,
-                            EOFError,
-                        ),
-                    )
-                    or exc_type_name
-                    in ["BrokenResourceError", "ClosedResourceError", "EndOfStream"]
-                    or "anyio" in exc_module
-                    and exc_type_name
-                    in ["BrokenResourceError", "ClosedResourceError", "EndOfStream"]
-                    or (isinstance(exc, OSError) and exc.errno == errno.EPIPE)
-                    or (
-                        isinstance(exc, ValueError)
-                        and "closed file" in str(exc).lower()
-                    )
-                    or (
-                        isinstance(exc, RuntimeError)
-                        and (
-                            "stdout" in str(exc).lower() or "stdin" in str(exc).lower()
-                        )
-                    )
-                    or (
-                        hasattr(fastmcp, "exceptions")
-                        and hasattr(fastmcp.exceptions, "ToolError")
-                        and isinstance(exc, fastmcp.exceptions.ToolError)
-                        and "cancelled" in str(exc).lower()
-                    )
-                    or (
-                        isinstance(exc, AssertionError)
-                        and "request already responded to" in str(exc).lower()
-                    )
-                )
+            def all_benign(exc_group):
+                """Check if all exceptions in group are benign disconnects."""
+                for exc in exc_group.exceptions:
+                    if isinstance(exc, BaseExceptionGroup):
+                        if not all_benign(exc):
+                            return False
+                    elif not isinstance(exc, benign_types):
+                        if isinstance(exc, OSError) and exc.errno == errno.EPIPE:
+                            continue
+                        return False
+                return True
 
-            # Check if ALL leaves are benign
-            leaves = list(_iter_leaves(e))
-            benign_checks = [(leaf, is_benign(leaf)) for leaf in leaves]
-
-            # Debug log the benign check results
-            try:
-                with open(debug_file, "a") as f:
-                    for leaf, is_b in benign_checks:
-                        f.write(
-                            f"[{timestamp}] Benign check: {type(leaf).__name__} -> {is_b}\n"
-                        )
-                        if not is_b:
-                            f.write(
-                                f"[{timestamp}] Not benign because: isinstance checks failed\n"
-                            )
-                            f.write(
-                                f"[{timestamp}] anyio.BrokenResourceError type: {anyio.BrokenResourceError}\n"
-                            )
-                            f.write(f"[{timestamp}] leaf type: {type(leaf)}\n")
-                            f.write(
-                                f"[{timestamp}] isinstance check: {isinstance(leaf, anyio.BrokenResourceError)}\n"
-                            )
-            except Exception:
-                pass
-
-            # Debug log the all() result
-            all_benign = all(is_b for _, is_b in benign_checks)
-            try:
-                with open(debug_file, "a") as f:
-                    f.write(f"[{timestamp}] All benign result: {all_benign}\n")
-                    f.write(f"[{timestamp}] Benign checks list: {benign_checks}\n")
-            except Exception:
-                pass
-
-            if all_benign:
-                try:
-                    with open(debug_file, "a") as f:
-                        f.write(f"[{timestamp}] About to suppress and return\n")
-                except Exception:
-                    pass
+            if all_benign(e):
                 logger.info(
                     "Suppressed ExceptionGroup containing only benign disconnect errors"
                 )
-                # For stdio transport, this is expected behavior
                 return  # Exit gracefully
             else:
-                # Some real error remains – re-raise so we crash loudly
+                # Some real error remains – re-raise
                 logger.error(
                     "Server crashed with ExceptionGroup containing real errors"
                 )
                 raise
-
-        # Not an ExceptionGroup - continue with original handler
-        # Debug log to file
-        import os
-        from datetime import datetime
-
-        try:
-            debug_file = os.path.join(os.getcwd(), "mcp_cancellation_debug.log")
-            with open(debug_file, "a") as f:
-                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-                f.write(
-                    f"[{timestamp}] SERVER MAIN: Caught exception: {type(e).__name__}: {e}\n"
-                )
-                f.flush()
-        except Exception:
-            pass
 
         # Handle anyio disconnection errors
         import anyio
