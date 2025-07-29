@@ -222,7 +222,8 @@ logging:
   project_path: /custom/path
 
 services:
-  loiter_killer_url: http://custom:9876
+  loiter_killer_host: custom
+  loiter_killer_port: 9876
 
 session:
   ttl_seconds: 7200
@@ -292,7 +293,8 @@ dev:
             "LOGGING__VICTORIA_LOGS_ENABLED": "false",
             "LOGGING__LOKI_APP_TAG": "env-tag",
             # Service URLs
-            "SERVICES__LOITER_KILLER_URL": "http://env:9876",
+            "SERVICES__LOITER_KILLER_HOST": "env",
+            "SERVICES__LOITER_KILLER_PORT": "9876",
             # Session settings
             "SESSION__TTL_SECONDS": "3600",
             # Security settings
@@ -325,7 +327,8 @@ dev:
         monkeypatch.setenv("PORT", "6000")
         monkeypatch.setenv("OPENAI__API_KEY", "mcp-key")
         monkeypatch.setenv("LOGGING__VICTORIA_LOGS_URL", "http://mcp:9428")
-        monkeypatch.setenv("SERVICES__LOITER_KILLER_URL", "http://mcp:9876")
+        monkeypatch.setenv("SERVICES__LOITER_KILLER_HOST", "mcp")
+        monkeypatch.setenv("SERVICES__LOITER_KILLER_PORT", "9876")
         monkeypatch.setenv("DEV__ADAPTER_MOCK", "true")
 
         settings = Settings()
