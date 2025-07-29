@@ -68,6 +68,8 @@ providers:
 providers:
   openai:
     api_key: ""  # Add your OpenAI API key
+  anthropic:
+    api_key: ""  # Add your Anthropic API key
   xai:
     api_key: ""  # Add your xAI API key
   # vertex:
