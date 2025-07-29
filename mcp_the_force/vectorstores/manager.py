@@ -2,7 +2,7 @@
 
 import hashlib
 import logging
-from typing import Dict, Any, List, Tuple, Optional, Sequence
+from typing import Dict, Any, List, Tuple, Optional, Sequence, Union
 from pathlib import Path
 
 from .protocol import VectorStore, VectorStoreClient, VSFile, SearchResult
@@ -53,13 +53,17 @@ class VectorStoreManager:
         return hashlib.sha256(content.encode()).hexdigest()
 
     async def create(
-        self, files: List[str], session_id: Optional[str] = None
-    ) -> Optional[str]:
+        self,
+        files: List[str],
+        session_id: Optional[str] = None,
+        ttl_seconds: Optional[int] = None,
+    ) -> Optional[Union[str, Dict[str, Any]]]:
         """Create or acquire vector store from files.
 
         Args:
             files: List of file paths
             session_id: Session ID for vector store reuse
+            ttl_seconds: Optional TTL for the vector store
 
         Returns:
             Vector store ID if created, None otherwise
@@ -72,12 +76,35 @@ class VectorStoreManager:
         from ..config import get_settings
 
         if get_settings().adapter_mock:
-            # Return a mock vector store ID
-            mock_vs_id = f"vs_mock_{session_id or 'ephemeral'}"
+            # In mock mode, use in-memory provider instead of mocking
+            # This ensures the store can actually be retrieved later
+            provider = "inmemory"
+            client = self._get_client(provider)
+
+            # Create a real in-memory store that can be retrieved
+            store_name = f"mock_{session_id or 'ephemeral'}"
+            store = await client.create(store_name, ttl_seconds=ttl_seconds)
+
             logger.info(
-                f"[MOCK] Created mock vector store: {mock_vs_id} with {len(files)} files"
+                f"[MOCK] Created in-memory vector store: {store.id} with {len(files)} files"
             )
-            return mock_vs_id
+
+            # Add files if provided
+            if files:
+                vs_files = []
+                for file_path in files:
+                    content = self._read_file_content(file_path)
+                    if content:  # Only add if we could read the file
+                        vs_files.append(VSFile(path=file_path, content=content))
+
+                if vs_files:
+                    await store.add_files(vs_files)
+
+            return {
+                "store_id": store.id,
+                "provider": provider,
+                "session_id": session_id,
+            }
 
         provider = self.provider
         client = self._get_client(provider)
@@ -133,7 +160,8 @@ class VectorStoreManager:
 
             # Create store
             store = await client.create(
-                name=f"session_{session_id}" if session_id else "mcp-the-force-vs"
+                name=f"session_{session_id}" if session_id else "mcp-the-force-vs",
+                ttl_seconds=ttl_seconds,
             )
 
             # Convert file paths to VSFile objects
@@ -154,7 +182,11 @@ class VectorStoreManager:
                 await self.loiter_killer.track_files(session_id, files)
 
             logger.info(f"Created vector store: {store.id}")
-            return store.id
+            return {
+                "store_id": store.id,
+                "provider": provider,
+                "session_id": session_id,
+            }
 
         except Exception as e:
             logger.error(f"Error creating vector store: {e}", exc_info=True)
@@ -200,11 +232,22 @@ class VectorStoreManager:
         """
         # For now, just create a store using the main create method
         files: List[str] = []  # Empty files for session creation
-        vs_id = await self.create(files, session_id)
+        result = await self.create(files, session_id, ttl_seconds)
 
+        # If create returned None (error), return empty dict
+        if result is None:
+            return {}
+
+        # If it's already a dict (new behavior), return it with provider override if needed
+        if isinstance(result, dict):
+            if provider:
+                result["provider"] = provider
+            return result
+
+        # Legacy: if it returned just a string ID
         return {
             "provider": provider or self.provider,
-            "store_id": vs_id,
+            "store_id": result,
             "session_id": session_id,
         }
 
