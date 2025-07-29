@@ -588,6 +588,6 @@ logging:
             assert settings.mcp.context_percentage == 0.85
             assert settings.mcp.default_temperature == 1.0
             assert settings.logging.level == "INFO"
-            assert settings.session.ttl_seconds == 3600
+            assert settings.session.ttl_seconds == 15552000  # 6 months default
             assert settings.memory.enabled is True
             assert settings.memory.rollover_limit == 9500

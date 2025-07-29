@@ -590,10 +590,12 @@ class ToolExecutor:
                 # For Gemini models, pass system_instruction separately
                 if adapter_class_name == "google":
                     generate_kwargs["system_instruction"] = developer_prompt
-                    generate_kwargs["messages"] = messages
+                    # Pass a copy to prevent mutations from affecting memory storage
+                    generate_kwargs["messages"] = messages.copy()
                 elif adapter_class_name in ["openai", "xai"]:
                     # OpenAI and Grok models use messages with developer role
-                    generate_kwargs["messages"] = messages
+                    # Pass a copy to prevent mutations from affecting memory storage
+                    generate_kwargs["messages"] = messages.copy()
 
                 result = await operation_manager.run_with_timeout(
                     operation_id,

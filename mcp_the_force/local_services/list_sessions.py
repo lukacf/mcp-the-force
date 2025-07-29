@@ -1,5 +1,6 @@
 """Local service for listing sessions."""
 
+import json
 import os
 from typing import List, Dict, Any, Optional
 from ..config import get_settings
@@ -55,12 +56,18 @@ class ListSessionsService:
 
         # Add search filter if provided
         if search:
-            query += " AND (session_id LIKE ? OR tool LIKE ?)"
+            if include_summary:
+                query += " AND (s.session_id LIKE ? OR s.tool LIKE ?)"
+            else:
+                query += " AND (session_id LIKE ? OR tool LIKE ?)"
             like_pattern = f"%{search}%"
             params.extend([like_pattern, like_pattern])
 
         # Add ordering and limit
-        query += " ORDER BY updated_at DESC LIMIT ?"
+        if include_summary:
+            query += " ORDER BY s.updated_at DESC LIMIT ?"
+        else:
+            query += " ORDER BY updated_at DESC LIMIT ?"
         params.append(limit)
 
         # Execute query using the async-safe method
@@ -73,7 +80,19 @@ class ListSessionsService:
                 session_data = {"tool_name": row[0], "session_id": row[1]}
                 if include_summary:
                     # The summary is the third column (index 2), may be None
-                    session_data["summary"] = row[2]
+                    summary_raw = row[2]
+                    if summary_raw:
+                        try:
+                            # Try to parse as JSON and extract one_liner
+                            summary_json = json.loads(summary_raw)
+                            session_data["summary"] = summary_json.get(
+                                "one_liner", summary_raw
+                            )
+                        except (json.JSONDecodeError, AttributeError):
+                            # Fallback to raw summary if not valid JSON
+                            session_data["summary"] = summary_raw
+                    else:
+                        session_data["summary"] = None
                 results.append(session_data)
 
         return results
