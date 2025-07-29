@@ -111,6 +111,16 @@ claude mcp add-json the-force-custom '{
 
 MCP The-Force uses a unified YAML-based configuration system with environment variable overlay support.
 
+### Configuration File Locations
+
+Configuration files are stored in different locations depending on how you run the server:
+
+- **Via uvx installation** (recommended): `~/.config/mcp-the-force/`
+- **For development**: Current working directory (`./config.yaml` and `./secrets.yaml`)
+- **Custom location**: Set `MCP_CONFIG_FILE` and `MCP_SECRETS_FILE` environment variables
+
+**Note**: When running via uvx, the server always uses `~/.config/mcp-the-force/` even if you have local config files in your current directory.
+
 ### Configuration Sources
 
 The system loads configuration from multiple sources with clear precedence (highest to lowest):
