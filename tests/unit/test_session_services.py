@@ -275,10 +275,10 @@ class TestDescribeSessionService:
             "This is a generated summary of the session.",
         )
 
-    async def test_describe_session_passes_history_in_instructions(
+    async def test_describe_session_uses_temp_session_for_history(
         self, populated_session_db, mocker
     ):
-        """Test that describe_session includes conversation history in the instructions."""
+        """Test that describe_session creates temp session with history and passes temp session_id."""
         from mcp_the_force.local_services.describe_session import DescribeSessionService
 
         # Mock get_summary to return None (cache miss)
@@ -287,7 +287,12 @@ class TestDescribeSessionService:
         )
         mock_get_summary.return_value = None
 
-        # Don't mock the executor - let's spy on it instead
+        # Mock set_session to capture the temp session
+        mock_set_session = mocker.patch(
+            "mcp_the_force.unified_session_cache.UnifiedSessionCache.set_session"
+        )
+
+        # Spy on the executor
         mock_executor = mocker.patch("mcp_the_force.tools.executor.executor.execute")
         mock_executor.return_value = "Summary"
 
@@ -298,10 +303,21 @@ class TestDescribeSessionService:
         mock_executor.assert_called_once()
         kwargs = mock_executor.call_args[1]
 
-        # THE KEY TEST: Verify the instructions contain the conversation history
+        # THE KEY TEST: Verify instructions do NOT contain conversation history
         instructions = kwargs.get("instructions", "")
-        assert "Hello" in instructions, "Conversation history not found in instructions"
-        assert "Summarize the following conversation" in instructions
+        assert (
+            "Hello" not in instructions
+        ), "Conversation history should NOT be in instructions"
+        assert "Summarize this conversation" in instructions
+
+        # Verify a temp session was created with the history
+        mock_set_session.assert_called()
+        temp_session = mock_set_session.call_args[0][0]
+        assert temp_session.session_id.startswith("temp-summary-")
+        assert len(temp_session.history) > 0  # Should have the copied history
+        assert (
+            temp_session.history[0]["content"] == "Hello"
+        )  # Verify history was copied
 
     async def test_describe_session_includes_context_parameter(
         self, populated_session_db, mocker
