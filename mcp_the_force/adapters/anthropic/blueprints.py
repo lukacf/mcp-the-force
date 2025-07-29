@@ -3,6 +3,7 @@
 from typing import List
 
 from ...tools.blueprint import ToolBlueprint
+from ...tools.blueprint_registry import register_blueprints
 from .capabilities import ANTHROPIC_MODEL_CAPABILITIES
 from .params import AnthropicToolParams
 
@@ -27,5 +28,9 @@ def get_anthropic_blueprints() -> List[ToolBlueprint]:
     return blueprints
 
 
-# Export for auto-discovery
-BLUEPRINTS = get_anthropic_blueprints()
+# Auto-register blueprints when this module is imported
+_blueprints = get_anthropic_blueprints()
+register_blueprints(_blueprints)
+
+# Export for compatibility
+BLUEPRINTS = _blueprints
