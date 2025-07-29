@@ -3,6 +3,7 @@
 import hashlib
 import logging
 from typing import Dict, Any, List, Tuple, Optional, Sequence
+from pathlib import Path
 
 from .protocol import VectorStore, VectorStoreClient, VSFile, SearchResult
 from . import registry
@@ -19,22 +20,27 @@ class VectorStoreManager:
     - Store creation and lifecycle
     - Integration with loiter killer for cleanup
     - File update detection and management
-    - Caching with stable list cache
+    - Provider-agnostic vector store operations
     """
 
     def __init__(
-        self, cache: Optional[StableListCache] = None, provider: str = "inmemory"
+        self, cache: Optional[StableListCache] = None, provider: Optional[str] = None
     ):
-        self.provider = provider
-        self._cache = cache
-        self._loiter_killer: Optional[LoiterKillerClient] = None
+        from ..config import get_settings
+
+        settings = get_settings()
+        self.provider = provider or settings.mcp.default_vector_store_provider
+        self.loiter_killer = LoiterKillerClient()
+        self._cache = cache  # For future use
         self._client_cache: Dict[str, VectorStoreClient] = {}
 
-    async def _ensure_loiter_killer(self) -> LoiterKillerClient:
-        """Ensure loiter killer client is initialized."""
-        if not self._loiter_killer:
-            self._loiter_killer = LoiterKillerClient()
-        return self._loiter_killer
+    def _read_file_content(self, file_path: str) -> str:
+        """Read file content from disk."""
+        try:
+            return Path(file_path).read_text()
+        except Exception as e:
+            logger.error(f"Failed to read file {file_path}: {e}")
+            return ""
 
     def _get_client(self, provider: str) -> VectorStoreClient:
         """Get or create a client for the provider."""
@@ -46,6 +52,142 @@ class VectorStoreManager:
         """Compute hash for file content."""
         return hashlib.sha256(content.encode()).hexdigest()
 
+    async def create(
+        self, files: List[str], session_id: Optional[str] = None
+    ) -> Optional[str]:
+        """Create or acquire vector store from files.
+
+        Args:
+            files: List of file paths
+            session_id: Session ID for vector store reuse
+
+        Returns:
+            Vector store ID if created, None otherwise
+        """
+        # Allow empty files for session creation
+        # if not files:
+        #     return None
+
+        # Check if we're in mock mode
+        from ..config import get_settings
+
+        if get_settings().adapter_mock:
+            # Return a mock vector store ID
+            mock_vs_id = f"vs_mock_{session_id or 'ephemeral'}"
+            logger.info(
+                f"[MOCK] Created mock vector store: {mock_vs_id} with {len(files)} files"
+            )
+            return mock_vs_id
+
+        provider = self.provider
+        client = self._get_client(provider)
+
+        # Try Loiter Killer first if session_id is available and provider is OpenAI
+        if session_id and self.loiter_killer.enabled and provider == "openai":
+            logger.info(f"Attempting to use Loiter Killer for session {session_id}")
+            (
+                vs_id,
+                existing_file_paths,
+            ) = await self.loiter_killer.get_or_create_vector_store(session_id)
+
+            if vs_id:
+                # Get existing store and add only new files
+                store = await client.get(vs_id)
+
+                # Find new files to add
+                new_files = [f for f in files if f not in existing_file_paths]
+
+                if new_files:
+                    # Convert to VSFile objects
+                    vs_files = []
+                    for file_path in new_files:
+                        content = self._read_file_content(file_path)
+                        if content:  # Only add if we could read the file
+                            vs_files.append(VSFile(path=file_path, content=content))
+
+                    if vs_files:
+                        await store.add_files(vs_files)
+                        # Track the new files with Loiter Killer
+                        await self.loiter_killer.track_files(session_id, new_files)
+                        logger.info(
+                            f"Added {len(new_files)} new files to vector store {vs_id}"
+                        )
+
+                skipped_files = [f for f in files if f in existing_file_paths]
+                if skipped_files:
+                    logger.info(
+                        f"Skipped {len(skipped_files)} existing files in vector store {vs_id}"
+                    )
+
+                logger.info(
+                    f"Using Loiter Killer vector store {vs_id} for session {session_id}"
+                )
+                return vs_id
+
+        # Fallback to direct creation (Loiter Killer unavailable or no session_id)
+        logger.info("Creating ephemeral vector store (Loiter Killer not available)")
+        try:
+            logger.info(
+                f"VectorStoreManager.create: About to create vector store with {len(files)} files"
+            )
+
+            # Create store
+            store = await client.create(
+                name=f"session_{session_id}" if session_id else "mcp-the-force-vs"
+            )
+
+            # Convert file paths to VSFile objects
+            vs_files = []
+            for file_path in files:
+                content = self._read_file_content(file_path)
+                if content:  # Only add if we could read the file
+                    vs_files.append(VSFile(path=file_path, content=content))
+
+            if vs_files:
+                await store.add_files(vs_files)
+                logger.info(
+                    f"Added {len(vs_files)} files to new vector store {store.id}"
+                )
+
+            # Track with Loiter Killer for OpenAI stores
+            if session_id and self.loiter_killer.enabled and provider == "openai":
+                await self.loiter_killer.track_files(session_id, files)
+
+            logger.info(f"Created vector store: {store.id}")
+            return store.id
+
+        except Exception as e:
+            logger.error(f"Error creating vector store: {e}", exc_info=True)
+            return None
+
+    async def delete(self, vs_id: Optional[str]) -> None:
+        """Delete vector store (only for ephemeral stores).
+
+        Args:
+            vs_id: Vector store ID to delete
+        """
+        if not vs_id:
+            return
+
+        # Check if we're in mock mode
+        from ..config import get_settings
+
+        if get_settings().adapter_mock:
+            logger.info(f"[MOCK] Deleted mock vector store: {vs_id}")
+            return
+
+        # Don't delete Loiter Killer managed stores - they handle their own lifecycle
+        if self.loiter_killer.enabled and self.provider == "openai":
+            logger.debug(f"Skipping delete for Loiter Killer managed store: {vs_id}")
+            return
+
+        try:
+            client = self._get_client(self.provider)
+            await client.delete(vs_id)
+            logger.info(f"Deleted ephemeral vector store: {vs_id}")
+        except Exception as e:
+            logger.error(f"Error deleting vector store: {e}")
+
     async def create_for_session(
         self,
         session_id: str,
@@ -54,33 +196,17 @@ class VectorStoreManager:
     ) -> Dict[str, Any]:
         """Create a vector store for a session.
 
-        Args:
-            session_id: Session identifier
-            ttl_seconds: Optional TTL in seconds
-            provider: Optional provider override
-
-        Returns:
-            Store info dict with provider, store_id, session_id
+        This method is kept for compatibility with tests but delegates to create().
         """
-        provider = provider or self.provider
-        client = self._get_client(provider)
+        # For now, just create a store using the main create method
+        files: List[str] = []  # Empty files for session creation
+        vs_id = await self.create(files, session_id)
 
-        # Create store
-        store = await client.create(
-            name=f"session_{session_id}", ttl_seconds=ttl_seconds
-        )
-
-        # Register with loiter killer if TTL specified
-        if ttl_seconds:
-            lk = await self._ensure_loiter_killer()
-            # Mock the register_store method for tests
-            # TODO: Implement actual vector store cleanup in loiter killer
-            if hasattr(lk, "register_store"):
-                await lk.register_store(
-                    provider=provider, store_id=store.id, ttl_seconds=ttl_seconds
-                )
-
-        return {"provider": provider, "store_id": store.id, "session_id": session_id}
+        return {
+            "provider": provider or self.provider,
+            "store_id": vs_id,
+            "session_id": session_id,
+        }
 
     async def store_and_search(
         self,
@@ -218,47 +344,6 @@ class VectorStoreManager:
         file = VSFile(path=path, content=new_content)
         await store.add_files([file])
 
-    async def create_project_history_store(self, project_path: str) -> Dict[str, Any]:
-        """Create a long-lived project history store.
 
-        Args:
-            project_path: Path to the project
-
-        Returns:
-            Store info
-        """
-        # Use a stable name based on project path
-        project_hash = hashlib.sha256(project_path.encode()).hexdigest()[:8]
-
-        return await self.create_for_session(
-            session_id=f"project_history_{project_hash}",
-            ttl_seconds=None,  # No TTL for project history
-        )
-
-    async def add_to_history(self, store_info: Dict[str, Any], files: Sequence[VSFile]):
-        """Add files to a history store.
-
-        Args:
-            store_info: Store info from create_project_history_store
-            files: Files to add (with metadata)
-        """
-        client = self._get_client(store_info["provider"])
-        store = await client.get(store_info["store_id"])
-        await store.add_files(files)
-
-    async def search_history(
-        self, store_info: Dict[str, Any], query: str, k: int = 20
-    ) -> Sequence[SearchResult]:
-        """Search a history store.
-
-        Args:
-            store_info: Store info
-            query: Search query
-            k: Number of results
-
-        Returns:
-            Search results
-        """
-        client = self._get_client(store_info["provider"])
-        store = await client.get(store_info["store_id"])
-        return await store.search(query, k=k)
+# Global instance
+vector_store_manager = VectorStoreManager()

@@ -39,6 +39,8 @@ class FlowContext:
     tools: List[Dict[str, Any]]
     tool_dispatcher: Any
     session_id: str
+    project: str
+    tool: str
     vector_store_ids: Optional[List[str]]
     start_time: float
     timeout_remaining: float
@@ -186,6 +188,8 @@ class BaseFlowStrategy(ABC):
         ]
         call_context = CallContext(
             session_id=self.context.session_id,
+            project=self.context.project,
+            tool=self.context.tool,
             vector_store_ids=self.context.vector_store_ids,
         )
         tool_results = await self.context.tool_dispatcher.execute_batch(
@@ -221,6 +225,8 @@ class BaseFlowStrategy(ABC):
             tools=self.context.tools,
             tool_dispatcher=self.context.tool_dispatcher,
             session_id=self.context.session_id,
+            project=self.context.project,
+            tool=self.context.tool,
             vector_store_ids=self.context.vector_store_ids,
             start_time=asyncio.get_event_loop().time(),
             timeout_remaining=self.context.timeout_remaining,
@@ -350,6 +356,8 @@ class FlowOrchestrator:
     async def run(self, request_data: Dict[str, Any]) -> Dict[str, Any]:
         try:
             session_id = request_data.pop("session_id", f"sess_{uuid4().hex}")
+            project = request_data.pop("project", "")
+            tool = request_data.pop("tool", "")
             api_key = request_data.pop("_api_key", None)
 
             self._preprocess_request(request_data)
@@ -366,6 +374,8 @@ class FlowOrchestrator:
                 tools=[],
                 tool_dispatcher=self.tool_dispatcher,
                 session_id=session_id,
+                project=project,
+                tool=tool,
                 vector_store_ids=request.vector_store_ids,
                 start_time=asyncio.get_event_loop().time(),
                 timeout_remaining=request.timeout,

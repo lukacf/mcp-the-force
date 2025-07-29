@@ -96,6 +96,8 @@ class ToolDispatcher:
                 # Update context with tool_call_id if provided
                 call_context = CallContext(
                     session_id=context.session_id,
+                    project=context.project,
+                    tool=context.tool,
                     vector_store_ids=context.vector_store_ids,
                     tool_call_id=tool_call.tool_call_id,
                 )
