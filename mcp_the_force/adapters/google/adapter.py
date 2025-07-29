@@ -106,11 +106,7 @@ class GeminiAdapter(LiteLLMBaseAdapter):
     param_class = GeminiToolParams
 
     def __init__(self, model: str = "gemini-2.5-pro"):
-        """Initialize the Gemini adapter.
-
-        Args:
-            model: Model name (e.g., "gemini-2.5-pro", "gemini-2.5-flash")
-        """
+        """Initialize the Gemini adapter."""
         if model not in GEMINI_MODEL_CAPABILITIES:
             raise InvalidModelException(
                 model=model,
@@ -121,30 +117,66 @@ class GeminiAdapter(LiteLLMBaseAdapter):
         self.model_name = model
         self.display_name = f"Gemini {model} (LiteLLM)"
         self.capabilities = GEMINI_MODEL_CAPABILITIES[model]
+        self._auth_method = "uninitialized"  # To be set by _validate_environment
 
-        # Call parent init after setting required attributes
         super().__init__()
 
     def _validate_environment(self):
-        """Ensure required environment variables are set."""
+        """Validate Gemini/Vertex AI authentication in the correct order."""
         settings = get_settings()
 
-        # Check for Vertex AI configuration
-        if settings.vertex.project and settings.vertex.location:
-            logger.info("Using Vertex AI configuration")
-        # Check for direct Gemini API key
-        elif settings.gemini.api_key if hasattr(settings, "gemini") else None:
-            logger.info("Using Gemini API key")
-        else:
-            raise ConfigurationException(
-                "No Gemini/Vertex AI credentials found. Set either "
-                "VERTEX_PROJECT/VERTEX_LOCATION or GEMINI_API_KEY",
-                provider="Gemini",
+        # 1. Service Account (via adc_credentials_path)
+        if (
+            settings.vertex.adc_credentials_path
+            and settings.vertex.project
+            and settings.vertex.location
+        ):
+            self._auth_method = "service_account"
+            logger.info("Using Vertex AI with specified ADC credentials.")
+            return
+
+        # 2. Gemini API Key
+        if settings.gemini and settings.gemini.api_key:
+            if settings.vertex.project or settings.vertex.location:
+                logger.warning(
+                    "Both Gemini API key and Vertex AI config are present. "
+                    "Prioritizing Gemini API key."
+                )
+            self._auth_method = "api_key"
+            logger.info("Using Gemini API key.")
+            return
+
+        # 3. Implicit Application Default Credentials (ADC)
+        if (
+            "GOOGLE_APPLICATION_CREDENTIALS" in os.environ
+            and settings.vertex.project
+            and settings.vertex.location
+        ):
+            self._auth_method = "implicit_adc"
+            logger.info(
+                "Using Vertex AI with implicit Application Default Credentials."
             )
+            return
+
+        # 4. Fallback ADC check (no env var, but project/location set)
+        if settings.vertex.project and settings.vertex.location:
+            self._auth_method = "fallback_adc"
+            logger.info("Using Vertex AI with gcloud ADC.")
+            return
+
+        raise ConfigurationException(
+            "No valid Gemini/Vertex AI credentials found. Please configure one of the following:\n"
+            "1. Service Account: Set `vertex.adc_credentials_path`, `vertex.project`, and `vertex.location`.\n"
+            "2. API Key: Set `gemini.api_key`.\n"
+            "3. ADC: Run `gcloud auth application-default login` and set `vertex.project` and `vertex.location`.",
+            provider="Gemini",
+        )
 
     def _get_model_prefix(self) -> str:
-        """Get the LiteLLM model prefix for this provider."""
-        return "vertex_ai"
+        """Get the LiteLLM model prefix based on the auth method."""
+        if self._auth_method == "api_key":
+            return "google"  # Use 'google' for direct API key auth
+        return "vertex_ai"  # Use 'vertex_ai' for all other auth methods
 
     def _build_request_params(
         self,
@@ -154,23 +186,23 @@ class GeminiAdapter(LiteLLMBaseAdapter):
         **kwargs: Any,
     ) -> Dict[str, Any]:
         """Build Gemini-specific request parameters."""
-        # Build base parameters
         request_params = {
             "model": f"{self._get_model_prefix()}/{self.model_name}",
             "input": conversation_input,
             "temperature": getattr(params, "temperature", 1.0),
         }
 
-        # Add Vertex AI configuration
         settings = get_settings()
-        if settings.vertex.project:
-            request_params["vertex_project"] = settings.vertex.project
-        if settings.vertex.location:
-            request_params["vertex_location"] = settings.vertex.location
 
-        # Add API key if using direct Gemini API
-        if hasattr(settings, "gemini") and settings.gemini.api_key:
-            request_params["api_key"] = settings.gemini.api_key
+        # Add parameters based on the authentication method
+        if self._auth_method == "api_key":
+            if settings.gemini and settings.gemini.api_key:
+                request_params["api_key"] = settings.gemini.api_key
+        else:  # service_account, implicit_adc, fallback_adc
+            if settings.vertex.project:
+                request_params["vertex_project"] = settings.vertex.project
+            if settings.vertex.location:
+                request_params["vertex_location"] = settings.vertex.location
 
         # Add instructions if provided
         if hasattr(params, "instructions") and params.instructions:

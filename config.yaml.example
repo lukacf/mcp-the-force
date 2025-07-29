@@ -25,6 +25,8 @@ providers:
     enabled: false
     project: # your-gcp-project-id
     location: us-central1
+  gemini:
+    enabled: true
   anthropic:
     enabled: false
   xai:
