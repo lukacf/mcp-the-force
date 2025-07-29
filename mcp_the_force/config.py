@@ -97,7 +97,9 @@ class MCPConfig(BaseModel):
 class SessionConfig(BaseModel):
     """Session management configuration."""
 
-    ttl_seconds: int = Field(3600, description="Session TTL in seconds", ge=60)
+    ttl_seconds: int = Field(
+        15552000, description="Session TTL in seconds (default: 6 months)", ge=60
+    )
     db_path: str = Field(".mcp_sessions.sqlite3", description="Session database path")
     cleanup_probability: float = Field(
         0.01, description="Cleanup probability", ge=0.0, le=1.0
@@ -116,6 +118,15 @@ class MemoryConfig(BaseModel):
         200000, description="Summary character limit", ge=100
     )
     max_files_per_commit: int = Field(50, description="Max files per commit", ge=1)
+
+
+class ToolsConfig(BaseModel):
+    """Configuration for built-in local service tools."""
+
+    default_summarization_model: str = Field(
+        "chat_with_gemini25_flash",
+        description="The default model used by describe_session for summarization.",
+    )
 
 
 class FeaturesConfig(BaseModel):
@@ -198,6 +209,7 @@ class Settings(BaseSettings):
     # Feature configs
     session: SessionConfig = Field(default_factory=SessionConfig)
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
+    tools: ToolsConfig = Field(default_factory=ToolsConfig)
     features: FeaturesConfig = Field(default_factory=FeaturesConfig)
     security: SecurityConfig = Field(default_factory=SecurityConfig)
     services: ServicesConfig = Field(default_factory=ServicesConfig)

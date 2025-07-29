@@ -46,7 +46,7 @@ providers:
     enabled: false
 
 session:
-  ttl_seconds: 3600
+  ttl_seconds: 15552000
   db_path: .mcp_sessions.sqlite3
   cleanup_probability: 0.01
 
