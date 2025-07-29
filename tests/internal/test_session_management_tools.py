@@ -149,3 +149,44 @@ class TestDescribeSessionIntegration:
         result = await executor.execute(metadata, session_id="integration-test-1")
 
         assert result == "This is a cached summary"
+
+    @pytest.mark.asyncio
+    async def test_describe_session_full_flow_with_history(
+        self, populated_test_sessions, mocker
+    ):
+        """Test describe_session passes conversation history to the model."""
+        from mcp_the_force.local_services.describe_session import DescribeSessionService
+
+        # Clear any cached summaries
+        from mcp_the_force.unified_session_cache import (
+            _get_instance as get_cache_instance,
+        )
+
+        cache = get_cache_instance()
+        await cache._execute_async(
+            "DELETE FROM session_summaries WHERE session_id = ?",
+            ("integration-test-1",),
+        )
+
+        # Use real service without mocking
+        service = DescribeSessionService()
+
+        # In mock mode, this should work if history is passed correctly
+        result = await service.execute(
+            session_id="integration-test-1",
+            summarization_model="chat_with_gemini25_flash",
+        )
+
+        # The result should be a proper summary, not an error about missing conversation
+        print(f"Result: {result}")
+        assert result is not None
+        assert isinstance(result, str)
+        assert len(result) > 0
+
+        # Key assertions - should NOT get these errors if history was passed
+        assert "provide the conversation" not in result.lower()
+        assert "need the conversation" not in result.lower()
+        assert (
+            "conversation history" not in result.lower()
+            or "summarize" in result.lower()
+        )
