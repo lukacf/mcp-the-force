@@ -161,6 +161,31 @@ mcp-config export-client          # Generate mcp-config.json for Claude
    ```
 3. Or set environment variable: `export XAI_API_KEY=xai-...`
 
+### Google Gemini / Vertex AI
+
+The adapter supports three authentication methods with the following precedence:
+
+1.  **API Key (Gemini API)**: For direct authentication with the Gemini API.
+2.  **Service Account (Vertex AI)**: For authentication in production or CI/CD environments.
+3.  **Application Default Credentials (ADC)**: For local development.
+
+#### 1. API Key Setup
+1. Get your API key from Google AI Studio.
+2. Add to `secrets.yaml`:
+   ```yaml
+   providers:
+     gemini:
+       enabled: true
+       api_key: "your-gemini-api-key"
+   ```
+3. Or set environment variable: `export GEMINI_API_KEY=your-gemini-api-key`
+
+#### 2. Service Account
+Follow the "For Production & CI/CD" instructions below to create and use a service account key.
+
+#### 3. Application Default Credentials (ADC)
+Follow the "For Local Development (Recommended)" instructions below to set up ADC.
+
 ### For Local Development (Recommended)
 
 **Google Cloud Application Default Credentials (ADC)**:
