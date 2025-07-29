@@ -77,7 +77,7 @@ class DescribeSessionService:
         temp_session_id = f"temp-summary-{session_id}-{uuid.uuid4().hex[:8]}"
         temp_session = UnifiedSession(
             project=original_session.project,
-            tool=original_session.tool,
+            tool=model_to_use,  # FIX: Use the summarization model's name, not the original tool
             session_id=temp_session_id,
             updated_at=original_session.updated_at,
             history=original_session.history.copy(),
@@ -123,5 +123,7 @@ class DescribeSessionService:
             return summary
 
         finally:
-            # Clean up the temporary session
-            await UnifiedSessionCache.delete_session(project, tool, temp_session_id)
+            # Clean up the temporary session using the correct tool name
+            await UnifiedSessionCache.delete_session(
+                project, model_to_use, temp_session_id
+            )
