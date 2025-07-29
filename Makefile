@@ -55,18 +55,17 @@ test-all: test-unit test-integration e2e
 
 e2e-setup:
 	@echo "Testing Docker-in-Docker Claude setup..."
-	@# Check for Google Cloud credentials like the old E2E system
-	@PROJECT_CREDS_PATH="$(PWD)/.gcloud/king_credentials.json"; \
+	@# Check for Google Cloud credentials (ADC pattern)
+	@ADC_PATH="$(PWD)/.gcp/adc-credentials.json"; \
 	GLOBAL_ADC_PATH="$$HOME/.config/gcloud/application_default_credentials.json"; \
-	if [ -f "$$PROJECT_CREDS_PATH" ]; then \
-		ADC_PATH="$$PROJECT_CREDS_PATH"; \
-		echo "Found project-specific credentials at $$ADC_PATH"; \
+	if [ -f "$$ADC_PATH" ]; then \
+		echo "Found project-local ADC at $$ADC_PATH"; \
 	elif [ -f "$$GLOBAL_ADC_PATH" ]; then \
 		ADC_PATH="$$GLOBAL_ADC_PATH"; \
-		echo "Using global ADC credentials at $$ADC_PATH"; \
+		echo "Using global ADC credentials"; \
 	else \
 		echo "Error: No Google Cloud credentials found"; \
-		echo "Run 'gcloud auth application-default login' first"; \
+		echo "Run 'mcp-config setup-adc' or 'gcloud auth application-default login'"; \
 		exit 1; \
 	fi; \
 	docker build -f tests/e2e_dind/Dockerfile.runner -t the-force-e2e-runner .; \
@@ -119,18 +118,17 @@ e2e-setup:
 
 e2e:
 	@echo "Running Docker-in-Docker e2e tests..."
-	@# Check for Google Cloud credentials like the old E2E system
-	@PROJECT_CREDS_PATH="$(PWD)/.gcloud/king_credentials.json"; \
+	@# Check for Google Cloud credentials (ADC pattern)
+	@ADC_PATH="$(PWD)/.gcp/adc-credentials.json"; \
 	GLOBAL_ADC_PATH="$$HOME/.config/gcloud/application_default_credentials.json"; \
-	if [ -f "$$PROJECT_CREDS_PATH" ]; then \
-		ADC_PATH="$$PROJECT_CREDS_PATH"; \
-		echo "Found project-specific credentials at $$ADC_PATH"; \
+	if [ -f "$$ADC_PATH" ]; then \
+		echo "Found project-local ADC at $$ADC_PATH"; \
 	elif [ -f "$$GLOBAL_ADC_PATH" ]; then \
 		ADC_PATH="$$GLOBAL_ADC_PATH"; \
-		echo "Using global ADC credentials at $$ADC_PATH"; \
+		echo "Using global ADC credentials"; \
 	else \
 		echo "Error: No Google Cloud credentials found"; \
-		echo "Run 'gcloud auth application-default login' first"; \
+		echo "Run 'mcp-config setup-adc' or 'gcloud auth application-default login'"; \
 		exit 1; \
 	fi; \
 	docker build -f tests/e2e_dind/Dockerfile.runner -t the-force-e2e-runner .; \
