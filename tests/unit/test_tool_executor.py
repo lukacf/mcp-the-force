@@ -144,15 +144,27 @@ class TestToolExecutor:
             mock_store.return_value = asyncio.Future()
             mock_store.return_value.set_result(None)
 
-            # Mock session cache
-            with patch(
-                "mcp_the_force.unified_session_cache.UnifiedSessionCache"
-            ) as mock_cache_class:
-                mock_cache_class.get_response_id = AsyncMock(
-                    return_value="previous_response_id"
-                )
-                mock_cache_class.set_response_id = AsyncMock()
-
+            # Mock session cache methods directly
+            with (
+                patch(
+                    "mcp_the_force.unified_session_cache.UnifiedSessionCache.get_response_id",
+                    new_callable=AsyncMock,
+                    return_value="previous_response_id",
+                ),
+                patch(
+                    "mcp_the_force.unified_session_cache.UnifiedSessionCache.set_response_id",
+                    new_callable=AsyncMock,
+                ),
+                patch(
+                    "mcp_the_force.unified_session_cache.UnifiedSessionCache.get_history",
+                    new_callable=AsyncMock,
+                    return_value=[],
+                ),
+                patch(
+                    "mcp_the_force.unified_session_cache.UnifiedSessionCache.set_history",
+                    new_callable=AsyncMock,
+                ),
+            ):
                 from mcp_the_force.tools.registry import get_tool
 
                 metadata = get_tool("chat_with_o3")
