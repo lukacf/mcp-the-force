@@ -493,5 +493,11 @@ async def nuke_everything():
 
 
 if __name__ == "__main__":
+    # Get port from config system
+    from mcp_the_force.config import get_settings
+
+    settings = get_settings()
+    port = settings.services.loiter_killer_port
+
     # Run the service (bind to 0.0.0.0 in container)
-    uvicorn.run(app, host="0.0.0.0", port=9876)
+    uvicorn.run(app, host="0.0.0.0", port=port)
