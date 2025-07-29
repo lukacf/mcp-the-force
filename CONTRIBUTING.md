@@ -209,7 +209,7 @@ class ChatWithGPT4(ToolSpec):
 
 **Search Architecture:**
 - `search_project_history`: Searches permanent knowledge (conversations, commits)
-- `search_session_attachments`: Searches ephemeral attachment stores
+- Vector stores created automatically for large contexts are session-scoped
 - Automatic deduplication and relevance ranking
 
 **Implementation:**
