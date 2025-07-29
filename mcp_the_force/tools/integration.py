@@ -254,21 +254,6 @@ def _register_developer_tools(mcp: FastMCP) -> None:
             logger.error(f"Failed to register developer tools: {e}")
 
 
-def create_list_models_tool(mcp: FastMCP) -> None:
-    """Create the list_models utility tool."""
-    from ..local_services.list_models import ListModelsService
-
-    @mcp.tool()
-    async def list_models() -> List[Dict[str, Any]]:
-        """List all available AI models and their capabilities.
-
-        Returns:
-            List of model information including names, providers, and capabilities
-        """
-        service = ListModelsService()
-        return await service.execute()
-
-
 def create_vector_store_tool(mcp: FastMCP) -> None:
     """Create the vector store management tool."""
 
