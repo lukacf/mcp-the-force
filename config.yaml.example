@@ -1,72 +1,135 @@
 # MCP The-Force Configuration Example
 # Copy this to config.yaml and customize for your environment
+# 
+# For sensitive values like API keys, use secrets.yaml instead
+# Run 'mcp-config init' to create both files automatically
 
+# Core MCP server settings
 mcp:
   host: 127.0.0.1
   port: 8000
-  # Percentage of a model's total context window to fill with file content.
-  # Files that fit within this limit are inlined directly in the prompt.
-  # Files that exceed this limit are automatically uploaded to a vector store
-  # for RAG (Retrieval Augmented Generation) via semantic search.
-  # The remaining space (e.g., 15%) is reserved as a safety buffer for the prompt
-  # template, tool definitions, and the model's generated response.
+  # Percentage of model's context window to use for file content
+  # Remaining space is reserved for prompts, tools, and responses
   context_percentage: 0.85
-  default_temperature: 1.0  # Neutral temperature (0=deterministic, 2=creative)
-
-logging:
-  level: INFO  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  default_temperature: 1.0  # 0=deterministic, 2=creative
+  thread_pool_workers: 10
+  default_vector_store_provider: openai
 
 # Provider configuration
 # API keys should go in secrets.yaml, not here
 providers:
   openai:
     enabled: true
+    max_output_tokens: 65536
+    max_function_calls: 500
+    max_parallel_tool_exec: 8
+    
   vertex:
-    enabled: false
-    project: # your-gcp-project-id
+    enabled: true
+    project: # your-gcp-project
     location: us-central1
-  anthropic:
-    enabled: false
+    max_output_tokens: 65536
+    max_function_calls: 500
+    
+  gemini:
+    enabled: true
+    
   xai:
+    enabled: true
+    max_output_tokens: 65536
+    max_function_calls: 500
+    
+  anthropic:
+    enabled: false  # Not currently implemented
+    max_output_tokens: 65536
+    max_function_calls: 500
+    
+  litellm:
+    enabled: false  # Not currently implemented
+    max_output_tokens: 65536
+    max_function_calls: 500
+
+# Logging configuration
+logging:
+  level: INFO  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  victoria_logs_url: http://localhost:9428
+  victoria_logs_enabled: true
+  loki_app_tag: mcp-the-force
+  project_path: # Optional: Set to your project root for relative paths in logs
+  
+  # Developer mode logging (for debugging with Claude Code)
+  developer_mode:
     enabled: false
-    # api_key should go in secrets.yaml
+    port: 4711
+    db_path: .mcp_logs.sqlite3
+    batch_size: 100
+    batch_timeout: 1.0
+    max_db_size_mb: 1000
 
 # Session management
 session:
-  ttl_seconds: 15552000  # 6 months (180 days)
+  ttl_seconds: 15552000  # 6 months
   db_path: .mcp_sessions.sqlite3
-  cleanup_probability: 0.01  # 1% chance to cleanup on each request
+  cleanup_probability: 0.01  # 1% chance to cleanup expired sessions
 
-# Memory system
+# Memory system for long-term project knowledge
 memory:
   enabled: true
-  rollover_limit: 100  # Create new vector store after 100 items
-  session_cutoff_hours: 24  # Look back 24 hours for related sessions
-  summary_char_limit: 1000  # Max chars for conversation summaries
-  max_files_per_commit: 20  # Max files to list in commit summaries
+  rollover_limit: 9500  # Token limit before summarization
+  session_cutoff_hours: 2  # Hours before session is eligible for memory storage
+  summary_char_limit: 200000  # Max chars for summarization
+  max_files_per_commit: 50  # Max files to include per git commit
 
-# Security configuration
+# Built-in tools configuration
+tools:
+  default_summarization_model: chat_with_gemini25_flash
+
+# Feature flags (currently none)
+features: {}
+
+# Backup configuration
+backup:
+  path: ~/.mcp_backups
+
+# Security settings
 security:
-  # Paths that are blocked from access
-  # Default list includes common system directories
+  # Paths blocked from file access (defaults shown)
+  # Note: These are the actual defaults from SecurityConfig in config.py
   path_blacklist:
-    - "/etc"
-    - "/usr"
-    - "/bin"
-    - "/sbin"
-    - "/boot"
-    - "/sys"
-    - "/proc"
-    - "/dev"
-    - "/root"
-    - "/System"  # macOS
-    - "/private/etc"  # macOS
-    - "/private/var"  # macOS
-    - "~/Library"  # macOS
-    - "C:\\Windows"  # Windows
-    - "C:\\Program Files"  # Windows
-    # Add custom paths to block:
-    # - "/path/to/sensitive/data"
+    - /etc
+    - /usr
+    - /bin
+    - /sbin
+    - /boot
+    - /sys
+    - /proc
+    - /dev
+    - /root
+    # macOS specific
+    - /System
+    - /private/etc
+    # Note: /private/var excluded to allow temp files in tests
+    # Block sensitive Library subdirectories but allow iCloud Drive
+    - ~/Library/Keychains
+    - ~/Library/Cookies
+    - ~/Library/Mail
+    - ~/Library/Messages
+    - ~/Library/Safari
+    - ~/Library/Accounts
+    - ~/Library/Autosave Information
+    - ~/Library/IdentityServices
+    - ~/Library/PersonalizationPortrait
+    # Windows specific
+    - C:\\Windows
+    - C:\\Program Files
+    - C:\\Program Files (x86)
 
-# Testing
-adapter_mock: false  # Set to true to use mock adapters
+# External services
+services:
+  loiter_killer_host: localhost
+  loiter_killer_port: 9876
+
+# Development settings
+dev:
+  adapter_mock: false  # Use mock adapters for testing
+  ci_e2e: false  # Running in CI/CD environment

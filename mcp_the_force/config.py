@@ -188,9 +188,15 @@ class SecurityConfig(BaseModel):
 class ServicesConfig(BaseModel):
     """External services configuration."""
 
-    loiter_killer_url: str = Field(
-        "http://localhost:9876", description="Loiter killer service URL"
+    loiter_killer_host: str = Field(
+        "localhost", description="Loiter killer service host"
     )
+    loiter_killer_port: int = Field(9876, description="Loiter killer service port")
+
+    @property
+    def loiter_killer_url(self) -> str:
+        """Construct loiter killer URL from host and port."""
+        return f"http://{self.loiter_killer_host}:{self.loiter_killer_port}"
 
 
 class DevConfig(BaseModel):
@@ -214,6 +220,7 @@ class Settings(BaseSettings):
     vertex: ProviderConfig = Field(
         default_factory=lambda: ProviderConfig(max_output_tokens=65536)
     )
+    gemini: ProviderConfig = Field(default_factory=ProviderConfig)
     anthropic: ProviderConfig = Field(default_factory=ProviderConfig)
     xai: ProviderConfig = Field(default_factory=ProviderConfig)
     litellm: ProviderConfig = Field(default_factory=ProviderConfig)
@@ -251,7 +258,10 @@ class Settings(BaseSettings):
                 abs_path = adc_path.resolve()
 
             if not abs_path.exists():
-                raise FileNotFoundError(f"ADC credentials file not found: {abs_path}")
+                logger.warning(
+                    f"ADC credentials file not found at {abs_path}. GOOGLE_APPLICATION_CREDENTIALS will not be set."
+                )
+                return
             if not os.access(str(abs_path), os.R_OK):
                 raise PermissionError(f"ADC credentials file not readable: {abs_path}")
 
@@ -388,6 +398,7 @@ class Settings(BaseSettings):
             "GCLOUD_OAUTH_CLIENT_ID": ("vertex", "oauth_client_id"),
             "GCLOUD_OAUTH_CLIENT_SECRET": ("vertex", "oauth_client_secret"),
             "GCLOUD_USER_REFRESH_TOKEN": ("vertex", "user_refresh_token"),
+            "GEMINI_API_KEY": ("gemini", "api_key"),
             "ANTHROPIC_API_KEY": ("anthropic", "api_key"),
             "XAI_API_KEY": ("xai", "api_key"),
             # MCP settings
@@ -416,7 +427,8 @@ class Settings(BaseSettings):
             "MEMORY_SUMMARY_CHAR_LIMIT": ("memory", "summary_char_limit"),
             "MEMORY_MAX_FILES_PER_COMMIT": ("memory", "max_files_per_commit"),
             # Services
-            "LOITER_KILLER_URL": ("services", "loiter_killer_url"),
+            "LOITER_KILLER_HOST": ("services", "loiter_killer_host"),
+            "LOITER_KILLER_PORT": ("services", "loiter_killer_port"),
             # Dev/Testing
             "MCP_ADAPTER_MOCK": ("dev", "adapter_mock"),
             "CI_E2E": ("dev", "ci_e2e"),
