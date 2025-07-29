@@ -4,82 +4,108 @@ An intelligent Model Context Protocol (MCP) server that orchestrates multiple AI
 
 ## 🚀 Quick Start
 
-```bash
-# 1. Install dependencies
-uv pip install -e .
+### For Claude Code Users (Recommended)
 
-# 2. Initialize configuration (creates config.yaml and secrets.yaml)
+Install and run directly from GitHub with a single command:
+
+```bash
+claude mcp add the-force -- \
+  uvx --from git+https://github.com/lukacf/mcp-the-force \
+  mcp-the-force
+```
+
+On first run, the server will:
+1. Create configuration files in `~/.config/mcp-the-force/`
+2. Show you where to add your API keys
+3. Start serving once configured
+
+### Configure API Keys
+
+After installation, add your API keys to `~/.config/mcp-the-force/secrets.yaml`:
+
+```yaml
+providers:
+  openai:
+    api_key: "sk-..."      # Your OpenAI API key
+  xai:
+    api_key: "xai-..."      # Your xAI API key
+```
+
+For Google Gemini models, authenticate with:
+```bash
+gcloud auth application-default login
+```
+
+### For Developers
+
+If you want to modify the code or contribute:
+
+```bash
+# Clone and install for development
+git clone https://github.com/lukacf/mcp-the-force
+cd mcp-the-force
+uv pip install -e ".[dev]"
+
+# Initialize configuration
 mcp-config init
 
-# 3. Add your API keys to secrets.yaml
-# Edit secrets.yaml and add your OpenAI API keys
-
-# 4. Set up Google Cloud authentication (for Gemini models)
-# Option A: Use global ADC (default)
-gcloud auth application-default login
-
-# Option B: Use project-specific ADC (recommended for multiple accounts)
-# See "Per-Project ADC Configuration" section below
-
-# 5. Validate your configuration
-mcp-config validate
-
-# 6. Run the server
+# Run locally
 uv run -- mcp-the-force
 ```
 
-## 🤖 Claude Desktop Integration
+## 🤖 Claude Code Integration
 
-### Basic Configuration
+### Using the Installed Server
 
-Add the following to your Claude Desktop configuration file (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
+If you used the Quick Start command above, your server is already configured! The Force is ready to assist you.
 
-```json
-{
-  "mcpServers": {
-    "the-force": {
-      "command": "uv",
-      "args": ["--directory", "/path/to/mcp-the-force", "run", "mcp-the-force"]
-    }
+### Manual Configuration
+
+If you need to manually configure or have installed from a local clone:
+
+```bash
+# For local development
+claude mcp add-json the-force-dev '{
+  "command": "uv",
+  "args": ["--directory", "/path/to/mcp-the-force", "run", "mcp-the-force"],
+  "env": {
+    "OPENAI_API_KEY": "$OPENAI_API_KEY",
+    "XAI_API_KEY": "$XAI_API_KEY",
+    "LOG_LEVEL": "INFO"
   }
-}
+}'
 ```
 
-### Advanced Configuration with Logging
-
-To enable the developer logging system for debugging MCP operations:
-
-```json
-{
-  "mcpServers": {
-    "the-force": {
-      "command": "uv",
-      "args": ["--directory", "/path/to/mcp-the-force", "run", "mcp-the-force"],
-      "env": {
-        "LOGGING__DEVELOPER_MODE__ENABLED": "true",
-        "LOGGING__DEVELOPER_MODE__PORT": "4711",
-        "LOGGING__DEVELOPER_MODE__DB_PATH": ".mcp_logs.sqlite3",
-        "LOGGING__DEVELOPER_MODE__BATCH_SIZE": "100",
-        "LOGGING__DEVELOPER_MODE__BATCH_TIMEOUT": "1.0",
-        "LOGGING__DEVELOPER_MODE__MAX_DB_SIZE_MB": "1000"
-      }
-    }
-  }
-}
-```
-
-When developer logging is enabled in `config.yaml`, you can search logs using the `search_mcp_debug_logs` tool within Claude Desktop.
-
-### Environment Variables in Claude Desktop
+### Environment Variables in Claude Code
 
 Any configuration setting can be overridden via environment variables in the MCP server configuration. The pattern is:
 
 - Use double underscores (`__`) to separate nested configuration levels
+- Environment variables in the `env` block override YAML/secrets settings
 - Examples:
   - `OPENAI_API_KEY` - Set OpenAI API key
   - `LOGGING__LEVEL` - Set logging level (DEBUG, INFO, WARNING, ERROR)
   - `MCP__CONTEXT_PERCENTAGE` - Set context window usage (0.0-1.0)
   - `PROVIDERS__VERTEX__PROJECT` - Set Google Cloud project
+
+### Advanced Configuration
+
+To override settings via environment variables:
+
+```bash
+claude mcp add-json the-force-custom '{
+  "command": "uvx",
+  "args": ["--from", "git+https://github.com/lukacf/mcp-the-force", "mcp-the-force"],
+  "env": {
+    "OPENAI_API_KEY": "$OPENAI_API_KEY",
+    "XAI_API_KEY": "$XAI_API_KEY",
+    "LOG_LEVEL": "DEBUG",
+    "MCP__CONTEXT_PERCENTAGE": "0.75",
+    "LOGGING__DEVELOPER_MODE__ENABLED": "true"
+  },
+  "description": "The-Force with custom settings"
+}'
+```
 
 ## 🔧 Configuration
 
@@ -146,6 +172,64 @@ mcp-config show --format env      # As environment variables
 mcp-config export-client          # Generate mcp-config.json for Claude
 ```
 
+### Configuration Reference
+
+Below are the key configuration options. Settings can be configured via:
+- YAML files (`config.yaml` and `secrets.yaml`)
+- Environment variables (use `__` for nested settings, e.g., `MCP__CONTEXT_PERCENTAGE`)
+
+#### Core Server Settings (`mcp`)
+
+| Setting | Environment Variable | Type | Default | Description |
+|---------|---------------------|------|---------|-------------|
+| `mcp.host` | `MCP__HOST` or `HOST` | string | `"127.0.0.1"` | Host address to bind to |
+| `mcp.port` | `MCP__PORT` or `PORT` | int | `8000` | Port to listen on (1-65535) |
+| `mcp.context_percentage` | `MCP__CONTEXT_PERCENTAGE` | float | `0.85` | Percentage of model's context window to use (0.1-0.95) |
+| `mcp.default_temperature` | `MCP__DEFAULT_TEMPERATURE` | float | `1.0` | Default sampling temperature (0.0-2.0) |
+| `mcp.thread_pool_workers` | `MCP__THREAD_POOL_WORKERS` | int | `10` | Worker threads for background tasks (1-100) |
+
+#### Provider Settings
+
+**OpenAI** (`providers.openai`):
+| Setting | Environment Variable | Type | Default | Description |
+|---------|---------------------|------|---------|-------------|
+| `openai.api_key` | `OPENAI_API_KEY` | string | - | **Secret.** Your OpenAI API key |
+| `openai.max_parallel_tool_exec` | `MAX_PARALLEL_TOOL_EXEC` | int | `8` | Max parallel tool executions |
+
+**Google Vertex AI** (`providers.vertex`):
+| Setting | Environment Variable | Type | Default | Description |
+|---------|---------------------|------|---------|-------------|
+| `vertex.project` | `VERTEX_PROJECT` | string | - | GCP project ID |
+| `vertex.location` | `VERTEX_LOCATION` | string | - | GCP location (e.g., us-central1) |
+
+**xAI** (`providers.xai`):
+| Setting | Environment Variable | Type | Default | Description |
+|---------|---------------------|------|---------|-------------|
+| `xai.api_key` | `XAI_API_KEY` | string | - | **Secret.** Your xAI API key |
+
+#### Session Management (`session`)
+
+| Setting | Environment Variable | Type | Default | Description |
+|---------|---------------------|------|---------|-------------|
+| `session.ttl_seconds` | `SESSION_TTL_SECONDS` | int | `15552000` (6 months) | Session time-to-live |
+| `session.db_path` | `SESSION_DB_PATH` | string | `".mcp_sessions.sqlite3"` | Session database path |
+
+#### Memory System (`memory`)
+
+| Setting | Environment Variable | Type | Default | Description |
+|---------|---------------------|------|---------|-------------|
+| `memory.enabled` | `MEMORY_ENABLED` | bool | `true` | Enable memory system |
+| `memory.rollover_limit` | `MEMORY_ROLLOVER_LIMIT` | int | `9500` | Token limit before rollover |
+
+#### Logging (`logging`)
+
+| Setting | Environment Variable | Type | Default | Description |
+|---------|---------------------|------|---------|-------------|
+| `logging.level` | `LOG_LEVEL` | string | `"INFO"` | Log level (DEBUG/INFO/WARNING/ERROR) |
+| `logging.developer_mode.enabled` | `LOGGING__DEVELOPER_MODE__ENABLED` | bool | `false` | Enable developer logging |
+
+For the complete list of all configuration options, see [CONFIGURATION.md](docs/CONFIGURATION.md).
+
 ## 🔐 Authentication
 
 ### xAI (Grok Models)
@@ -207,125 +291,156 @@ providers:
 - Credentials are project-local (already in .gitignore)
 - Works seamlessly with Docker/CI (mount the .gcp directory)
 
-### For Production & CI/CD
+### For CI/CD Environments
 
-#### Option 1: Service Account (Traditional)
-```bash
-# Create service account
-gcloud iam service-accounts create mcp-the-force
+For CI/CD environments where interactive authentication isn't possible, you have several options:
 
-# Grant necessary permissions
-gcloud projects add-iam-policy-binding YOUR_PROJECT \
-  --member="serviceAccount:mcp-the-force@YOUR_PROJECT.iam.gserviceaccount.com" \
-  --role="roles/aiplatform.user"
+1. **Use existing ADC from the CI environment** - Many CI services provide Google Cloud authentication
+2. **Set environment variables directly** - Pass credentials through the `env` block in your MCP configuration
+3. **Use the OAuth refresh token approach** - Configure `oauth_client_id`, `oauth_client_secret`, and `user_refresh_token` in `secrets.yaml`
 
-# Create and download key
-gcloud iam service-accounts keys create service-account-key.json \
-  --iam-account=mcp-the-force@YOUR_PROJECT.iam.gserviceaccount.com
+For detailed CI/CD setup instructions, see the project's CI configuration files.
 
-# Set environment variable
-export GOOGLE_APPLICATION_CREDENTIALS="./service-account-key.json"
-```
+## Available Tools
 
-#### Option 2: Workload Identity (Recommended for GitHub Actions)
+The server provides a suite of powerful tools for AI-assisted development, including chat/research models from various providers and local utilities for project management.
 
-**Setup Workload Identity Pool:**
-```bash
-# Create workload identity pool
-gcloud iam workload-identity-pools create "github-actions" \
-  --project="$PROJECT_ID" \
-  --location="global"
+### AI Chat & Research Tools
 
-# Create provider
-gcloud iam workload-identity-pools providers create-oidc "github" \
-  --project="$PROJECT_ID" \
-  --location="global" \
-  --workload-identity-pool="github-actions" \
-  --issuer-uri="https://token.actions.githubusercontent.com" \
-  --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository"
+These tools are dynamically generated based on provider-specific capabilities. Common parameters for all AI tools include:
 
-# Bind service account
-gcloud iam service-accounts add-iam-policy-binding \
-  --project="$PROJECT_ID" \
-  --role="roles/iam.workloadIdentityUser" \
-  --member="principalSet://iam.googleapis.com/projects/$PROJECT_NUMBER/locations/global/workloadIdentityPools/github-actions/attribute.repository/$REPO" \
-  mcp-the-force@$PROJECT_ID.iam.gserviceaccount.com
-```
+-   `instructions` (string, required): The primary directive for the AI model.
+-   `output_format` (string, required): A description of the desired response format.
+-   `context` (list[string], required): A list of file or directory paths to be used as context.
+-   `priority_context` (list[string], optional): A list of file or directory paths to prioritize for inline inclusion.
+-   `session_id` (string, required): A unique identifier for a multi-turn conversation.
+-   `disable_memory_store` (boolean, optional): If true, prevents the conversation from being saved to long-term project history.
+-   `structured_output_schema` (dict, optional): A JSON schema that the model's output must conform to.
 
-**GitHub Secrets Setup:**
-- `GCP_PROJECT_ID`: Your Google Cloud project ID
-- `GCP_WORKLOAD_IDENTITY_PROVIDER`: `projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/github-actions/providers/github`
-- `GCP_SERVICE_ACCOUNT`: `mcp-the-force@PROJECT_ID.iam.gserviceaccount.com`
+#### OpenAI Models
 
-## 🛠️ Available Tools
+| Tool Name | Model Name | Context Window | Description |
+| :--- | :--- | :--- | :--- |
+| `chat_with_o3` | o3 | 200,000 | Chain-of-thought reasoning with web search. |
+| `chat_with_o3_pro` | o3-pro | 200,000 | Deep analysis and formal reasoning with web search. |
+| `chat_with_o4_mini` | o4-mini | 200,000 | Fast reasoning model. |
+| `chat_with_gpt41` | gpt-4.1 | 1,000,000 | Fast long-context processing with web search. |
+| `research_with_o3_deep_research` | o3-deep-research | 200,000 | Ultra-deep research with extensive web search (10-60 min). |
+| `research_with_o4_mini_deep_research`| o4-mini-deep-research| 200,000 | Fast research with web search (2-10 min). |
 
-### Primary Chat Tools
+**Key OpenAI Parameters:**
+- `temperature` (float, optional): Controls randomness. Supported by GPT-4 models only. Default: `0.2`.
+- `reasoning_effort` (string, optional): Controls 'thinking' time. Supported by o-series models only. Can be `low`, `medium`, or `high`.
 
-| Tool | Model | Best For | Context | Sessions | Web Search |
-|---|---|---|---|---|---|
-| `chat_with_gemini25_pro` | Gemini 2.5 Pro | Deep analysis, multimodal | ~1M tokens | ✅ | No |
-| `chat_with_gemini25_flash` | Gemini 2.5 Flash | Fast summaries, triage | ~1M tokens | ✅ | No |
-| `chat_with_o3` | OpenAI o3 | Step-by-step reasoning | ~200k tokens | ✅ | ✅ |
-| `chat_with_o3_pro` | OpenAI o3-pro | Formal analysis, deep debugging | ~200k tokens | ✅ | ✅ |
-| `chat_with_gpt4_1` | GPT-4.1 | Large-scale refactoring, RAG | ~1M tokens | ✅ | ✅ |
-| `chat_with_grok4` | xAI Grok 4 | Advanced reasoning, real-time info | ~256k tokens | ✅ | ✅ |
-| `chat_with_grok3_reasoning` | Grok 3 Beta | Complex problem solving, real-time info | ~131k tokens | ✅ | ✅ |
+#### Google Models
 
-### Research Tools
+| Tool Name | Model Name | Context Window | Description |
+| :--- | :--- | :--- | :--- |
+| `chat_with_gemini25_pro` | gemini-2.5-pro | 1,000,000 | Deep multimodal analysis and complex reasoning. |
+| `chat_with_gemini25_flash` | gemini-2.5-flash | 1,000,000 | Fast summarization and quick analysis. |
 
-| Tool | Model | Best For | Features |
-|---|---|---|---|
-| `research_with_o3_deep_research` | o3-deep-research | Ultra-deep research | Autonomous web search (10-60 min) |
-| `research_with_o4_mini_deep_research` | o4-mini-deep-research | Fast, focused research | Autonomous web search (2-10 min) |
+**Key Google Parameters:**
+- `temperature` (float, optional): Controls randomness. Default: `1.0`.
+- `reasoning_effort` (string, optional): Controls the 'thinking budget' for the model. Can be `low`, `medium`, or `high`.
+- `disable_memory_search` (boolean, optional): If true, prevents the model from using the `search_project_history` tool.
+
+#### xAI (Grok) Models
+
+| Tool Name | Model Name | Context Window | Description |
+| :--- | :--- | :--- | :--- |
+| `chat_with_grok3_beta` | grok-3-beta | 131,000 | Deep reasoning using xAI Grok 3 Beta model. |
+| `chat_with_grok4` | grok-4 | 256,000 | Advanced assistant using xAI Grok 4 model. |
+
+**Key Grok Parameters:**
+- `search_mode` (string, optional): Controls the 'Live Search' feature. Can be `auto`, `on`, or `off`. Default: `auto`.
+- `search_parameters` (dict, optional): Fine-grained control over web search functionality.
+- `return_citations` (boolean, optional): If true, response will include citations for web search results. Default: `true`.
 
 ### Utility Tools
 
--   `list_models` - List all available models and their capabilities.
--   `count_project_tokens` - Count tokens for specified files or directories.
--   `search_project_history` - Search past conversations and git commits from the project's long-term memory.
--   `search_mcp_debug_logs` - (Developer mode only) Run a raw LogsQL query against VictoriaLogs debug logs. Note: This tool no longer accepts friendly parameters; it takes a single `query` string containing the raw LogsQL.
+These tools run locally to provide information about the project and server.
 
-### Tool Naming Convention
+-   **`list_sessions`**: List existing AI conversation sessions for the current project.
+    -   `limit` (int, optional): Maximum number of sessions to return. Default: `5`.
+    -   `search` (string, optional): Substring filter for session ID or tool name.
+    -   `include_summary` (boolean, optional): Whether to include cached summaries in the results.
 
-Tools follow these naming patterns for clarity and consistency:
-- `chat_with_{model_name}` - Conversational AI assistance with specific models
-- `research_with_{model_name}` - Autonomous research tools with web search capabilities
+-   **`describe_session`**: Generate an AI-powered summary of an existing session's conversation history.
+    -   `session_id` (string, required): The ID of the session to summarize.
+    -   `summarization_model` (string, optional): The AI model to use for summarization. Defaults to the one configured in `config.yaml`.
+    -   `extra_instructions` (string, optional): Additional instructions for the AI generating the summary.
+    -   `clear_cache` (boolean, optional): If true, forces regeneration of the summary.
 
-## 📁 Smart Context Management
+-   **`search_project_history`**: Search the project's long-term memory (vector database of past conversations and commits).
+    -   `query` (string, required): The query to search for. Semicolon-separated for multiple queries.
+    -   `max_results` (int, optional): Maximum number of search results. Default: `40`.
+    -   `store_types` (list[string], optional): Types of memory to search. Can be `['conversation', 'commit']`. Default searches both.
 
-The server intelligently handles large codebases through a "stable inline list" approach, which optimizes context for multi-turn conversations.
+-   **`count_project_tokens`**: Count tokens for specified files or directories, respecting `.gitignore` and skipping binaries.
+    -   `items` (list[string], required): A list of file and/or directory paths to analyze.
+    -   `top_n` (int, optional): The number of top files and directories to include in the report. Default: `10`.
 
-### How It Works
+-   **`search_mcp_debug_logs`** (Developer Mode Only): Run a raw LogsQL query against the VictoriaLogs debug logging system.
+    -   `query` (string, required): The raw LogsQL query string to execute.
 
-1.  **First Request**: The server analyzes your `context` files.
-    *   It calculates a `token_budget` based on the model's context window (e.g., 85% of 1M tokens).
-    *   It fills this budget by inlining the smallest files first to maximize the number of complete files the model sees.
-    *   Files that don't fit are designated for a vector store.
-    *   This initial set of inlined files becomes the **stable inline list** for the session.
+## Smart Context Management
 
-2.  **Subsequent Requests (in the same session)**:
-    *   The server only sends files from the stable list that have **changed** since the last turn.
-    *   Unchanged files are not sent, saving significant tokens and reducing latency.
-    *   Files that were sent to the vector store remain available for searching via the model's internal `search_task_files` function.
+The server features an advanced context management system designed to handle large codebases efficiently, ensuring that models always have the most relevant information without exceeding their context window.
 
-This provides the speed of inline context with the scale of a vector store, making conversations about large projects efficient.
+### The `context` and `priority_context` Parameters
+
+All AI tools accept `context` and `priority_context` parameters, which take a list of file or directory paths.
+
+-   **`context`**: The primary list of files and directories that the model should be aware of.
+-   **`priority_context`**: A special list of files and directories that are **guaranteed** to be included directly in the prompt, as long as they fit within the model's total token budget. These files are processed first.
+
+### The Stable-Inline List Feature
+
+To ensure a predictable and efficient multi-turn conversation, the server uses a **Stable-Inline List**.
+
+1.  **First Request**: When you make the first call in a new `session_id`, the server analyzes all files in `context` and `priority_context`.
+    *   It calculates a token budget (typically 85% of the model's total context window).
+    *   It fills this budget by inlining the smallest files first, maximizing the number of complete files the model sees directly.
+    *   Any files that do not fit into this budget are designated for a searchable vector store.
+    *   The list of files that were included inline is then saved and becomes the "stable list" for this session.
+
+2.  **Subsequent Requests**: For all following requests in the same session:
+    *   The server only sends files from the stable list that have been **modified** since the last turn. Unchanged files are not resent, saving a significant number of tokens.
+    *   Files not on the stable list (i.e., those that initially went to the vector store) remain available for the model to search using its internal `search_task_files` function.
+
+This mechanism provides the "best of both worlds": the speed and direct access of inline context, and the scalability of a vector store for large codebases.
+
+### Token Budget Calculation
+
+The token budget for inline context is calculated based on the `context_percentage` setting in `config.yaml` (default: `0.85`).
+
+-   **Formula**: `token_budget = model_max_context * context_percentage`
+-   The remaining percentage is reserved as a safety buffer for the prompt template, tool definitions, and the model's generated response.
 
 ### File Filtering
 - **Respects .gitignore**: Automatically excludes files based on your project's .gitignore rules.
 - **Binary file detection**: Skips non-text files (images, binaries, archives).
-- **Size limits**: 2MB per file, 50MB total maximum per request.
+- **Size limits**: 500KB per file, 50MB total maximum per request.
 - **Supported extensions**: 60+ text file types including code, docs, and configs.
 
-## 💬 Conversation Support
+## Session Management
 
-All AI chat and research tools support persistent multi-turn conversations via the `session_id` parameter.
+### The UnifiedSessionCache
 
--   **Unified Persistent Caching**: The server uses a single SQLite database (`.mcp_sessions.sqlite3` by default) to manage conversation history for **all** models (OpenAI, Gemini, and Grok). This ensures conversations survive server restarts.
--   **How it Works**:
-    -   **OpenAI**: The server caches the `response_id` required by the OpenAI Responses API to continue a conversation.
-    -   **Gemini/Grok**: The server stores the full conversation history (all user and assistant messages) in the database.
--   **Session TTL**: The default Time-To-Live for all sessions is 1 hour, but this is configurable in `config.yaml`.
--   **Session IDs**: Session IDs are global. Use unique, descriptive names for different tasks (e.g., "debug-auth-issue-2024-07-15").
+MCP The-Force uses a centralized and persistent session management system, the `UnifiedSessionCache`, to provide a seamless multi-turn conversation experience across all supported AI providers.
+
+-   **Persistence**: All session data is stored in a local SQLite database (`.mcp_sessions.sqlite3` by default). This means your conversations are preserved even if you restart the server.
+-   **Unified History**: The cache stores conversation history in a standardized format, allowing different models to participate in the same conceptual session (though they maintain separate histories).
+
+### The `session_id` Parameter
+
+The `session_id` is the key to conversational continuity.
+
+-   **How it works**: When you make a call with a `session_id`, the server retrieves the history for that session from the cache and provides it to the model. After the model responds, the new turn is added to the session's history.
+-   **Continuity Across Models**: While the history for `chat_with_o3` and `chat_with_gemini25_pro` are stored separately even with the same `session_id`, using the same ID is a good practice for conceptually related tasks. It also allows the `search_project_history` tool to find all related conversation turns.
+-   **TTL**: Sessions have a Time-To-Live (TTL) configured in `config.yaml` (`session.ttl_seconds`). The default is 6 months, after which inactive sessions are automatically purged.
+
+By using descriptive `session_id`s (e.g., `debug-auth-refactor-2024-07-22`), you create a rich, searchable history of your interactions that becomes a valuable part of your project's long-term memory.
 
 ## 📋 Structured Output Support
 
@@ -378,8 +493,8 @@ Use the-force chat_with_gemini25_flash with {"instructions": "Review this functi
 ### Large Codebase Analysis with RAG
 
 ```
-# Analyze large codebase using attachments for RAG
-Use the-force chat_with_gpt4_1 with {"instructions": "Analyze this codebase for architectural patterns and potential improvements", "output_format": "Structured analysis with specific recommendations", "context": [], "attachments": ["/path/to/docs/", "/path/to/src/"], "session_id": "architecture-analysis"}
+# Analyze large codebase with automatic RAG for files that exceed context
+Use the-force chat_with_gpt4_1 with {"instructions": "Analyze this codebase for architectural patterns and potential improvements", "output_format": "Structured analysis with specific recommendations", "context": ["/path/to/docs/", "/path/to/src/"], "session_id": "architecture-analysis"}
 ```
 
 ### Structured Output for Reliable Results
@@ -417,6 +532,26 @@ Search across project history:
 # Search past decisions and commit history
 Use the-force search_project_history with {"query": "authentication implementation decisions", "max_results": 10}
 ```
+
+## 🧹 Loiter Killer Service
+
+The MCP server includes a companion service called "Loiter Killer" that manages the lifecycle of OpenAI vector stores created during RAG operations.
+
+### Purpose
+- **Automatic cleanup**: Deletes expired vector stores to prevent hitting API limits
+- **Resource management**: Tracks and manages vector store usage across sessions
+- **Cost optimization**: Prevents accumulation of unused vector stores that count against quotas
+
+### Running the Service
+```bash
+# Start with docker-compose (recommended)
+docker-compose up -d loiter-killer
+
+# Or run directly
+cd loiter_killer && python loiter_killer.py
+```
+
+The service runs on port 9876 by default (configurable via `services.loiter_killer_port`).
 
 ## 🔍 Developer Logging System
 

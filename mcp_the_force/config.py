@@ -188,9 +188,15 @@ class SecurityConfig(BaseModel):
 class ServicesConfig(BaseModel):
     """External services configuration."""
 
-    loiter_killer_url: str = Field(
-        "http://localhost:9876", description="Loiter killer service URL"
+    loiter_killer_host: str = Field(
+        "localhost", description="Loiter killer service host"
     )
+    loiter_killer_port: int = Field(9876, description="Loiter killer service port")
+
+    @property
+    def loiter_killer_url(self) -> str:
+        """Construct loiter killer URL from host and port."""
+        return f"http://{self.loiter_killer_host}:{self.loiter_killer_port}"
 
 
 class DevConfig(BaseModel):
@@ -416,7 +422,8 @@ class Settings(BaseSettings):
             "MEMORY_SUMMARY_CHAR_LIMIT": ("memory", "summary_char_limit"),
             "MEMORY_MAX_FILES_PER_COMMIT": ("memory", "max_files_per_commit"),
             # Services
-            "LOITER_KILLER_URL": ("services", "loiter_killer_url"),
+            "LOITER_KILLER_HOST": ("services", "loiter_killer_host"),
+            "LOITER_KILLER_PORT": ("services", "loiter_killer_port"),
             # Dev/Testing
             "MCP_ADAPTER_MOCK": ("dev", "adapter_mock"),
             "CI_E2E": ("dev", "ci_e2e"),
