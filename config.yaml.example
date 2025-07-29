@@ -40,7 +40,7 @@ providers:
     max_function_calls: 500
     
   anthropic:
-    enabled: false  # Not currently implemented
+    enabled: true
     max_output_tokens: 65536
     max_function_calls: 500
     

@@ -1,6 +1,6 @@
 # MCP The Force Server
 
-An intelligent Model Context Protocol (MCP) server that orchestrates multiple AI models with advanced context management for large codebases. Built with a sophisticated descriptor-based tool system, it supports both OpenAI (o3, o3-pro, gpt-4.1) and Google Gemini (2.5-pro, 2.5-flash) models with smart file inlining and vector store integration.
+An intelligent Model Context Protocol (MCP) server that orchestrates multiple AI models with advanced context management for large codebases. Built with a sophisticated descriptor-based tool system, it supports OpenAI (o3, o3-pro, gpt-4.1), Google Gemini (2.5-pro, 2.5-flash), Anthropic Claude (4-opus, 4-sonnet, 3-opus), and xAI Grok models with smart file inlining and vector store integration.
 
 ## 🚀 Quick Start
 
@@ -242,6 +242,19 @@ For the complete list of all configuration options, see [CONFIGURATION.md](docs/
 
 ## 🔐 Authentication
 
+### Anthropic (Claude Models)
+
+**API Key Setup**:
+1. Get your API key from [console.anthropic.com](https://console.anthropic.com/)
+2. Add to `secrets.yaml`:
+   ```yaml
+   providers:
+     anthropic:
+       enabled: true
+       api_key: "sk-ant-..." # Add your key here
+   ```
+3. Or set environment variable: `export ANTHROPIC_API_KEY=sk-ant-...`
+
 ### xAI (Grok Models)
 
 **API Key Setup**:
@@ -358,7 +371,7 @@ These tools are dynamically generated based on provider-specific capabilities. C
 | :--- | :--- | :--- | :--- |
 | `chat_with_o3` | o3 | 200,000 | Chain-of-thought reasoning with web search. |
 | `chat_with_o3_pro` | o3-pro | 200,000 | Deep analysis and formal reasoning with web search. |
-| `chat_with_o4_mini` | o4-mini | 200,000 | Fast reasoning model. |
+| `chat_with_codex_mini` | codex-mini | 200,000 | Fast coding-specialized reasoning model. |
 | `chat_with_gpt41` | gpt-4.1 | 1,000,000 | Fast long-context processing with web search. |
 | `research_with_o3_deep_research` | o3-deep-research | 200,000 | Ultra-deep research with extensive web search (10-60 min). |
 | `research_with_o4_mini_deep_research`| o4-mini-deep-research| 200,000 | Fast research with web search (2-10 min). |
@@ -378,6 +391,20 @@ These tools are dynamically generated based on provider-specific capabilities. C
 - `temperature` (float, optional): Controls randomness. Default: `1.0`.
 - `reasoning_effort` (string, optional): Controls the 'thinking budget' for the model. Can be `low`, `medium`, or `high`.
 - `disable_memory_search` (boolean, optional): If true, prevents the model from using the `search_project_history` tool.
+
+#### Anthropic Models
+
+| Tool Name | Model Name | Context Window | Description |
+| :--- | :--- | :--- | :--- |
+| `chat_with_claude4_opus` | claude-4-opus | 200,000 | Deep analysis and formal reasoning with extended thinking (32k output). |
+| `chat_with_claude4_sonnet` | claude-4-sonnet | 200,000 | Fast long-context processing with extended thinking (64k output). |
+| `chat_with_claude3_opus` | claude-3-opus | 200,000 | Exceptional theory of mind and deep, thoughtful discussions (8k output). |
+
+**Key Anthropic Parameters:**
+- `temperature` (float, optional): Controls randomness. Default: `0.7`.
+- `max_tokens` (int, required): Maximum tokens to generate. Required by Anthropic API.
+- `reasoning_effort` (string, optional): Extended thinking effort level. Can be `low`, `medium`, or `high`. Only for Claude 4 models.
+- `thinking_budget` (int, optional): Explicit thinking token budget (1024-32768). Overrides reasoning_effort.
 
 #### xAI (Grok) Models
 
