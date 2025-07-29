@@ -35,8 +35,7 @@ class TestMemoryConfig:
 
     def test_init_creates_database(self, temp_db, mock_client):
         """Test that initialization creates database tables."""
-        with patch("mcp_the_force.memory.config.get_client", return_value=mock_client):
-            MemoryConfig(db_path=temp_db)
+        MemoryConfig(db_path=temp_db)
 
         # Check tables were created
         conn = sqlite3.connect(temp_db)
@@ -51,15 +50,15 @@ class TestMemoryConfig:
 
     def test_get_active_conversation_store_creates_first(self, temp_db, mock_client):
         """Test creating first conversation store."""
-        with patch("mcp_the_force.memory.config.get_client", return_value=mock_client):
+        with patch(
+            "mcp_the_force.memory.config.MemoryConfig._create_store"
+        ) as mock_create:
+            mock_create.return_value = "vs_test_store_id"
             config = MemoryConfig(db_path=temp_db)
             store_id = config.get_active_conversation_store()
 
         assert store_id == "vs_test_store_id"
-        mock_client.vector_stores.create.assert_called_once_with(
-            name="project-conversations-001",
-            expires_after={"anchor": "last_active_at", "days": 365},
-        )
+        mock_create.assert_called_once_with("conversation", 1)
 
         # Check database state
         conn = sqlite3.connect(temp_db)
@@ -73,26 +72,23 @@ class TestMemoryConfig:
 
     def test_get_active_commit_store_creates_first(self, temp_db, mock_client):
         """Test creating first commit store."""
-        with patch("mcp_the_force.memory.config.get_client", return_value=mock_client):
+        with patch(
+            "mcp_the_force.memory.config.MemoryConfig._create_store"
+        ) as mock_create:
+            mock_create.return_value = "vs_test_store_id"
             config = MemoryConfig(db_path=temp_db)
             store_id = config.get_active_commit_store()
 
         assert store_id == "vs_test_store_id"
-        mock_client.vector_stores.create.assert_called_once_with(
-            name="project-commits-001",
-            expires_after={"anchor": "last_active_at", "days": 365},
-        )
+        mock_create.assert_called_once_with("commit", 1)
 
     def test_increment_counts(self, temp_db, mock_client):
         """Test incrementing document counts."""
-        # Mock different store IDs for conversation and commit
-        conv_store = MagicMock()
-        conv_store.id = "vs_conversation_store"
-        commit_store = MagicMock()
-        commit_store.id = "vs_commit_store"
-        mock_client.vector_stores.create.side_effect = [conv_store, commit_store]
-
-        with patch("mcp_the_force.memory.config.get_client", return_value=mock_client):
+        with patch(
+            "mcp_the_force.memory.config.MemoryConfig._create_store"
+        ) as mock_create:
+            # Mock different store IDs for conversation and commit
+            mock_create.side_effect = ["vs_conversation_store", "vs_commit_store"]
             config = MemoryConfig(db_path=temp_db)
 
             # Create stores first
@@ -119,17 +115,14 @@ class TestMemoryConfig:
 
     def test_rollover_at_limit(self, temp_db, mock_client):
         """Test store rollover when limit is reached."""
-        # Create stores with different IDs
-        store1 = MagicMock()
-        store1.id = "vs_store_001"
-        store2 = MagicMock()
-        store2.id = "vs_store_002"
-        mock_client.vector_stores.create.side_effect = [store1, store2]
-
         with (
-            patch("mcp_the_force.memory.config.get_client", return_value=mock_client),
+            patch(
+                "mcp_the_force.memory.config.MemoryConfig._create_store"
+            ) as mock_create,
             patch("mcp_the_force.memory.config.get_settings") as mock_settings,
         ):
+            # Mock different store IDs
+            mock_create.side_effect = ["vs_store_001", "vs_store_002"]
             # Set low rollover limit for testing
             settings = MagicMock()
             settings.memory_rollover_limit = 2
@@ -166,15 +159,11 @@ class TestMemoryConfig:
 
     def test_get_all_store_ids(self, temp_db, mock_client):
         """Test retrieving all store IDs."""
-        # Create multiple stores
-        stores = []
-        for i in range(4):
-            store = MagicMock()
-            store.id = f"vs_store_{i:03d}"
-            stores.append(store)
-        mock_client.vector_stores.create.side_effect = stores
-
-        with patch("mcp_the_force.memory.config.get_client", return_value=mock_client):
+        with patch(
+            "mcp_the_force.memory.config.MemoryConfig._create_store"
+        ) as mock_create:
+            # Mock creating multiple stores
+            mock_create.side_effect = [f"vs_store_{i:03d}" for i in range(4)]
             config = MemoryConfig(db_path=temp_db)
 
             # Create some stores
@@ -190,10 +179,7 @@ class TestMemoryConfig:
 
     def test_singleton_instance(self, temp_db, mock_client):
         """Test that get_memory_config returns singleton."""
-        with (
-            patch("mcp_the_force.memory.config.get_client", return_value=mock_client),
-            patch("mcp_the_force.memory.config.get_settings") as mock_settings,
-        ):
+        with patch("mcp_the_force.memory.config.get_settings") as mock_settings:
             settings = MagicMock()
             settings.session_db_path = str(temp_db)
             settings.memory_rollover_limit = 9500
@@ -237,9 +223,17 @@ class TestMemoryConfig:
                 results.append((store_type, f"ERROR: {e}"))
 
         with patch(
-            "mcp_the_force.memory.config.get_client",
-            return_value=create_mock_client(),
-        ):
+            "mcp_the_force.memory.config.MemoryConfig._create_store"
+        ) as mock_create:
+            # Generate unique store IDs for concurrent access
+            store_counter = [0]
+
+            def thread_safe_create_store(store_type, store_num):
+                with threading.Lock():
+                    store_counter[0] += 1
+                    return f"vs_{store_type}_{store_counter[0]:03d}"
+
+            mock_create.side_effect = thread_safe_create_store
             config = MemoryConfig(db_path=temp_db)
 
             # Create threads

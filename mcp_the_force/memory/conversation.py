@@ -28,11 +28,9 @@ async def store_conversation_memory(
     )
 
     try:
-        # Get async client (lazy import to avoid circular dependency)
-        from ..adapters.openai.client import OpenAIClientFactory
-
-        settings = get_settings()
-        client = await OpenAIClientFactory.get_instance(api_key=settings.openai_api_key)
+        # Import vector store manager to use the abstraction
+        from ..vectorstores.manager import vector_store_manager
+        from ..vectorstores.protocol import VSFile
 
         # Get current git state using subprocess (sync, but quick - run in executor if needed)
         loop = asyncio.get_event_loop()
@@ -66,7 +64,7 @@ async def store_conversation_memory(
         summary = await create_conversation_summary(messages, response, tool_name)
 
         # Create document with metadata
-        doc = {
+        doc: Dict[str, Any] = {
             "content": summary,
             "metadata": {
                 "type": "conversation",
@@ -83,6 +81,9 @@ async def store_conversation_memory(
             },
         }
 
+        # Extract timestamp for filename (before redaction to ensure type safety)
+        timestamp = doc["metadata"]["timestamp"]
+
         # Redact secrets before storage
         doc = redact_dict(doc)
 
@@ -97,12 +98,25 @@ async def store_conversation_memory(
         logger.debug(f"[MEMORY] Created temp file: {tmp_path}")
 
         try:
-            # Upload to vector store (async)
-            with open(tmp_path, "rb") as f:
-                file_obj = await client.files.create(file=f, purpose="assistants")
-                await client.vector_stores.files.create(
-                    vector_store_id=store_id, file_id=file_obj.id
-                )
+            # Upload to vector store using the abstraction
+            with open(tmp_path, "r") as f:
+                content = f.read()
+
+            # Create VSFile
+            vs_file = VSFile(
+                path=f"conversations/{session_id}_{timestamp}.json",
+                content=content,
+                metadata={
+                    "type": "conversation",
+                    "session_id": session_id,
+                    "tool": tool_name,
+                },
+            )
+
+            # Get the vector store and add the file
+            client = vector_store_manager._get_client(vector_store_manager.provider)
+            store = await client.get(store_id)
+            await store.add_files([vs_file])
 
             # Increment count
             config.increment_conversation_count()
@@ -194,6 +208,14 @@ async def create_conversation_summary(
         for msg in messages:
             if isinstance(msg, dict) and msg.get("role") == "user":
                 raw_content = msg.get("content", "")
+                # Handle both string content and list content (newer format)
+                if isinstance(raw_content, list):
+                    # Extract text from content parts
+                    text_parts = []
+                    for part in raw_content:
+                        if isinstance(part, dict) and part.get("type") == "text":
+                            text_parts.append(part.get("text", ""))
+                    raw_content = "\n".join(text_parts)
                 user_components = _extract_message_components(raw_content)
                 break
 
@@ -262,7 +284,12 @@ Conversation to summarize:
         from ..adapters.tool_dispatcher import ToolDispatcher
 
         params = SimpleNamespace(temperature=0.3)
-        ctx = CallContext(session_id="", vector_store_ids=None)
+        ctx = CallContext(
+            session_id="memory-summarization",
+            project="memory-system",
+            tool="gemini25_flash",
+            vector_store_ids=None,
+        )
         tool_dispatcher = ToolDispatcher(vector_store_ids=None)
 
         result = await adapter.generate(
@@ -293,7 +320,6 @@ def _create_fallback_summary(
     user_components: MessageComponents, response: str, tool_name: str
 ) -> str:
     """Create a structured summary when Gemini Flash is unavailable."""
-    from ..config import get_settings
 
     settings = get_settings()
 

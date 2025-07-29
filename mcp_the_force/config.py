@@ -92,6 +92,9 @@ class MCPConfig(BaseModel):
     thread_pool_workers: int = Field(
         10, description="Max workers for shared thread pool", ge=1, le=100
     )
+    default_vector_store_provider: str = Field(
+        "openai", description="Default provider for vector stores"
+    )
 
 
 class SessionConfig(BaseModel):
