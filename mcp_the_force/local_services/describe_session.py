@@ -97,16 +97,35 @@ class DescribeSessionService:
             if not metadata:
                 return f"Error: Summarization model '{model_to_use}' not found."
 
+            # Format the conversation history for the instructions
+            formatted_history = []
+            for message in original_session.history:
+                role = message.get("role", "unknown")
+                content = message.get("content", "")
+                # Handle both string content and list content (for multimodal)
+                if isinstance(content, list):
+                    # Extract text from multimodal content
+                    text_parts = []
+                    for item in content:
+                        if isinstance(item, dict) and "text" in item:
+                            text_parts.append(item["text"])
+                    content = "\n".join(text_parts)
+                formatted_history.append(f"{role}: {content}")
+
+            conversation_text = "\n\n".join(formatted_history)
+
             # Build params for executor
             params = {
                 "session_id": temp_session_id,
-                "instructions": "Summarize this conversation."
+                "instructions": "Summarize the following conversation:\n\n"
+                + conversation_text
                 + (
-                    f" {kwargs.get('extra_instructions', '')}"
+                    f"\n\n{kwargs.get('extra_instructions', '')}"
                     if kwargs.get("extra_instructions")
                     else ""
                 ),
                 "output_format": "A concise summary of the conversation",
+                "context": [],  # Empty context - all data is in the session history
             }
 
             # Execute the summarization
