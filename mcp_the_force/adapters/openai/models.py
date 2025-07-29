@@ -72,11 +72,11 @@ class O3ProCapabilities(OSeriesCapabilities):
 
 
 @dataclass
-class O4MiniCapabilities(OSeriesCapabilities):
-    """OpenAI o4-mini model capabilities."""
+class CodexMiniCapabilities(OSeriesCapabilities):
+    """OpenAI codex-mini model capabilities (o4-mini optimized for coding)."""
 
     max_context_window: int = 200_000
-    description: str = "Fast reasoning model (200k context)"
+    description: str = "Fast coding-specialized reasoning model (200k context)"
     parallel_function_calls: int = -1  # Unlimited
 
 
@@ -132,7 +132,7 @@ class O4MiniDeepResearchCapabilities(DeepResearchCapabilities):
 OPENAI_MODEL_CAPABILITIES = {
     "o3": O3Capabilities(),
     "o3-pro": O3ProCapabilities(),
-    "o4-mini": O4MiniCapabilities(),
+    "codex-mini": CodexMiniCapabilities(),
     "gpt-4.1": GPT41Capabilities(),
     "o3-deep-research": O3DeepResearchCapabilities(),
     "o4-mini-deep-research": O4MiniDeepResearchCapabilities(),
@@ -191,4 +191,4 @@ class OpenAIRequest(BaseModel):
                 }
             }
 
-        return api_data
+        return api_data  # type: ignore[no-any-return]
