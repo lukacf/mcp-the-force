@@ -51,16 +51,16 @@ session_id="debug-jwt"  # Contaminates reasoning paths
 
 #### Context Optimization
 ```python
-# First call: Create vector store
+# First call: Automatic vector store creation for large contexts
 chat_with_gpt4_1(
-    attachments=["/large/codebase"],
+    context=["/large/codebase"],  # Auto-creates vector store if > 85% of context window
     session_id="analysis-main"
 )
 
-# Subsequent calls: Reference same session for RAG
+# Subsequent calls: Reference same session for efficient processing
 chat_with_gemini25_pro(
-    context=[],  # Empty - relies on session memory
-    session_id="analysis-main"
+    context=["/specific/files"],  # Can add new context
+    session_id="analysis-main"  # Reuses vector store from session
 )
 ```
 
@@ -81,7 +81,7 @@ gemini25_pro("What did we miss in this analysis?")
 #### For Architecture Review
 ```python
 # Overview: Large context for patterns
-gpt4_1(attachments=["/entire/codebase"], "Find architectural inconsistencies")
+gpt4_1(context=["/entire/codebase"], "Find architectural inconsistencies")
 
 # Deep dive: Specific subsystems
 gemini25_pro("Analyze the data layer for ACID compliance issues")
@@ -128,13 +128,15 @@ for i, task in enumerate(tasks):
 
 #### Context Window Management
 ```python
-# Large codebase strategy
-if codebase_size > 1_million_tokens:
-    # Use attachments for auto-RAG
-    use_attachments_strategy()
+# Large codebase strategy (handled automatically)
+if codebase_size > (model_context_window * 0.85):
+    # Server automatically creates vector store
+    # No special handling needed - just use context
+    pass
 else:
-    # Use direct context
-    use_inline_context()
+    # Server inlines files directly
+    # Again, no special handling needed
+    pass
 ```
 
 ### Performance Optimization
