@@ -2,8 +2,7 @@
 
 from mcp_the_force.tools.blueprint import ToolBlueprint
 from mcp_the_force.tools.blueprint_registry import register_blueprints
-from ..params import GeminiToolParams
-from .models import GEMINI_MODEL_CAPABILITIES
+from .definitions import GeminiToolParams, GEMINI_MODEL_CAPABILITIES
 
 # Generate blueprints from model capabilities
 blueprints = []

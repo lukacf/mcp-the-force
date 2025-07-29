@@ -214,6 +214,7 @@ class Settings(BaseSettings):
     vertex: ProviderConfig = Field(
         default_factory=lambda: ProviderConfig(max_output_tokens=65536)
     )
+    gemini: ProviderConfig = Field(default_factory=ProviderConfig)
     anthropic: ProviderConfig = Field(default_factory=ProviderConfig)
     xai: ProviderConfig = Field(default_factory=ProviderConfig)
     litellm: ProviderConfig = Field(default_factory=ProviderConfig)
@@ -251,7 +252,10 @@ class Settings(BaseSettings):
                 abs_path = adc_path.resolve()
 
             if not abs_path.exists():
-                raise FileNotFoundError(f"ADC credentials file not found: {abs_path}")
+                logger.warning(
+                    f"ADC credentials file not found at {abs_path}. GOOGLE_APPLICATION_CREDENTIALS will not be set."
+                )
+                return
             if not os.access(str(abs_path), os.R_OK):
                 raise PermissionError(f"ADC credentials file not readable: {abs_path}")
 
@@ -388,6 +392,7 @@ class Settings(BaseSettings):
             "GCLOUD_OAUTH_CLIENT_ID": ("vertex", "oauth_client_id"),
             "GCLOUD_OAUTH_CLIENT_SECRET": ("vertex", "oauth_client_secret"),
             "GCLOUD_USER_REFRESH_TOKEN": ("vertex", "user_refresh_token"),
+            "GEMINI_API_KEY": ("gemini", "api_key"),
             "ANTHROPIC_API_KEY": ("anthropic", "api_key"),
             "XAI_API_KEY": ("xai", "api_key"),
             # MCP settings
