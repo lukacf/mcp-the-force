@@ -31,15 +31,16 @@ They are your task force, your work force, your close collaborators.
    - Remember that different perspectives from The Force are valuable inputs, not directives; you are responsible for synthesizing and implementing solutions
 
 5. **Understand and Utilize Each Force Member's Unique Strengths**:
-   - **chat_with_gemini25_pro**: Deep multimodal analysis (Gemini 2.5 Pro, ~1M context). Best for bug fixing, code analysis.
-   - **chat_with_gemini25_flash**: Fast summarization/analysis (Gemini 2.5 Flash, ~1M context). Best for rapid insights, triage.
-   - **chat_with_o3**: Chain-of-thought reasoning (OpenAI o3, ~200k context). Supports web search.
-   - **chat_with_o3_pro**: Deep analysis and formal reasoning (OpenAI o3-pro, ~200k context). Supports web search. Slower, more expensive.
-   - **chat_with_gpt4_1**: Fast long-context processing (GPT-4.1, ~1M context). Supports web search. Best for large-scale refactoring and RAG.
-   - **chat_with_grok4**: Advanced reasoning with real-time web info (Grok 4, ~256k context).
-   - **chat_with_grok3_reasoning**: Complex problem solving with real-time web info (Grok 3 Beta, ~131k context).
-   - **research_with_o3_deep_research**: Autonomous, long-running (10-60 min) research with extensive web search (o3-deep-research).
-   - **research_with_o4_mini_deep_research**: Faster (2-10 min) autonomous research with web search (o4-mini-deep-research).
+   - **chat_with_gemini25_pro**: Deep multimodal analysis and complex reasoning (Gemini 2.5 Pro, 1M tokens). Best for bug fixing, code analysis.
+   - **chat_with_gemini25_flash**: Fast summarization and quick analysis (Gemini 2.5 Flash, 1M tokens). Best for rapid insights, triage.
+   - **chat_with_o3**: Chain-of-thought reasoning with web search (OpenAI o3, 200k tokens). 
+   - **chat_with_o3_pro**: Deep analysis and formal reasoning with web search (OpenAI o3-pro, 200k tokens). Slower, more expensive.
+   - **chat_with_o4_mini**: Fast reasoning model (OpenAI o4-mini, 200k tokens).
+   - **chat_with_gpt41**: Fast long-context processing with web search (GPT-4.1, 1M tokens). Best for large-scale refactoring and RAG.
+   - **chat_with_grok3_beta**: Deep reasoning using xAI Grok 3 Beta model (131k tokens).
+   - **chat_with_grok4**: Advanced assistant using xAI Grok 4 model with multi-agent reasoning (256k tokens).
+   - **research_with_o3_deep_research**: Ultra-deep research with extensive web search (o3-deep-research, 200k tokens, 10-60 min).
+   - **research_with_o4_mini_deep_research**: Fast research with web search (o4-mini-deep-research, 200k tokens, 2-10 min).
    - Provide relevant context to each Force member at the start of a session; be transparent about your AI nature and collaboration goals
    - Avoid using Tasks for calling the assistants; use general prompts and conversation
 
@@ -60,7 +61,7 @@ They are your task force, your work force, your close collaborators.
 
 ## Project Overview
 
-MCP The-Force Server - A Model Context Protocol (MCP) server that provides access to multiple AI models (OpenAI o-series and Google Gemini 2.5) with intelligent context management for large codebases. Built with a sophisticated descriptor-based tool system using Python descriptors for parameter routing. Uses FastMCP framework with smart file inlining and vector store integration for RAG. Supports optional multi-turn conversations for OpenAI models.
+MCP The-Force Server - A Model Context Protocol (MCP) server that provides access to multiple AI models (OpenAI o-series, Google Gemini 2.5, and xAI Grok) with intelligent context management for large codebases. Built with a sophisticated descriptor-based tool system using Python descriptors for parameter routing. Uses FastMCP framework with smart file inlining and vector store integration for RAG. Supports multi-turn conversations for all models via UnifiedSessionCache.
 
 ## Commands
 
@@ -74,15 +75,19 @@ MCP The-Force Server - A Model Context Protocol (MCP) server that provides acces
 ### Core Components
 
 1. **Adapters** (`mcp_the_force/adapters/`)
-   - `base.py`: Abstract `BaseAdapter` defining the interface
-   - `openai/`: OpenAI models integration (o3, o3-pro, gpt-4.1) via Responses API
-   - `vertex_adapter.py`: Google Vertex AI integration (Gemini 2.5 pro/flash) via google-genai SDK
+   - Protocol-based architecture with `MCPAdapter` protocol
+   - `openai/`: OpenAI models integration (o3, o3-pro, o4-mini, gpt-4.1) via Responses API
+   - `google/`: Google Vertex AI integration (Gemini 2.5 pro/flash) via google-genai SDK
+   - `xai/`: xAI integration (Grok 3 Beta, Grok 4)
+   - `registry.py`: Central adapter registry
 
 2. **Tool System** (`mcp_the_force/tools/`)
-   - `descriptors.py`: Route descriptors for parameter routing
+   - `descriptors.py`: Route descriptors with capability requirements
    - `base.py`: ToolSpec base class with dataclass-like definitions
-   - `definitions.py`: Tool definitions for all models
-   - `executor.py`: Orchestrates tool execution with component delegation
+   - `autogen.py`: Automatic tool generation from adapter blueprints
+   - `executor.py`: Orchestrates tool execution with capability validation
+   - `capability_validator.py`: Validates parameters against model capabilities
+   - `factories.py`: Dynamic tool class generation
    - `integration.py`: FastMCP integration layer
 
 3. **Server** (`mcp_the_force/server.py`)
@@ -107,22 +112,30 @@ MCP The-Force Server - A Model Context Protocol (MCP) server that provides acces
 
 Tools are defined using a descriptor-based system with parameter routing:
 
-**Primary tools:**
-- `chat_with_gemini25_pro`: Deep analysis (Gemini 2.5 Pro, ~1M tokens)
-- `chat_with_gemini25_flash`: Fast summarization (Gemini 2.5 Flash, ~1M tokens)
-- `chat_with_o3`: Chain-of-thought reasoning (OpenAI o3, ~200k tokens), web search enabled.
-- `chat_with_o3_pro`: Formal proofs (OpenAI o3-pro, ~200k tokens), web search enabled.
-- `chat_with_gpt4_1`: Large-scale analysis (GPT-4.1, ~1M tokens), web search enabled.
-- `chat_with_grok4`: Advanced multi-agent reasoning (Grok 4, ~256k tokens), with Live Search.
-- `chat_with_grok3_reasoning`: Complex problem solving (Grok 3 Beta, ~131k tokens), with Live Search.
-- `research_with_o3_deep_research`: Ultra-deep research (OpenAI o3-deep-research, ~200k tokens), autonomous web search, 10-60 min response time.
-- `research_with_o4_mini_deep_research`: Fast research (OpenAI o4-mini-deep-research, ~200k tokens), autonomous web search, 2-10 min response time.
+**AI Chat & Research Tools:**
+
+*Google Models:*
+- `chat_with_gemini25_pro`: Deep multimodal analysis and complex reasoning (Gemini 2.5 Pro, 1M tokens)
+- `chat_with_gemini25_flash`: Fast summarization and quick analysis (Gemini 2.5 Flash, 1M tokens)
+
+*OpenAI Models:*
+- `chat_with_o3`: Chain-of-thought reasoning with web search (OpenAI o3, 200k tokens)
+- `chat_with_o3_pro`: Deep analysis and formal reasoning with web search (OpenAI o3-pro, 200k tokens)
+- `chat_with_o4_mini`: Fast reasoning model (OpenAI o4-mini, 200k tokens)
+- `chat_with_gpt41`: Fast long-context processing with web search (GPT-4.1, 1M tokens)
+- `research_with_o3_deep_research`: Ultra-deep research with extensive web search (o3-deep-research, 200k tokens, 10-60 min)
+- `research_with_o4_mini_deep_research`: Fast research with web search (o4-mini-deep-research, 200k tokens, 2-10 min)
+
+*xAI Models:*
+- `chat_with_grok3_beta`: Deep reasoning using xAI Grok 3 Beta model (131k tokens)
+- `chat_with_grok4`: Advanced assistant using xAI Grok 4 model with multi-agent reasoning (256k tokens)
 
 **Utility tools:**
-- `list_models`: Show all available models and capabilities.
-- `search_project_history`: Search past conversations and git commits from the project's long-term memory.
-- `count_project_tokens`: Count tokens for specified files or directories.
-- `search_mcp_debug_logs`: (Developer mode only) Run a raw LogsQL query against VictoriaLogs debug logs.
+- `list_sessions`: List existing AI conversation sessions for the current project
+- `describe_session`: Generate an AI-powered summary of an existing session's conversation history
+- `search_project_history`: Search past conversations and git commits from the project's long-term memory
+- `count_project_tokens`: Count tokens for specified files or directories
+- `search_mcp_debug_logs`: (Developer mode only) Run a raw LogsQL query against VictoriaLogs debug logs
 
 Use `search_project_history` whenever you need to recall prior AI decisions or
 code history. 
@@ -135,7 +148,7 @@ All AI chat and research tools support multi-turn conversations via the `session
 - **Session Continuity**:
   - **OpenAI/Grok**: The server caches the `response_id` (for OpenAI) or the full history (for Grok) to continue the conversation.
   - **Gemini**: The server stores the full conversation history locally in the SQLite database.
-- **Session TTL**: The default Time-To-Live for all sessions is 1 hour, but this is configurable.
+- **Session TTL**: The default Time-To-Live for all sessions is 6 months (configurable via `session.ttl_seconds`).
 - **Session IDs**: Session IDs are global. Use unique names for different tasks (e.g., "refactor-auth-logic-2024-07-15"). 
 
 ### Configuration
@@ -153,12 +166,15 @@ mcp-config init
 ```
 
 **Key Configuration:**
-- `providers.openai.api_key`: Required for OpenAI models (o3, o3-pro, gpt-4.1)
+- `providers.openai.api_key`: Required for OpenAI models (o3, o3-pro, o4-mini, gpt-4.1)
 - `providers.vertex.project`, `providers.vertex.location`: Required for Google Vertex AI models
+- `providers.xai.api_key`: Required for xAI models (Grok 3 Beta, Grok 4)
 - `mcp.host`, `mcp.port`: Server configuration
 - `mcp.context_percentage`: Percentage of model context to use (default: 0.85 = 85%)
 - `mcp.default_temperature`: AI model temperature setting
 - `logging.level`: Logging verbosity
+- `session.ttl_seconds`: Session time-to-live (default: 15552000 = 6 months)
+- `memory.enabled`: Enable/disable long-term memory system
 
 The project uses a YAML-based configuration system managed by the `mcp-config` CLI tool. This is the recommended way to manage settings. Environment variables can also be used, which is particularly useful for integrating with clients like Claude Desktop, and they will override YAML settings.
 
@@ -172,11 +188,11 @@ The project uses a YAML-based configuration system managed by the `mcp-config` C
 - All adapters must implement `BaseAdapter.generate()` method
 - Tools defined as dataclasses with `@tool` decorator
 - Parameters use `Route.prompt()`, `Route.adapter()`, etc. for routing
-- **Critical**: Always use absolute paths in context/attachments parameters
+- **Critical**: Always use absolute paths in context parameters
 
 ## File Paths
 
-**Important**: When using this server, always provide absolute paths in `context` and `attachments` parameters:
+**Important**: When using this server, always provide absolute paths in `context` parameters:
 - ✅ Correct: `["/Users/username/project/src/"]`
 - ❌ Avoid: `["./src/", "../other/"]`
 
