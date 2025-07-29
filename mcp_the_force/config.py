@@ -245,6 +245,9 @@ class Settings(BaseSettings):
         """Initialize settings and set up ADC if configured."""
         super().__init__(**kwargs)
 
+        # Store config path for debugging
+        self._config_path = None
+
         # Set GOOGLE_APPLICATION_CREDENTIALS if adc_credentials_path is configured
         if self.vertex.adc_credentials_path:
             # Resolve path relative to config file location
@@ -353,6 +356,8 @@ class Settings(BaseSettings):
                 with open(config_file) as f:
                     config_data = yaml.safe_load(f) or {}
                 logger.debug(f"Loaded configuration from {config_file}")
+                # Store the path for later use
+                cls._last_config_path = str(config_file)
             except Exception as e:
                 logger.warning(f"Failed to load {config_file}: {e}")
 

@@ -19,23 +19,26 @@ class TestAnthropicBlueprints:
     def test_blueprint_names(self):
         """Test that blueprints have correct generated names."""
         blueprints = get_anthropic_blueprints()
-        # Tool names are generated automatically by the blueprint system
-        # Check model names instead
+        # Check model names
         model_names = [bp.model_name for bp in blueprints]
+        assert "claude-opus-4-20250514" in model_names
+        assert "claude-sonnet-4-20250514" in model_names
+        assert "claude-3-opus-20240229" in model_names
 
-        # Check that we have the expected models
-        assert "claude-4-opus" in model_names
-        assert "claude-4-sonnet" in model_names
-        assert "claude-3-opus" in model_names
+        # Check friendly tool names
+        tool_names = [bp.tool_name for bp in blueprints]
+        assert "chat_with_claude4_opus" in tool_names
+        assert "chat_with_claude4_sonnet" in tool_names
+        assert "chat_with_claude3_opus" in tool_names
 
     def test_blueprint_model_mapping(self):
         """Test that blueprints map to correct models."""
         blueprints = get_anthropic_blueprints()
         model_names = [bp.model_name for bp in blueprints]
 
-        assert "claude-4-opus" in model_names
-        assert "claude-4-sonnet" in model_names
-        assert "claude-3-opus" in model_names
+        assert "claude-opus-4-20250514" in model_names
+        assert "claude-sonnet-4-20250514" in model_names
+        assert "claude-3-opus-20240229" in model_names
 
     def test_blueprint_adapter_key(self):
         """Test that all blueprints use anthropic adapter."""
@@ -57,14 +60,20 @@ class TestAnthropicBlueprints:
             assert len(bp.description) > 10
 
         # Check specific descriptions
-        opus4_bp = next(bp for bp in blueprints if bp.model_name == "claude-4-opus")
+        opus4_bp = next(
+            bp for bp in blueprints if bp.model_name == "claude-opus-4-20250514"
+        )
         assert "extended thinking" in opus4_bp.description
         assert "32k output" in opus4_bp.description
 
-        sonnet4_bp = next(bp for bp in blueprints if bp.model_name == "claude-4-sonnet")
+        sonnet4_bp = next(
+            bp for bp in blueprints if bp.model_name == "claude-sonnet-4-20250514"
+        )
         assert "64k output" in sonnet4_bp.description
 
-        opus3_bp = next(bp for bp in blueprints if bp.model_name == "claude-3-opus")
+        opus3_bp = next(
+            bp for bp in blueprints if bp.model_name == "claude-3-opus-20240229"
+        )
         assert "8k output" in opus3_bp.description
 
     def test_blueprint_capabilities(self):
@@ -76,9 +85,9 @@ class TestAnthropicBlueprints:
             ANTHROPIC_MODEL_CAPABILITIES,
         )
 
-        opus4_caps = ANTHROPIC_MODEL_CAPABILITIES["claude-4-opus"]
+        opus4_caps = ANTHROPIC_MODEL_CAPABILITIES["claude-opus-4-20250514"]
         assert opus4_caps.supports_reasoning_effort is True
         assert opus4_caps.max_context_window == 200_000
 
-        opus3_caps = ANTHROPIC_MODEL_CAPABILITIES["claude-3-opus"]
+        opus3_caps = ANTHROPIC_MODEL_CAPABILITIES["claude-3-opus-20240229"]
         assert opus3_caps.supports_reasoning_effort is False

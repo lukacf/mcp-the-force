@@ -24,6 +24,21 @@ def get_config_dir() -> Path:
 
 def ensure_config_exists():
     """Ensure configuration files exist, creating defaults if needed."""
+    # If config files are already set via env vars, don't override them
+    if "MCP_CONFIG_FILE" in os.environ or "MCP_SECRETS_FILE" in os.environ:
+        return
+
+    # Check if we're running from a development environment
+    # (i.e., config.yaml exists in the current directory or parent directories)
+    current_dir = Path.cwd()
+    for _ in range(3):  # Check up to 3 levels up
+        if (current_dir / "config.yaml").exists():
+            # We're in a development environment, don't override config location
+            return
+        if current_dir.parent == current_dir:
+            break
+        current_dir = current_dir.parent
+
     config_dir = get_config_dir()
     config_file = config_dir / "config.yaml"
     secrets_file = config_dir / "secrets.yaml"
