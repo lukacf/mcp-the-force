@@ -144,14 +144,23 @@ async def build_context_with_stable_list(
             try:
                 size = os.path.getsize(file_path)
                 est_tokens = estimate_tokens(size)
-                if est_tokens <= remaining_budget:
+
+                # Priority files ALWAYS go inline, regardless of budget
+                if file_path in priority_files:
+                    inline_paths.append(file_path)
+                    remaining_budget -= est_tokens  # Still track budget impact
+                elif est_tokens <= remaining_budget:
                     inline_paths.append(file_path)
                     remaining_budget -= est_tokens
                 else:
                     overflow_paths.append(file_path)
             except (OSError, IOError):
-                # If we can't stat the file, put it in overflow
-                overflow_paths.append(file_path)
+                # If we can't stat the file, put it in overflow unless it's priority
+                if file_path in priority_files:
+                    # Priority files still go inline even if we can't stat them
+                    inline_paths.append(file_path)
+                else:
+                    overflow_paths.append(file_path)
 
         # Second pass: load and tokenize only files that will be sent inline
         logger.debug(
@@ -160,10 +169,24 @@ async def build_context_with_stable_list(
         file_data = await load_specific_files_async(inline_paths)
 
         # Safety check: trim if our size estimates were too optimistic
-        file_data.sort(key=lambda t: t[2])  # Sort by actual token count
-        used_tokens = 0
+        # Separate priority and regular files
+        priority_data = [f for f in file_data if f[0] in priority_files]
+        regular_data = [f for f in file_data if f[0] not in priority_files]
+
+        # Sort regular files by token count
+        regular_data.sort(key=lambda t: t[2])
+
+        # Priority files always go first
         trimmed_data = []
-        for file_path, content, tokens in file_data:
+        used_tokens = 0
+
+        # Add all priority files (they MUST be included)
+        for file_path, content, tokens in priority_data:
+            trimmed_data.append((file_path, content, tokens))
+            used_tokens += tokens
+
+        # Add regular files that fit in remaining budget
+        for file_path, content, tokens in regular_data:
             if used_tokens + tokens <= token_budget:
                 trimmed_data.append((file_path, content, tokens))
                 used_tokens += tokens
