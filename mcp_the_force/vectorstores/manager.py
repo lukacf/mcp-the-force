@@ -48,6 +48,17 @@ class VectorStoreManager:
             self._client_cache[provider] = registry.get_client(provider)
         return self._client_cache[provider]
 
+    def _get_client_for_store(self, provider: str) -> VectorStoreClient:
+        """Get client for store operations, handling mock mode.
+
+        In mock mode, always returns inmemory client regardless of provider.
+        """
+        from ..config import get_settings
+
+        if get_settings().adapter_mock:
+            return self._get_client("inmemory")
+        return self._get_client(provider)
+
     def _compute_file_hash(self, content: str) -> str:
         """Compute hash for file content."""
         return hashlib.sha256(content.encode()).hexdigest()
@@ -76,17 +87,17 @@ class VectorStoreManager:
         from ..config import get_settings
 
         if get_settings().adapter_mock:
-            # In mock mode, use in-memory provider instead of mocking
-            # This ensures the store can actually be retrieved later
-            provider = "inmemory"
-            client = self._get_client(provider)
+            # In mock mode, use in-memory provider for implementation
+            # but preserve the original provider name for compatibility
+            original_provider = self.provider
+            mock_client = self._get_client("inmemory")
 
             # Create a real in-memory store that can be retrieved
             store_name = f"mock_{session_id or 'ephemeral'}"
-            store = await client.create(store_name, ttl_seconds=ttl_seconds)
+            store = await mock_client.create(store_name, ttl_seconds=ttl_seconds)
 
             logger.info(
-                f"[MOCK] Created in-memory vector store: {store.id} with {len(files)} files"
+                f"[MOCK] Created in-memory vector store: {store.id} for provider {original_provider} with {len(files)} files"
             )
 
             # Add files if provided
@@ -102,7 +113,7 @@ class VectorStoreManager:
 
             return {
                 "store_id": store.id,
-                "provider": provider,
+                "provider": original_provider,  # Return the originally requested provider
                 "session_id": session_id,
             }
 
@@ -205,7 +216,13 @@ class VectorStoreManager:
         from ..config import get_settings
 
         if get_settings().adapter_mock:
-            logger.info(f"[MOCK] Deleted mock vector store: {vs_id}")
+            # In mock mode, actually delete from inmemory client
+            try:
+                client = self._get_client("inmemory")
+                await client.delete(vs_id)
+                logger.info(f"[MOCK] Deleted mock vector store: {vs_id}")
+            except Exception as e:
+                logger.error(f"[MOCK] Error deleting mock vector store: {e}")
             return
 
         # Don't delete Loiter Killer managed stores - they handle their own lifecycle
@@ -277,7 +294,7 @@ class VectorStoreManager:
         )
 
         # Get store
-        client = self._get_client(store_info["provider"])
+        client = self._get_client_for_store(store_info["provider"])
         store = await client.get(store_info["store_id"])
 
         # Convert to VSFile objects
@@ -308,7 +325,7 @@ class VectorStoreManager:
         )
 
         # Add files
-        client = self._get_client(store_info["provider"])
+        client = self._get_client_for_store(store_info["provider"])
         store = await client.get(store_info["store_id"])
 
         vs_files = [VSFile(path=path, content=content) for path, content in files]
@@ -330,7 +347,7 @@ class VectorStoreManager:
         Returns:
             Search results
         """
-        client = self._get_client(store_info["provider"])
+        client = self._get_client_for_store(store_info["provider"])
         store = await client.get(store_info["store_id"])
         return await store.search(query, k=k)
 
