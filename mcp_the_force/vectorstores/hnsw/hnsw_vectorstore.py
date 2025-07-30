@@ -35,7 +35,7 @@ def _default_index_factory(dim: int) -> IndexProtocol:  # pragma: no cover
     """Default factory that creates real hnswlib indices."""
     import hnswlib
 
-    idx = hnswlib.Index(space="l2", dim=dim)
+    idx = hnswlib.Index(space="cosine", dim=dim)
     # Don't initialize here - let the store handle it with proper sizing
     return idx  # type: ignore[no-any-return]
 
@@ -76,6 +76,36 @@ class HnswVectorStore(VectorStore):
         if not files:
             return []
 
+        # Process files and prepare chunks outside the lock
+        all_chunks = []
+        all_metadata = []
+
+        for file in files:
+            # Chunk the file content
+            chunks = chunk_text_by_paragraph(file.content)
+
+            # Store metadata for each chunk
+            for chunk in chunks:
+                all_chunks.append(chunk)
+                all_metadata.append({"text": chunk, "source": file.path})
+
+        if not all_chunks:
+            return []
+
+        # Generate embeddings outside the lock (run in executor to avoid blocking asyncio)
+        model = get_embedding_model()
+        loop = asyncio.get_running_loop()
+        embeddings = await loop.run_in_executor(
+            None,
+            lambda: model.encode(
+                all_chunks,
+                batch_size=32,
+                convert_to_numpy=True,
+                show_progress_bar=False,
+            ),
+        )
+
+        # Now acquire the lock for index operations
         with self._lock:
             # Lazy initialize the index
             if self._index is None:
@@ -83,26 +113,6 @@ class HnswVectorStore(VectorStore):
                 self._index.init_index(
                     max_elements=self._max_elements, ef_construction=200, M=16
                 )
-
-            # Process each file
-            all_chunks = []
-            all_metadata = []
-
-            for file in files:
-                # Chunk the file content
-                chunks = chunk_text_by_paragraph(file.content)
-
-                # Store metadata for each chunk
-                for chunk in chunks:
-                    all_chunks.append(chunk)
-                    all_metadata.append({"text": chunk, "source": file.path})
-
-            if not all_chunks:
-                return []
-
-            # Generate embeddings
-            model = get_embedding_model()
-            embeddings = model.encode(all_chunks)
 
             # Check if we need to resize the index
             current_count = len(self._doc_chunks)
@@ -159,13 +169,18 @@ class HnswVectorStore(VectorStore):
             if not self._index or self._index.get_current_count() == 0:
                 return []
 
-        # 1. Embed the query
+        # 1. Embed the query (run in executor to avoid blocking asyncio)
         model = get_embedding_model()
-        query_vector = model.encode([query])
+        loop = asyncio.get_running_loop()
+        query_vector = await loop.run_in_executor(
+            None,
+            lambda: model.encode(
+                [query], convert_to_numpy=True, show_progress_bar=False
+            ),
+        )
 
         # 2. Query the HNSW index
         # This is a blocking CPU-bound call, so run in an executor
-        loop = asyncio.get_running_loop()
         with self._lock:
             if not self._index:  # Additional safety check
                 return []
@@ -205,43 +220,50 @@ class HnswVectorStore(VectorStore):
         index_path = self.client.persistence_dir / f"{self._id}.bin"
         meta_path = self.client.persistence_dir / f"{self._id}.json"
 
-        # Use a lock to prevent race conditions during saves
-        with self._lock:
-            if not self._index:
-                return
+        # Note: This method should only be called when the lock is already held
+        # by the calling method (e.g., add_files), so we don't acquire it here
+        if not self._index:
+            return
 
-            # Write to temporary files first for atomicity
-            index_tmp = index_path.with_suffix(".tmp")
-            meta_tmp = meta_path.with_suffix(".tmp")
+        # Write to temporary files first for atomicity
+        # Note: with_suffix replaces the ENTIRE suffix, so we need to be careful
+        index_tmp = self.client.persistence_dir / f"{self._id}.bin.tmp"
+        meta_tmp = self.client.persistence_dir / f"{self._id}.json.tmp"
 
-            try:
-                # Save the HNSW index
-                self._index.save_index(str(index_tmp))
-            except (RuntimeError, OSError, PermissionError) as e:
-                index_tmp.unlink(missing_ok=True)
-                raise VectorStoreError(f"Failed to save HNSW index: {e}") from e
+        try:
+            # Save the HNSW index
+            self._index.save_index(str(index_tmp))
+        except (RuntimeError, OSError, PermissionError) as e:
+            index_tmp.unlink(missing_ok=True)
+            raise VectorStoreError(f"Failed to save HNSW index: {e}") from e
 
-            try:
-                # Save the metadata
-                with open(meta_tmp, "w") as f:
-                    json.dump(self._doc_chunks, f)
-            except (OSError, PermissionError) as e:
-                # Clean up both temp files
-                index_tmp.unlink(missing_ok=True)
-                meta_tmp.unlink(missing_ok=True)
-                raise VectorStoreError(f"Failed to save metadata: {e}") from e
+        try:
+            # Save the metadata
+            import logging
 
-            try:
-                # Atomically move the files
-                os.rename(str(index_tmp), str(index_path))
-                os.rename(str(meta_tmp), str(meta_path))
-            except (OSError, PermissionError) as e:
-                # Clean up temp files on error
-                index_tmp.unlink(missing_ok=True)
-                meta_tmp.unlink(missing_ok=True)
-                raise VectorStoreError(
-                    f"Failed to move files to final location: {e}"
-                ) from e
+            logging.debug(
+                f"Saving metadata to {meta_tmp}, doc_chunks={len(self._doc_chunks)}"
+            )
+            with open(meta_tmp, "w") as f:
+                json.dump(self._doc_chunks, f)
+            logging.debug(f"Metadata saved, file exists: {meta_tmp.exists()}")
+        except (OSError, PermissionError) as e:
+            # Clean up both temp files
+            index_tmp.unlink(missing_ok=True)
+            meta_tmp.unlink(missing_ok=True)
+            raise VectorStoreError(f"Failed to save metadata: {e}") from e
+
+        try:
+            # Atomically move the files
+            os.rename(str(index_tmp), str(index_path))
+            os.rename(str(meta_tmp), str(meta_path))
+        except (OSError, PermissionError) as e:
+            # Clean up temp files on error
+            index_tmp.unlink(missing_ok=True)
+            meta_tmp.unlink(missing_ok=True)
+            raise VectorStoreError(
+                f"Failed to move files to final location: {e}"
+            ) from e
 
 
 class HnswVectorStoreClient(VectorStoreClient):
@@ -267,12 +289,24 @@ class HnswVectorStoreClient(VectorStoreClient):
     async def create(self, name: str, ttl_seconds: Optional[int] = None) -> VectorStore:
         """Create a new vector store."""
         store_id = f"hnsw_{uuid.uuid4().hex[:8]}"
-        return HnswVectorStore(
+        store = HnswVectorStore(
             client=self,
             store_id=store_id,
             index_factory=self._index_factory,
             persist=self._persist,
         )
+
+        # Initialize empty store and save it immediately if persistence is enabled
+        # This ensures the store exists on disk even before any files are added
+        if self._persist:
+            # Initialize the index with default parameters
+            store._index = store._index_factory(get_embedding_dimensions())
+            store._index.init_index(
+                max_elements=store._max_elements, ef_construction=200, M=16
+            )
+            store._save()
+
+        return store
 
     async def get(self, store_id: str) -> VectorStore:
         """Get an existing vector store."""
@@ -315,6 +349,9 @@ class HnswVectorStoreClient(VectorStoreClient):
                     max_elements = max(current_elements * 2, 10000)
                     store._index.load_index(str(index_path), max_elements=max_elements)
                     store._max_elements = max_elements
+                    # Set ef for better search performance
+                    # ef controls speed/accuracy tradeoff (higher = more accurate but slower)
+                    store._index.set_ef(50)  # type: ignore[attr-defined]  # Default is 10, we use 50 for better accuracy
                 except FileNotFoundError:
                     raise VectorStoreError(f"Index file not found for store {store_id}")
                 except (RuntimeError, OSError) as e:

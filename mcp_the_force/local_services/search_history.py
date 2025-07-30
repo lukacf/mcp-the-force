@@ -6,19 +6,13 @@ import asyncio
 from datetime import datetime, timezone
 from pathlib import Path
 
-from openai import OpenAI
-
 from ..memory.async_config import get_async_memory_config
+from ..vectorstores.manager import VectorStoreManager
 from ..utils.redaction import redact_secrets
-from ..utils.thread_pool import get_shared_executor
-from ..config import get_settings
 from ..tools.search_dedup_sqlite import SQLiteSearchDeduplicator
 from ..utils.scope_manager import scope_manager
 
 logger = logging.getLogger(__name__)
-
-# Thread pool for synchronous OpenAI operations (shared)
-executor = get_shared_executor()
 
 # Semaphore to limit concurrent searches
 search_semaphore = asyncio.Semaphore(5)
@@ -53,7 +47,7 @@ class SearchHistoryService:
     """Local service for searching project history stores."""
 
     # Class-level singletons
-    _client: Optional[OpenAI] = None
+    _vector_store_manager: Optional[VectorStoreManager] = None
     _memory_config: Optional[Any] = None  # AsyncMemoryConfig
     _deduplicator = None
     _deduplicator_lock = asyncio.Lock()
@@ -61,26 +55,25 @@ class SearchHistoryService:
 
     def __init__(
         self,
-        client: Optional[OpenAI] = None,
+        vector_store_manager: Optional[VectorStoreManager] = None,
         memory_config: Optional[Any] = None,
         deduplicator: Optional[Any] = None,
     ):
-        self.client = client
+        self.vector_store_manager = vector_store_manager
         self.memory_config = memory_config
 
         # Use provided dependencies if given (for tests)
-        if client and memory_config:
+        if vector_store_manager and memory_config:
             self._deduplicator = deduplicator
             return
 
         # Otherwise, initialize singletons once
-        if SearchHistoryService._client is None:
-            settings = get_settings()
-            SearchHistoryService._client = OpenAI(api_key=settings.openai_api_key)
+        if SearchHistoryService._vector_store_manager is None:
+            SearchHistoryService._vector_store_manager = VectorStoreManager()
         if SearchHistoryService._memory_config is None:
             SearchHistoryService._memory_config = get_async_memory_config()
 
-        self.client = SearchHistoryService._client
+        self.vector_store_manager = SearchHistoryService._vector_store_manager
         self.memory_config = SearchHistoryService._memory_config
         self._ensure_deduplicator()
 
@@ -327,52 +320,46 @@ class SearchHistoryService:
                 f"[SEARCH_HISTORY] Searching store {store_id} ({store_type}) for: '{query}'"
             )
 
-            # Run synchronous OpenAI call in thread pool
-            loop = asyncio.get_event_loop()
-            response = None
-            if self.client:
-                client = self.client  # Capture for lambda
-                response = await loop.run_in_executor(
-                    executor,
-                    lambda: client.vector_stores.search(
-                        vector_store_id=store_id,
-                        query=query,
-                        max_num_results=max_results,
-                    ),
-                )
+            # Get the store using vector store manager
+            if not self.vector_store_manager:
+                logger.error("Vector store manager not initialized")
+                return []
+
+            # Get store info from cache to determine provider
+            store_info = await self.vector_store_manager.vector_store_cache.get_store(
+                vector_store_id=store_id
+            )
+
+            if not store_info:
+                logger.error(f"Store {store_id} not found in cache")
+                return []
+
+            provider = store_info["provider"]
+            client = self.vector_store_manager._get_client(provider)
+
+            # Get the store instance
+            store = await client.get(store_id)
+
+            # Search using the vector store protocol
+            search_results = await store.search(query=query, k=max_results)
 
             results = []
-            if response and hasattr(response, "data"):
-                for item in response.data:
-                    # Extract content - handle different response formats
-                    content = ""
-                    if hasattr(item, "content"):
-                        if isinstance(item.content, str):
-                            content = item.content
-                        elif isinstance(item.content, list) and item.content:
-                            # Try to extract text from first content item
-                            first_item = item.content[0]
-                            if hasattr(first_item, "text"):
-                                if hasattr(first_item.text, "value"):
-                                    content = first_item.text.value
-                                else:
-                                    content = str(first_item.text)
+            for item in search_results:
+                result = {
+                    "content": item.content,
+                    "store_id": store_id,
+                    "score": item.score,
+                }
 
-                    result = {
-                        "content": content,
-                        "store_id": store_id,
-                        "score": getattr(item, "score", 0),
-                    }
+                # Add file_id if available
+                if hasattr(item, "file_id"):
+                    result["file_id"] = item.file_id
 
-                    # Add file_id if available
-                    if hasattr(item, "file_id") and item.file_id:
-                        result["file_id"] = item.file_id
+                # Add metadata if available
+                if item.metadata:
+                    result["metadata"] = item.metadata
 
-                    # Add metadata if available
-                    if hasattr(item, "metadata") and item.metadata:
-                        result["metadata"] = item.metadata
-
-                    results.append(result)
+                results.append(result)
 
             logger.debug(
                 f"[SEARCH_HISTORY] Store {store_id} returned {len(results)} results for query '{query}'"

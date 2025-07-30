@@ -1,12 +1,14 @@
 FROM python:3.13-slim
 
-# Install system dependencies
+# Install system dependencies including C++ compiler for hnswlib
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         git \
         curl \
         ca-certificates \
-        procps && \
+        procps \
+        build-essential \
+        g++ && \
     rm -rf /var/lib/apt/lists/*
 
 # Install uv for faster Python package management

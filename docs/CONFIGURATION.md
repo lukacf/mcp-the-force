@@ -130,7 +130,7 @@ Core settings for the `mcp-the-force` server process.
 | `mcp.context_percentage` | `MCP__MCP__CONTEXT_PERCENTAGE` or `CONTEXT_PERCENTAGE` | `float` | `0.85` | Percentage of a model's total context window to use for history and prompts. Range: `0.1-0.95`. |
 | `mcp.default_temperature` | `MCP__MCP__DEFAULT_TEMPERATURE` or `DEFAULT_TEMPERATURE` | `float` | `1.0` | Default sampling temperature for AI models, controlling creativity. Range: `0.0-2.0`. |
 | `mcp.thread_pool_workers` | `MCP__MCP__THREAD_POOL_WORKERS` | `int` | `10` | Maximum number of worker threads in the shared thread pool for background tasks. Range: `1-100`. |
-| `mcp.default_vector_store_provider` | `MCP__MCP__DEFAULT_VECTOR_STORE_PROVIDER` | `string` | `"openai"` | Default provider to use for creating vector stores. |
+| `mcp.default_vector_store_provider` | `MCP__MCP__DEFAULT_VECTOR_STORE_PROVIDER` | `string` | `"openai"` | Default provider to use for creating vector stores. Options: `"openai"` (default), `"hnsw"` (local, requires C++ compiler). |
 
 ---
 

@@ -285,10 +285,13 @@ class ToolExecutor:
                 logger.debug(
                     f"Creating vector store with {len(files_for_vector_store)} overflow/attachment files: {files_for_vector_store}"
                 )
-                vs_id = await self.vector_store_manager.create(
+                vs_result = await self.vector_store_manager.create(
                     files_for_vector_store, session_id=session_id
                 )
-                vector_store_ids = [vs_id] if vs_id and isinstance(vs_id, str) else None
+                vs_id = (
+                    vs_result.get("store_id") if isinstance(vs_result, dict) else None
+                )
+                vector_store_ids = [vs_id] if vs_id else None
                 logger.debug(
                     f"Vector store ready: {vs_id}, vector_store_ids={vector_store_ids}"
                 )
@@ -322,12 +325,15 @@ class ToolExecutor:
                         f"Gathered {len(files)} files from attachments: {files}"
                     )
                     if files:
-                        vs_id = await self.vector_store_manager.create(
+                        vs_result = await self.vector_store_manager.create(
                             files, session_id=None
                         )
-                        vector_store_ids = (
-                            [vs_id] if vs_id and isinstance(vs_id, str) else None
+                        vs_id = (
+                            vs_result.get("store_id")
+                            if isinstance(vs_result, dict)
+                            else None
                         )
+                        vector_store_ids = [vs_id] if vs_id else None
                         logger.debug(
                             f"Created vector store {vs_id}, vector_store_ids={vector_store_ids}"
                         )
