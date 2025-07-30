@@ -16,7 +16,7 @@ RUN pip install uv
 WORKDIR /app
 
 # Copy project files
-COPY pyproject.toml README.md ./
+COPY pyproject.toml README.md LICENSE ./
 COPY mcp_the_force ./mcp_the_force
 COPY *.md *.py ./
 
