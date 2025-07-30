@@ -11,12 +11,20 @@ import logging
 from .blueprint_registry import BLUEPRINTS
 from .factories import make_tool
 from ..adapters.registry import list_adapters
+from ..config import get_settings
 
 logger = logging.getLogger(__name__)
+
 
 # Import all adapter packages from the central registry
 # This ensures we have only ONE place where adapters are listed
 for adapter_key in list_adapters():
+    settings = get_settings()
+    provider_config = getattr(settings, adapter_key, None)
+    if provider_config and not provider_config.enabled:
+        logger.info(f"Skipping disabled adapter: {adapter_key}")
+        continue
+
     package = f"mcp_the_force.adapters.{adapter_key}"
     try:
         importlib.import_module(package)
