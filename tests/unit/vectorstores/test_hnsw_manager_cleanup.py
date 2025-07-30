@@ -8,8 +8,21 @@ from mcp_the_force.vector_store_cache import VectorStoreCache
 
 
 @pytest.fixture
-async def manager_with_test_db(tmp_path):
+async def manager_with_test_db(tmp_path, monkeypatch):
     """Create a VectorStoreManager with test database."""
+    # Ensure we don't use mock mode for HNSW tests
+    monkeypatch.setenv("MCP_ADAPTER_MOCK", "0")
+
+    # Use a temp directory for HNSW stores
+    hnsw_dir = tmp_path / "hnsw_stores"
+    hnsw_dir.mkdir()
+    monkeypatch.setenv("HNSW_STORE_DIR", str(hnsw_dir))
+
+    # Clear settings cache to ensure env var changes take effect
+    from mcp_the_force.config import get_settings
+
+    get_settings.cache_clear()
+
     db_path = tmp_path / "test_vector_stores.db"
     manager = VectorStoreManager(provider="hnsw")
     # Override the database path
@@ -19,50 +32,25 @@ async def manager_with_test_db(tmp_path):
         purge_probability=0.0,  # Disable automatic purge for tests
     )
 
-    # Mock the client delete method to track calls
+    # Track delete calls by wrapping the real client's delete method
     delete_calls = []
 
-    class MockClient:
-        def __init__(self):
-            self.provider = "hnsw"
+    # Get the real HNSW client
+    real_client = manager._get_client("hnsw")
+    original_delete = real_client.delete
 
-        async def delete(self, store_id):
-            delete_calls.append(store_id)
+    async def tracked_delete(store_id):
+        delete_calls.append(store_id)
+        return await original_delete(store_id)
 
-        async def get(self, store_id):
-            # Return a mock store
-            class MockStore:
-                id = store_id
-                provider = "hnsw"
-
-                async def add_files(self, files):
-                    pass
-
-                async def search(self, query, k=20):
-                    return []
-
-            return MockStore()
-
-        async def create(self, name, ttl_seconds=None):
-            class MockStore:
-                id = f"hnsw_{time.time_ns() % 100000000:08x}"
-                provider = "hnsw"
-
-                async def add_files(self, files):
-                    pass
-
-                async def search(self, query, k=20):
-                    return []
-
-            return MockStore()
-
-    # Inject mock client
-    manager._client_cache["hnsw"] = MockClient()
+    real_client.delete = tracked_delete
     manager.delete_calls = delete_calls
 
     yield manager
     # Cleanup
     manager.vector_store_cache.close()
+    # Clear settings cache again to reset for other tests
+    get_settings.cache_clear()
 
 
 @pytest.mark.asyncio
