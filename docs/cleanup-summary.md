@@ -40,7 +40,7 @@ Moved completed development docs to `docs/archive/`:
 - grok-adapter.md
 - litellm-refactor.md
 - logging-rewrite.md
-- loiter-killer-architecture.md
+- loiter-killer-architecture.md (service has been removed, functionality integrated into MCP server)
 - solved-hanging-issue.md
 - victoria-log-issues.md
 
@@ -53,7 +53,7 @@ Moved completed development docs to `docs/archive/`:
 
 1. **Fixed placeholder author name** in pyproject.toml
 2. **Cleaned up debug code** in server.py for production readiness
-3. **Made Loiter Killer port configurable** using the config system
+3. **Removed Loiter Killer service entirely** - vector store lifecycle management is now integrated directly into the MCP server with automatic cleanup
 
 ## Repository Status
 
