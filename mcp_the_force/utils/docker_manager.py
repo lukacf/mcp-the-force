@@ -16,11 +16,6 @@ class DockerManager:
     def __init__(self):
         self.compose_file = "docker-compose.yaml"
         self.required_services = {
-            "loiter-killer": {
-                "health_url": "http://localhost:9876/health",
-                "health_timeout": 60,  # seconds to wait for healthy
-                "required": False,  # Don't block MCP startup if loiter killer fails
-            },
             "victorialogs": {
                 "health_url": "http://localhost:9428/health",
                 "health_timeout": 30,

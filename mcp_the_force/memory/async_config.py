@@ -6,7 +6,6 @@ from pathlib import Path
 
 from .config import MemoryConfig
 from ..config import get_settings
-from ..utils.loiter_killer_client import LoiterKillerClient
 
 import logging
 
@@ -18,7 +17,6 @@ class AsyncMemoryConfig:
 
     def __init__(self, db_path: Optional[Path] = None):
         self._sync_config = MemoryConfig(db_path)
-        self._loiter_killer = LoiterKillerClient()
 
     def _get_loop(self):
         """Get the current event loop."""
@@ -63,27 +61,7 @@ class AsyncMemoryConfig:
                 # Fall through to creation logic below
 
             if not need_create:
-                # Store exists - register with LoiterKiller if needed
-                session_id = "project-memory-conversation"
-                logger.info(
-                    f"[MEMORY] Checking if existing store {store_id} needs LoiterKiller registration..."
-                )
-                try:
-                    registered = await self._loiter_killer.register_existing_store(
-                        session_id, store_id, protected=True
-                    )
-                    if registered:
-                        logger.info(
-                            f"[MEMORY] Successfully registered existing store {store_id} with LoiterKiller"
-                        )
-                    else:
-                        logger.debug(
-                            f"[MEMORY] Store {store_id} already registered or LoiterKiller unavailable"
-                        )
-                except Exception as e:
-                    logger.debug(
-                        f"[MEMORY] Could not register existing store {store_id}: {e}"
-                    )
+                # Store exists and is valid
                 return str(store_id)
 
         # Need to create a new store - do this async
@@ -103,27 +81,7 @@ class AsyncMemoryConfig:
             )
             logger.info(f"[MEMORY] Created conversation store: {store.id}")
 
-            # Register with LoiterKiller as protected project history
-            session_id = "project-memory-conversation"
-            logger.info(
-                f"[MEMORY] Attempting to register store {store.id} with LoiterKiller..."
-            )
-            try:
-                registered = await self._loiter_killer.register_existing_store(
-                    session_id, store.id, protected=True
-                )
-                if registered:
-                    logger.info(
-                        f"[MEMORY] Successfully registered store {store.id} with LoiterKiller"
-                    )
-                else:
-                    logger.warning(
-                        f"[MEMORY] Failed to register store {store.id} with LoiterKiller"
-                    )
-            except Exception as e:
-                logger.error(
-                    f"[MEMORY] Exception registering store {store.id} with LoiterKiller: {e}"
-                )
+            # Store is now managed by VectorStoreCache with protected flag
 
             # Record in DB
             def _record_store():
@@ -170,27 +128,7 @@ class AsyncMemoryConfig:
             name=name, expires_after={"anchor": "last_active_at", "days": 365}
         )
 
-        # Register with LoiterKiller as protected project history
-        session_id = f"project-memory-{store_type}"
-        logger.info(
-            f"[MEMORY] Attempting to register store {store.id} with LoiterKiller..."
-        )
-        try:
-            registered = await self._loiter_killer.register_existing_store(
-                session_id, store.id, protected=True
-            )
-            if registered:
-                logger.info(
-                    f"[MEMORY] Successfully registered store {store.id} with LoiterKiller"
-                )
-            else:
-                logger.warning(
-                    f"[MEMORY] Failed to register store {store.id} with LoiterKiller"
-                )
-        except Exception as e:
-            logger.error(
-                f"[MEMORY] Exception registering store {store.id} with LoiterKiller: {e}"
-            )
+        # Store is now managed by VectorStoreCache with protected flag
 
         # Update DB
         def _update_db():
@@ -254,27 +192,7 @@ class AsyncMemoryConfig:
                 # Fall through to creation logic below
 
             if not need_create:
-                # Store exists - register with LoiterKiller if needed
-                session_id = "project-memory-commit"
-                logger.info(
-                    f"[MEMORY] Checking if existing store {store_id} needs LoiterKiller registration..."
-                )
-                try:
-                    registered = await self._loiter_killer.register_existing_store(
-                        session_id, store_id, protected=True
-                    )
-                    if registered:
-                        logger.info(
-                            f"[MEMORY] Successfully registered existing store {store_id} with LoiterKiller"
-                        )
-                    else:
-                        logger.debug(
-                            f"[MEMORY] Store {store_id} already registered or LoiterKiller unavailable"
-                        )
-                except Exception as e:
-                    logger.debug(
-                        f"[MEMORY] Could not register existing store {store_id}: {e}"
-                    )
+                # Store exists and is valid
                 return str(store_id)
 
         # Need to create a new store - do this async
@@ -292,27 +210,7 @@ class AsyncMemoryConfig:
                 name=name, expires_after={"anchor": "last_active_at", "days": 365}
             )
 
-            # Register with LoiterKiller as protected project history
-            session_id = "project-memory-commit"
-            logger.info(
-                f"[MEMORY] Attempting to register store {store.id} with LoiterKiller..."
-            )
-            try:
-                registered = await self._loiter_killer.register_existing_store(
-                    session_id, store.id, protected=True
-                )
-                if registered:
-                    logger.info(
-                        f"[MEMORY] Successfully registered store {store.id} with LoiterKiller"
-                    )
-                else:
-                    logger.warning(
-                        f"[MEMORY] Failed to register store {store.id} with LoiterKiller"
-                    )
-            except Exception as e:
-                logger.error(
-                    f"[MEMORY] Exception registering store {store.id} with LoiterKiller: {e}"
-                )
+            # Store is now managed by VectorStoreCache with protected flag
 
             # Record in DB
             def _record_store():

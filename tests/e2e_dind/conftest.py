@@ -417,7 +417,6 @@ def claude(stack, request) -> Callable[[str, int], str]:
             "CI_E2E": "1",  # This MUST be set for the MCP server to allow /tmp paths
             "PYTHONPATH": "/host-project",
             "VICTORIA_LOGS_URL": "http://host.docker.internal:9428",  # Critical for logging!
-            "LOITER_KILLER_URL": "http://server:9876",  # LoiterKiller running in server container
             "SESSION_DB_PATH": "/tmp/mcp_sessions.sqlite3",  # Use absolute path for session persistence across processes
             "LOKI_APP_TAG": os.getenv(
                 "LOKI_APP_TAG", "e2e-test-unknown"
@@ -512,45 +511,7 @@ def _collect_failure_logs(compose: DockerCompose) -> None:
 # These fixtures simplify test writing and fix common issues
 
 
-@pytest.fixture(autouse=True)
-def ensure_loiter_killer(stack: DockerCompose) -> None:
-    """
-    Ensures LoiterKiller service is running and healthy in the server container.
-
-    LoiterKiller manages OpenAI vector store lifecycle and is required for
-    proper operation of the MCP server when using context overflow.
-
-    This fixture runs automatically for all tests to ensure LoiterKiller
-    is available before any MCP operations.
-    """
-    print("Ensuring LoiterKiller is available...")
-
-    # Wait for LoiterKiller to be ready (up to 30 seconds)
-    for i in range(30):
-        try:
-            stdout, stderr, return_code = stack.exec_in_container(
-                [
-                    "bash",
-                    "-c",
-                    "curl -s http://localhost:9876/health || echo 'LoiterKiller not ready'",
-                ],
-                "server",
-            )
-
-            if return_code == 0 and "healthy" in stdout.lower():
-                print("✅ LoiterKiller is healthy")
-                return
-
-        except Exception:
-            pass
-
-        if i == 29:
-            # Last attempt - check processes to debug
-            ps_out, _, _ = stack.exec_in_container(["bash", "-c", "ps aux"], "server")
-            print(f"LoiterKiller not available after 30s. Processes:\n{ps_out}")
-            raise RuntimeError("LoiterKiller failed to become available")
-
-        time.sleep(1)
+# LoiterKiller fixture removed - vector store lifecycle is now managed internally by the MCP server
 
 
 @pytest.fixture
@@ -803,7 +764,6 @@ def claude_with_low_context(stack, request) -> Callable[[str, int], str]:
             "CI_E2E": "1",  # This MUST be set for the MCP server to allow /tmp paths
             "PYTHONPATH": "/host-project",
             "VICTORIA_LOGS_URL": "http://host.docker.internal:9428",  # Critical for logging!
-            "LOITER_KILLER_URL": "http://server:9876",  # LoiterKiller running in server container
             "SESSION_DB_PATH": "/tmp/mcp_sessions.sqlite3",  # Use absolute path for session persistence across processes
             "LOKI_APP_TAG": os.getenv(
                 "LOKI_APP_TAG", "e2e-test-unknown"

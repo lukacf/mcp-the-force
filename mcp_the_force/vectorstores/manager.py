@@ -1,5 +1,6 @@
 """High-level vector store manager for orchestration."""
 
+import asyncio
 import hashlib
 import logging
 from typing import Dict, Any, List, Tuple, Optional, Sequence, Union
@@ -7,7 +8,7 @@ from pathlib import Path
 
 from .protocol import VectorStore, VectorStoreClient, VSFile, SearchResult
 from . import registry
-from ..utils.loiter_killer_client import LoiterKillerClient
+from ..vector_store_cache import VectorStoreCache
 from ..utils.stable_list_cache import StableListCache
 
 logger = logging.getLogger(__name__)
@@ -30,7 +31,24 @@ class VectorStoreManager:
 
         settings = get_settings()
         self.provider = provider or settings.mcp.default_vector_store_provider
-        self.loiter_killer = LoiterKillerClient()
+
+        # Initialize vector store cache with settings
+        db_path = getattr(settings, "session_db_path", ".mcp_sessions.sqlite3")
+        ttl = (
+            getattr(settings.vector_stores, "ttl_seconds", 7200)
+            if hasattr(settings, "vector_stores")
+            else 7200
+        )
+        purge_prob = (
+            getattr(settings.vector_stores, "cleanup_probability", 0.02)
+            if hasattr(settings, "vector_stores")
+            else 0.02
+        )
+
+        self.vector_store_cache = VectorStoreCache(
+            db_path=db_path, ttl=ttl, purge_probability=purge_prob
+        )
+
         self._cache = cache  # For future use
         self._client_cache: Dict[str, VectorStoreClient] = {}
 
@@ -120,50 +138,29 @@ class VectorStoreManager:
         provider = self.provider
         client = self._get_client(provider)
 
-        # Try Loiter Killer first if session_id is available and provider is OpenAI
-        if session_id and self.loiter_killer.enabled and provider == "openai":
-            logger.info(f"Attempting to use Loiter Killer for session {session_id}")
+        # Check for existing vector store in cache
+        existing_store_id = None
+        was_reused = False
+
+        if session_id:
             (
-                vs_id,
-                existing_file_paths,
-            ) = await self.loiter_killer.get_or_create_vector_store(session_id)
+                existing_store_id,
+                was_reused,
+            ) = await self.vector_store_cache.get_or_create_placeholder(
+                session_id, provider
+            )
 
-            if vs_id:
-                # Get existing store and add only new files
-                store = await client.get(vs_id)
-
-                # Find new files to add
-                new_files = [f for f in files if f not in existing_file_paths]
-
-                if new_files:
-                    # Convert to VSFile objects
-                    vs_files = []
-                    for file_path in new_files:
-                        content = self._read_file_content(file_path)
-                        if content:  # Only add if we could read the file
-                            vs_files.append(VSFile(path=file_path, content=content))
-
-                    if vs_files:
-                        await store.add_files(vs_files)
-                        # Track the new files with Loiter Killer
-                        await self.loiter_killer.track_files(session_id, new_files)
-                        logger.info(
-                            f"Added {len(new_files)} new files to vector store {vs_id}"
-                        )
-
-                skipped_files = [f for f in files if f in existing_file_paths]
-                if skipped_files:
-                    logger.info(
-                        f"Skipped {len(skipped_files)} existing files in vector store {vs_id}"
-                    )
-
+            if existing_store_id:
                 logger.info(
-                    f"Using Loiter Killer vector store {vs_id} for session {session_id}"
+                    f"Reusing existing vector store {existing_store_id} for session {session_id}"
                 )
-                return vs_id
+                # Just return the existing store ID, files are already there
+                return existing_store_id
 
-        # Fallback to direct creation (Loiter Killer unavailable or no session_id)
-        logger.info("Creating ephemeral vector store (Loiter Killer not available)")
+        # Create new vector store
+        logger.info(
+            f"Creating new vector store for session {session_id or 'ephemeral'}"
+        )
         try:
             logger.info(
                 f"VectorStoreManager.create: About to create vector store with {len(files)} files"
@@ -188,9 +185,11 @@ class VectorStoreManager:
                     f"Added {len(vs_files)} files to new vector store {store.id}"
                 )
 
-            # Track with Loiter Killer for OpenAI stores
-            if session_id and self.loiter_killer.enabled and provider == "openai":
-                await self.loiter_killer.track_files(session_id, files)
+            # Register with cache for lifecycle management
+            if session_id:
+                await self.vector_store_cache.register_store(
+                    session_id, store.id, provider
+                )
 
             logger.info(f"Created vector store: {store.id}")
             return {
@@ -225,17 +224,10 @@ class VectorStoreManager:
                 logger.error(f"[MOCK] Error deleting mock vector store: {e}")
             return
 
-        # Don't delete Loiter Killer managed stores - they handle their own lifecycle
-        if self.loiter_killer.enabled and self.provider == "openai":
-            logger.debug(f"Skipping delete for Loiter Killer managed store: {vs_id}")
-            return
-
-        try:
-            client = self._get_client(self.provider)
-            await client.delete(vs_id)
-            logger.info(f"Deleted ephemeral vector store: {vs_id}")
-        except Exception as e:
-            logger.error(f"Error deleting vector store: {e}")
+        # Don't delete cache-managed stores - they handle their own lifecycle
+        # The cleanup task will handle deletion when appropriate
+        logger.debug(f"Vector store {vs_id} lifecycle is managed by cache")
+        return
 
     async def create_for_session(
         self,
@@ -403,6 +395,80 @@ class VectorStoreManager:
         await store.delete_files([old_file_id])
         file = VSFile(path=path, content=new_content)
         await store.add_files([file])
+
+    async def cleanup_expired(self) -> int:
+        """Clean up expired vector stores.
+
+        Returns:
+            Number of stores cleaned up
+        """
+        logger.info("Starting vector store cleanup")
+        cleaned_count = 0
+
+        # Get expired stores from cache
+        expired_stores = await self.vector_store_cache.get_expired_stores(limit=100)
+
+        if not expired_stores:
+            logger.debug("No expired vector stores to clean up")
+            return 0
+
+        # Group by provider for efficient batch deletion
+        stores_by_provider: Dict[str, List[Dict[str, Any]]] = {}
+        for store in expired_stores:
+            provider = store["provider"]
+            if provider not in stores_by_provider:
+                stores_by_provider[provider] = []
+            stores_by_provider[provider].append(store)
+
+        # Delete stores for each provider
+        for provider, stores in stores_by_provider.items():
+            client = self._get_client(provider)
+
+            # Create deletion tasks
+            delete_tasks = []
+            for store in stores:
+
+                async def delete_store(store_info):
+                    try:
+                        await client.delete(store_info["vector_store_id"])
+                        return store_info["session_id"], True
+                    except Exception as e:
+                        logger.error(
+                            f"Failed to delete vector store {store_info['vector_store_id']}: {e}"
+                        )
+                        return store_info["session_id"], False
+
+                delete_tasks.append(delete_store(store))
+
+            # Execute deletions concurrently
+            results = await asyncio.gather(*delete_tasks, return_exceptions=True)
+
+            # Remove successfully deleted stores from cache
+            for result in results:
+                if isinstance(result, tuple) and result[1]:
+                    session_id = result[0]
+                    if await self.vector_store_cache.remove_store(session_id):
+                        cleaned_count += 1
+
+        logger.info(f"Cleaned up {cleaned_count} expired vector stores")
+
+        # Also clean up orphaned entries (older than 30 days)
+        orphaned_count = await self.vector_store_cache.cleanup_orphaned()
+        if orphaned_count > 0:
+            logger.info(f"Cleaned up {orphaned_count} orphaned cache entries")
+
+        return cleaned_count
+
+    async def renew_lease(self, session_id: str) -> bool:
+        """Renew the lease for a vector store.
+
+        Args:
+            session_id: The session identifier
+
+        Returns:
+            True if lease was renewed, False if not found
+        """
+        return await self.vector_store_cache.renew_lease(session_id)
 
 
 # Global instance

@@ -155,13 +155,6 @@ bash ~/.config/mcp-the-force/scripts/install-memory-hook.sh
 ### Configuration
 For a full list of settings, see [CONFIGURATION.md](docs/CONFIGURATION.md). You can manage settings via YAML files or the `mcp-config` CLI tool.
 
-### Loiter Killer Service
-This companion service, enabled by default in `docker-compose.yaml`, automatically cleans up temporary OpenAI vector stores to prevent hitting account limits and incurring unnecessary costs.
-
-```bash
-docker-compose up -d loiter-killer
-```
-
 ### Developer Logging
 The Force integrates with VictoriaLogs for centralized debugging. Enable developer mode to search logs:
 

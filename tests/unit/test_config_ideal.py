@@ -134,13 +134,15 @@ class TestNoEnvironmentBypassesAllowed:
         assert hasattr(settings.openai, "max_parallel_tool_exec")
         assert settings.openai.max_parallel_tool_exec == 8  # default
 
-    def test_loiter_killer_uses_settings(self):
-        """Loiter killer should use settings."""
+    def test_vector_store_cache_uses_settings(self):
+        """Vector store cache should use settings."""
         settings = Settings()
 
         # Should be configurable
-        assert hasattr(settings.services, "loiter_killer_url")
-        assert settings.services.loiter_killer_url == "http://localhost:9876"
+        assert hasattr(settings, "vector_stores")
+        assert settings.vector_stores.ttl_seconds == 7200  # 2 hours default
+        assert settings.vector_stores.cleanup_interval_seconds == 300  # 5 minutes
+        assert settings.vector_stores.cleanup_probability == 0.02  # 2%
 
     def test_test_flags_in_settings(self):
         """Test flags should be in settings."""
@@ -222,8 +224,12 @@ logging:
   project_path: /custom/path
 
 services:
-  loiter_killer_host: custom
-  loiter_killer_port: 9876
+  # Currently no external services configured
+
+vector_stores:
+  ttl_seconds: 3600
+  cleanup_interval_seconds: 600
+  cleanup_probability: 0.05
 
 session:
   ttl_seconds: 7200
@@ -268,7 +274,9 @@ dev:
         assert settings.logging.victoria_logs_url == "http://custom:9428"
         assert settings.logging.loki_app_tag == "custom-tag"
 
-        assert settings.services.loiter_killer_url == "http://custom:9876"
+        assert settings.vector_stores.ttl_seconds == 3600
+        assert settings.vector_stores.cleanup_interval_seconds == 600
+        assert settings.vector_stores.cleanup_probability == 0.05
 
         assert settings.security.path_blacklist == ["/etc", "/custom/blacklist"]
 
@@ -316,7 +324,7 @@ dev:
         assert settings.openai.max_parallel_tool_exec == 32
         assert settings.logging.victoria_logs_url == "http://env:9428"
         assert settings.logging.victoria_logs_enabled is False
-        assert settings.services.loiter_killer_url == "http://env:9876"
+        # Services should be empty
         assert settings.security.path_blacklist == ["/env1", "/env2"]
         assert settings.dev.adapter_mock is True
 
@@ -327,8 +335,8 @@ dev:
         monkeypatch.setenv("PORT", "6000")
         monkeypatch.setenv("OPENAI__API_KEY", "mcp-key")
         monkeypatch.setenv("LOGGING__VICTORIA_LOGS_URL", "http://mcp:9428")
-        monkeypatch.setenv("SERVICES__LOITER_KILLER_HOST", "mcp")
-        monkeypatch.setenv("SERVICES__LOITER_KILLER_PORT", "9876")
+        monkeypatch.setenv("VECTOR_STORES__TTL_SECONDS", "1800")
+        monkeypatch.setenv("VECTOR_STORES__CLEANUP_INTERVAL_SECONDS", "180")
         monkeypatch.setenv("DEV__ADAPTER_MOCK", "true")
 
         settings = Settings()
@@ -337,7 +345,8 @@ dev:
         assert settings.mcp.port == 6000
         assert settings.openai.api_key == "mcp-key"
         assert settings.logging.victoria_logs_url == "http://mcp:9428"
-        assert settings.services.loiter_killer_url == "http://mcp:9876"
+        assert settings.vector_stores.ttl_seconds == 1800
+        assert settings.vector_stores.cleanup_interval_seconds == 180
         assert settings.dev.adapter_mock is True
 
 
@@ -376,7 +385,13 @@ class TestConfigurationSchema:
 
         # Service URLs
         assert hasattr(settings, "services")
-        assert hasattr(settings.services, "loiter_killer_url")
+        # No external services currently configured
+
+        # Vector store settings
+        assert hasattr(settings, "vector_stores")
+        assert hasattr(settings.vector_stores, "ttl_seconds")
+        assert hasattr(settings.vector_stores, "cleanup_interval_seconds")
+        assert hasattr(settings.vector_stores, "cleanup_probability")
 
         # Session settings
         assert hasattr(settings, "session")
