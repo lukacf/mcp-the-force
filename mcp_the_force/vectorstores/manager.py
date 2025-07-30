@@ -90,6 +90,7 @@ class VectorStoreManager:
         ttl_seconds: Optional[int] = None,
         provider_metadata: Optional[Dict[str, Any]] = None,
         rollover_from: Optional[str] = None,
+        provider: Optional[str] = None,
     ) -> Optional[Union[str, Dict[str, Any]]]:
         """Create or acquire vector store from files.
 
@@ -105,6 +106,7 @@ class VectorStoreManager:
             ttl_seconds: Optional TTL for the vector store (only applies to session stores)
             provider_metadata: Optional metadata specific to the vector store provider
             rollover_from: Optional ID of a previous store to roll over from
+            provider: Optional provider override. If not specified, uses default from config
 
         Returns:
             Dict with store_id, provider, and session_id/name, or None on error
@@ -150,7 +152,8 @@ class VectorStoreManager:
         if get_settings().adapter_mock:
             # In mock mode, use in-memory provider for implementation
             # but preserve the original provider name for compatibility
-            original_provider = self.provider
+            # Use provided provider or fall back to default
+            original_provider = provider or self.provider
             mock_client = self._get_client("inmemory")
 
             # Create a real in-memory store that can be retrieved
@@ -203,8 +206,9 @@ class VectorStoreManager:
 
             return result
 
-        provider = self.provider
-        client = self._get_client(provider)
+        # Use provided provider or fall back to default
+        provider_to_use = provider or self.provider
+        client = self._get_client(provider_to_use)
 
         # Check for existing vector store in cache
         existing_store_id = None
@@ -216,7 +220,7 @@ class VectorStoreManager:
                 existing_store_id,
                 was_reused,
             ) = await self.vector_store_cache.get_or_create_placeholder(
-                session_id, provider, protected
+                session_id, provider_to_use, protected
             )
 
             if existing_store_id:
@@ -226,7 +230,7 @@ class VectorStoreManager:
                 # Return consistent format - always a dict
                 return {
                     "store_id": existing_store_id,
-                    "provider": provider,
+                    "provider": provider_to_use,
                     "session_id": session_id,
                 }
 
@@ -277,7 +281,7 @@ class VectorStoreManager:
                 # Serialize provider_metadata to JSON if provided
                 await self.vector_store_cache.register_store(
                     vector_store_id=store.id,
-                    provider=provider,
+                    provider=provider_to_use,
                     session_id=session_id,
                     name=name,
                     protected=protected,
@@ -289,7 +293,7 @@ class VectorStoreManager:
             logger.info(f"Created vector store: {store.id}")
             result = {
                 "store_id": store.id,
-                "provider": provider,
+                "provider": provider_to_use,
             }
 
             # Include either session_id or name in the result

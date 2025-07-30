@@ -15,7 +15,9 @@ from ..capabilities import AdapterCapabilities
 class OpenAIBaseCapabilities(AdapterCapabilities):
     """Base capabilities shared by all OpenAI models."""
 
-    native_file_search: bool = True
+    native_vector_store_provider: str = (
+        "openai"  # OpenAI models require OpenAI vector stores
+    )
     supports_functions: bool = True
     supports_streaming: bool = True
     supports_vision: bool = False

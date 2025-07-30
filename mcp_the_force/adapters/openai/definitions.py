@@ -85,6 +85,9 @@ class OpenAIBaseCapabilities(AdapterCapabilities):
     """Base capabilities for all OpenAI models."""
 
     provider: str = "openai"
+    native_vector_store_provider: str = (
+        "openai"  # OpenAI models require OpenAI vector stores
+    )
     model_family: str = ""
     supports_tools: bool = True
     supports_web_search: bool = False

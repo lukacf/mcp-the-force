@@ -13,7 +13,9 @@ class AdapterCapabilities:
     """
 
     # Core capabilities
-    native_file_search: bool = False
+    native_vector_store_provider: Optional[str] = (
+        None  # Provider required for native file search
+    )
     supports_functions: bool = True  # Legacy name for supports_tools
     supports_tools: bool = True  # Tools/function calling
     supports_streaming: bool = True

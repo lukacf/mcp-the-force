@@ -16,7 +16,6 @@ class AnthropicBaseCapabilities(AdapterCapabilities):
     supports_streaming: bool = True
     supports_temperature: bool = True
     supports_structured_output: bool = True
-    native_file_search: bool = False
     supports_vision: bool = True
     parallel_function_calls: int | None = (
         None  # Anthropic doesn't support parallel tool calls

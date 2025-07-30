@@ -125,12 +125,24 @@ class BaseFlowStrategy(ABC):
             tools.append({"type": capability.web_search_tool})
 
         if self.context.request.vector_store_ids:
-            tools.append(
-                {
-                    "type": "file_search",
-                    "vector_store_ids": self.context.request.vector_store_ids,
-                }
-            )
+            # Filter to only include OpenAI vector stores (those starting with 'vs_')
+            openai_vector_stores = [
+                vs_id
+                for vs_id in self.context.request.vector_store_ids
+                if vs_id.startswith("vs_")
+            ]
+            if openai_vector_stores:
+                tools.append(
+                    {
+                        "type": "file_search",
+                        "vector_store_ids": openai_vector_stores,
+                    }
+                )
+                logger.debug(
+                    f"Added file_search tool with {len(openai_vector_stores)} OpenAI vector stores"
+                )
+            else:
+                logger.debug("No OpenAI vector stores available for file_search tool")
 
         return tools
 
