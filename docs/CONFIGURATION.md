@@ -173,6 +173,20 @@ Settings related to user session management.
 
 ---
 
+## Vector Stores (`vector_stores`)
+
+Configuration for vector store lifecycle management.
+
+| YAML Path | Environment Variable | Type | Default Value | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `vector_stores.ttl_seconds` | `MCP__VECTOR_STORES__TTL_SECONDS` | `int` | `7200` (2 hours) | Time-to-live for vector stores in seconds. Minimum: `300` (5 minutes). |
+| `vector_stores.cleanup_interval_seconds` | `MCP__VECTOR_STORES__CLEANUP_INTERVAL_SECONDS` | `int` | `300` (5 minutes) | How often to run automatic cleanup of expired vector stores. Minimum: `60` (1 minute). |
+| `vector_stores.cleanup_probability` | `MCP__VECTOR_STORES__CLEANUP_PROBABILITY` | `float` | `0.02` | The probability (0.0 to 1.0) of triggering a cleanup during operations. |
+
+*   **Note**: Vector stores are automatically cleaned up when they expire, preventing quota exhaustion. This replaces the previous external loiter-killer service.
+
+---
+
 ## Memory (`memory`)
 
 Configuration for the long-term memory system.
@@ -252,12 +266,7 @@ Default blacklisted paths:
 
 Configuration for external services that MCP interacts with.
 
-| YAML Path | Environment Variable | Type | Default Value | Description |
-| :--- | :--- | :--- | :--- | :--- |
-| `services.loiter_killer_host` | `MCP__SERVICES__LOITER_KILLER_HOST` or `LOITER_KILLER_HOST` | `string` | `"localhost"` | The hostname of the loiter-killer service. |
-| `services.loiter_killer_port` | `MCP__SERVICES__LOITER_KILLER_PORT` or `LOITER_KILLER_PORT` | `int` | `9876` | The port of the loiter-killer service. |
-
-*   **Note**: The full URL (`http://{host}:{port}`) is constructed from these settings and is also available via the `LOITER_KILLER_URL` environment variable for other processes.
+*Currently no external services are configured.*
 
 ---
 
