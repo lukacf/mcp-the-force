@@ -109,6 +109,20 @@ class SessionConfig(BaseModel):
     )
 
 
+class VectorStoreConfig(BaseModel):
+    """Vector store lifecycle management configuration."""
+
+    ttl_seconds: int = Field(
+        7200, description="Vector store TTL in seconds (default: 2 hours)", ge=300
+    )
+    cleanup_interval_seconds: int = Field(
+        300, description="Cleanup interval in seconds (default: 5 minutes)", ge=60
+    )
+    cleanup_probability: float = Field(
+        0.02, description="Cleanup probability on operations", ge=0.0, le=1.0
+    )
+
+
 class MemoryConfig(BaseModel):
     """Memory system configuration."""
 
@@ -188,15 +202,8 @@ class SecurityConfig(BaseModel):
 class ServicesConfig(BaseModel):
     """External services configuration."""
 
-    loiter_killer_host: str = Field(
-        "localhost", description="Loiter killer service host"
-    )
-    loiter_killer_port: int = Field(9876, description="Loiter killer service port")
-
-    @property
-    def loiter_killer_url(self) -> str:
-        """Construct loiter killer URL from host and port."""
-        return f"http://{self.loiter_killer_host}:{self.loiter_killer_port}"
+    # Currently no external services configured
+    pass
 
 
 class DevConfig(BaseModel):
@@ -227,6 +234,7 @@ class Settings(BaseSettings):
 
     # Feature configs
     session: SessionConfig = Field(default_factory=SessionConfig)
+    vector_stores: VectorStoreConfig = Field(default_factory=VectorStoreConfig)
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
     tools: ToolsConfig = Field(default_factory=ToolsConfig)
     features: FeaturesConfig = Field(default_factory=FeaturesConfig)
@@ -568,7 +576,7 @@ class Settings(BaseSettings):
             "LOKI_APP_TAG": self.logging.loki_app_tag,
             "MCP_PROJECT_PATH": self.logging.project_path or "",
             # Services
-            "LOITER_KILLER_URL": self.services.loiter_killer_url,
+            # (No external services currently configured)
             # Testing/Dev
             "MCP_ADAPTER_MOCK": str(self.dev.adapter_mock).lower(),
             "CI_E2E": str(self.dev.ci_e2e).lower(),

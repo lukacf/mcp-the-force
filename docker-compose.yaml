@@ -3,27 +3,9 @@ version: '3.8'
 services:
   # VictoriaLogs is managed separately, not part of this compose file
   # It's already running on port 9428
-
-  loiter-killer:
-    build:
-      context: loiter_killer
-      dockerfile: Dockerfile
-    container_name: loiter-killer
-    environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-    ports:
-      - "127.0.0.1:9876:9876"
-    volumes:
-      - ./loiter_killer_data:/app/data
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "python", "-c", "import httpx; exit(0 if httpx.get('http://localhost:9876/health').status_code == 200 else 1)"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    networks:
-      - the-force-network
+  
+  # The loiter-killer service has been removed as vector store lifecycle
+  # management is now integrated directly into the MCP server
 
 networks:
   the-force-network:

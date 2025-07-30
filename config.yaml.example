@@ -72,6 +72,12 @@ session:
   db_path: .mcp_sessions.sqlite3
   cleanup_probability: 0.01  # 1% chance to cleanup expired sessions
 
+# Vector store lifecycle management
+vector_stores:
+  ttl_seconds: 7200  # 2 hours
+  cleanup_interval_seconds: 300  # 5 minutes
+  cleanup_probability: 0.02  # 2% chance to cleanup on operations
+
 # Memory system for long-term project knowledge
 memory:
   enabled: true
@@ -126,8 +132,7 @@ security:
 
 # External services
 services:
-  loiter_killer_host: localhost
-  loiter_killer_port: 9876
+  # Currently no external services configured
 
 # Development settings
 dev:

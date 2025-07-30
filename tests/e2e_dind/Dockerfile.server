@@ -23,62 +23,25 @@ COPY *.md *.py ./
 # Install the package and dependencies
 RUN uv pip install --system .
 
-# Install LoiterKiller dependencies and copy its code
-COPY loiter_killer/requirements.txt /loiter_killer/requirements.txt
-RUN pip install --no-cache-dir -r /loiter_killer/requirements.txt
-
-COPY loiter_killer/loiter_killer.py /loiter_killer/loiter_killer.py
-
 # Create directories for runtime
 RUN mkdir -p /tmp && chmod 1777 /tmp
-RUN mkdir -p /app/data  # For LoiterKiller data
+RUN mkdir -p /app/data  # For any data needs
 
-# Create a startup script that runs both LoiterKiller and MCP server
+# Create a startup script for the MCP server container
 RUN echo '#!/bin/bash\n\
 set -e\n\
 \n\
 echo "=== Starting E2E server container ==="\n\
 \n\
-# Set PYTHONPATH for LoiterKiller\n\
-export PYTHONPATH=/loiter_killer:$PYTHONPATH\n\
-\n\
-# Start LoiterKiller in the background\n\
-echo "Starting LoiterKiller..."\n\
-cd /app/data\n\
-python /loiter_killer/loiter_killer.py > /tmp/loiter_killer.log 2>&1 &\n\
-LOITER_PID=$!\n\
-echo "LoiterKiller started with PID $LOITER_PID"\n\
-\n\
-# Wait for LoiterKiller to be ready\n\
-echo "Waiting for LoiterKiller to be ready..."\n\
-for i in {1..30}; do\n\
-    if curl -s http://localhost:9876/health > /dev/null 2>&1; then\n\
-        echo "LoiterKiller is ready!"\n\
-        break\n\
-    fi\n\
-    if [ $i -eq 30 ]; then\n\
-        echo "LoiterKiller failed to start"\n\
-        echo "LoiterKiller logs:"\n\
-        cat /tmp/loiter_killer.log || true\n\
-        exit 1\n\
-    fi\n\
-    echo "  Waiting... ($i/30)"\n\
-    sleep 1\n\
-done\n\
-\n\
-# Keep the container running\n\
-echo "Container ready - LoiterKiller running on PID $LOITER_PID"\n\
+# Keep the container running for test operations\n\
+echo "Container ready - MCP server environment prepared"\n\
 tail -f /dev/null\n\
 ' > /startup.sh && chmod +x /startup.sh
 
 # Create a simple health check script
 RUN echo '#!/bin/bash\n\
-# Check if LoiterKiller is running\n\
-if ! curl -s http://localhost:9876/health > /dev/null; then\n\
-    echo "LoiterKiller is not responding"\n\
-    exit 1\n\
-fi\n\
-echo "LoiterKiller is healthy"\n\
+# Basic container health check\n\
+echo "Container is healthy"\n\
 exit 0\n\
 ' > /health.sh && chmod +x /health.sh
 

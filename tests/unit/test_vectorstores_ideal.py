@@ -430,26 +430,25 @@ class TestVectorStoreManager:
         assert store_info["session_id"] == "sess123"
 
     @pytest.mark.asyncio
-    async def test_manager_integrates_with_loiter_killer(self, mock_registry):
-        """Manager should register stores with loiter killer."""
-        with patch("mcp_the_force.vectorstores.manager.LoiterKillerClient") as mock_lk:
-            mock_lk_instance = AsyncMock()
-            mock_lk.return_value = mock_lk_instance
-            mock_lk_instance.enabled = True
+    async def test_manager_integrates_with_vector_store_cache(self, mock_registry):
+        """Manager should register stores with vector store cache."""
+        with patch("mcp_the_force.vectorstores.manager.VectorStoreCache") as mock_cache:
+            mock_cache_instance = AsyncMock()
+            mock_cache.return_value = mock_cache_instance
 
-            # Mock the get_or_create_vector_store to return None (no existing store)
-            mock_lk_instance.get_or_create_vector_store.return_value = (None, [])
+            # Mock the get_or_create_placeholder to return None (no existing store)
+            mock_cache_instance.get_or_create_placeholder.return_value = (None, False)
+            mock_cache_instance.register_store = AsyncMock()
 
-            # LoiterKiller only works with OpenAI provider
+            # Vector store cache works with all providers
             manager = VectorStoreManager(provider="openai")
 
             store_info = await manager.create_for_session(
                 session_id="sess123", ttl_seconds=3600
             )
 
-            # LoiterKiller should have been used for OpenAI provider
-            # But since create_for_session creates with empty files,
-            # it goes through the regular create path, not LoiterKiller
+            # Vector store cache should have been used for the provider
+            # The cache manages the lifecycle of vector stores
             assert store_info["provider"] == "openai"
             assert store_info["store_id"]
 
