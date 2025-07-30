@@ -135,6 +135,7 @@ class CodexMiniCapabilities(OSeriesCapabilities):
     supports_web_search: bool = False  # Codex-mini doesn't support web search
     supports_live_search: bool = False  # Codex-mini doesn't support live search
     web_search_tool: str = ""  # No web search tool for codex-mini
+    native_vector_store_provider: None = None  # type: ignore[assignment]  # Codex-mini doesn't support file search
 
 
 @dataclass

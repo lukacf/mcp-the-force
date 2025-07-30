@@ -268,53 +268,24 @@ class ToolExecutor:
             # For backwards compatibility, keep final_prompt
             final_prompt = prompt
 
-            # 4. Handle vector store if needed
+            # 4. Prepare vector store data for later creation
             vs_id = None
             vector_store_ids = None
+            vector_store_files = None  # Store files for later creation
+            vector_store_session_id = None  # Store session_id for later creation
 
             if session_id and files_for_vector_store:
-                # Use pre-calculated overflow files from stable list
-                # Clear attachment search cache for new attachments
-                from .search_task_files import SearchTaskFilesAdapter
-
-                await SearchTaskFilesAdapter.clear_deduplication_cache()
+                # Store for later creation after adapter instantiation
+                vector_store_files = files_for_vector_store
+                vector_store_session_id = session_id
                 logger.debug(
-                    "Cleared SearchTaskFilesAdapter deduplication cache for new task files"
+                    f"Will create vector store with {len(files_for_vector_store)} overflow/attachment files after adapter instantiation"
                 )
-
-                logger.debug(
-                    f"Creating vector store with {len(files_for_vector_store)} overflow/attachment files: {files_for_vector_store}"
-                )
-                vs_result = await self.vector_store_manager.create(
-                    files_for_vector_store, session_id=session_id
-                )
-                vs_id = (
-                    vs_result.get("store_id") if isinstance(vs_result, dict) else None
-                )
-                vector_store_ids = [vs_id] if vs_id else None
-                logger.debug(
-                    f"Vector store ready: {vs_id}, vector_store_ids={vector_store_ids}"
-                )
-
-                # E2E verbose logging - log vector store details when DEBUG is enabled
-                if logger.isEnabledFor(logging.DEBUG) and vs_id:
-                    logger.debug(
-                        f"[{operation_id}] Created vector store {vs_id} with {len(files_for_vector_store)} files for session {session_id}"
-                    )
-                logger.debug("[DEBUG] Exiting IF block for vector store handling")
             else:
                 # Fallback: Gather files from vector_store parameter if no session_id
                 vector_store_param = routed_params.get("vector_store", [])
                 assert isinstance(vector_store_param, list)  # Type hint for mypy
                 if vector_store_param:
-                    # Clear attachment search cache for new attachments
-                    from .search_task_files import SearchTaskFilesAdapter
-
-                    await SearchTaskFilesAdapter.clear_deduplication_cache()
-                    logger.debug(
-                        "Cleared SearchTaskFilesAdapter deduplication cache for new attachments"
-                    )
-
                     # Gather files from directories (skip safety check for attachments)
                     from ..utils.fs import gather_file_paths
 
@@ -325,17 +296,11 @@ class ToolExecutor:
                         f"Gathered {len(files)} files from attachments: {files}"
                     )
                     if files:
-                        vs_result = await self.vector_store_manager.create(
-                            files, session_id=None
-                        )
-                        vs_id = (
-                            vs_result.get("store_id")
-                            if isinstance(vs_result, dict)
-                            else None
-                        )
-                        vector_store_ids = [vs_id] if vs_id else None
+                        # Store for later creation after adapter instantiation
+                        vector_store_files = files
+                        vector_store_session_id = None
                         logger.debug(
-                            f"Created vector store {vs_id}, vector_store_ids={vector_store_ids}"
+                            f"Will create vector store with {len(files)} attachment files after adapter instantiation"
                         )
 
             # Memory stores are no longer auto-attached
@@ -417,6 +382,51 @@ class ToolExecutor:
                 )
             except Exception as e:
                 raise fastmcp.exceptions.ToolError(f"Failed to initialize adapter: {e}")
+
+            # 4.5. Now create vector store with adapter capabilities
+            if vector_store_files:
+                # Determine provider based on adapter capabilities
+                provider_override = None
+                if hasattr(adapter, "capabilities") and hasattr(
+                    adapter.capabilities, "native_vector_store_provider"
+                ):
+                    provider_override = (
+                        adapter.capabilities.native_vector_store_provider
+                    )
+                    if provider_override:
+                        logger.info(
+                            f"Using native vector store provider '{provider_override}' for {model_name}"
+                        )
+
+                # Clear attachment search cache for new attachments
+                from .search_task_files import SearchTaskFilesAdapter
+
+                await SearchTaskFilesAdapter.clear_deduplication_cache()
+                logger.debug(
+                    "Cleared SearchTaskFilesAdapter deduplication cache for new task files"
+                )
+
+                logger.debug(
+                    f"Creating vector store with {len(vector_store_files)} files using provider: {provider_override or 'default'}"
+                )
+                vs_result = await self.vector_store_manager.create(
+                    vector_store_files,
+                    session_id=vector_store_session_id,
+                    provider=provider_override,
+                )
+                vs_id = (
+                    vs_result.get("store_id") if isinstance(vs_result, dict) else None
+                )
+                vector_store_ids = [vs_id] if vs_id else None
+                logger.debug(
+                    f"Vector store ready: {vs_id}, vector_store_ids={vector_store_ids}"
+                )
+
+                # E2E verbose logging - log vector store details when DEBUG is enabled
+                if logger.isEnabledFor(logging.DEBUG) and vs_id:
+                    logger.debug(
+                        f"[{operation_id}] Created vector store {vs_id} with {len(vector_store_files)} files for session {vector_store_session_id or 'attachments'}"
+                    )
 
             # 6. Handle session - unified for all adapters
             session_params = routed_params["session"]
