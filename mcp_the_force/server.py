@@ -2,15 +2,18 @@
 """MCP The-Force Server with dataclass-based tools."""
 
 import asyncio
+import contextlib
 import logging
 import os
 import sys
+from contextlib import asynccontextmanager
+from collections.abc import AsyncIterator
 from pathlib import Path
 from .logging.setup import setup_logging
 
 # Platform-specific imports
 if sys.platform != "win32":
-    import fcntl
+    import fcntl  # Used by background cleanup task
 
 # Initialize the new logging system first
 setup_logging()
@@ -34,8 +37,26 @@ from .tools.integration import (  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
-# Initialize FastMCP server
-mcp = FastMCP("mcp-the-force")
+
+@asynccontextmanager
+async def server_lifespan(server: FastMCP) -> AsyncIterator[None]:
+    """Lifespan context manager for the MCP server."""
+    # Start background cleanup task
+    cleanup_task = asyncio.create_task(_periodic_cleanup_task())
+    logger.info("Background vector store cleanup task started")
+
+    try:
+        yield  # Server is now running
+    finally:
+        # Cancel cleanup task on shutdown
+        cleanup_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await cleanup_task
+        logger.info("Background cleanup task stopped")
+
+
+# Initialize FastMCP server with lifespan
+mcp = FastMCP("mcp-the-force", lifespan=server_lifespan)
 
 # Register all dataclass-based tools
 logger.debug("Registering dataclass-based tools...")
@@ -217,14 +238,6 @@ def main():
         logger.info(
             "State reset manager configured for aggressive cleanup between queries"
         )
-
-        # Add startup hook to start cleanup task when FastMCP is ready
-        @mcp.on_startup
-        async def on_startup():
-            """Start background tasks after server is ready."""
-            # Start cleanup task in the background
-            asyncio.create_task(_periodic_cleanup_task())
-            logger.info("Background cleanup task started")
 
         # Now let FastMCP handle everything
         mcp.run()  # Will create its own event loop
