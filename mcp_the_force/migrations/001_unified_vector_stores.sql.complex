@@ -1,0 +1,151 @@
+-- Migration 001: Unified Vector Stores
+-- This migration unifies the separate vector_stores and stores tables into a single unified schema
+
+-- Start transaction
+BEGIN TRANSACTION;
+
+-- Create schema versioning table if it doesn't exist
+CREATE TABLE IF NOT EXISTS schema_version (
+    version INTEGER PRIMARY KEY,
+    applied_at INTEGER NOT NULL
+);
+
+-- Check if migration already applied
+CREATE TEMP TABLE migration_check AS
+SELECT COUNT(*) as already_applied FROM schema_version WHERE version = 1;
+
+-- Only proceed if not already applied
+CREATE TRIGGER skip_if_applied
+BEFORE INSERT ON schema_version
+WHEN (SELECT already_applied FROM migration_check) > 0
+BEGIN
+    SELECT RAISE(ABORT, 'Migration already applied');
+END;
+
+-- Backup existing tables
+CREATE TABLE IF NOT EXISTS vector_stores_backup AS 
+SELECT * FROM vector_stores;
+
+CREATE TABLE IF NOT EXISTS stores_backup AS 
+SELECT * FROM stores;
+
+-- Drop existing indexes on old tables
+DROP INDEX IF EXISTS idx_vector_stores_updated;
+DROP INDEX IF EXISTS idx_vector_stores_expires;
+DROP INDEX IF EXISTS idx_active_store;
+
+-- Rename old tables
+ALTER TABLE vector_stores RENAME TO vector_stores_old;
+ALTER TABLE stores RENAME TO stores_old;
+
+-- Create new unified vector_stores table
+CREATE TABLE vector_stores (
+    vector_store_id TEXT PRIMARY KEY,
+    name TEXT UNIQUE,
+    session_id TEXT UNIQUE,
+    provider TEXT NOT NULL CHECK(provider IN ('openai', 'inmemory', 'pinecone', 'hnsw')),
+    provider_metadata TEXT,
+    is_protected INTEGER NOT NULL DEFAULT 0,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at INTEGER NOT NULL,
+    expires_at INTEGER,
+    updated_at INTEGER NOT NULL,
+    document_count INTEGER DEFAULT 0,
+    rollover_from TEXT REFERENCES vector_stores(vector_store_id),
+    
+    CHECK (
+        (name IS NOT NULL AND session_id IS NULL) OR
+        (name IS NULL AND session_id IS NOT NULL)
+    )
+);
+
+-- Create required indexes
+CREATE INDEX idx_vs_session_id ON vector_stores(session_id);
+CREATE INDEX idx_vs_name ON vector_stores(name);
+CREATE INDEX idx_vs_expires_at ON vector_stores(expires_at) WHERE expires_at IS NOT NULL;
+CREATE INDEX idx_vs_active_named ON vector_stores(name, is_active) WHERE name IS NOT NULL;
+CREATE INDEX idx_vs_rollover ON vector_stores(rollover_from) WHERE rollover_from IS NOT NULL;
+
+-- Migrate data from old vector_stores table (session stores)
+INSERT INTO vector_stores (
+    vector_store_id,
+    name,
+    session_id,
+    provider,
+    provider_metadata,
+    is_protected,
+    is_active,
+    created_at,
+    expires_at,
+    updated_at,
+    document_count,
+    rollover_from
+)
+SELECT 
+    vector_store_id,
+    NULL as name,
+    session_id,
+    provider,
+    NULL as provider_metadata,
+    protected as is_protected,
+    1 as is_active,
+    created_at,
+    expires_at,
+    updated_at,
+    0 as document_count,
+    NULL as rollover_from
+FROM vector_stores_old;
+
+-- Migrate data from old stores table (memory stores)
+-- Note: stores table uses TEXT for created_at, we need to convert to INTEGER timestamp
+INSERT INTO vector_stores (
+    vector_store_id,
+    name,
+    session_id,
+    provider,
+    provider_metadata,
+    is_protected,
+    is_active,
+    created_at,
+    expires_at,
+    updated_at,
+    document_count,
+    rollover_from
+)
+SELECT 
+    store_id as vector_store_id,
+    'project-' || store_type || 's-' || 
+        printf('%03d', ROW_NUMBER() OVER (PARTITION BY store_type ORDER BY created_at)) as name,
+    NULL as session_id,
+    'openai' as provider,  -- Assuming OpenAI provider for existing stores
+    NULL as provider_metadata,
+    1 as is_protected,  -- Memory stores should be protected
+    is_active,
+    CAST(strftime('%s', created_at) AS INTEGER) as created_at,
+    NULL as expires_at,  -- Memory stores don't expire
+    CAST(strftime('%s', created_at) AS INTEGER) as updated_at,
+    doc_count as document_count,
+    NULL as rollover_from
+FROM stores_old;
+
+-- Drop old tables
+DROP TABLE vector_stores_old;
+DROP TABLE stores_old;
+
+-- Update memory_meta to track migration
+INSERT OR REPLACE INTO memory_meta(key, value) 
+VALUES('migration_version', '1');
+
+-- Record migration as applied
+INSERT INTO schema_version (version, applied_at) VALUES (1, strftime('%s', 'now'));
+
+-- Clean up temporary objects
+DROP TRIGGER skip_if_applied;
+DROP TABLE migration_check;
+
+COMMIT;
+
+-- Verify migration success
+SELECT 
+    'Migration completed successfully. Unified ' || COUNT(*) || ' vector stores.' as status
+FROM vector_stores;
