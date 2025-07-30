@@ -74,3 +74,63 @@ async def test_atomic_save(tmp_path):
     # Check actual files exist
     assert (tmp_path / f"{store_id}.bin").exists()
     assert (tmp_path / f"{store_id}.json").exists()
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_delete_store(tmp_path):
+    """Test that delete removes store files from disk."""
+    client = HnswVectorStoreClient(persist=True)
+    client.persistence_dir = tmp_path
+
+    # Create and persist a store
+    store = await client.create(name="test-delete")
+    store_id = store.id
+
+    # Add some data to ensure files are created
+    await store.add_files([VSFile(path="test.txt", content="data to delete")])
+
+    # Verify files exist
+    index_path = tmp_path / f"{store_id}.bin"
+    meta_path = tmp_path / f"{store_id}.json"
+    assert index_path.exists()
+    assert meta_path.exists()
+
+    # Delete the store
+    await client.delete(store_id)
+
+    # Verify files are gone
+    assert not index_path.exists(), "Index file should be deleted"
+    assert not meta_path.exists(), "Metadata file should be deleted"
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_delete_nonexistent_store(tmp_path):
+    """Test that deleting a non-existent store doesn't raise an error."""
+    client = HnswVectorStoreClient(persist=True)
+    client.persistence_dir = tmp_path
+
+    # Should not raise an error
+    await client.delete("nonexistent_store_id")
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_delete_partial_store(tmp_path):
+    """Test deletion when only one file exists (corrupted state)."""
+    client = HnswVectorStoreClient(persist=True)
+    client.persistence_dir = tmp_path
+
+    # Create only a metadata file (simulating corruption)
+    store_id = "hnsw_partial"
+    meta_path = tmp_path / f"{store_id}.json"
+    meta_path.write_text('{"chunks": []}')
+
+    assert meta_path.exists()
+
+    # Delete should handle this gracefully
+    await client.delete(store_id)
+
+    # File should be gone
+    assert not meta_path.exists()
