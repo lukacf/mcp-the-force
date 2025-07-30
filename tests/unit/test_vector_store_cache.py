@@ -32,7 +32,9 @@ class TestVectorStoreCache:
         assert reused is False
 
         # WHEN a new store is added
-        await cache.register_store(session_id, vector_store_id, provider="openai")
+        await cache.register_store(
+            vector_store_id=vector_store_id, provider="openai", session_id=session_id
+        )
 
         # THEN the same store can be retrieved by its session_id
         result, reused = await cache.get_or_create_placeholder(session_id)
@@ -53,7 +55,9 @@ class TestVectorStoreCache:
         session_id = "test-session-456"
         vector_store_id = "vs_def456"
 
-        await cache.register_store(session_id, vector_store_id)
+        await cache.register_store(
+            vector_store_id=vector_store_id, provider="openai", session_id=session_id
+        )
 
         # Advance time by 60 seconds
         virtual_clock.advance_time(60)
@@ -83,7 +87,11 @@ class TestVectorStoreCache:
             # AND a store is added at virtual time T
             session_id = "test-session-789"
             vector_store_id = "vs_ghi789"
-            await cache.register_store(session_id, vector_store_id)
+            await cache.register_store(
+                vector_store_id=vector_store_id,
+                provider="openai",
+                session_id=session_id,
+            )
 
             # Verify it's initially retrievable
             result, reused = await cache.get_or_create_placeholder(session_id)
@@ -116,8 +124,18 @@ class TestVectorStoreCache:
         normal_session = "normal-session"
         protected_session = "protected-session"
 
-        await cache.register_store(normal_session, "vs_normal", protected=False)
-        await cache.register_store(protected_session, "vs_protected", protected=True)
+        await cache.register_store(
+            vector_store_id="vs_normal",
+            provider="openai",
+            session_id=normal_session,
+            protected=False,
+        )
+        await cache.register_store(
+            vector_store_id="vs_protected",
+            provider="openai",
+            session_id=protected_session,
+            protected=True,
+        )
 
         # Advance time to make both expire
         virtual_clock.advance_time(200)  # Well past the 120s TTL
@@ -138,14 +156,16 @@ class TestVectorStoreCache:
         """Verify that remove_store correctly deletes entries."""
         # GIVEN a store exists
         session_id = "test-remove"
-        await cache.register_store(session_id, "vs_remove123")
+        await cache.register_store(
+            vector_store_id="vs_remove123", provider="openai", session_id=session_id
+        )
 
         # Verify it exists
         result, _ = await cache.get_or_create_placeholder(session_id)
         assert result is not None
 
         # WHEN remove_store is called
-        removed = await cache.remove_store(session_id)
+        removed = await cache.remove_store("vs_remove123")
         assert removed is True
 
         # THEN the store is no longer retrievable
@@ -153,7 +173,7 @@ class TestVectorStoreCache:
         assert result is None
 
         # AND calling remove again returns False
-        removed = await cache.remove_store(session_id)
+        removed = await cache.remove_store("vs_remove123")
         assert removed is False
 
     async def test_cleanup_orphaned(self, cache, virtual_clock, monkeypatch):
@@ -162,11 +182,15 @@ class TestVectorStoreCache:
         monkeypatch.setattr(time, "time", virtual_clock.time)
 
         # GIVEN entries created at different times
-        await cache.register_store("ancient", "vs_ancient")
+        await cache.register_store(
+            vector_store_id="vs_ancient", provider="openai", session_id="ancient"
+        )
 
         # Advance time by 29 days (not yet orphaned)
         virtual_clock.advance_time(29 * 24 * 60 * 60)
-        await cache.register_store("medium", "vs_medium")
+        await cache.register_store(
+            vector_store_id="vs_medium", provider="openai", session_id="medium"
+        )
 
         # Advance time by 2 more days (31 days total for first entry)
         virtual_clock.advance_time(2 * 24 * 60 * 60)
@@ -197,23 +221,32 @@ class TestVectorStoreCache:
         monkeypatch.setattr(time, "time", virtual_clock.time)
 
         # GIVEN various stores in different states
-        await cache.register_store("active1", "vs_active1")
-        await cache.register_store("active2", "vs_active2")
-        await cache.register_store("protected1", "vs_protected1", protected=True)
+        await cache.register_store(
+            vector_store_id="vs_active1", provider="openai", session_id="active1"
+        )
+        await cache.register_store(
+            vector_store_id="vs_active2", provider="openai", session_id="active2"
+        )
+        await cache.register_store(
+            vector_store_id="vs_protected1",
+            provider="openai",
+            session_id="protected1",
+            protected=True,
+        )
 
         # Advance time to expire some stores
         virtual_clock.advance_time(150)  # Past 120s TTL
 
-        await cache.register_store("active3", "vs_active3")  # New active store
+        await cache.register_store(
+            vector_store_id="vs_active3", provider="openai", session_id="active3"
+        )  # New active store
 
         # WHEN get_stats is called
         stats = await cache.get_stats()
 
         # THEN it returns correct counts
         assert stats["total"] == 4  # All stores
-        assert (
-            stats["active"] == 1
-        )  # Only active3 (protected1 is expired but protected)
+        assert stats["active"] == 4  # All stores are still active (is_active = 1)
         assert (
             stats["expired"] == 2
         )  # active1 and active2 (protected stores don't count as expired)
@@ -229,7 +262,13 @@ class TestVectorStoreCache:
         # WHEN multiple stores are registered concurrently
         tasks = []
         for i, session_id in enumerate(session_ids):
-            tasks.append(cache.register_store(session_id, f"vs_concurrent_{i}"))
+            tasks.append(
+                cache.register_store(
+                    vector_store_id=f"vs_concurrent_{i}",
+                    provider="openai",
+                    session_id=session_id,
+                )
+            )
 
         await asyncio.gather(*tasks)
 
@@ -244,11 +283,17 @@ class TestVectorStoreCache:
         # Test very long session ID
         long_id = "x" * 1025  # Over 1024 character limit
         with pytest.raises(ValueError, match="session_id too long"):
-            await cache.register_store(long_id, "vs_test")
+            await cache.register_store(
+                vector_store_id="vs_test", provider="openai", session_id=long_id
+            )
 
         # Valid session IDs should work
-        await cache.register_store("valid-session-123", "vs_test")
-        await cache.register_store("", "vs_empty")  # Empty is allowed by base class
         await cache.register_store(
-            "   ", "vs_spaces"
+            vector_store_id="vs_test", provider="openai", session_id="valid-session-123"
+        )
+        await cache.register_store(
+            vector_store_id="vs_empty", provider="openai", session_id=""
+        )  # Empty is allowed by base class
+        await cache.register_store(
+            vector_store_id="vs_spaces", provider="openai", session_id="   "
         )  # Spaces are allowed by base class

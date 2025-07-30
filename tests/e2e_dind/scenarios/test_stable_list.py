@@ -58,9 +58,9 @@ class TestStableInlineList:
 
         # Verify both tokens are found, proving the model can access both inline and overflowed (vector store) files
         assert MARKER_SMALL_FILE in response, "Failed to find token from inline context"
-        assert MARKER_LARGE_FILE in response, (
-            "Failed to find token from overflow file in vector store"
-        )
+        assert (
+            MARKER_LARGE_FILE in response
+        ), "Failed to find token from overflow file in vector store"
         print(
             "✅ Initial split test passed - model accessed both inline and vector store content!"
         )
@@ -93,12 +93,12 @@ class TestStableInlineList:
             session_id="stable-list-test-dedup",
         )
         print(f"✅ First response: {response1}")
-        assert MARKER_SMALL_FILE in response1, (
-            f"Failed to find initial token in first call. Response: {response1}"
-        )
-        assert MARKER_CONTEXT_1 in response1, (
-            f"Failed to find context token in first call. Response: {response1}"
-        )
+        assert (
+            MARKER_SMALL_FILE in response1
+        ), f"Failed to find initial token in first call. Response: {response1}"
+        assert (
+            MARKER_CONTEXT_1 in response1
+        ), f"Failed to find context token in first call. Response: {response1}"
 
         # Second call - provide the unchanged file and a new file
         # The server should detect that 'unchanged_file' was already sent and not resend it
@@ -124,9 +124,9 @@ class TestStableInlineList:
         print(f"✅ Second response: {response2}")
 
         # Verify the model recalls the first token (from memory/session) and finds the new token
-        assert MARKER_SMALL_FILE in response2, (
-            "Failed to recall token from previous turn"
-        )
+        assert (
+            MARKER_SMALL_FILE in response2
+        ), "Failed to recall token from previous turn"
         assert MARKER_CONTEXT_2 in response2, "Failed to find new context token"
         print(
             "✅ Deduplication test passed - model remembered context without resending!"
@@ -184,10 +184,10 @@ class TestStableInlineList:
         print(f"✅ Second response: {response2}")
 
         # Verify the new token is found, proving the modified file was resent and read
-        assert MARKER_MODIFIED_FILE in response2, (
-            "Failed to find modified token - file was not resent"
-        )
-        assert MARKER_SMALL_FILE not in response2, (
-            "Old token found - file change not detected"
-        )
+        assert (
+            MARKER_MODIFIED_FILE in response2
+        ), "Failed to find modified token - file was not resent"
+        assert (
+            MARKER_SMALL_FILE not in response2
+        ), "Old token found - file change not detected"
         print("✅ Change detection test passed - modified file was resent!")
