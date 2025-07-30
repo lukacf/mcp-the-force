@@ -223,8 +223,12 @@ class VectorStoreManager:
                 logger.info(
                     f"Reusing existing vector store {existing_store_id} for session {session_id}"
                 )
-                # Just return the existing store ID, files are already there
-                return existing_store_id
+                # Return consistent format - always a dict
+                return {
+                    "store_id": existing_store_id,
+                    "provider": provider,
+                    "session_id": session_id,
+                }
 
         # For named stores, we don't check for existing - they're managed differently
         # The vector store provider will handle deduplication based on name

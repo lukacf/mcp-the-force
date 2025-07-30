@@ -78,7 +78,7 @@ def mock_embedding_model(monkeypatch):
     mock_model = MagicMock()
 
     # Make encode return appropriately sized arrays based on input
-    def mock_encode(texts):
+    def mock_encode(texts, **kwargs):
         """Return random embeddings with correct shape."""
         if isinstance(texts, list):
             return np.random.rand(len(texts), 384)

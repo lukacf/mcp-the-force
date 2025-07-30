@@ -124,6 +124,13 @@ class ToolHandler:
         """
         declarations = []
 
+        logger.debug("[TOOL_HANDLER] prepare_tool_declarations called with:")
+        logger.debug(
+            f"  - capabilities.native_file_search: {capabilities.native_file_search}"
+        )
+        logger.debug(f"  - vector_store_ids: {vector_store_ids}")
+        logger.debug(f"  - disable_memory_search: {disable_memory_search}")
+
         # All adapters get the project history search tool unless disabled
         if not disable_memory_search:
             declarations.append(self._get_memory_declaration_openai())
@@ -135,7 +142,14 @@ class ToolHandler:
                 f"Adding task files search tool with {len(vector_store_ids)} vector stores"
             )
             declarations.append(self._get_task_files_declaration_openai())
+        else:
+            logger.debug("[TOOL_HANDLER] Not adding search_task_files because:")
+            logger.debug(
+                f"  - vector_store_ids is {'empty' if not vector_store_ids else 'present'}"
+            )
+            logger.debug(f"  - native_file_search is {capabilities.native_file_search}")
 
+        logger.debug(f"[TOOL_HANDLER] Returning {len(declarations)} tool declarations")
         return declarations
 
     def _get_memory_declaration_openai(self) -> Dict[str, Any]:
