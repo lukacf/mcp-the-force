@@ -13,7 +13,6 @@ from ..capabilities import AdapterCapabilities
 class GrokBaseCapabilities(AdapterCapabilities):
     """Base capabilities shared by all Grok models."""
 
-    native_file_search: bool = False
     supports_functions: bool = True
     supports_streaming: bool = True
     supports_live_search: bool = True

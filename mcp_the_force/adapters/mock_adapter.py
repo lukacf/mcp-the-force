@@ -48,7 +48,6 @@ class MockAdapter:
         """Get the appropriate capabilities and param class for the model."""
         # Default capabilities
         default_capabilities = AdapterCapabilities(
-            native_file_search=False,
             supports_tools=True,
             supports_streaming=False,
             max_context_window=1_000_000,
