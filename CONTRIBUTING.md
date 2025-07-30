@@ -1,14 +1,18 @@
 # Contributing to MCP The-Force
 
-MCP The-Force is a thoughtfully designed AI server that empowers developers to integrate new capabilities with ease. This guide covers how to extend the robust architecture to support additional AI providers, tools, and memory sources.
+MCP The-Force is a protocol-based AI server designed to integrate multiple AI providers and tools. This guide covers how to extend its architecture to support additional AI providers, tools, and memory sources.
+
+## Development Philosophy
+
+This project is not only a tool but also a product of its own methodology. The "The Force" MCP server was developed by an AI assistant (Claude) relying extensively on the very tools this server provides. This dogfooding approach—using the system to build itself—ensures that the architecture is practical, robust, and built from a user-centric perspective. Test-Driven Development (TDD) is a central practice in this project, ensuring reliability and maintainability.
 
 ## Architecture Highlights
 
 - **Protocol-Based Adapters**: Implement the `MCPAdapter` protocol to add support for a new AI provider. The system handles lifecycle management, parameter validation and integration.
 
-- **Declarative Tool Definitions**: Use the declarative magic of Python dataclasses to describe a tool's parameters, capabilities and routing. The appropriate tool classes and validations are automatically generated.
+- **Declarative Tool Definitions**: A declarative system using Python descriptors to define tool parameters, capabilities, and routing, which are then used to automatically generate tool classes and validations.
 
-- **Automatic Capability Checking**: Specify model and tool capabilities with definitions. Parameters are automatically validated against those capabilities to provide strong guarantees. 
+- **Automatic Capability Checking**: Model and tool capabilities are defined declaratively. Parameters are automatically validated against these capabilities at runtime. 
 
 - **Unified Memory Abstractions**: The VectorStoreManager and UnifiedSessionCache provide interfaces for working with embeddings and conversation history across providers, enabling long-term memory integration independent of vendor specifics.
 
@@ -57,21 +61,54 @@ Pre-commit hooks ensure code quality:
 </details>
 
 <details>
-<summary>Development Commands</summary>
+<summary>Makefile Commands</summary>
 
-The Makefile is the source of truth for all test commands to maintain consistency across local development, pre-commit hooks and CI/CD.
+The Makefile is the source of truth for all test and maintenance commands to maintain consistency across local development and CI/CD.
 
 ```bash
 make help              # Show available commands  
 make lint              # Run ruff and mypy  
-make test              # Run fast unit tests only
+make test              # Run fast unit tests only (for pre-commit)
 make test-unit         # Run all unit tests with coverage
-make test-integration  # Run integration tests 
+make test-integration  # Run integration tests (uses mock adapters) 
 make e2e               # Run Docker-in-Docker E2E tests
 make ci                # Run full CI suite locally
-make clean             # Clean generated files   
+make clean             # Clean generated files
+make backup            # Manually backup SQLite databases   
 ```
 </details>
+
+## Testing Strategy
+
+The project relies on a multi-layered testing strategy, with Test-Driven Development (TDD) as its core philosophy. Each layer provides a different level of validation, from fast unit checks to full end-to-end workflow verification.
+
+### Pre-commit and Pre-push Hooks
+To enforce code quality and prevent regressions, the repository uses pre-commit hooks that run automatically:
+-   **On every commit** (`make test`): Fast unit tests (<5 seconds) are run, along with `ruff` and `mypy` checks.
+-   **On every push** (`make test-unit` & `make test-integration`): The full unit and integration test suites are run. This can be skipped with `git push --no-verify`.
+
+### Unit Tests
+-   **Command**: `make test-unit`
+-   **Location**: `tests/unit/`
+-   **Purpose**: Test individual components in complete isolation. All external dependencies, I/O, and API calls are mocked. These tests are fast and verify the correctness of specific functions and classes.
+
+### Integration Tests
+-   **Command**: `make test-integration`
+-   **Location**: `tests/internal/` and `tests/integration_mcp/`
+-   **Purpose**: Verify that components work together correctly. These tests use a `MockAdapter` to simulate AI model behavior, allowing for validation of the full internal workflow (parameter routing, context building, session management) without making real API calls.
+
+### End-to-End (E2E) Tests
+-   **Command**: `make e2e`
+-   **Location**: `tests/e2e_dind/`
+-   **Purpose**: Validate complete, real-world user workflows in an isolated Docker-in-Docker environment. These tests use real API keys and models to ensure the system works as expected from the client's perspective.
+-   **Scenarios**: The E2E suite includes comprehensive scenarios for:
+    1.  **Smoke Test**: Basic health check and core functionality.
+    2.  **Context Overflow & RAG**: Verification of context splitting between inline and vector stores.
+    3.  **Session Management**: Testing session persistence, isolation, and cross-model state.
+    4.  **Stable List**: Validating consistent context handling in multi-turn conversations.
+    5.  **Priority Context**: Ensuring the priority override forces files inline.
+    6.  **Environment Checks**: Validating the test environment itself is correctly configured.
+-   **Architecture**: Each test scenario runs in its own Docker Compose stack, providing complete network and filesystem isolation. This design ensures that tests are reliable and free from flakiness caused by shared state or resource contention. The scenarios are designed to run in parallel and test the system's stability and correctness under real-world conditions.
 
 ## Architecture Overview
 
@@ -111,8 +148,7 @@ make clean             # Clean generated files
 `mcp_the_force/utils/` handles conversation context:
 
 - `fs.py`: Intelligently gathers relevant context files respecting `.gitignore`  
-- `prompt_builder.py`: Decides whether to inline context or route to vector store based on token count
-- `vector_store.py`: Provides clean integration with vector databases for retrieval-augmented generation  
+- `context_builder.py`: Decides whether to inline context or route to vector store based on a stable-list algorithm and token budget
 - `token_counter.py`: Counts tokens to control context size
 </details>
 
@@ -204,67 +240,19 @@ For local utilities that don't require an AI model:
 The executor will route calls to the local service instead of an adapter. 
 </details>
 
-## Docker-in-Docker E2E Testing
-
-The `tests/e2e_dind/` directory contains a robust end-to-end testing system that validates complete user workflows in isolated Docker environments.  
-
-### Architecture
-
-Each test scenario runs in its own Docker compose stack, providing:
-- Dedicated network to prevent cross-test interference
-- Isolated filesystem with temporary directories per test 
-- CPU and memory limits to avoid resource contention
-- Fresh containers for a clean environment in each test
-
-The Docker-in-Docker setup is admittedly complex, but that byzantine architecture enables complete isolation and parallelism for truly comprehensive testing:
-```
-the-force-e2e-runner (host container)  
-├── test-scenario-1-network
-│   ├── mcp-server (production build)
-│   └── claude-runner (CLI execution)
-├── test-scenario-2-network
-│   ├── mcp-server (production build)  
-│   └── claude-runner (CLI execution)
-└── ...
-```
-
-### Test Scenarios
-
-The 6 comprehensive test scenarios cover all critical functionality:  
-1. Smoke Test: Basic health check and core functionality
-2. Context Overflow and RAG Workflow: Context splitting between inline and vector store 
-3. Graceful Failure Handling: Error scenarios and user-friendly responses
-4. Stable List Context Management: Consistent multi-turn context handling
-5. Priority Context Override: Explicit control over file placement 
-6. Session Management and Isolation: Cross-model state management
-
-All tests run in parallel with an impressive 100% pass rate. The isolated environments eliminate flakiness from shared state, resource contention, and race conditions.
-
-### Running Tests
-
-Locally, use `make e2e` to run all scenarios or `docker run` individual scenarios for debugging. In CI/CD, each scenario runs as a separate job for maximum parallelism.
-
-### Benefits Over Previous Approach  
-
-The new Docker-in-Docker approach provides:
-- Flake-free tests with no shared state, resource contention, or race conditions  
-- Meaningful tests of real user workflows, not just API edge cases
-- Clear failure isolation and faster debugging of individual scenarios
-- True end-to-end validation with production-like network boundaries and setup
-
 ## Contributing Guidelines
 
 We appreciate contributions to MCP The-Force! Here's how to get started:
 
-1. Create a branch for your feature or bug fix
-2. Write tests to cover new code (we use pytest) 
-3. Follow conventions using pre-commit hooks for consistent style
-4. Keep pull requests small and focused on a single change  
-5. Use descriptive commit messages and PR titles/descriptions
+1. Create a branch for your feature or bug fix.
+2. Write tests to cover new code (we use pytest).
+3. Follow conventions using pre-commit hooks for consistent style.
+4. Keep pull requests small and focused on a single change.
+5. Use descriptive commit messages and PR titles/descriptions.
 
 Before submitting a PR, make sure to:
-1. Run full test suite with `make ci`
-2. Update relevant documentation
-3. Add a changelog entry for your change
+1. Run the full CI suite with `make ci`.
+2. Update relevant documentation.
+3. Add a changelog entry for your change.
 
 Open a PR against the main branch for review by maintainers. Feel free to open an issue or reach out if you have any questions!
