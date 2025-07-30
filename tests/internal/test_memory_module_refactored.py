@@ -1,8 +1,7 @@
 """Integration tests for refactored memory module using VectorStoreManager."""
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from mcp_the_force.memory.async_config import AsyncMemoryConfig
+from unittest.mock import AsyncMock, patch
 
 
 @pytest.mark.asyncio
@@ -10,57 +9,10 @@ class TestMemoryModuleRefactored:
     """Test the refactored memory system with VectorStoreManager."""
 
     @pytest.fixture
-    async def memory_config(self, tmp_path):
-        """Create AsyncMemoryConfig instance for testing."""
-        # Mock settings
-        with patch("mcp_the_force.memory.async_config.get_settings") as mock_settings:
-            settings = MagicMock()
-            settings.memory.enabled = True
-            settings.memory.data_dir = str(tmp_path)
-            settings.memory.vector_store_provider = "openai"
-            settings.memory.rollover_docs_limit = 100
-            mock_settings.return_value = settings
-
-            config = AsyncMemoryConfig()
-            yield config
-            # Cleanup
-            if hasattr(config, "_pool"):
-                await config._pool.close()
-
-    @pytest.fixture
-    def mock_vector_store_manager(self):
-        """Mock the vector_store_manager."""
-        manager = AsyncMock()
-        manager.create = AsyncMock()
-        manager._get_client = MagicMock()
-        return manager
-
-    async def test_memory_uses_vector_store_manager(
-        self, memory_config, mock_vector_store_manager
-    ):
-        """Test that memory module uses VectorStoreManager instead of OpenAI client."""
-        with patch(
-            "mcp_the_force.memory.async_config.vector_store_manager",
-            mock_vector_store_manager,
-        ):
-            # Setup mock responses
-            mock_vector_store_manager.create.return_value = "vs_memory001"
-            mock_client = AsyncMock()
-            mock_client.get = AsyncMock(return_value={"id": "vs_memory001"})
-            mock_vector_store_manager._get_client.return_value = mock_client
-
-            # Create a conversation store
-            await memory_config._create_store_async("conversation", name="Test Store")
-
-            # Verify VectorStoreManager.create was called with correct params
-            mock_vector_store_manager.create.assert_called_once()
-            call_args = mock_vector_store_manager.create.call_args
-
-            # Check the arguments
-            assert call_args.kwargs["name"] == "project-conversation-001"
-            assert call_args.kwargs["protected"] is True
-            assert call_args.kwargs["files"] == []
-            assert "session_id" not in call_args.kwargs
+    async def isolate_test_databases(self, tmp_path):
+        """Isolate test databases."""
+        # This fixture ensures each test gets a clean database
+        yield tmp_path
 
     async def test_no_openai_imports(self):
         """Test that memory module has no direct OpenAI imports."""
@@ -74,158 +26,209 @@ class TestMemoryModuleRefactored:
         assert "from ..adapters.openai.client import OpenAIClientFactory" not in source
         assert "OpenAIClientFactory" not in source
 
-    async def test_rollover_with_lineage_tracking(
-        self, memory_config, mock_vector_store_manager
-    ):
-        """Test store rollover includes lineage tracking."""
+    async def test_create_first_conversation_store(self, isolate_test_databases):
+        """
+        Test that get_active_conversation_store creates a new store
+        when no active store exists.
+        """
+        # 1. Mock the VectorStoreManager dependency at the module level where it's used
         with patch(
             "mcp_the_force.memory.async_config.vector_store_manager",
-            mock_vector_store_manager,
-        ):
-            # Setup mocks
-            old_store_id = "vs_old001"
-            new_store_id = "vs_new001"
-            mock_vector_store_manager.create.return_value = new_store_id
+            new_callable=AsyncMock,
+        ) as mock_vsm:
+            # Configure the mock to return a predictable value
+            mock_vsm.create.return_value = {"store_id": "vs_new_conversation_store"}
+            mock_vsm.provider = "openai"
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(
+                return_value={"id": "vs_new_conversation_store"}
+            )
+            mock_vsm._get_client.return_value = mock_client
 
-            # Mock database to simulate existing store
-            with patch.object(memory_config, "_get_active_store") as mock_get_active:
-                mock_get_active.return_value = {
-                    "store_id": old_store_id,
-                    "sequence": 1,
-                    "doc_count": 100,
-                }
+            # Import the class AFTER mocking is set up
+            from mcp_the_force.memory.async_config import AsyncMemoryConfig
 
-                # Trigger rollover
-                await memory_config._rollover_store_async("conversation", old_store_id)
+            # 2. Arrange: Instantiate the class. The DB will be empty.
+            memory_config = AsyncMemoryConfig(
+                db_path=isolate_test_databases / "memory.db"
+            )
 
-                # Verify create was called with rollover_from
-                mock_vector_store_manager.create.assert_called_once()
-                call_args = mock_vector_store_manager.create.call_args
-                assert call_args.kwargs["rollover_from"] == old_store_id
-                assert call_args.kwargs["name"] == "project-conversation-002"
+            # 3. Act: Call the public method
+            store_id = await memory_config.get_active_conversation_store()
 
-    async def test_provider_independence(
-        self, memory_config, mock_vector_store_manager
-    ):
-        """Test that memory system works with any provider."""
+            # 4. Assert
+            # It should have returned the ID from our mock
+            assert store_id == "vs_new_conversation_store"
+
+            # It should have called the manager's create method exactly once
+            mock_vsm.create.assert_called_once()
+
+            # Verify it was called with the correct parameters for a new memory store
+            call_args = mock_vsm.create.call_args
+            assert call_args.kwargs["name"] == "project-conversations-001"
+            assert call_args.kwargs["protected"] is True
+            assert call_args.kwargs["files"] == []
+
+    async def test_rollover_store_on_limit(self, isolate_test_databases):
+        """
+        Test that a new store is created when the active one is full.
+        """
+        with patch(
+            "mcp_the_force.memory.async_config.vector_store_manager",
+            new_callable=AsyncMock,
+        ) as mock_vsm:
+            # Configure the mock to return the new store's ID
+            mock_vsm.create.return_value = {"store_id": "vs_rollover_store"}
+            mock_vsm.provider = "openai"
+
+            from mcp_the_force.memory.async_config import AsyncMemoryConfig
+
+            # Arrange:
+            # - Instantiate the config
+            # - Manually set the state of the DB to have one full, active store
+            memory_config = AsyncMemoryConfig(
+                db_path=isolate_test_databases / "memory.db"
+            )
+
+            # Directly manipulate the sync config's DB for setup
+            db_conn = memory_config._sync_config._db
+            with db_conn:
+                # Create a "full" active store
+                db_conn.execute(
+                    "INSERT INTO stores (store_id, store_type, doc_count, created_at, is_active) VALUES (?, ?, ?, ?, ?)",
+                    (
+                        "vs_full_store_001",
+                        "conversation",
+                        10000,
+                        1234567890,
+                        1,
+                    ),  # Set doc_count to rollover_limit
+                )
+
+            # Act: This call should trigger a rollover
+            new_store_id = await memory_config.get_active_conversation_store()
+
+            # Assert:
+            assert new_store_id == "vs_rollover_store"
+
+            # The manager should have been called to create the new store
+            mock_vsm.create.assert_called_once()
+
+            # Check that it was called with the correct rollover name and params
+            call_args = mock_vsm.create.call_args
+            assert call_args.kwargs["name"] == "project-conversations-002"
+            assert call_args.kwargs["protected"] is True
+            assert call_args.kwargs["rollover_from"] == "vs_full_store_001"
+
+            # Verify the old store is now inactive in the DB
+            with db_conn:
+                cursor = db_conn.execute(
+                    "SELECT is_active FROM stores WHERE store_id = ?",
+                    ("vs_full_store_001",),
+                )
+                row = cursor.fetchone()
+                assert row[0] == 0  # is_active should be 0
+
+    async def test_uses_existing_active_store(self, isolate_test_databases):
+        """
+        Test that an existing, non-full, active store is reused.
+        """
+        # Mock only the parts of the manager we need to control for this test
+        with patch(
+            "mcp_the_force.memory.async_config.vector_store_manager.create",
+            new_callable=AsyncMock,
+        ) as mock_create:
+            with patch(
+                "mcp_the_force.memory.async_config.vector_store_manager._get_client"
+            ) as mock_get_client:
+                with patch(
+                    "mcp_the_force.memory.async_config.vector_store_manager.provider",
+                    "openai",
+                ):
+                    # Mock the provider's 'get' method to simulate successful verification
+                    mock_provider_client = AsyncMock()
+                    mock_get_client.return_value = mock_provider_client
+
+                    from mcp_the_force.memory.async_config import AsyncMemoryConfig
+
+                    # Arrange:
+                    # - Create a store entry that is active but NOT full
+                    memory_config = AsyncMemoryConfig(
+                        db_path=isolate_test_databases / "memory.db"
+                    )
+                    db_conn = memory_config._sync_config._db
+                    with db_conn:
+                        db_conn.execute(
+                            "INSERT INTO stores (store_id, store_type, doc_count, created_at, is_active) VALUES (?, ?, ?, ?, ?)",
+                            ("vs_existing_store", "conversation", 100, 1234567890, 1),
+                        )
+
+                    # Act
+                    store_id = await memory_config.get_active_conversation_store()
+
+                    # Assert
+                    assert store_id == "vs_existing_store"
+
+                    # The provider client should have been used to verify the store exists
+                    mock_provider_client.get.assert_called_once_with(
+                        "vs_existing_store"
+                    )
+
+                    # Most importantly, no new store should have been created
+                    mock_create.assert_not_called()
+
+    async def test_error_handling_during_rollover(self, isolate_test_databases):
+        """Test error handling during store rollover."""
+        with patch(
+            "mcp_the_force.memory.async_config.vector_store_manager",
+            new_callable=AsyncMock,
+        ) as mock_vsm:
+            # Make create fail
+            mock_vsm.create.side_effect = Exception("Provider error")
+            mock_vsm.provider = "openai"
+
+            from mcp_the_force.memory.async_config import AsyncMemoryConfig
+
+            # Arrange: Create a full store that would trigger rollover
+            memory_config = AsyncMemoryConfig(
+                db_path=isolate_test_databases / "memory.db"
+            )
+
+            db_conn = memory_config._sync_config._db
+            with db_conn:
+                # Create a "full" active store
+                db_conn.execute(
+                    "INSERT INTO stores (store_id, store_type, doc_count, created_at, is_active) VALUES (?, ?, ?, ?, ?)",
+                    ("vs_full_store", "conversation", 10000, 1234567890, 1),
+                )
+
+            # Act & Assert: Should raise the exception
+            with pytest.raises(Exception, match="Provider error"):
+                await memory_config.get_active_conversation_store()
+
+    async def test_provider_independence(self, isolate_test_databases):
+        """Test that memory system works with any provider through VectorStoreManager."""
         providers = ["openai", "inmemory", "pinecone", "hnsw"]
 
         for provider in providers:
             with patch(
                 "mcp_the_force.memory.async_config.vector_store_manager",
-                mock_vector_store_manager,
-            ):
-                with patch(
-                    "mcp_the_force.memory.async_config.get_settings"
-                ) as mock_settings:
-                    # Set different provider
-                    settings = MagicMock()
-                    settings.memory.vector_store_provider = provider
-                    mock_settings.return_value = settings
+                new_callable=AsyncMock,
+            ) as mock_vsm:
+                # Configure mock for this provider
+                mock_vsm.create.return_value = {"store_id": f"vs_{provider}001"}
+                mock_vsm.provider = provider
 
-                    # Reset mock
-                    mock_vector_store_manager.create.reset_mock()
-                    mock_vector_store_manager.create.return_value = f"vs_{provider}001"
+                from mcp_the_force.memory.async_config import AsyncMemoryConfig
 
-                    # Create store
-                    await memory_config._create_store_async(
-                        "conversation", name=f"Test {provider}"
-                    )
+                # Each provider gets its own DB to avoid conflicts
+                memory_config = AsyncMemoryConfig(
+                    db_path=isolate_test_databases / f"memory_{provider}.db"
+                )
 
-                    # Verify it uses the configured provider
-                    # The actual provider handling is in VectorStoreManager
-                    mock_vector_store_manager.create.assert_called_once()
+                # Create store
+                store_id = await memory_config.get_active_conversation_store()
 
-    async def test_sequential_naming(self, memory_config, mock_vector_store_manager):
-        """Test that stores are named sequentially."""
-        with patch(
-            "mcp_the_force.memory.async_config.vector_store_manager",
-            mock_vector_store_manager,
-        ):
-            # Mock database responses for different sequences
-            sequence_responses = [
-                [],  # No existing stores
-                [{"sequence": 1}],  # One existing store
-                [{"sequence": 1}, {"sequence": 2}],  # Two existing stores
-            ]
-            expected_names = [
-                "project-conversation-001",
-                "project-conversation-002",
-                "project-conversation-003",
-            ]
-
-            for seq_response, expected_name in zip(sequence_responses, expected_names):
-                mock_vector_store_manager.create.reset_mock()
-
-                with patch.object(memory_config, "_execute_async") as mock_execute:
-                    mock_execute.return_value = seq_response
-                    mock_vector_store_manager.create.return_value = "vs_test"
-
-                    await memory_config._create_store_async("conversation", name="Test")
-
-                    # Verify correct sequential name
-                    call_args = mock_vector_store_manager.create.call_args
-                    assert call_args.kwargs["name"] == expected_name
-
-    async def test_store_verification_uses_manager(
-        self, memory_config, mock_vector_store_manager
-    ):
-        """Test that store verification uses VectorStoreManager's client."""
-        with patch(
-            "mcp_the_force.memory.async_config.vector_store_manager",
-            mock_vector_store_manager,
-        ):
-            store_id = "vs_verify001"
-
-            # Setup mock client
-            mock_client = AsyncMock()
-            mock_client.get = AsyncMock(return_value={"id": store_id})
-            mock_vector_store_manager._get_client.return_value = mock_client
-
-            # Get active store (triggers verification)
-            with patch.object(memory_config, "_get_active_store") as mock_get_active:
-                mock_get_active.return_value = {"store_id": store_id, "sequence": 1}
-
-                await memory_config.get_active_conversation_store()
-
-                # Verify it used VectorStoreManager's client
-                mock_vector_store_manager._get_client.assert_called_once_with("openai")
-                mock_client.get.assert_called_once_with(store_id)
-
-    async def test_error_handling_during_rollover(
-        self, memory_config, mock_vector_store_manager
-    ):
-        """Test error handling during store rollover."""
-        with patch(
-            "mcp_the_force.memory.async_config.vector_store_manager",
-            mock_vector_store_manager,
-        ):
-            # Make create fail
-            mock_vector_store_manager.create.side_effect = Exception("Provider error")
-
-            # Mock existing store
-            with patch.object(memory_config, "_get_active_store") as mock_get_active:
-                mock_get_active.return_value = {"store_id": "vs_old", "sequence": 1}
-
-                # Rollover should raise the exception
-                with pytest.raises(Exception, match="Provider error"):
-                    await memory_config._rollover_store_async("conversation", "vs_old")
-
-    async def test_metadata_support(self, memory_config, mock_vector_store_manager):
-        """Test that provider metadata can be passed through."""
-        with patch(
-            "mcp_the_force.memory.async_config.vector_store_manager",
-            mock_vector_store_manager,
-        ):
-            # Future enhancement: memory config could accept provider_metadata
-            # For now, just verify the interface exists
-            mock_vector_store_manager.create.return_value = "vs_meta001"
-
-            await memory_config._create_store_async("conversation", name="Test")
-
-            # The create method supports provider_metadata even if not used yet
-            call_args = mock_vector_store_manager.create.call_args
-            assert (
-                "provider_metadata" not in call_args.kwargs
-                or call_args.kwargs["provider_metadata"] is None
-            )
+                # Verify it uses VectorStoreManager regardless of provider
+                assert store_id == f"vs_{provider}001"
+                mock_vsm.create.assert_called_once()
