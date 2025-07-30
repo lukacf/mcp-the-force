@@ -5,7 +5,7 @@ import contextlib
 import logging
 import time
 import uuid
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Union, Dict
 import fastmcp.exceptions
 from mcp_the_force.adapters.registry import get_adapter_class
 from .registry import ToolMetadata
@@ -71,7 +71,9 @@ class ToolExecutor:
         # Log request start with operation ID
         logger.info(f"[{operation_id}] Starting {tool_id}")
 
-        vs_id: Optional[str] = None  # Initialize to avoid UnboundLocalError
+        vs_id: Optional[Union[str, Dict[str, Any]]] = (
+            None  # Initialize to avoid UnboundLocalError
+        )
         memory_tasks: List[asyncio.Task] = []  # Track memory storage tasks
         was_cancelled = False  # Track if the operation was cancelled
 
@@ -286,7 +288,7 @@ class ToolExecutor:
                 vs_id = await self.vector_store_manager.create(
                     files_for_vector_store, session_id=session_id
                 )
-                vector_store_ids = [vs_id] if vs_id else None
+                vector_store_ids = [vs_id] if vs_id and isinstance(vs_id, str) else None
                 logger.debug(
                     f"Vector store ready: {vs_id}, vector_store_ids={vector_store_ids}"
                 )
@@ -323,7 +325,9 @@ class ToolExecutor:
                         vs_id = await self.vector_store_manager.create(
                             files, session_id=None
                         )
-                        vector_store_ids = [vs_id] if vs_id else None
+                        vector_store_ids = (
+                            [vs_id] if vs_id and isinstance(vs_id, str) else None
+                        )
                         logger.debug(
                             f"Created vector store {vs_id}, vector_store_ids={vector_store_ids}"
                         )
@@ -573,10 +577,10 @@ class ToolExecutor:
                 f"[TIMING] Starting adapter.generate at {time.strftime('%H:%M:%S')}"
             )
 
-            # Renew lease before long-running operation if using Loiter Killer
-            if session_id and vs_id and self.vector_store_manager.loiter_killer.enabled:
-                await self.vector_store_manager.loiter_killer.renew_lease(session_id)
-                logger.debug(f"Renewed Loiter Killer lease for session {session_id}")
+            # Renew lease before long-running operation
+            if session_id and vs_id:
+                await self.vector_store_manager.renew_lease(session_id)
+                logger.debug(f"Renewed vector store lease for session {session_id}")
 
             # Scope context is now set by the integration layer, so we don't need to set it here
             try:

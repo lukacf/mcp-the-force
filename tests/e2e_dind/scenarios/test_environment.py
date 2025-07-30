@@ -31,27 +31,9 @@ def test_environment_check(claude, stack):
     stdout, _, _ = stack.exec_in_container(["hostname"], "server")
     print(f"   Server hostname: {stdout.strip()}")
 
-    # 3.1. Check if LoiterKiller is available (it starts with the container)
-    print("\n3.1. Checking LoiterKiller availability...")
-    # First, let's see what processes are running
+    # Check what processes are running
     stdout, _, _ = stack.exec_in_container(["bash", "-c", "ps aux"], "server")
     print(f"   Current processes:\n{stdout}")
-
-    # Check if we can reach LoiterKiller
-    stdout, stderr, return_code = stack.exec_in_container(
-        [
-            "bash",
-            "-c",
-            "curl -s http://localhost:9876/health || echo 'LoiterKiller not ready'",
-        ],
-        "server",
-    )
-    if return_code == 0 and "healthy" in stdout.lower():
-        print("   ✅ LoiterKiller is healthy")
-    else:
-        print(
-            "   ⚠️  LoiterKiller not yet available (this is expected - it starts on demand)"
-        )
 
     # 4. Check server container environment variables
     print("\n4. Checking server environment variables...")
@@ -61,7 +43,6 @@ def test_environment_check(claude, stack):
         "VERTEX_PROJECT",
         "VERTEX_LOCATION",
         "VICTORIA_LOGS_URL",
-        "LOITER_KILLER_URL",
         "HOST",
         "PORT",
         "LOG_LEVEL",
@@ -134,31 +115,6 @@ def test_environment_check(claude, stack):
         "server",
     )
     print(f"   host.docker.internal resolution: {stdout.strip()}")
-
-    # Check LoiterKiller connectivity
-    print("\n7.1. Checking LoiterKiller connectivity...")
-
-    # Check what URL the server container will use
-    stdout, _, _ = stack.exec_in_container(
-        ["bash", "-c", "echo $LOITER_KILLER_URL"], "server"
-    )
-    server_loiter_url = stdout.strip()
-    print(f"   Server LOITER_KILLER_URL env: {server_loiter_url}")
-
-    # Test connectivity from server container to LoiterKiller (on localhost)
-    print("   Testing LoiterKiller from server container...")
-    stdout, stderr, return_code = stack.exec_in_container(
-        [
-            "bash",
-            "-c",
-            f"curl -v {server_loiter_url}/health 2>&1 || echo 'CURL FAILED'",
-        ],
-        "server",
-    )
-    print(f"   LoiterKiller curl output:\n{stdout}")
-
-    # Since LoiterKiller runs on localhost, no DNS resolution needed
-    print("   LoiterKiller is running on localhost:9876 inside the server container")
 
     # Check actual logging configuration
     print("\n   Checking logging configuration...")
