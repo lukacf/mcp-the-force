@@ -155,6 +155,35 @@ bash ~/.config/mcp-the-force/scripts/install-memory-hook.sh
 ### Configuration
 For a full list of settings, see [CONFIGURATION.md](docs/CONFIGURATION.md). You can manage settings via YAML files or the `mcp-config` CLI tool.
 
+### Local Vector Store (HNSW)
+
+The Force includes a high-performance local vector store option using HNSW (Hierarchical Navigable Small World) graphs. This provides:
+
+- **No External Dependencies**: Works completely offline, no API calls required
+- **Fast Performance**: HNSW provides logarithmic search complexity
+- **Automatic Model Download**: Downloads a compact 45MB embedding model on first use
+- **Smart Caching**: Embeddings are cached in memory for repeated queries
+- **Cosine Similarity**: Uses cosine distance for accurate semantic search
+
+To use the local HNSW vector store instead of OpenAI:
+
+```yaml
+# config.yaml
+vector_stores:
+  default_vector_store_provider: hnsw  # Use 'openai' for OpenAI's vector store
+```
+
+**Note**: HNSW requires a C++ compiler to install (`hnswlib` builds from source). Install build tools first:
+- macOS: `xcode-select --install`
+- Linux: `apt-get install build-essential`
+- Windows: Install Microsoft C++ Build Tools
+
+The HNSW implementation includes:
+- Automatic persistence to `~/.cache/mcp-the-force/vectorstores/hnsw/`
+- Optimized search with `ef=50` for better accuracy
+- Thread-safe operations with proper locking
+- Dynamic index resizing as your knowledge base grows
+
 ### Developer Logging
 The Force integrates with VictoriaLogs for centralized debugging. Enable developer mode to search logs:
 

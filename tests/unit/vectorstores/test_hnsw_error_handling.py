@@ -30,11 +30,10 @@ async def test_save_permission_error(tmp_path, monkeypatch, mock_embedding_model
 
     monkeypatch.setattr(Path, "mkdir", mock_mkdir)
 
-    store = await client.create(name="test-perms")
-
-    # This should raise VectorStoreError due to permission issue
+    # This should raise VectorStoreError due to permission issue during create
+    # (since we now save empty stores immediately)
     with pytest.raises(VectorStoreError, match="Cannot create persistence directory"):
-        await store.add_files([VSFile(path="test.txt", content="data")])
+        await client.create(name="test-perms")
 
 
 @pytest.mark.asyncio
