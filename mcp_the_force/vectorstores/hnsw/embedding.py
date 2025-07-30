@@ -1,6 +1,9 @@
 """Embedding model management for HNSW vector store."""
 
+import logging
 from threading import Lock
+
+logger = logging.getLogger(__name__)
 
 # Global instance and lock for thread-safe lazy initialization
 _model = None
@@ -12,9 +15,17 @@ def _load_sentence_transformer():
     Isolated import so that tests can monkey-patch this function instead
     of wrestling with sys.modules.
     """
+    logger.info(
+        "Initializing HNSW embedding model. First-time setup may download "
+        "~45MB model data. This is a one-time operation..."
+    )
+
     from sentence_transformers import SentenceTransformer
 
-    return SentenceTransformer("paraphrase-MiniLM-L3-v2")
+    model = SentenceTransformer("paraphrase-MiniLM-L3-v2")
+    logger.info("HNSW embedding model loaded successfully")
+
+    return model
 
 
 def get_embedding_model():
