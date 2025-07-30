@@ -5,7 +5,7 @@ This guide covers everything you need to know to develop, test, and extend the M
 ## 🛠️ Development Setup
 
 ### Prerequisites
-- Python 3.10+ required
+- Python 3.13+ required
 - `uv` package manager
 - Git with pre-commit hooks
 
@@ -107,7 +107,7 @@ pytest tests/e2e_dind -v               # Docker-in-Docker E2E tests
    - **Protocol-based design**: All adapters implement `MCPAdapter` protocol
    - **Central Registry** (`registry.py`): Single source of truth for adapter listing
    - **Self-contained packages**: Each adapter owns its definitions, capabilities, and implementation
-   - Current adapters: OpenAI, Google Gemini, xAI Grok
+   - Current adapters: OpenAI, Google Gemini, xAI Grok, Anthropic
 
 2. **Tool System** (`mcp_the_force/tools/`)
    - `descriptors.py`: Route descriptors with capability requirements
@@ -128,6 +128,13 @@ pytest tests/e2e_dind -v               # Docker-in-Docker E2E tests
    - `prompt_builder.py`: Smart context inlining vs vector store routing
    - `vector_store.py`: OpenAI vector store integration for RAG
    - `token_counter.py`: Token counting for context management
+
+5. **Vector Store Abstraction** (`mcp_the_force/vectorstores/`)
+   - `manager.py`: Central VectorStoreManager for provider-agnostic operations
+   - `protocol.py`: VectorStore protocol defining the interface all providers must implement
+   - `openai/`: OpenAI vector store implementation
+   - `in_memory.py`: In-memory implementation for testing
+   - Vector store lifecycle management with TTL and automatic cleanup
 
 ### Protocol-Based Adapter Architecture
 
@@ -226,17 +233,56 @@ await store_conversation_memory(
 python -m mcp_the_force.memory.commit
 ```
 
-### Session Management
+### Vector Store Architecture
 
-**OpenAI Models:**
-- Ephemeral cache using SQLite with TTL
-- Stores response IDs for conversation continuity
-- OpenAI maintains full conversation context
+The project uses a provider-agnostic vector store abstraction layer:
 
-**Gemini Models:**
-- Full conversation history in SQLite
-- Message persistence with automatic cleanup
-- TTL-based session expiration
+**Core Components:**
+- **VectorStoreManager** (`vectorstores/manager.py`): Central manager handling all vector store operations
+- **VectorStore Protocol** (`vectorstores/protocol.py`): Defines the interface all providers must implement
+- **VectorStoreCache** (`vector_store_cache.py`): SQLite-based caching with TTL and automatic cleanup
+- **Provider Implementations**: OpenAI (production) and InMemory (testing)
+
+**Key Features:**
+- Automatic lifecycle management with configurable TTL (default: 2 hours)
+- Provider-agnostic API - switch providers without changing code
+- Unified handling for session-specific and named (permanent) stores
+- Automatic cleanup of expired stores to prevent quota exhaustion
+- Support for rollover lineage tracking in memory stores
+
+**Usage Example:**
+```python
+from mcp_the_force.vectorstores.manager import vector_store_manager
+
+# Create a vector store for a session
+store_id = await vector_store_manager.create(
+    files=files,
+    session_id="user-session-123",
+    ttl_seconds=7200  # 2 hour TTL
+)
+
+# Add files to an existing store
+await vector_store_manager.add_files(
+    vector_store_id=store_id,
+    files=[VSFile(path="doc.txt", content="...")]
+)
+
+# Search across stores
+results = await vector_store_manager.search(
+    vector_store_ids=[store_id],
+    query="search query"
+)
+```
+
+### Session Management: The UnifiedSessionCache
+
+The server features a persistent, unified session management system that works across **all** AI providers.
+
+- **Unified Cache**: All conversation history is stored in a single SQLite database (`.mcp_sessions.sqlite3` by default), managed by the `UnifiedSessionCache`.
+- **Persistence**: Sessions are preserved across server restarts with a default TTL of 6 months, ensuring long-term conversational memory.
+- **Provider-Agnostic**: The executor and adapters use the cache to maintain conversational context, regardless of whether you're using OpenAI, Gemini, Grok, or Anthropic models.
+- **How it Works**: When a `session_id` is provided, the executor retrieves the message history from the cache and passes it to the adapter, ensuring the model has the full context of the conversation.
+- **Thread-Safe**: Built with SQLite's thread-safety and proper async handling for concurrent access.
 
 ### Context Management Logic
 
@@ -262,11 +308,11 @@ else:
 
 ### Adding a New Adapter
 
-Adding support for a new AI provider (e.g., Anthropic Claude) involves creating a self-contained adapter package:
+Adding support for a new AI provider (e.g., Mistral) involves creating a self-contained adapter package:
 
 #### 1. Create the adapter package structure
 ```
-mcp_the_force/adapters/anthropic/
+mcp_the_force/adapters/mistral/
 ├── __init__.py
 ├── adapter.py          # MCPAdapter implementation
 └── definitions.py      # Single source of truth
@@ -274,7 +320,7 @@ mcp_the_force/adapters/anthropic/
 
 #### 2. Create `definitions.py` (Single source of truth)
 ```python
-# adapters/anthropic/definitions.py
+# adapters/mistral/definitions.py
 
 from typing import Dict, Any, Optional
 from dataclasses import dataclass
@@ -286,8 +332,8 @@ from ...tools.blueprint import ToolBlueprint
 from ...tools.blueprint_registry import register_blueprints
 
 # Parameter class with capability requirements
-class AnthropicToolParams(BaseToolParams):
-    """Anthropic-specific parameters."""
+class MistralToolParams(BaseToolParams):
+    """Mistral-specific parameters."""
     
     temperature: float = Route.adapter(
         default=0.7,
@@ -302,31 +348,31 @@ class AnthropicToolParams(BaseToolParams):
 
 # Capability definitions
 @dataclass
-class ClaudeCapabilities(AdapterCapabilities):
-    provider: str = "anthropic"
-    model_family: str = "claude"
+class MistralCapabilities(AdapterCapabilities):
+    provider: str = "mistral"
+    model_family: str = "mistral"
     supports_temperature: bool = True
     supports_tools: bool = True
-    max_context_window: int = 200_000
+    max_context_window: int = 32_000
 
 @dataclass
-class Claude3OpusCapabilities(ClaudeCapabilities):
-    model_name: str = "claude-3-opus"
-    description: str = "Most capable Claude model"
+class MistralLargeCapabilities(MistralCapabilities):
+    model_name: str = "mistral-large"
+    description: str = "Most capable Mistral model"
 
 # Model registry
-ANTHROPIC_MODEL_CAPABILITIES = {
-    "claude-3-opus": Claude3OpusCapabilities(),
+MISTRAL_MODEL_CAPABILITIES = {
+    "mistral-large": MistralLargeCapabilities(),
 }
 
 # Auto-generate and register blueprints
 def _generate_and_register_blueprints():
     blueprints = []
-    for model_name, capabilities in ANTHROPIC_MODEL_CAPABILITIES.items():
+    for model_name, capabilities in MISTRAL_MODEL_CAPABILITIES.items():
         blueprint = ToolBlueprint(
             model_name=model_name,
-            adapter_key="anthropic",
-            param_class=AnthropicToolParams,
+            adapter_key="mistral",
+            param_class=MistralToolParams,
             description=capabilities.description,
             timeout=600,
             context_window=capabilities.max_context_window,
@@ -340,53 +386,53 @@ _generate_and_register_blueprints()
 
 #### 3. Implement the adapter
 ```python
-# adapters/anthropic/adapter.py
+# adapters/mistral/adapter.py
 
 from ..protocol import CallContext, ToolDispatcher
-from .definitions import AnthropicToolParams, ANTHROPIC_MODEL_CAPABILITIES
+from .definitions import MistralToolParams, MISTRAL_MODEL_CAPABILITIES
 
-class AnthropicAdapter:
-    """Anthropic adapter implementing MCPAdapter protocol."""
+class MistralAdapter:
+    """Mistral adapter implementing MCPAdapter protocol."""
     
-    param_class = AnthropicToolParams
+    param_class = MistralToolParams
     
     def __init__(self, model_name: str):
-        if model_name not in ANTHROPIC_MODEL_CAPABILITIES:
+        if model_name not in MISTRAL_MODEL_CAPABILITIES:
             raise ValueError(f"Unknown model: {model_name}")
             
         self.model_name = model_name
-        self.capabilities = ANTHROPIC_MODEL_CAPABILITIES[model_name]
-        self.display_name = f"Anthropic {model_name}"
+        self.capabilities = MISTRAL_MODEL_CAPABILITIES[model_name]
+        self.display_name = f"Mistral {model_name}"
     
     async def generate(
         self,
         prompt: str,
-        params: AnthropicToolParams,
+        params: MistralToolParams,
         ctx: CallContext,
         *,
         tool_dispatcher: ToolDispatcher,
         **kwargs
     ) -> Dict[str, Any]:
         # Implement your API call
-        response = await self.client.messages.create(
+        response = await self.client.chat(
             model=self.model_name,
             messages=[{"role": "user", "content": prompt}],
             temperature=params.temperature,
             max_tokens=params.max_tokens,
         )
-        return {"content": response.content}
+        return {"content": response.choices[0].message.content}
 ```
 
 #### 4. Set up the package `__init__.py`
 ```python
-# adapters/anthropic/__init__.py
+# adapters/mistral/__init__.py
 
-from .adapter import AnthropicAdapter
+from .adapter import MistralAdapter
 # This import triggers blueprint registration!
 from . import definitions  # noqa: F401
-from .definitions import ANTHROPIC_MODEL_CAPABILITIES
+from .definitions import MISTRAL_MODEL_CAPABILITIES
 
-__all__ = ["AnthropicAdapter", "ANTHROPIC_MODEL_CAPABILITIES"]
+__all__ = ["MistralAdapter", "MISTRAL_MODEL_CAPABILITIES"]
 ```
 
 #### 5. Add ONE line to the central registry
@@ -396,7 +442,8 @@ _ADAPTER_REGISTRY: Dict[str, Tuple[str, str]] = {
     "openai": ("mcp_the_force.adapters.openai.adapter", "OpenAIProtocolAdapter"),
     "google": ("mcp_the_force.adapters.google.adapter", "GeminiAdapter"),
     "xai": ("mcp_the_force.adapters.xai.adapter", "GrokAdapter"),
-    "anthropic": ("mcp_the_force.adapters.anthropic.adapter", "AnthropicAdapter"),  # ADD THIS
+    "anthropic": ("mcp_the_force.adapters.anthropic.adapter", "AnthropicAdapter"),
+    "mistral": ("mcp_the_force.adapters.mistral.adapter", "MistralAdapter"),  # ADD THIS
 }
 ```
 
@@ -447,7 +494,7 @@ Tools are automatically generated from blueprints:
 
 1. **At startup**: `tools/autogen.py` imports all adapters
 2. **Blueprint registration**: Each adapter's `definitions.py` registers blueprints
-3. **Tool generation**: `factories.py` creates tool classes like `ChatWithClaude3Opus`
+3. **Tool generation**: `factories.py` creates tool classes like `ChatWithMistralLarge`
 4. **Capability extraction**: Capabilities are retrieved from the adapter's definitions
 5. **Registration**: Tools are registered with the MCP server
 
@@ -474,27 +521,97 @@ To add new memory sources (beyond conversations and git commits):
 
 Example:
 ```python
+from ..vectorstores.manager import vector_store_manager
+from ..vectorstores.protocol import VSFile
+
 async def store_new_memory_type(content: str, metadata: Dict[str, Any]) -> None:
-    """Store new memory type in vector store."""
-    memory_config = get_memory_config()
-    client = get_client()
+    """Store new memory type using the vector store manager."""
+    from ..memory.async_config import get_async_memory_config
     
-    # Create document with metadata
-    document = {
-        "content": content,
-        "metadata": {
-            "type": "new_memory_type",
-            "timestamp": datetime.utcnow().isoformat(),
-            **metadata
-        }
-    }
+    config = get_async_memory_config()
+    store_id = await config.get_active_conversation_store()  # Or create a new store type
     
-    # Store in vector store
-    await client.beta.vector_stores.file_batches.upload_and_poll(
-        vector_store_id=memory_config.conversation_store_id,
-        files=[document]
+    # The VectorStoreManager abstracts away provider-specific details
+    vs_file = VSFile(
+        path=f"memory_type/{metadata['id']}.json",
+        content=json.dumps({
+            "content": content,
+            "metadata": {
+                "type": "new_memory_type",
+                "timestamp": datetime.utcnow().isoformat(),
+                **metadata
+            }
+        }),
+        metadata={"type": "new_memory_type", **metadata}
+    )
+    
+    # Add to vector store using the manager
+    await vector_store_manager.add_files(
+        vector_store_id=store_id,
+        files=[vs_file]
     )
 ```
+
+### Adding a New `LocalService` (Utility Tool)
+
+For tools that run locally (e.g., database queries, file system operations) without calling an external AI model, the project uses the `LocalService` protocol. This ensures a clean separation from AI-backed tools.
+
+#### 1. Create the Service Class
+
+Implement the `LocalService` protocol in a new file, for example, in `mcp_the_force/local_services/`:
+
+```python
+# mcp_the_force/local_services/my_utility.py
+from typing import Any, Dict
+
+class MyUtilityService:
+    async def execute(self, **kwargs: Any) -> Dict[str, Any]:
+        # Your logic here
+        param_value = kwargs.get("my_param")
+        result = await self.perform_operation(param_value)
+        return {"status": "success", "result": result}
+    
+    async def perform_operation(self, value: str) -> str:
+        # Implement your utility logic
+        return f"Processed {value}"
+```
+
+#### 2. Define the ToolSpec
+
+Create a `ToolSpec` class in `mcp_the_force/tools/`. Set `service_cls` to your new service and `adapter_class` to `None`:
+
+```python
+# mcp_the_force/tools/my_utility_tool.py
+from .base import ToolSpec
+from .registry import tool
+from .descriptors import Route
+from ..local_services.my_utility import MyUtilityService
+
+@tool
+class MyUtilityTool(ToolSpec):
+    """Description of your utility tool."""
+    service_cls = MyUtilityService
+    adapter_class = None  # This signals it's a local service
+    timeout = 30
+    
+    my_param: str = Route.adapter(description="A parameter for the service")
+    optional_param: Optional[str] = Route.adapter(
+        description="Optional parameter",
+        default=None
+    )
+```
+
+#### 3. Register the Tool
+
+Import your new tool file in `mcp_the_force/tools/definitions.py` to ensure it's registered on startup:
+
+```python
+# mcp_the_force/tools/definitions.py
+# ... existing imports ...
+from . import my_utility_tool  # Add this import
+```
+
+The executor will now automatically route calls to `my_utility_tool` to your `MyUtilityService.execute` method instead of an AI adapter.
 
 ### Error Handling Best Practices
 
@@ -522,6 +639,47 @@ logger.info("Starting operation")        # User-visible progress
 logger.debug("Internal state: %s", data) # Debug information
 logger.error("Operation failed: %s", e)  # Error conditions
 ```
+
+### Working with Vector Stores
+
+When implementing features that use vector stores:
+
+1. **Always use VectorStoreManager**, never create stores directly:
+   ```python
+   # ✅ Correct
+   from mcp_the_force.vectorstores.manager import vector_store_manager
+   store_id = await vector_store_manager.create(files=files)
+   
+   # ❌ Wrong - don't use provider clients directly
+   client = OpenAI()
+   store = await client.vector_stores.create()
+   ```
+
+2. **Respect the abstraction** - the code should work with any provider:
+   ```python
+   # Good - uses protocol types
+   from mcp_the_force.vectorstores.protocol import VSFile
+   
+   # Bad - uses provider-specific types
+   from openai.types import FileObject
+   ```
+
+3. **Handle cleanup properly** - stores have TTL and will be cleaned up:
+   ```python
+   # For temporary stores (most common)
+   store_id = await vector_store_manager.create(
+       files=files,
+       session_id="user-123",
+       ttl_seconds=7200  # Will be auto-cleaned after 2 hours
+   )
+   
+   # For permanent stores (rare, needs explicit protection)
+   store_id = await vector_store_manager.create(
+       files=files,
+       name="project-knowledge-base",
+       protected=True  # Won't be auto-cleaned
+   )
+   ```
 
 ### Testing Guidelines
 
@@ -634,6 +792,48 @@ Or in configuration:
 logging:
   level: DEBUG
 ```
+
+### Concurrency and Thread Safety
+
+The server is designed to handle concurrent requests safely:
+
+**Key Considerations:**
+1. **SQLite Databases**: All use WAL mode for better concurrency
+   ```python
+   # Automatically set in SQLiteBaseCache
+   await conn.execute("PRAGMA journal_mode=WAL")
+   await conn.execute("PRAGMA busy_timeout=5000")
+   ```
+
+2. **Vector Store Operations**: The VectorStoreManager uses async locks to prevent race conditions
+   ```python
+   async with self._operation_lock:
+       # Critical section for store creation
+   ```
+
+3. **Session Cache**: Thread-safe with proper connection pooling
+4. **File-based Locks**: Used for cross-process coordination (e.g., cleanup tasks)
+
+**Best Practices:**
+- Always use `async with` for database connections
+- Don't share database connections across coroutines
+- Use the provided managers (VectorStoreManager, UnifiedSessionCache) rather than direct access
+- Be aware of the cleanup probability mechanism to avoid thundering herd
+
+### Database Migrations
+
+The project uses a simple migration system for schema changes:
+
+**Current Schema Version**: 001 (unified vector stores)
+- Migration files in `mcp_the_force/migrations/`
+- Automatic backup before migrations
+- Rollback support for safety
+
+**Adding a Migration:**
+1. Create SQL file: `002_your_feature.sql`
+2. Update `CURRENT_VERSION` in `migrate.py`
+3. Test with rollback: `002_your_feature_rollback.sql`
+4. Run: `python -m mcp_the_force.migrations.migrate`
 
 ## 🤝 Contributing Guidelines
 
