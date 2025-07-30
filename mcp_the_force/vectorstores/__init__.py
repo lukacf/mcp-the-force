@@ -18,10 +18,12 @@ from .manager import VectorStoreManager
 # Import and register providers
 from .in_memory import InMemoryClient
 from .openai import OpenAIClient
+from .hnsw import HnswVectorStoreClient
 from ..config import get_settings
 
 # Register providers
 registry.register("inmemory", lambda: InMemoryClient())
+registry.register("hnsw", lambda: HnswVectorStoreClient())
 
 
 # Register OpenAI with API key from settings
@@ -51,4 +53,5 @@ __all__ = [
     # Clients
     "InMemoryClient",
     "OpenAIClient",
+    "HnswVectorStoreClient",
 ]
