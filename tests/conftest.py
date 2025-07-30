@@ -309,10 +309,6 @@ def mock_openai_factory(mock_openai_client, tmp_path, monkeypatch):
             new=mock_get_instance,
         ),
         patch(
-            "mcp_the_force.local_services.search_history.OpenAI",
-            return_value=mock_openai_client,
-        ),
-        patch(
             "mcp_the_force.local_services.search_history.get_async_memory_config",
             return_value=Mock(
                 get_active_conversation_store=AsyncMock(return_value="test_store_conv"),
