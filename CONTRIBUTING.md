@@ -2,9 +2,6 @@
 
 MCP The-Force is a protocol-based AI server designed to integrate multiple AI providers and tools. This guide covers how to extend its architecture to support additional AI providers, tools, and memory sources.
 
-## Development Philosophy
-
-This project is not only a tool but also a product of its own methodology. The "The Force" MCP server was developed by an AI assistant (Claude) relying extensively on the very tools this server provides. This dogfooding approach—using the system to build itself—ensures that the architecture is practical, robust, and built from a user-centric perspective. Test-Driven Development (TDD) is a central practice in this project, ensuring reliability and maintainability.
 
 ## Architecture Highlights
 
@@ -111,6 +108,51 @@ To enforce code quality and prevent regressions, the repository uses pre-commit 
 -   **Architecture**: Each test scenario runs in its own Docker Compose stack, providing complete network and filesystem isolation. This design ensures that tests are reliable and free from flakiness caused by shared state or resource contention. The scenarios are designed to run in parallel and test the system's stability and correctness under real-world conditions.
 
 ## Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                          MCP Client (e.g., Claude)                  │
+└─────────────────────────────────┬───────────────────────────────────┘
+                                  │ MCP Protocol
+┌─────────────────────────────────┴───────────────────────────────────┐
+│                         MCP The-Force Server                        │
+│  ┌───────────────────────────────────────────────────────────────┐  │
+│  │                      FastMCP Integration                      │  │
+│  └──────────────────────────────┬────────────────────────────────┘  │
+│                                 │                                    │
+│  ┌──────────────────────────────┴────────────────────────────────┐  │
+│  │                      Tool Executor                             │  │
+│  │  ┌──────────────┐  ┌─────────────────┐  ┌──────────────────┐ │  │
+│  │  │ Capability   │  │ Parameter       │  │ Tool Factory     │ │  │
+│  │  │ Validator    │  │ Router          │  │ (autogen)       │ │  │
+│  │  └──────────────┘  └─────────────────┘  └──────────────────┘ │  │
+│  └────────────────────────┬──────────────────────────────────────┘  │
+│                           │                                          │
+│  ┌────────────────────────┴──────────────────────────────────────┐  │
+│  │                    Adapter Registry                            │  │
+│  │  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────────────┐ │  │
+│  │  │ OpenAI  │  │ Gemini  │  │  xAI    │  │ Anthropic       │ │  │
+│  │  │ Adapter │  │ Adapter │  │ Adapter │  │ Adapter         │ │  │
+│  │  └─────────┘  └─────────┘  └─────────┘  └─────────────────┘ │  │
+│  └────────────────────────┬──────────────────────────────────────┘  │
+│                           │                                          │
+│  ┌────────────────────────┴──────────────────────────────────────┐  │
+│  │                   Context Management                           │  │
+│  │  ┌─────────────┐  ┌──────────────┐  ┌────────────────────┐  │  │
+│  │  │ File System │  │ Token        │  │ Context Builder    │  │  │
+│  │  │ Gatherer    │  │ Counter      │  │ (inline vs vector) │  │  │
+│  │  └─────────────┘  └──────────────┘  └──────────────────┘   │  │
+│  └────────────────────────┬──────────────────────────────────────┘  │
+│                           │                                          │
+│  ┌────────────────────────┴──────────────────────────────────────┐  │
+│  │                    Memory & Storage                            │  │
+│  │  ┌─────────────────┐  ┌─────────────────┐  ┌──────────────┐ │  │
+│  │  │ UnifiedSession  │  │ VectorStore     │  │ Long-term    │ │  │
+│  │  │ Cache (SQLite)  │  │ Manager         │  │ Memory       │ │  │
+│  │  └─────────────────┘  └─────────────────┘  └──────────────┘ │  │
+│  └────────────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────┘
+```
 
 <details>
 <summary>Adapters</summary>
@@ -240,9 +282,15 @@ For local utilities that don't require an AI model:
 The executor will route calls to the local service instead of an adapter. 
 </details>
 
+
+## Development Philosophy
+
+This project is not only a tool but also a product of its own methodology. The "The Force" MCP server was developed by an AI assistant (Claude) relying extensively on the very tools this server provides. This dogfooding approach—using the system to build itself—ensures that the architecture is practical, robust, and built from a user-centric perspective. Test-Driven Development (TDD) is a central practice in this project, ensuring reliability and maintainability.
+
+
 ## Contributing Guidelines
 
-We appreciate contributions to MCP The-Force! Here's how to get started:
+Contributions to MCP The-Force are appreciated! Here's how to get started:
 
 1. Create a branch for your feature or bug fix.
 2. Write tests to cover new code (we use pytest).
