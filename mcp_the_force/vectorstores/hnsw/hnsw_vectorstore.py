@@ -36,7 +36,7 @@ def _default_index_factory(dim: int) -> IndexProtocol:  # pragma: no cover
     import hnswlib
 
     idx = hnswlib.Index(space="l2", dim=dim)
-    idx.init_index(max_elements=10000, ef_construction=200, M=16)
+    # Don't initialize here - let the store handle it with proper sizing
     return idx  # type: ignore[no-any-return]
 
 
@@ -59,6 +59,7 @@ class HnswVectorStore(VectorStore):
         self._lock = Lock()
         self._index_factory = index_factory
         self._persist = persist
+        self._max_elements = 10000  # Initial capacity
 
     @property
     def id(self) -> str:
@@ -79,6 +80,9 @@ class HnswVectorStore(VectorStore):
             # Lazy initialize the index
             if self._index is None:
                 self._index = self._index_factory(get_embedding_dimensions())
+                self._index.init_index(
+                    max_elements=self._max_elements, ef_construction=200, M=16
+                )
 
             # Process each file
             all_chunks = []
@@ -100,8 +104,27 @@ class HnswVectorStore(VectorStore):
             model = get_embedding_model()
             embeddings = model.encode(all_chunks)
 
+            # Check if we need to resize the index
+            current_count = len(self._doc_chunks)
+            new_count = current_count + len(all_chunks)
+
+            if new_count > self._max_elements:
+                # Double the capacity (with some headroom)
+                new_max = max(new_count * 2, self._max_elements * 2)
+                try:
+                    # Resize the index (this is supported by hnswlib)
+                    self._index.resize_index(new_max)  # type: ignore
+                    self._max_elements = new_max
+                except AttributeError:
+                    # If resize is not supported (e.g., in tests), log warning
+                    import logging
+
+                    logging.warning(
+                        f"Index resize not supported, may hit capacity limit at {self._max_elements} elements"
+                    )
+
             # Add to index
-            start_idx = len(self._doc_chunks)
+            start_idx = current_count
             indices = list(range(start_idx, start_idx + len(all_chunks)))
             self._index.add_items(embeddings, indices)
 
@@ -172,7 +195,12 @@ class HnswVectorStore(VectorStore):
     def _save(self) -> None:
         """Save the index and metadata to disk atomically."""
         # Ensure the persistence directory exists
-        self.client.persistence_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            self.client.persistence_dir.mkdir(parents=True, exist_ok=True)
+        except (PermissionError, OSError) as e:
+            raise VectorStoreError(
+                f"Cannot create persistence directory {self.client.persistence_dir}: {e}"
+            ) from e
 
         index_path = self.client.persistence_dir / f"{self._id}.bin"
         meta_path = self.client.persistence_dir / f"{self._id}.json"
@@ -189,19 +217,31 @@ class HnswVectorStore(VectorStore):
             try:
                 # Save the HNSW index
                 self._index.save_index(str(index_tmp))
+            except (RuntimeError, OSError, PermissionError) as e:
+                index_tmp.unlink(missing_ok=True)
+                raise VectorStoreError(f"Failed to save HNSW index: {e}") from e
 
+            try:
                 # Save the metadata
                 with open(meta_tmp, "w") as f:
                     json.dump(self._doc_chunks, f)
+            except (OSError, PermissionError) as e:
+                # Clean up both temp files
+                index_tmp.unlink(missing_ok=True)
+                meta_tmp.unlink(missing_ok=True)
+                raise VectorStoreError(f"Failed to save metadata: {e}") from e
 
+            try:
                 # Atomically move the files
                 os.rename(str(index_tmp), str(index_path))
                 os.rename(str(meta_tmp), str(meta_path))
-            except Exception as e:
+            except (OSError, PermissionError) as e:
                 # Clean up temp files on error
                 index_tmp.unlink(missing_ok=True)
                 meta_tmp.unlink(missing_ok=True)
-                raise VectorStoreError(f"Failed to save store: {e}") from e
+                raise VectorStoreError(
+                    f"Failed to move files to final location: {e}"
+                ) from e
 
 
 class HnswVectorStoreClient(VectorStoreClient):
@@ -252,17 +292,45 @@ class HnswVectorStoreClient(VectorStoreClient):
 
         try:
             # Load metadata
-            with open(meta_path, "r") as f:
-                store._doc_chunks = json.load(f)
+            try:
+                with open(meta_path, "r") as f:
+                    store._doc_chunks = json.load(f)
+            except FileNotFoundError:
+                raise VectorStoreError(f"Metadata file not found for store {store_id}")
+            except PermissionError as e:
+                raise VectorStoreError(
+                    f"Permission denied reading metadata for store {store_id}: {e}"
+                ) from e
+            except json.JSONDecodeError as e:
+                raise VectorStoreError(
+                    f"Corrupted metadata file for store {store_id}: {e}"
+                ) from e
 
             # Load HNSW index
             if store._doc_chunks:  # Only load index if there are chunks
-                store._index = store._index_factory(get_embedding_dimensions())
-                store._index.load_index(str(index_path), max_elements=10000)
+                try:
+                    store._index = store._index_factory(get_embedding_dimensions())
+                    # Load with a larger max_elements to allow growth
+                    current_elements = len(store._doc_chunks)
+                    max_elements = max(current_elements * 2, 10000)
+                    store._index.load_index(str(index_path), max_elements=max_elements)
+                    store._max_elements = max_elements
+                except FileNotFoundError:
+                    raise VectorStoreError(f"Index file not found for store {store_id}")
+                except (RuntimeError, OSError) as e:
+                    raise VectorStoreError(
+                        f"Failed to load HNSW index for store {store_id}: {e}"
+                    ) from e
 
             return store
-        except (FileNotFoundError, PermissionError, json.JSONDecodeError) as e:
-            raise VectorStoreError(f"Failed to load store {store_id}: {e}") from e
+        except VectorStoreError:
+            # Re-raise our own errors
+            raise
+        except Exception as e:
+            # Catch any unexpected errors
+            raise VectorStoreError(
+                f"Unexpected error loading store {store_id}: {e}"
+            ) from e
 
     async def delete(self, store_id: str) -> None:
         """Delete a vector store and its associated files."""

@@ -16,6 +16,7 @@ class IndexProtocol(Protocol):
     ) -> tuple[list[list[int]], list[list[float]]]: ...
     def save_index(self, path: str) -> None: ...
     def load_index(self, path: str, max_elements: int) -> None: ...
+    def resize_index(self, new_max: int) -> None: ...
 
 
 class FakeIndex:
@@ -57,6 +58,10 @@ class FakeIndex:
 
     def load_index(self, path: str, max_elements: int) -> None:
         """No-op load."""
+        pass
+
+    def resize_index(self, new_max: int) -> None:
+        """No-op resize."""
         pass
 
 
