@@ -85,18 +85,61 @@ class VectorStoreManager:
         self,
         files: List[str],
         session_id: Optional[str] = None,
+        name: Optional[str] = None,
+        protected: bool = False,
         ttl_seconds: Optional[int] = None,
+        provider_metadata: Optional[Dict[str, Any]] = None,
+        rollover_from: Optional[str] = None,
     ) -> Optional[Union[str, Dict[str, Any]]]:
         """Create or acquire vector store from files.
 
+        Supports two modes:
+        1. Session-based stores (temporary): Use session_id parameter
+        2. Named stores (permanent memory): Use name parameter
+
         Args:
             files: List of file paths
-            session_id: Session ID for vector store reuse
-            ttl_seconds: Optional TTL for the vector store
+            session_id: Session ID for temporary vector store reuse. Cannot be used with name.
+            name: Unique name for permanent memory stores. Cannot be used with session_id.
+            protected: Whether the store should be protected from cleanup. Always True for named stores.
+            ttl_seconds: Optional TTL for the vector store (only applies to session stores)
+            provider_metadata: Optional metadata specific to the vector store provider
+            rollover_from: Optional ID of a previous store to roll over from
 
         Returns:
-            Vector store ID if created, None otherwise
+            Dict with store_id, provider, and session_id/name, or None on error
+
+        Raises:
+            ValueError: If both session_id and name are provided, or if neither is provided
+
+        Examples:
+            # Create a temporary session store
+            >>> result = await manager.create(
+            ...     files=["/path/to/file.py"],
+            ...     session_id="debug-session-123",
+            ...     ttl_seconds=3600
+            ... )
+
+            # Create a permanent memory store
+            >>> result = await manager.create(
+            ...     files=["/path/to/conversations.jsonl"],
+            ...     name="project-conversations",
+            ...     protected=True
+            ... )
         """
+        # Validate that either session_id OR name is provided, not both
+        if session_id and name:
+            raise ValueError(
+                "Cannot provide both session_id and name. Use session_id for temporary stores or name for permanent memory stores."
+            )
+        if not session_id and not name:
+            raise ValueError(
+                "Must provide either session_id (for temporary stores) or name (for permanent memory stores)."
+            )
+
+        # Named stores are always protected
+        if name:
+            protected = True
         # Allow empty files for session creation
         # if not files:
         #     return None
@@ -111,7 +154,12 @@ class VectorStoreManager:
             mock_client = self._get_client("inmemory")
 
             # Create a real in-memory store that can be retrieved
-            store_name = f"mock_{session_id or 'ephemeral'}"
+            if name:
+                store_name = name  # Use the actual name for named stores
+            elif session_id:
+                store_name = f"mock_{session_id}"
+            else:
+                store_name = "mock_ephemeral"
             store = await mock_client.create(store_name, ttl_seconds=ttl_seconds)
 
             logger.info(
@@ -129,11 +177,31 @@ class VectorStoreManager:
                 if vs_files:
                     await store.add_files(vs_files)
 
-            return {
+            # Register with cache for lifecycle management (same as non-mock path)
+            if session_id or name:
+                await self.vector_store_cache.register_store(
+                    vector_store_id=store.id,
+                    provider=original_provider,  # Use original provider for cache
+                    session_id=session_id,
+                    name=name,
+                    protected=protected,
+                    ttl_seconds=ttl_seconds,
+                    provider_metadata=provider_metadata,
+                    rollover_from=rollover_from,
+                )
+
+            result = {
                 "store_id": store.id,
                 "provider": original_provider,  # Return the originally requested provider
-                "session_id": session_id,
             }
+
+            # Include either session_id or name in the result
+            if session_id:
+                result["session_id"] = session_id
+            elif name:
+                result["name"] = name
+
+            return result
 
         provider = self.provider
         client = self._get_client(provider)
@@ -142,12 +210,13 @@ class VectorStoreManager:
         existing_store_id = None
         was_reused = False
 
+        # For session stores, check cache for reuse
         if session_id:
             (
                 existing_store_id,
                 was_reused,
             ) = await self.vector_store_cache.get_or_create_placeholder(
-                session_id, provider
+                session_id, provider, protected
             )
 
             if existing_store_id:
@@ -157,19 +226,33 @@ class VectorStoreManager:
                 # Just return the existing store ID, files are already there
                 return existing_store_id
 
+        # For named stores, we don't check for existing - they're managed differently
+        # The vector store provider will handle deduplication based on name
+
         # Create new vector store
-        logger.info(
-            f"Creating new vector store for session {session_id or 'ephemeral'}"
-        )
+        store_identifier = name or session_id or "ephemeral"
+        logger.info(f"Creating new vector store for {store_identifier}")
         try:
             logger.info(
                 f"VectorStoreManager.create: About to create vector store with {len(files)} files"
             )
 
-            # Create store
+            # Create store with appropriate name
+            if name:
+                # Named store (permanent memory)
+                store_name = name
+            elif session_id:
+                # Session store (temporary)
+                store_name = f"session_{session_id}"
+            else:
+                # Ephemeral store
+                store_name = "mcp-the-force-vs"
+
             store = await client.create(
-                name=f"session_{session_id}" if session_id else "mcp-the-force-vs",
-                ttl_seconds=ttl_seconds,
+                name=store_name,
+                ttl_seconds=ttl_seconds
+                if not name
+                else None,  # Named stores don't expire
             )
 
             # Convert file paths to VSFile objects
@@ -186,17 +269,32 @@ class VectorStoreManager:
                 )
 
             # Register with cache for lifecycle management
-            if session_id:
+            if session_id or name:
+                # Serialize provider_metadata to JSON if provided
                 await self.vector_store_cache.register_store(
-                    session_id, store.id, provider
+                    vector_store_id=store.id,
+                    provider=provider,
+                    session_id=session_id,
+                    name=name,
+                    protected=protected,
+                    ttl_seconds=ttl_seconds,
+                    provider_metadata=provider_metadata,
+                    rollover_from=rollover_from,
                 )
 
             logger.info(f"Created vector store: {store.id}")
-            return {
+            result = {
                 "store_id": store.id,
                 "provider": provider,
-                "session_id": session_id,
             }
+
+            # Include either session_id or name in the result
+            if session_id:
+                result["session_id"] = session_id
+            elif name:
+                result["name"] = name
+
+            return result
 
         except Exception as e:
             logger.error(f"Error creating vector store: {e}", exc_info=True)
@@ -241,7 +339,9 @@ class VectorStoreManager:
         """
         # For now, just create a store using the main create method
         files: List[str] = []  # Empty files for session creation
-        result = await self.create(files, session_id, ttl_seconds)
+        result = await self.create(
+            files=files, session_id=session_id, ttl_seconds=ttl_seconds
+        )
 
         # If create returned None (error), return empty dict
         if result is None:
@@ -422,7 +522,7 @@ class VectorStoreManager:
 
         # Delete stores for each provider
         for provider, stores in stores_by_provider.items():
-            client = self._get_client(provider)
+            client = self._get_client_for_store(provider)
 
             # Create deletion tasks
             delete_tasks = []
@@ -431,12 +531,12 @@ class VectorStoreManager:
                 async def delete_store(store_info):
                     try:
                         await client.delete(store_info["vector_store_id"])
-                        return store_info["session_id"], True
+                        return store_info["vector_store_id"], True
                     except Exception as e:
                         logger.error(
                             f"Failed to delete vector store {store_info['vector_store_id']}: {e}"
                         )
-                        return store_info["session_id"], False
+                        return store_info["vector_store_id"], False
 
                 delete_tasks.append(delete_store(store))
 
@@ -446,8 +546,8 @@ class VectorStoreManager:
             # Remove successfully deleted stores from cache
             for result in results:
                 if isinstance(result, tuple) and result[1]:
-                    session_id = result[0]
-                    if await self.vector_store_cache.remove_store(session_id):
+                    vector_store_id = result[0]
+                    if await self.vector_store_cache.remove_store(vector_store_id):
                         cleaned_count += 1
 
         logger.info(f"Cleaned up {cleaned_count} expired vector stores")
