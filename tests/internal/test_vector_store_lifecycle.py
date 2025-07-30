@@ -36,7 +36,9 @@ class TestVectorStoreLifecycle:
             for session_id in session_ids:
                 # Register directly in cache
                 await manager.vector_store_cache.register_store(
-                    session_id, f"vs_{session_id}", provider="openai"
+                    vector_store_id=f"vs_{session_id}",
+                    provider="openai",
+                    session_id=session_id,
                 )
 
             # Advance time to expire all stores
@@ -71,7 +73,7 @@ class TestVectorStoreLifecycle:
 
             # Register a store
             await manager.vector_store_cache.register_store(
-                session_id, "vs_old_123", provider="openai"
+                vector_store_id="vs_old_123", provider="openai", session_id=session_id
             )
 
             # Expire and clean it up
@@ -89,7 +91,7 @@ class TestVectorStoreLifecycle:
 
             # Register a new store
             await manager.vector_store_cache.register_store(
-                session_id, "vs_new_456", provider="openai"
+                vector_store_id="vs_new_456", provider="openai", session_id=session_id
             )
 
             # Should be able to retrieve it
@@ -115,10 +117,16 @@ class TestVectorStoreLifecycle:
 
             # Register normal and protected stores
             await manager.vector_store_cache.register_store(
-                "normal", "vs_normal", provider="openai", protected=False
+                vector_store_id="vs_normal",
+                provider="openai",
+                session_id="normal",
+                protected=False,
             )
             await manager.vector_store_cache.register_store(
-                "protected", "vs_protected", provider="openai", protected=True
+                vector_store_id="vs_protected",
+                provider="openai",
+                session_id="protected",
+                protected=True,
             )
 
             # Expire both
@@ -157,13 +165,13 @@ class TestVectorStoreLifecycle:
 
             # Register stores
             await manager.vector_store_cache.register_store(
-                "fail", "vs_fail", provider="openai"
+                vector_store_id="vs_fail", provider="openai", session_id="fail"
             )
             await manager.vector_store_cache.register_store(
-                "success1", "vs_success1", provider="openai"
+                vector_store_id="vs_success1", provider="openai", session_id="success1"
             )
             await manager.vector_store_cache.register_store(
-                "success2", "vs_success2", provider="openai"
+                vector_store_id="vs_success2", provider="openai", session_id="success2"
             )
 
             # Expire all
@@ -212,7 +220,9 @@ class TestVectorStoreLifecycle:
             num_stores = 50
             for i in range(num_stores):
                 await manager.vector_store_cache.register_store(
-                    f"session_{i}", f"vs_{i}", provider="openai"
+                    vector_store_id=f"vs_{i}",
+                    provider="openai",
+                    session_id=f"session_{i}",
                 )
 
             # Expire all
