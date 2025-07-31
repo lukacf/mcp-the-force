@@ -288,12 +288,15 @@ def mock_openai_factory(mock_openai_client, tmp_path, monkeypatch):
     if hasattr(async_config_module, "_async_memory_config"):
         async_config_module._async_memory_config = None
 
-    # Clear SearchHistoryService singletons
-    from mcp_the_force.local_services.search_history import SearchHistoryService
+    # Clear SearchHistoryService singletons inside the context to avoid circular import
+    try:
+        from mcp_the_force.local_services.search_history import SearchHistoryService
 
-    SearchHistoryService._client = None
-    SearchHistoryService._memory_config = None
-    SearchHistoryService._deduplicator = None
+        SearchHistoryService._client = None
+        SearchHistoryService._memory_config = None
+    except ImportError:
+        # If there's a circular import, skip clearing
+        pass
 
     # Create an async mock that returns the client
     async def mock_get_instance(*args, **kwargs):
@@ -307,10 +310,6 @@ def mock_openai_factory(mock_openai_client, tmp_path, monkeypatch):
         patch(
             "mcp_the_force.adapters.openai.client.OpenAIClientFactory.get_instance",
             new=mock_get_instance,
-        ),
-        patch(
-            "mcp_the_force.local_services.search_history.OpenAI",
-            return_value=mock_openai_client,
         ),
         patch(
             "mcp_the_force.local_services.search_history.get_async_memory_config",

@@ -8,11 +8,10 @@ from typing import List, Dict, Any
 import logging
 import asyncio
 
-from openai import AsyncOpenAI
 import fastmcp.exceptions
 
 # No longer need BaseAdapter - this is a local service
-from ..adapters.openai.client import OpenAIClientFactory
+from ..vectorstores.manager import VectorStoreManager
 from .base import ToolSpec
 from .descriptors import Route
 from .registry import tool
@@ -57,11 +56,7 @@ class SearchTaskFilesAdapter:
 
     def __init__(self, model_name: str = "task_files_search"):
         self.model_name = model_name
-        # Client will be obtained asynchronously via _get_client()
-
-    async def _get_client(self) -> AsyncOpenAI:
-        """Get the OpenAI client instance using the singleton factory."""
-        return await OpenAIClientFactory.get_instance()
+        self.vector_store_manager = VectorStoreManager()
 
     @classmethod
     async def clear_deduplication_cache(cls):
@@ -205,45 +200,41 @@ class SearchTaskFilesAdapter:
         """Search a single vector store."""
         async with search_semaphore:  # Limit concurrent searches
             try:
-                # Get the async client from singleton factory
-                client = await self._get_client()
-
-                # Use the async vector store search method
-                response = await client.vector_stores.search(
-                    vector_store_id=store_id,
-                    query=query,
-                    max_num_results=max_results,
+                # Get store info from cache to determine provider
+                store_info = (
+                    await self.vector_store_manager.vector_store_cache.get_store(
+                        vector_store_id=store_id
+                    )
                 )
+
+                if not store_info:
+                    logger.error(f"Store {store_id} not found in cache")
+                    return []
+
+                provider = store_info["provider"]
+                client = self.vector_store_manager._get_client(provider)
+
+                # Get the store instance
+                store = await client.get(store_id)
+
+                # Search using the vector store protocol
+                search_results = await store.search(query=query, k=max_results)
 
                 # Format results
                 results = []
-                for item in response.data:
-                    # Extract content - handle different response formats
-                    content = ""
-                    if hasattr(item, "content"):
-                        if isinstance(item.content, str):
-                            content = item.content
-                        elif isinstance(item.content, list) and item.content:
-                            # Try to extract text from first content item
-                            first_item = item.content[0]
-                            if hasattr(first_item, "text"):
-                                if hasattr(first_item.text, "value"):
-                                    content = first_item.text.value
-                                else:
-                                    content = str(first_item.text)
-
+                for item in search_results:
                     result = {
-                        "content": content,
+                        "content": item.content,
                         "store_id": store_id,
-                        "score": getattr(item, "score", 0),
+                        "score": item.score,
                     }
 
                     # Add file_id if available
-                    if hasattr(item, "file_id") and item.file_id:
+                    if hasattr(item, "file_id"):
                         result["file_id"] = item.file_id
 
                     # Add metadata if available
-                    if hasattr(item, "metadata") and item.metadata:
+                    if item.metadata:
                         result["metadata"] = item.metadata
 
                     results.append(result)

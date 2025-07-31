@@ -13,7 +13,7 @@ mcp:
   context_percentage: 0.85
   default_temperature: 1.0  # 0=deterministic, 2=creative
   thread_pool_workers: 10
-  default_vector_store_provider: openai
+  default_vector_store_provider: openai  # Options: openai, hnsw, inmemory, pinecone
 
 # Provider configuration
 # API keys should go in secrets.yaml, not here
@@ -77,6 +77,8 @@ vector_stores:
   ttl_seconds: 7200  # 2 hours
   cleanup_interval_seconds: 300  # 5 minutes
   cleanup_probability: 0.02  # 2% chance to cleanup on operations
+  # Note: HNSW provider requires no additional configuration
+  # It stores data locally in ~/.cache/mcp-the-force/vectorstores/hnsw/
 
 # Memory system for long-term project knowledge
 memory:
