@@ -2,7 +2,7 @@
 
 from mcp_the_force.tools.blueprint import ToolBlueprint
 from mcp_the_force.tools.blueprint_registry import register_blueprints
-from ..params import GrokToolParams
+from .definitions import GrokToolParams
 from .models import GROK_MODEL_CAPABILITIES
 
 # Generate blueprints from model capabilities
@@ -32,7 +32,7 @@ for model_name, custom_description in user_facing_models.items():
         param_class=GrokToolParams,
         description=custom_description,  # Use custom description for clarity
         timeout=timeout,
-        context_window=capabilities.max_context_window,
+        context_window=capabilities.max_context_window or 128_000,  # Default if None
         tool_type="chat",  # All Grok models are chat tools
     )
     blueprints.append(blueprint)

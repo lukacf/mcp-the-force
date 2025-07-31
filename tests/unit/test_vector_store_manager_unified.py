@@ -267,10 +267,15 @@ class TestVectorStoreManagerUnified:
                 files=[],
                 session_id="temp-store",
                 ttl_seconds=60,  # 1 minute
+                provider="inmemory",  # Use inmemory explicitly for ID consistency
             )
 
             # Create protected named store
-            result2 = await manager.create(files=[], name="permanent-store")
+            result2 = await manager.create(
+                files=[],
+                name="permanent-store",
+                provider="inmemory",  # Use inmemory explicitly for ID consistency
+            )
 
             # Advance time past TTL
             virtual_clock.advance_time(120)  # 2 minutes

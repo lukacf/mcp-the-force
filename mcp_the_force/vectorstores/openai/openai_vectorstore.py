@@ -106,6 +106,7 @@ class OpenAIVectorStore:
                 file_streams.append(file_stream)
 
             # Decide whether to use parallel or single batch based on file count
+            file_batch: Any = None
             if len(file_streams) <= 20:
                 # For small uploads, use single batch
                 logger.debug("Using single batch upload")
@@ -146,7 +147,6 @@ class OpenAIVectorStore:
                 total_completed = 0
                 total_failed = 0
                 total_files = 0
-                file_batch = None
 
                 for r in results:
                     if isinstance(r, dict) and "completed" in r:

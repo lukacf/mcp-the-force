@@ -197,7 +197,7 @@ Generate a structured JSON summary of this conversation following the schema and
 5. NEVER include empty arrays or empty objects - omit the field entirely instead
 6. The one_liner must be ≤ 120 characters
 7. The summary should be 1-3 paragraphs providing narrative context
-{f'''8. For the custom field: {extra_instructions}''' if extra_instructions else '8. The custom field should be an empty string since no extra_instructions were provided'}
+{f'''8. For the custom field: {extra_instructions}''' if extra_instructions else "8. The custom field should be an empty string since no extra_instructions were provided"}
 </rules>
 
 <examples>
