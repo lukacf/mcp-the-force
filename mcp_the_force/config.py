@@ -21,14 +21,7 @@ SECRETS_FILE = Path(".mcp-the-force/secrets.yaml")
 class DeveloperLoggingConfig(BaseModel):
     """Developer logging settings."""
 
-    enabled: bool = Field(False, description="Enable developer logging mode")
-    port: int = Field(4711, description="ZMQ logging port")
-    db_path: str = Field(
-        ".mcp-the-force/logs.sqlite3", description="SQLite database path"
-    )
-    batch_size: int = Field(100, description="Batch size for database writes")
-    batch_timeout: float = Field(1.0, description="Batch timeout in seconds")
-    max_db_size_mb: int = Field(1000, description="Max database size before rotation")
+    enabled: bool = Field(False, description="Enable LogsQL debug query tool")
 
 
 class LoggingConfig(BaseModel):
