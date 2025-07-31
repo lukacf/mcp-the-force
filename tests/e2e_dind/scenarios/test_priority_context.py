@@ -87,9 +87,9 @@ class TestPriorityContextAndFileTree:
 
         # Verify the response indicates direct access (not via search)
         assert marker in response, f"Marker {marker} not found in response"
-        assert "search_task_files" not in response.lower(), (
-            "Model should not need to search for priority files"
-        )
+        assert (
+            "search_task_files" not in response.lower()
+        ), "Model should not need to search for priority files"
         # Accept if response mentions seeing the x's or the large file content
         response_lower = response.lower()
         assert any(
@@ -297,12 +297,12 @@ class TestPriorityContextAndFileTree:
         )
 
         # Verify both small file markers are visible
-        assert f"{marker_base}-small1" in response1, (
-            "First small file marker should be visible"
-        )
-        assert f"{marker_base}-small2" in response1, (
-            "Second small file marker should be visible"
-        )
+        assert (
+            f"{marker_base}-small1" in response1
+        ), "First small file marker should be visible"
+        assert (
+            f"{marker_base}-small2" in response1
+        ), "Second small file marker should be visible"
 
         # Second call: add a file that should trigger overflow with 1% limit
         large_path = os.path.join(isolated_test_dir, "dynamic_large.txt")
@@ -324,9 +324,9 @@ class TestPriorityContextAndFileTree:
         )
 
         # Verify the modified small file is visible
-        assert f"{marker_base}-small1-modified" in response2, (
-            "Modified small file should be visible"
-        )
+        assert (
+            f"{marker_base}-small1-modified" in response2
+        ), "Modified small file should be visible"
 
         # The large file should be mentioned as needing search or attached
         # This verifies dynamic overflow handling
@@ -335,9 +335,9 @@ class TestPriorityContextAndFileTree:
             pass
         else:
             # Check if the model at least acknowledges the large file exists
-            assert "large" in response2.lower(), (
-                "Large file should be mentioned somehow"
-            )
+            assert (
+                "large" in response2.lower()
+            ), "Large file should be mentioned somehow"
 
 
 # Simple syntax check when run directly

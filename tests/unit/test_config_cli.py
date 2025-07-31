@@ -63,11 +63,19 @@ class TestConfigCLI:
         # Without --force, should skip
         result = runner.invoke(app, ["init"])
         assert result.exit_code == 0
-        assert "[SKIP] Skipping .mcp-the-force/config.yaml (already exists)" in result.stdout
-        assert "[SKIP] Skipping .mcp-the-force/secrets.yaml (already exists)" in result.stdout
+        assert (
+            "[SKIP] Skipping .mcp-the-force/config.yaml (already exists)"
+            in result.stdout
+        )
+        assert (
+            "[SKIP] Skipping .mcp-the-force/secrets.yaml (already exists)"
+            in result.stdout
+        )
 
         # Verify files weren't overwritten
-        assert (tmp_path / ".mcp-the-force" / "config.yaml").read_text() == "existing: config"
+        assert (
+            tmp_path / ".mcp-the-force" / "config.yaml"
+        ).read_text() == "existing: config"
 
         # With --force, should overwrite
         result = runner.invoke(app, ["init", "--force"])
@@ -76,7 +84,9 @@ class TestConfigCLI:
         assert "[OK] Created .mcp-the-force/secrets.yaml" in result.stdout
 
         # Verify files were overwritten
-        assert (tmp_path / ".mcp-the-force" / "config.yaml").read_text() != "existing: config"
+        assert (
+            tmp_path / ".mcp-the-force" / "config.yaml"
+        ).read_text() != "existing: config"
 
     def test_validate_command_valid(self, tmp_path, monkeypatch):
         """Test validate command with valid configuration."""

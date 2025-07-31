@@ -157,10 +157,10 @@ async def test_multiple_stores_cleanup(manager_with_test_db):
     # Verify correct stores were deleted
     for name, store_id, is_protected in stores_created:
         if is_protected:
-            assert store_id not in manager_with_test_db.delete_calls, (
-                f"Protected store {name} should not be deleted"
-            )
+            assert (
+                store_id not in manager_with_test_db.delete_calls
+            ), f"Protected store {name} should not be deleted"
         else:
-            assert store_id in manager_with_test_db.delete_calls, (
-                f"Session store {name} should be deleted"
-            )
+            assert (
+                store_id in manager_with_test_db.delete_calls
+            ), f"Session store {name} should be deleted"

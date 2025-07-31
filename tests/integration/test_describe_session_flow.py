@@ -48,23 +48,23 @@ async def test_describe_session_passes_full_history_to_model(isolate_test_databa
     final_prompt = mock_adapter_input.get("prompt", "")
 
     # Verify that the original history is in the prompt sent to the summarizer
-    assert "This is the conversation to be summarized." in final_prompt, (
-        "History from the original session was missing from the summarizer's prompt."
-    )
+    assert (
+        "This is the conversation to be summarized." in final_prompt
+    ), "History from the original session was missing from the summarizer's prompt."
 
-    assert "Tell me more about the topic." in final_prompt, (
-        "Second user message was missing from the summarizer's prompt."
-    )
+    assert (
+        "Tell me more about the topic." in final_prompt
+    ), "Second user message was missing from the summarizer's prompt."
 
     # Verify that the summarization instruction is also present
-    assert "Summarize this conversation" in final_prompt, (
-        "Summarization instruction was missing from the prompt."
-    )
+    assert (
+        "Summarize this conversation" in final_prompt
+    ), "Summarization instruction was missing from the prompt."
 
     # Verify the session_id in the mock response is the temp session
-    assert mock_adapter_input["session_id"].startswith("temp-summary-"), (
-        "The session_id should be a temporary session ID"
-    )
+    assert mock_adapter_input["session_id"].startswith(
+        "temp-summary-"
+    ), "The session_id should be a temporary session ID"
 
 
 @pytest.mark.asyncio
@@ -94,11 +94,11 @@ async def test_describe_session_cache_key_mismatch_bug(isolate_test_databases):
     mock_response = json.loads(result)
 
     # The bug would cause this to fail because the executor couldn't find the temp session
-    assert "Test conversation for key mismatch" in mock_response["prompt"], (
-        "Cache key mismatch: temp session was not found by the executor"
-    )
+    assert (
+        "Test conversation for key mismatch" in mock_response["prompt"]
+    ), "Cache key mismatch: temp session was not found by the executor"
 
     # Also verify the model used was the one we requested
-    assert mock_response["model"] == "gemini-2.5-pro", (
-        "Wrong model was used for summarization"
-    )
+    assert (
+        mock_response["model"] == "gemini-2.5-pro"
+    ), "Wrong model was used for summarization"

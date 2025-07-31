@@ -25,9 +25,9 @@ class TestCapabilityBasedGeneration:
             # Get the parameter class from the tool
             param_class = tool_metadata.spec_class
             # Verify it inherits from BaseToolParams
-            assert issubclass(param_class, ToolSpec), (
-                f"{tool_name}'s param class does not inherit from ToolSpec"
-            )
+            assert issubclass(
+                param_class, ToolSpec
+            ), f"{tool_name}'s param class does not inherit from ToolSpec"
 
             # Check base parameters exist
             assert hasattr(param_class, "instructions")
@@ -47,9 +47,9 @@ class TestCapabilityBasedGeneration:
                 attr = getattr(metadata.spec_class, "reasoning_effort")
                 if isinstance(attr, RouteDescriptor):
                     # The parameter should be filtered at runtime based on capabilities
-                    assert hasattr(attr, "requires_capability"), (
-                        f"{tool_name}.reasoning_effort should have requires_capability check"
-                    )
+                    assert hasattr(
+                        attr, "requires_capability"
+                    ), f"{tool_name}.reasoning_effort should have requires_capability check"
                     # If the model doesn't support it, the executor will filter it out
                     # This is the correct behavior for capability-based filtering
 
@@ -60,9 +60,9 @@ class TestCapabilityBasedGeneration:
             assert metadata is not None
 
             # Temperature is a universal parameter
-            assert hasattr(metadata.spec_class, "temperature"), (
-                f"{tool_name} missing temperature parameter"
-            )
+            assert hasattr(
+                metadata.spec_class, "temperature"
+            ), f"{tool_name} missing temperature parameter"
 
     def test_correct_adapter_assignment(self):
         """Verify tools are assigned to the correct adapter families."""
@@ -76,9 +76,9 @@ class TestCapabilityBasedGeneration:
             for tool_name in tool_names:
                 metadata = get_tool(tool_name)
                 assert metadata is not None
-                assert metadata.model_config.get("adapter_class") == adapter_type, (
-                    f"{tool_name} should use {adapter_type} adapter"
-                )
+                assert (
+                    metadata.model_config.get("adapter_class") == adapter_type
+                ), f"{tool_name} should use {adapter_type} adapter"
 
     def test_route_types_are_correct(self):
         """Verify parameters have the correct route types."""
@@ -139,15 +139,15 @@ class TestCapabilityBasedGeneration:
             assert metadata is not None
 
             # Check required metadata fields
-            assert metadata.model_config.get("description") is not None, (
-                f"{tool_name} missing description"
-            )
-            assert metadata.model_config.get("adapter_class") is not None, (
-                f"{tool_name} missing adapter_class"
-            )
-            assert metadata.capabilities is not None, (
-                f"{tool_name} missing capabilities"
-            )
+            assert (
+                metadata.model_config.get("description") is not None
+            ), f"{tool_name} missing description"
+            assert (
+                metadata.model_config.get("adapter_class") is not None
+            ), f"{tool_name} missing adapter_class"
+            assert (
+                metadata.capabilities is not None
+            ), f"{tool_name} missing capabilities"
 
     def test_web_search_capability_consistency(self):
         """Verify web search parameters match capabilities."""
@@ -182,6 +182,6 @@ class TestCapabilityBasedGeneration:
             assert metadata is not None
 
             for param in memory_params:
-                assert hasattr(metadata.spec_class, param), (
-                    f"{tool_name} missing {param} parameter"
-                )
+                assert hasattr(
+                    metadata.spec_class, param
+                ), f"{tool_name} missing {param} parameter"
