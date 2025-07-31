@@ -279,9 +279,17 @@ def create_vector_store_tool(mcp: FastMCP) -> None:
         try:
             from ..vectorstores.manager import vector_store_manager
 
-            vs_id = await vector_store_manager.create(files)
-            if vs_id:
-                return {"vector_store_id": vs_id, "status": "created"}
+            result = await vector_store_manager.create(files)
+            if result:
+                # Handle both old string return and new dict return
+                if isinstance(result, dict):
+                    return {
+                        "vector_store_id": result.get("store_id", ""),
+                        "status": "created",
+                    }
+                else:
+                    # Legacy string return
+                    return {"vector_store_id": result, "status": "created"}
             else:
                 return {"vector_store_id": "", "status": "no_supported_files"}
         except Exception as e:

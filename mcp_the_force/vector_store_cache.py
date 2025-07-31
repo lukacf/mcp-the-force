@@ -157,7 +157,7 @@ class VectorStoreCache(BaseSQLiteCache):
                is_protected, is_active, created_at, expires_at, updated_at,
                document_count, rollover_from
         FROM vector_stores
-        WHERE {' AND '.join(conditions)} AND is_active = 1
+        WHERE {" AND ".join(conditions)} AND is_active = 1
         """
 
         rows = await self._execute_async(query, tuple(params))

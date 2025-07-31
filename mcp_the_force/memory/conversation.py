@@ -234,6 +234,26 @@ async def create_conversation_summary(
 
         settings = get_settings()
 
+        # Sanitize the response to avoid LiteLLM misinterpreting tool call patterns
+        sanitized_response = response[: settings.memory_summary_char_limit]
+        # Remove any JSON-like structures that might confuse LiteLLM
+        # This is a workaround for LiteLLM potentially misinterpreting text as actual tool calls
+        import re
+
+        # Remove or escape patterns that look like tool call JSON
+        sanitized_response = re.sub(
+            r'"tool_calls?"', '"tool-calls"', sanitized_response
+        )
+        sanitized_response = re.sub(
+            r'"role":\s*"tool"', '"role": "tool-response"', sanitized_response
+        )
+        # Remove any JSON blocks that might contain tool call structures
+        sanitized_response = re.sub(
+            r'\{[^}]*"tool_call[^}]*\}',
+            "[tool call details removed]",
+            sanitized_response,
+        )
+
         # Build a clean representation of the conversation
         conversation_text = f"""
 ## User Request
@@ -243,7 +263,7 @@ Context Files: {len(user_components["context_files"])} files provided
 Vector Store Attachments: {"Yes" if user_components["has_attachments"] else "No"}
 
 ## Assistant Response ({tool_name})
-{response[: settings.memory_summary_char_limit]}
+{sanitized_response}
 """
 
         # Use Gemini Flash to create summary
@@ -283,9 +303,17 @@ Conversation to summarize:
         from ..adapters.protocol import CallContext
         from ..adapters.tool_dispatcher import ToolDispatcher
 
-        params = SimpleNamespace(temperature=0.3)
+        # Use a unique session ID to avoid contamination from previous runs
+        import uuid
+
+        unique_session_id = f"memory-summarization-{uuid.uuid4().hex[:8]}"
+
+        params = SimpleNamespace(
+            temperature=0.3,
+            disable_memory_search=True,  # No tools needed for summarization
+        )
         ctx = CallContext(
-            session_id="memory-summarization",
+            session_id=unique_session_id,
             project="memory-system",
             tool="gemini25_flash",
             vector_store_ids=None,
@@ -301,6 +329,14 @@ Conversation to summarize:
 
         # Extract content from result
         summary = result.get("content", "") if isinstance(result, dict) else str(result)
+
+        # Clean up the temporary session to avoid database bloat
+        from ..unified_session_cache import UnifiedSessionCache
+
+        await UnifiedSessionCache.delete_session(
+            project="memory-system", tool="gemini25_flash", session_id=unique_session_id
+        )
+        logger.debug(f"Cleaned up temporary summarization session: {unique_session_id}")
 
         # Add metadata header
         return f"""## AI Consultation Session
