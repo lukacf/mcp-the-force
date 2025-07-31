@@ -142,16 +142,11 @@ Configuration for application logging.
 
 ### Developer Logging (`logging.developer_mode`)
 
-Specialized ZMQ-based logging for development and debugging tools.
+Enables the `search_mcp_debug_logs` tool for querying VictoriaLogs debug data with LogsQL.
 
 | YAML Path | Environment Variable | Type | Default Value | Description |
 | :--- | :--- | :--- | :--- | :--- |
-| `logging.developer_mode.enabled` | `MCP__LOGGING__DEVELOPER_MODE__ENABLED` | `bool` | `False` | Enable or disable the developer logging mode. |
-| `logging.developer_mode.port` | `MCP__LOGGING__DEVELOPER_MODE__PORT` | `int` | `4711` | The ZMQ port for publishing log messages. |
-| `logging.developer_mode.db_path` | `MCP__LOGGING__DEVELOPER_MODE__DB_PATH` | `string` | `".mcp-the-force/logs.sqlite3"` | Path to the SQLite database for the log viewer. |
-| `logging.developer_mode.batch_size` | `MCP__LOGGING__DEVELOPER_MODE__BATCH_SIZE` | `int` | `100` | Number of log entries to batch before writing to the database. |
-| `logging.developer_mode.batch_timeout` | `MCP__LOGGING__DEVELOPER_MODE__BATCH_TIMEOUT`| `float` | `1.0` | Timeout in seconds to wait before writing a batch to the database. |
-| `logging.developer_mode.max_db_size_mb`| `MCP__LOGGING__DEVELOPER_MODE__MAX_DB_SIZE_MB`| `int` | `1000`| Maximum size of the log database in megabytes before rotation occurs. |
+| `logging.developer_mode.enabled` | `MCP__LOGGING__DEVELOPER_MODE__ENABLED` | `bool` | `False` | Enable the LogsQL debug query tool for searching VictoriaLogs. |
 
 ---
 
