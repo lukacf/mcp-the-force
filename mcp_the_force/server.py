@@ -228,16 +228,18 @@ def main():
         asyncio.set_event_loop(None)
 
         # Register cleanup handlers for state reset
-        from .utils.state_reset import state_reset_manager
-        from .adapters.openai.client import OpenAIClientFactory
-
-        # Register singletons to be cleared
-        if hasattr(OpenAIClientFactory, "_instances"):
-            state_reset_manager.register_singleton(OpenAIClientFactory._instances)
-
-        logger.info(
-            "State reset manager configured for aggressive cleanup between queries"
-        )
+        # DISABLED: StateResetManager was introduced to fix a bug that was caused by something else
+        # Commenting out to test if it's still needed
+        # from .utils.state_reset import state_reset_manager
+        # from .adapters.openai.client import OpenAIClientFactory
+        #
+        # # Register singletons to be cleared
+        # if hasattr(OpenAIClientFactory, "_instances"):
+        #     state_reset_manager.register_singleton(OpenAIClientFactory._instances)
+        #
+        # logger.info(
+        #     "State reset manager configured for aggressive cleanup between queries"
+        # )
 
         # Now let FastMCP handle everything
         mcp.run()  # Will create its own event loop

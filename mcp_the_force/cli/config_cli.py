@@ -13,7 +13,11 @@ except ImportError:
     print("Error: typer is required for the CLI. Install with: pip install typer")
     sys.exit(1)
 
-from mcp_the_force.config import get_settings, CONFIG_FILE, SECRETS_FILE
+from mcp_the_force.config import get_settings
+
+# Default config file paths (can be overridden by env vars)
+CONFIG_FILE = Path(".mcp-the-force/config.yaml")
+SECRETS_FILE = Path(".mcp-the-force/secrets.yaml")
 
 app = typer.Typer(help="MCP The-Force configuration management")
 
@@ -47,7 +51,7 @@ providers:
 
 session:
   ttl_seconds: 15552000
-  db_path: .mcp_sessions.sqlite3
+  db_path: .mcp-the-force/sessions.sqlite3
   cleanup_probability: 0.01
 
 memory:
@@ -185,29 +189,39 @@ def init(
 ):
     """Initialize configuration files (config.yaml and secrets.yaml)."""
     try:
+        # Ensure .mcp-the-force directory exists
+        config_dir = Path(".mcp-the-force")
+        config_dir.mkdir(exist_ok=True)
+
+        # Use env vars if set, otherwise use defaults
+        config_file = Path(os.getenv("MCP_CONFIG_FILE", str(CONFIG_FILE)))
+        secrets_file = Path(os.getenv("MCP_SECRETS_FILE", str(SECRETS_FILE)))
+
         # Create config.yaml
-        if CONFIG_FILE.exists() and not force:
-            typer.echo(f"[SKIP] Skipping {CONFIG_FILE.name} (already exists)")
+        if config_file.exists() and not force:
+            typer.echo(f"[SKIP] Skipping {config_file} (already exists)")
         else:
-            CONFIG_FILE.write_text(INIT_CONFIG_TEMPLATE)
-            typer.echo(f"[OK] Created {CONFIG_FILE.name}")
+            config_file.parent.mkdir(parents=True, exist_ok=True)
+            config_file.write_text(INIT_CONFIG_TEMPLATE)
+            typer.echo(f"[OK] Created {config_file}")
 
         # Create secrets.yaml
-        if SECRETS_FILE.exists() and not force:
-            typer.echo(f"[SKIP] Skipping {SECRETS_FILE.name} (already exists)")
+        if secrets_file.exists() and not force:
+            typer.echo(f"[SKIP] Skipping {secrets_file} (already exists)")
         else:
-            SECRETS_FILE.touch(mode=0o600)  # Secure permissions
-            SECRETS_FILE.write_text(INIT_SECRETS_TEMPLATE)
-            typer.echo(f"[OK] Created {SECRETS_FILE.name}")
-            typer.echo("[WARN] Remember to add secrets.yaml to .gitignore!")
+            secrets_file.parent.mkdir(parents=True, exist_ok=True)
+            secrets_file.touch(mode=0o600)  # Secure permissions
+            secrets_file.write_text(INIT_SECRETS_TEMPLATE)
+            typer.echo(f"[OK] Created {secrets_file}")
+            typer.echo("[WARN] Remember to add .mcp-the-force/ to .gitignore!")
 
         # Check .gitignore
         gitignore = Path(".gitignore")
         if gitignore.exists():
             content = gitignore.read_text()
-            if "secrets.yaml" not in content:
+            if ".mcp-the-force" not in content:
                 typer.echo(
-                    "[WARN] Add 'secrets.yaml' to .gitignore to prevent committing secrets!"
+                    "[WARN] Add '.mcp-the-force/' to .gitignore to prevent committing secrets!"
                 )
     except PermissionError as e:
         typer.echo(f"[ERROR] Permission denied: {e}", err=True)
@@ -381,8 +395,12 @@ def import_legacy(
     force: bool = typer.Option(False, "--force", "-f", help="Overwrite existing files"),
 ):
     """Import configuration from legacy .env and mcp-config.json files."""
-    if CONFIG_FILE.exists() and not force:
-        typer.echo(f"{CONFIG_FILE} already exists. Use --force to overwrite.", err=True)
+    # Use env vars if set, otherwise use defaults
+    config_file = Path(os.getenv("MCP_CONFIG_FILE", str(CONFIG_FILE)))
+    secrets_file = Path(os.getenv("MCP_SECRETS_FILE", str(SECRETS_FILE)))
+
+    if config_file.exists() and not force:
+        typer.echo(f"{config_file} already exists. Use --force to overwrite.", err=True)
         raise typer.Exit(1)
 
     # Check if any legacy files exist
@@ -485,16 +503,19 @@ def import_legacy(
     config_data = clean_dict(config_data)
     secrets_data = clean_dict(secrets_data)
 
+    # Ensure config directory exists
+    config_file.parent.mkdir(parents=True, exist_ok=True)
+
     # Write config.yaml
-    CONFIG_FILE.write_text(yaml.dump(config_data, default_flow_style=False))
-    typer.echo(f"[OK] Created {CONFIG_FILE}")
+    config_file.write_text(yaml.dump(config_data, default_flow_style=False))
+    typer.echo(f"[OK] Created {config_file}")
 
     # Write secrets.yaml if there are secrets
     if secrets_data.get("providers"):
-        SECRETS_FILE.touch(mode=0o600)
-        SECRETS_FILE.write_text(yaml.dump(secrets_data, default_flow_style=False))
-        typer.echo(f"[OK] Created {SECRETS_FILE} (mode 600)")
-        typer.echo("[WARN] Remember to add secrets.yaml to .gitignore!")
+        secrets_file.touch(mode=0o600)
+        secrets_file.write_text(yaml.dump(secrets_data, default_flow_style=False))
+        typer.echo(f"[OK] Created {secrets_file} (mode 600)")
+        typer.echo("[WARN] Remember to add .mcp-the-force/ to .gitignore!")
 
     # Final success message
     typer.echo("[OK] Successfully imported legacy configuration")

@@ -24,6 +24,10 @@ PRODUCTION_DBS = {
     ".mcp_logs.sqlite3",
     ".mcp_vector_stores.db",
     "session_cache.db",
+    # New .mcp-the-force paths
+    "sessions.sqlite3",
+    "stable_list_cache.sqlite3",
+    "logs.sqlite3",
 }
 
 # Note: Adapter mocking is controlled by MCP_ADAPTER_MOCK environment variable
@@ -90,6 +94,12 @@ def isolate_test_databases(tmp_path, monkeypatch):
                 if database.endswith(prod_db):
                     database = test_db_map[prod_db]
                     break
+
+        # Special handling for .mcp-the-force/ paths
+        elif ".mcp-the-force/" in database:
+            db_name = db_path.name
+            if db_name in PRODUCTION_DBS:
+                database = test_db_map[db_name]
 
         # Call original connect with potentially redirected path
         return original_connect(database, *args, **kwargs)
