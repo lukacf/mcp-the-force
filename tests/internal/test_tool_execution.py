@@ -95,7 +95,7 @@ class TestToolExecutionIntegration:
 
             # Mock vector store creation
             mock_vs_manager = AsyncMock()
-            mock_vs_manager.create = AsyncMock(return_value="vs-test-id")
+            mock_vs_manager.create = AsyncMock(return_value={"store_id": "vs-test-id"})
 
             # Also mock memory storage to prevent real async calls
             # Import the executor to patch its vector_store_manager
@@ -117,8 +117,9 @@ class TestToolExecutionIntegration:
                 )
 
                 # Verify vector store was created with overflow files
+                # The call now includes provider parameter
                 mock_vs_manager.create.assert_called_once_with(
-                    [str(test_file)], session_id="test-large"
+                    [str(test_file)], session_id="test-large", provider="openai"
                 )
 
                 # Parse the mock response

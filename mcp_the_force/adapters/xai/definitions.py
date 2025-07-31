@@ -124,7 +124,6 @@ class GrokBaseCapabilities(AdapterCapabilities):
 
     provider: str = "xai"
     model_family: str = "grok"
-    native_file_search: bool = False
     supports_tools: bool = True  # Changed from supports_functions
     supports_streaming: bool = True
     supports_live_search: bool = True

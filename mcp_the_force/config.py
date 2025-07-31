@@ -216,6 +216,9 @@ class DevConfig(BaseModel):
 class Settings(BaseSettings):
     """Unified settings for mcp-the-force server."""
 
+    # Class variable for tracking config path
+    _last_config_path: Optional[str] = None
+
     # Top-level configs
     mcp: MCPConfig = Field(default_factory=MCPConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)

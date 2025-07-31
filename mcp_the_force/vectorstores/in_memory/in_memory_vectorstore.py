@@ -35,10 +35,9 @@ class InMemoryVectorStore:
 
         # TTL tracking
         self._created_at = datetime.now().timestamp()
-        if ttl_seconds:
-            self._expires_at: Optional[float] = self._created_at + ttl_seconds
-        else:
-            self._expires_at: Optional[float] = None
+        self._expires_at: Optional[float] = (
+            self._created_at + ttl_seconds if ttl_seconds else None
+        )
 
     async def add_files(self, files: Sequence[VSFile]) -> Sequence[str]:
         """Add files to the store."""

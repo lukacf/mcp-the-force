@@ -90,7 +90,6 @@ class GeminiBaseCapabilities(AdapterCapabilities):
 
     provider: str = "google"
     model_family: str = "gemini"
-    native_file_search: bool = False
     supports_tools: bool = True  # Changed from supports_functions
     supports_streaming: bool = True
     supports_live_search: bool = False  # Gemini doesn't have Live Search like Grok

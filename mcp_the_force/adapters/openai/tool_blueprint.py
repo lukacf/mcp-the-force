@@ -2,7 +2,7 @@
 
 from mcp_the_force.tools.blueprint import ToolBlueprint
 from mcp_the_force.tools.blueprint_registry import register_blueprints
-from ..params import OpenAIToolParams
+from .definitions import OpenAIToolParams
 from .models import OPENAI_MODEL_CAPABILITIES
 
 # Generate blueprints from model capabilities
