@@ -51,6 +51,7 @@ class VectorStoreManager:
 
         self._cache = cache  # For future use
         self._client_cache: Dict[str, VectorStoreClient] = {}
+        self._mock_id_mapping: Dict[str, str] = {}  # Maps mock IDs to real inmemory IDs
 
     def _read_file_content(self, file_path: str) -> str:
         """Read file content from disk."""
@@ -69,11 +70,14 @@ class VectorStoreManager:
     def _get_client_for_store(self, provider: str) -> VectorStoreClient:
         """Get client for store operations, handling mock mode.
 
-        In mock mode, always returns inmemory client regardless of provider.
+        In mock mode, returns inmemory client unless a mock client was injected.
         """
         from ..config import get_settings
 
         if get_settings().adapter_mock:
+            # Check if a mock client was explicitly injected for this provider
+            if provider in self._client_cache:
+                return self._client_cache[provider]
             return self._get_client("inmemory")
         return self._get_client(provider)
 
@@ -165,8 +169,19 @@ class VectorStoreManager:
                 store_name = "mock_ephemeral"
             store = await mock_client.create(store_name, ttl_seconds=ttl_seconds)
 
+            # Create a mock ID with the correct provider prefix
+            # Special case: inmemory provider should keep inmem_ prefix
+            if original_provider == "inmemory":
+                mock_store_id = store.id  # Keep the original inmem_ ID
+            else:
+                mock_store_id = store.id.replace("inmem_", f"{original_provider}_")
+
+            # Store the mapping from mock ID to real inmemory ID (only if different)
+            if mock_store_id != store.id:
+                self._mock_id_mapping[mock_store_id] = store.id
+
             logger.info(
-                f"[MOCK] Created in-memory vector store: {store.id} for provider {original_provider} with {len(files)} files"
+                f"[MOCK] Created in-memory vector store: {mock_store_id} (actual: {store.id}) for provider {original_provider} with {len(files)} files"
             )
 
             # Add files if provided
@@ -183,7 +198,7 @@ class VectorStoreManager:
             # Register with cache for lifecycle management (same as non-mock path)
             if session_id or name:
                 await self.vector_store_cache.register_store(
-                    vector_store_id=store.id,
+                    vector_store_id=mock_store_id,
                     provider=original_provider,  # Use original provider for cache
                     session_id=session_id,
                     name=name,
@@ -194,7 +209,7 @@ class VectorStoreManager:
                 )
 
             result = {
-                "store_id": store.id,
+                "store_id": mock_store_id,
                 "provider": original_provider,  # Return the originally requested provider
             }
 
@@ -321,11 +336,17 @@ class VectorStoreManager:
         from ..config import get_settings
 
         if get_settings().adapter_mock:
-            # In mock mode, actually delete from inmemory client
+            # In mock mode, translate mock ID to real inmemory ID if needed
+            real_id = self._mock_id_mapping.get(vs_id, vs_id)
             try:
                 client = self._get_client("inmemory")
-                await client.delete(vs_id)
-                logger.info(f"[MOCK] Deleted mock vector store: {vs_id}")
+                await client.delete(real_id)
+                logger.info(
+                    f"[MOCK] Deleted mock vector store: {vs_id} (actual: {real_id})"
+                )
+                # Clean up the mapping
+                if vs_id in self._mock_id_mapping:
+                    del self._mock_id_mapping[vs_id]
             except Exception as e:
                 logger.error(f"[MOCK] Error deleting mock vector store: {e}")
             return
@@ -510,6 +531,8 @@ class VectorStoreManager:
         Returns:
             Number of stores cleaned up
         """
+        from ..config import get_settings
+
         logger.info("Starting vector store cleanup")
         cleaned_count = 0
 
@@ -536,10 +559,26 @@ class VectorStoreManager:
             delete_tasks = []
             for store in stores:
 
-                async def delete_store(store_info):
+                async def delete_store(store_info, provider=provider, client=client):
                     try:
-                        await client.delete(store_info["vector_store_id"])
-                        return store_info["vector_store_id"], True
+                        store_id = store_info["vector_store_id"]
+                        # In mock mode, handle ID translation if needed
+                        if (
+                            get_settings().adapter_mock
+                            and provider in self._client_cache
+                        ):
+                            # Using injected mock client, pass the original ID
+                            await client.delete(store_id)
+                        elif get_settings().adapter_mock:
+                            # Using inmemory client, translate mock ID to real ID
+                            real_id = self._mock_id_mapping.get(store_id, store_id)
+                            await client.delete(real_id)
+                            # Clean up the mapping
+                            if store_id in self._mock_id_mapping:
+                                del self._mock_id_mapping[store_id]
+                        else:
+                            await client.delete(store_id)
+                        return store_id, True
                     except Exception as e:
                         logger.error(
                             f"Failed to delete vector store {store_info['vector_store_id']}: {e}"
