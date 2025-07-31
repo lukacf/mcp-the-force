@@ -72,12 +72,12 @@ class TestSessionManagement:
         result = safe_json(response)
         assert result is not None, f"Failed to parse JSON: {response}"
         assert result["information_stored"] is True, f"Storage failed: {result}"
-        assert (
-            protocol_name in result["stored_content"]
-        ), f"Protocol not stored: {result}"
-        assert (
-            str(port_number) in result["stored_content"]
-        ), f"Port not stored: {result}"
+        assert protocol_name in result["stored_content"], (
+            f"Protocol not stored: {result}"
+        )
+        assert str(port_number) in result["stored_content"], (
+            f"Port not stored: {result}"
+        )
 
         # Step 2: Test immediate recall in same session
         response = call_claude_tool(
@@ -94,9 +94,9 @@ class TestSessionManagement:
         # Validate recall - should match our schema exactly
         result = safe_json(response)
         assert result is not None, f"Failed to parse JSON: {response}"
-        assert (
-            result["found_in_session"] is True
-        ), f"Should find info in session: {result}"
+        assert result["found_in_session"] is True, (
+            f"Should find info in session: {result}"
+        )
         # Accept both protocol name alone or with "Protocol" prefix
         assert protocol_name in result["protocol_name"], f"Wrong protocol: {result}"
         assert result["port_number"] == port_number, f"Wrong port: {result}"
@@ -116,9 +116,9 @@ class TestSessionManagement:
         # Original session should still remember
         result = safe_json(response)
         assert result is not None, f"Failed to parse JSON: {response}"
-        assert (
-            result["found_in_session"] is True
-        ), f"Should find info in original session: {result}"
+        assert result["found_in_session"] is True, (
+            f"Should find info in original session: {result}"
+        )
         # Accept both protocol name alone or with "Protocol" prefix
         assert protocol_name in result["protocol_name"], f"Wrong protocol: {result}"
         assert result["port_number"] == port_number, f"Wrong port: {result}"
@@ -231,12 +231,12 @@ class TestSessionManagement:
         )
 
         # Simple validation that it was stored
-        assert (
-            protocol_name in response
-        ), f"Protocol not mentioned in response: {response}"
-        assert (
-            str(port_number) in response
-        ), f"Port not mentioned in response: {response}"
+        assert protocol_name in response, (
+            f"Protocol not mentioned in response: {response}"
+        )
+        assert str(port_number) in response, (
+            f"Port not mentioned in response: {response}"
+        )
 
         # Give memory storage time to complete
         import time
@@ -257,11 +257,11 @@ class TestSessionManagement:
         # Validate that Gemini found the information through history search
         result = safe_json(response)
         assert result is not None, f"Failed to parse JSON: {response}"
-        assert (
-            result["found_protocol"] is True
-        ), f"Protocol not found in history: {result}"
-        assert (
-            protocol_name in result["protocol_name"]
-        ), f"Wrong protocol found: {result}"
+        assert result["found_protocol"] is True, (
+            f"Protocol not found in history: {result}"
+        )
+        assert protocol_name in result["protocol_name"], (
+            f"Wrong protocol found: {result}"
+        )
         assert result["port_number"] == port_number, f"Wrong port found: {result}"
         assert result["results_count"] > 0, f"No search results returned: {result}"

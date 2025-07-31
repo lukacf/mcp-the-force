@@ -28,7 +28,9 @@ class TestBasicMCP:
             result = await client.call_tool("list_sessions", arguments={"limit": "5"})
 
             # Check if the tool call was successful
-            assert not result.is_error, f"Tool call failed with error: {getattr(result, 'error_message', 'Unknown error')}"
+            assert not result.is_error, (
+                f"Tool call failed with error: {getattr(result, 'error_message', 'Unknown error')}"
+            )
 
             # Access the actual response from the .content attribute
             content = result.content
@@ -66,7 +68,9 @@ class TestBasicMCP:
             )
 
             # Check if the tool call was successful
-            assert not result.is_error, f"Tool call failed with error: {getattr(result, 'error_message', 'Unknown error')}"
+            assert not result.is_error, (
+                f"Tool call failed with error: {getattr(result, 'error_message', 'Unknown error')}"
+            )
 
             # Access the actual response from the .content attribute
             content = result.content
@@ -100,7 +104,9 @@ class TestBasicMCP:
             )
 
             # Check if the tool call was successful
-            assert not result.is_error, f"Tool call failed with error: {getattr(result, 'error_message', 'Unknown error')}"
+            assert not result.is_error, (
+                f"Tool call failed with error: {getattr(result, 'error_message', 'Unknown error')}"
+            )
 
             # Access the actual response from the .content attribute
             content = result.content
@@ -126,7 +132,9 @@ class TestBasicMCP:
             )
 
             # Check if the tool call was successful
-            assert not result.is_error, f"Tool call failed with error: {getattr(result, 'error_message', 'Unknown error')}"
+            assert not result.is_error, (
+                f"Tool call failed with error: {getattr(result, 'error_message', 'Unknown error')}"
+            )
 
             # Access the actual response from the .content attribute
             content = result.content
@@ -158,7 +166,9 @@ class TestBasicMCP:
             result = await client.call_tool("search_project_history", {"query": "test"})
 
             # Check if the tool call was successful
-            assert not result.is_error, f"Tool call failed with error: {getattr(result, 'error_message', 'Unknown error')}"
+            assert not result.is_error, (
+                f"Tool call failed with error: {getattr(result, 'error_message', 'Unknown error')}"
+            )
 
             # Access the actual response from the .content attribute
             content = result.content
