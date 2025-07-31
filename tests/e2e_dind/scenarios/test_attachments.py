@@ -106,12 +106,12 @@ class TestContextOverflowAndRag:
         print(f"✅ Response: {response}")
 
         # Verify model can find content from both files
-        assert INLINE_TOKEN in response, (
-            f"Model failed to find inline token '{INLINE_TOKEN}' from small file"
-        )
-        assert OVERFLOW_TOKEN in response, (
-            f"Model failed to find overflow token '{OVERFLOW_TOKEN}' from vector store"
-        )
+        assert (
+            INLINE_TOKEN in response
+        ), f"Model failed to find inline token '{INLINE_TOKEN}' from small file"
+        assert (
+            OVERFLOW_TOKEN in response
+        ), f"Model failed to find overflow token '{OVERFLOW_TOKEN}' from vector store"
 
         # Verify the model actually found both tokens (not just echoed them)
         response_lower = response.lower()
@@ -210,14 +210,14 @@ class TestContextOverflowAndRag:
         print(f"✅ Response: {response}")
 
         # Verify the priority file content is accessible directly (not via search)
-        assert PRIORITY_TOKEN in response, (
-            f"Model failed to find priority token '{PRIORITY_TOKEN}' that should be inline"
-        )
+        assert (
+            PRIORITY_TOKEN in response
+        ), f"Model failed to find priority token '{PRIORITY_TOKEN}' that should be inline"
 
         # Verify it's not reporting "not in direct context"
-        assert "not in direct context" not in response.lower(), (
-            "Priority file was not included inline as expected"
-        )
+        assert (
+            "not in direct context" not in response.lower()
+        ), "Priority file was not included inline as expected"
 
         print("✅ Priority context override test passed!")
 
