@@ -31,5 +31,6 @@ chmod 600 "$ADC_PATH"
 export GOOGLE_APPLICATION_CREDENTIALS="$ADC_PATH"
 echo "Created ADC at: $ADC_PATH"
 
-# Optional: Set up cleanup on exit
-# trap 'rm -f "$ADC_PATH"' EXIT
+# Note: No cleanup trap needed - this script is designed for CI environments
+# where credentials must persist for the duration of the job/session.
+# The CI environment itself is ephemeral and will be cleaned up entirely.

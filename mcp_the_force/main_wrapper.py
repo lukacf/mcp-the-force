@@ -8,42 +8,34 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def get_config_dir() -> Path:
-    """Get configuration directory following XDG Base Directory specification."""
-    # Use XDG_CONFIG_HOME if set, otherwise ~/.config
-    xdg_config_home = os.environ.get("XDG_CONFIG_HOME")
-    if xdg_config_home:
-        config_dir = Path(xdg_config_home) / "mcp-the-force"
-    else:
-        config_dir = Path.home() / ".config" / "mcp-the-force"
-
-    # Create directory if it doesn't exist
-    config_dir.mkdir(parents=True, exist_ok=True)
-    return config_dir
-
-
 def ensure_config_exists():
     """Ensure configuration files exist, creating defaults if needed."""
-    # If config files are already set via env vars, don't override them
+    # If config files are already set via env vars, respect them
     if "MCP_CONFIG_FILE" in os.environ or "MCP_SECRETS_FILE" in os.environ:
         return
 
-    # Check if we're running from a development environment
-    # (i.e., config.yaml exists in the current directory or parent directories)
-    current_dir = Path.cwd()
-    for _ in range(3):  # Check up to 3 levels up
-        if (current_dir / "config.yaml").exists():
-            # We're in a development environment, don't override config location
-            return
-        if current_dir.parent == current_dir:
-            break
-        current_dir = current_dir.parent
+    # Safety check: Don't create config in home or root directories
+    cwd = Path.cwd()
+    if cwd == Path.home() or cwd == Path("/"):
+        print(
+            f"[MCP The-Force] ERROR: Cannot create configuration in {cwd}",
+            file=sys.stderr,
+        )
+        print(
+            "[MCP The-Force] Please run from a project directory, not from home or root",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
-    config_dir = get_config_dir()
+    # Use current working directory as project root (MCP clients set this correctly)
+    # Create .mcp-the-force directory to keep configs organized
+    config_dir = cwd / ".mcp-the-force"
+    config_dir.mkdir(exist_ok=True)
+
     config_file = config_dir / "config.yaml"
     secrets_file = config_dir / "secrets.yaml"
 
-    # Set environment variables to point to our config location
+    # Set environment variables so config.py can find them
     os.environ["MCP_CONFIG_FILE"] = str(config_file)
     os.environ["MCP_SECRETS_FILE"] = str(secrets_file)
 
@@ -72,13 +64,15 @@ providers:
     enabled: true
 """
         config_file.write_text(default_config)
-        print(f"Created default configuration at: {config_file}", file=sys.stderr)
+        print(
+            f"[MCP The-Force] Created configuration at: {config_file}", file=sys.stderr
+        )
 
     # Create secrets.yaml template if it doesn't exist
     if not secrets_file.exists():
         secrets_template = """# MCP The-Force Secrets
 # Add your API keys here
-# This file is automatically excluded from git
+# This file should be added to .gitignore
 
 providers:
   openai:
@@ -94,8 +88,25 @@ providers:
   #   user_refresh_token: ""
 """
         secrets_file.write_text(secrets_template)
-        print(f"Created secrets template at: {secrets_file}", file=sys.stderr)
-        print(f"Please edit {secrets_file} to add your API keys", file=sys.stderr)
+        secrets_file.chmod(0o600)  # Set secure permissions
+        print(
+            f"[MCP The-Force] Created secrets template at: {secrets_file}",
+            file=sys.stderr,
+        )
+        print(
+            f"[MCP The-Force] Please edit {secrets_file} to add your API keys",
+            file=sys.stderr,
+        )
+
+        # Check if .gitignore exists and warn about adding .mcp-the-force
+        gitignore = Path.cwd() / ".gitignore"
+        if gitignore.exists():
+            gitignore_content = gitignore.read_text()
+            if ".mcp-the-force" not in gitignore_content:
+                print(
+                    "[MCP The-Force] WARNING: Add '.mcp-the-force/' to your .gitignore file to exclude sensitive data",
+                    file=sys.stderr,
+                )
 
 
 def main():

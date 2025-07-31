@@ -1,5 +1,8 @@
 #!/bin/bash
 # Backup SQLite databases to prevent data loss
+#
+# OS Compatibility: macOS, Linux
+# Note: This script uses bash-specific features and may not work on Windows without WSL
 
 # Get backup directory from config, with fallback
 BACKUP_DIR_FROM_CONFIG=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && python -c "
@@ -9,7 +12,7 @@ try:
 except:
     pass
 " 2>/dev/null)
-BACKUP_DIR="${BACKUP_DIR_FROM_CONFIG:-$HOME/.mcp_backups}"
+BACKUP_DIR="${BACKUP_DIR_FROM_CONFIG:-.mcp-the-force/backups}"
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # Create backup directory if it doesn't exist
@@ -33,7 +36,7 @@ backup_file() {
 
 # Backup all SQLite databases
 cd "$PROJECT_DIR"
-for db in .mcp_sessions.sqlite3 .mcp_logs.sqlite3 .mcp_vector_stores.db .stable_list_cache.sqlite3; do
+for db in .mcp-the-force/sessions.sqlite3 .mcp-the-force/logs.sqlite3; do
     backup_file "$db"
 done
 

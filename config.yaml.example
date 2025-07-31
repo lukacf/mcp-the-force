@@ -97,7 +97,7 @@ features: {}
 
 # Backup configuration
 backup:
-  path: ~/.mcp_backups
+  path: .mcp-the-force/backups
 
 # Security settings
 security:
