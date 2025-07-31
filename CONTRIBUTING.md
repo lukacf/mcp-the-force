@@ -37,11 +37,19 @@ make install-hooks
 
 # Initialize configuration 
 mcp-config init
-# Edit secrets.yaml with API keys
+# Edit .mcp-the-force/secrets.yaml with API keys
 
 # Validate setup
 make test  
+
+# (Optional) Set up VictoriaLogs for debugging
+docker run --rm -it -p 9428:9428 \
+  -v ./victoria-logs-data:/victoria-logs-data \
+  docker.io/victoriametrics/victoria-logs:v1.26.0 \
+  -storageDataPath=/victoria-logs-data
 ```
+
+The `victoria-logs-data/` directory is automatically created and ignored by git.
 </details>
 
 <details>
@@ -150,6 +158,14 @@ To enforce code quality and prevent regressions, the repository uses pre-commit 
 │  │  │ UnifiedSession  │  │   VectorStore   │  │  Long-term   │    │   │
 │  │  │  Cache (SQLite) │  │    Manager      │  │    Memory    │    │   │
 │  │  └─────────────────┘  └─────────────────┘  └──────────────┘    │   │
+│  └───────────────────────────────────────────────────────┬────────┘   │
+│                                                           │            │
+│  ┌────────────────────────────────────────────────────────┴───────┐   │
+│  │                    Logging & Debugging                         │   │
+│  │  ┌─────────────────┐  ┌─────────────────┐                      │   │
+│  │  │  VictoriaLogs   │  │   LogsQL Tool   │                      │   │
+│  │  │  Integration    │  │  (dev mode)     │                      │   │
+│  │  └─────────────────┘  └─────────────────┘                      │   │
 │  └────────────────────────────────────────────────────────────────┘   │
 └───────────────────────────────────────────────────────────────────────┘
 ```
@@ -209,7 +225,7 @@ To enforce code quality and prevent regressions, the repository uses pre-commit 
 
 The `UnifiedSessionCache` enables stateful conversations:  
 
-- Uses SQLite (`.mcp_sessions.sqlite3`) to store conversation history across all providers
+- Uses SQLite (`.mcp-the-force/sessions.sqlite3`) to store conversation history across all providers
 - Allows long-running conversations to persist across restarts
 - Completely provider-agnostic session management  
 </details>

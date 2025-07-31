@@ -144,7 +144,7 @@ code history.
 
 All AI chat and research tools support multi-turn conversations via the `session_id` parameter.
 
-- **Unified Session Caching**: The server now uses a persistent SQLite database (`.mcp_sessions.sqlite3`) to manage conversation history for **all** models (OpenAI, Gemini, and Grok).
+- **Unified Session Caching**: The server now uses a persistent SQLite database (`.mcp-the-force/sessions.sqlite3`) to manage conversation history for **all** models (OpenAI, Gemini, and Grok).
 - **Session Continuity**:
   - **OpenAI/Grok**: The server caches the `response_id` (for OpenAI) or the full history (for Grok) to continue the conversation.
   - **Gemini**: The server stores the full conversation history locally in the SQLite database.

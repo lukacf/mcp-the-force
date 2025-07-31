@@ -1,7 +1,6 @@
 """Executor for dataclass-based tools."""
 
 import asyncio
-import contextlib
 import logging
 import time
 import uuid
@@ -829,13 +828,14 @@ class ToolExecutor:
                 #         vector_store_manager.delete(vs_id), timeout=5.0
                 #     )
 
-            # Wait for memory tasks to complete
-            if memory_tasks:
-                with contextlib.suppress(asyncio.TimeoutError):
-                    await asyncio.wait_for(
-                        asyncio.gather(*memory_tasks, return_exceptions=True),
-                        timeout=120.0,  # Original timeout for memory storage
-                    )
+            # Don't wait for memory tasks - they're fire-and-forget
+            # This was blocking the response for 8+ seconds while uploading to vector store
+            # if memory_tasks:
+            #     with contextlib.suppress(asyncio.TimeoutError):
+            #         await asyncio.wait_for(
+            #             asyncio.gather(*memory_tasks, return_exceptions=True),
+            #             timeout=120.0,  # Original timeout for memory storage
+            #         )
 
             elapsed = asyncio.get_event_loop().time() - start_time
             logger.info(f"[{operation_id}] {tool_id} completed in {elapsed:.2f}s")

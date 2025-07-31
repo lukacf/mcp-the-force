@@ -15,7 +15,8 @@ class LoggingService:
     """Local service for executing raw LogsQL queries."""
 
     def __init__(self):
-        self.base_url = "http://localhost:9428"
+        settings = get_settings()
+        self.base_url = settings.logging.victoria_logs_url
 
     async def execute(self, **kwargs: Any) -> str:
         """Execute raw LogsQL query and return formatted results."""
