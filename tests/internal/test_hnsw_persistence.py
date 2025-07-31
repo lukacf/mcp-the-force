@@ -5,9 +5,16 @@ These tests use real hnswlib and sentence-transformers libraries.
 
 import pytest
 import json
+import os
 
 from mcp_the_force.vectorstores.protocol import VSFile
 from mcp_the_force.vectorstores.hnsw.hnsw_vectorstore import HnswVectorStoreClient
+
+# Skip all tests in this module if in mock mode
+pytestmark = pytest.mark.skipif(
+    os.getenv("MCP_ADAPTER_MOCK") == "1",
+    reason="HNSW persistence tests require real HNSW implementation",
+)
 
 
 @pytest.mark.integration
