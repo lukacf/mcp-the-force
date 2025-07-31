@@ -120,12 +120,12 @@ def stack(request):
             try:
                 import yaml
 
-                # Check for config files in the project root
+                # Check for config files in the standardized location
                 project_root = Path(
                     __file__
                 ).parent.parent.parent  # tests/e2e_dind/conftest.py -> project root
-                config_file = project_root / "config.yaml"
-                secrets_file = project_root / "secrets.yaml"
+                config_file = project_root / ".mcp-the-force" / "config.yaml"
+                secrets_file = project_root / ".mcp-the-force" / "secrets.yaml"
 
                 vertex_project = None
 

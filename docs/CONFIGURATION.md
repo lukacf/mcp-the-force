@@ -4,24 +4,18 @@ This document provides a comprehensive reference for all configuration settings 
 
 ## Configuration File Locations
 
-The server looks for configuration files in different locations depending on how it's run:
-
-### When installed via uvx (recommended for users)
-- **Location**: `~/.config/mcp-the-force/` (follows XDG Base Directory specification)
+### Default Location (Project-Local)
+- **Location**: `./.mcp-the-force/` in your project directory
 - **Files**: `config.yaml` and `secrets.yaml`
-- **Note**: The uvx wrapper automatically sets environment variables to point to this location
+- **Note**: The server automatically creates this directory on first run
+- **Security**: Add `.mcp-the-force/` to your `.gitignore` file to prevent committing secrets
 
-### When running from source (for developers)
-- **Location**: Current working directory
-- **Files**: `./config.yaml` and `./secrets.yaml`
-- **Note**: This is the default when no environment variables are set
-
-### Development Mode Detection
-When running from source with `uv run -- mcp-the-force`, the server automatically detects if it's in a development environment by checking for `config.yaml` in the current directory or up to 3 parent directories. If found, it will use the local configuration files instead of the XDG config directory. This allows developers to use project-specific configuration without setting environment variables.
-
-### Custom locations
+### Custom Locations
 - Set `MCP_CONFIG_FILE` and `MCP_SECRETS_FILE` environment variables to use any location
 - These environment variables always take precedence over defaults
+
+### For MCP Developers
+When developing mcp-the-force itself, configuration works the same way - create `.mcp-the-force/config.yaml` and `.mcp-the-force/secrets.yaml` in your clone directory
 
 ## General Notes
 
@@ -154,7 +148,7 @@ Specialized ZMQ-based logging for development and debugging tools.
 | :--- | :--- | :--- | :--- | :--- |
 | `logging.developer_mode.enabled` | `MCP__LOGGING__DEVELOPER_MODE__ENABLED` | `bool` | `False` | Enable or disable the developer logging mode. |
 | `logging.developer_mode.port` | `MCP__LOGGING__DEVELOPER_MODE__PORT` | `int` | `4711` | The ZMQ port for publishing log messages. |
-| `logging.developer_mode.db_path` | `MCP__LOGGING__DEVELOPER_MODE__DB_PATH` | `string` | `".mcp_logs.sqlite3"` | Path to the SQLite database for the log viewer. |
+| `logging.developer_mode.db_path` | `MCP__LOGGING__DEVELOPER_MODE__DB_PATH` | `string` | `".mcp-the-force/logs.sqlite3"` | Path to the SQLite database for the log viewer. |
 | `logging.developer_mode.batch_size` | `MCP__LOGGING__DEVELOPER_MODE__BATCH_SIZE` | `int` | `100` | Number of log entries to batch before writing to the database. |
 | `logging.developer_mode.batch_timeout` | `MCP__LOGGING__DEVELOPER_MODE__BATCH_TIMEOUT`| `float` | `1.0` | Timeout in seconds to wait before writing a batch to the database. |
 | `logging.developer_mode.max_db_size_mb`| `MCP__LOGGING__DEVELOPER_MODE__MAX_DB_SIZE_MB`| `int` | `1000`| Maximum size of the log database in megabytes before rotation occurs. |
@@ -168,7 +162,7 @@ Settings related to user session management.
 | YAML Path | Environment Variable | Type | Default Value | Description |
 | :--- | :--- | :--- | :--- | :--- |
 | `session.ttl_seconds` | `MCP__SESSION__TTL_SECONDS` or `SESSION_TTL_SECONDS` | `int` | `15552000` (6 months) | Time-to-live for sessions in seconds. Must be at least `60`. |
-| `session.db_path` | `MCP__SESSION__DB_PATH` or `SESSION_DB_PATH` | `string` | `".mcp_sessions.sqlite3"` | Path to the SQLite database file for storing session data. |
+| `session.db_path` | `MCP__SESSION__DB_PATH` or `SESSION_DB_PATH` | `string` | `".mcp-the-force/sessions.sqlite3"` | Path to the SQLite database file for storing session data. |
 | `session.cleanup_probability` | `MCP__SESSION__CLEANUP_PROBABILITY` or `SESSION_CLEANUP_PROBABILITY` | `float` | `0.01` | The probability (0.0 to 1.0) of triggering a cleanup of expired sessions on any given request. |
 
 ---
@@ -223,7 +217,7 @@ Configuration for database backup scripts.
 
 | YAML Path | Environment Variable | Type | Default Value | Description |
 | :--- | :--- | :--- | :--- | :--- |
-| `backup.path` | `MCP__BACKUP__PATH` | `string` | `~/.mcp_backups` | The directory where database backup files will be stored. |
+| `backup.path` | `MCP__BACKUP__PATH` | `string` | `".mcp-the-force/backups"` | The directory where database backup files will be stored. |
 
 ---
 
@@ -333,12 +327,17 @@ When a setting is defined in multiple places, the following precedence applies (
 3. **config.yaml** - Overrides defaults
 4. **Built-in defaults** - Used when nothing else is specified
 
-### Important Note on File Locations
+### Environment Variable Configuration
 
-The location of `config.yaml` and `secrets.yaml` depends on how you run the server:
+You can pass configuration directly via environment variables when adding the server to Claude:
 
-- **Via uvx (`mcp-the-force`)**: Always uses `~/.config/mcp-the-force/` regardless of local files
-- **Direct execution**: Uses files in current directory unless overridden by environment variables
-- **Custom**: Use `MCP_CONFIG_FILE` and `MCP_SECRETS_FILE` to specify any location
+```bash
+claude mcp add the-force -- \
+  uvx --from git+https://github.com/lukacf/mcp-the-force \
+  mcp-the-force \
+  --env OPENAI_API_KEY=sk-... \
+  --env XAI_API_KEY=xai-... \
+  --env VERTEX_PROJECT=my-gcp-project
+```
 
-This means if you have both `~/.config/mcp-the-force/config.yaml` and `./config.yaml`, which one is used depends on whether you run via uvx or directly.
+This is particularly useful for API keys, allowing you to configure the server without editing files.

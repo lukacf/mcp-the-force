@@ -73,8 +73,7 @@ gcp-service-account-key.json
 *.tmp
 *.temp
 
-# Session cache database
-.mcp_sessions.sqlite3
+# SQLite databases (now in .mcp-the-force/)
 *.sqlite3
 *.sqlite3-wal
 *.sqlite3-shm
@@ -82,6 +81,7 @@ gcp-service-account-key.json
 # Configuration files
 config.yaml
 secrets.yaml
+.mcp-the-force/
 
 # Victoria Logs data (should never be committed)
 victoria-logs-data/

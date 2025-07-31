@@ -80,18 +80,19 @@ class SearchHistoryService:
     def _ensure_deduplicator(self):
         """Ensure the SQLite deduplicator is initialized."""
         if SearchHistoryService._deduplicator is None:
-            # Use the same database as memory config
-            home = Path.home()
-            cache_dir = home / ".cache" / "mcp-the-force"
-            cache_dir.mkdir(parents=True, exist_ok=True)
-            db_path = cache_dir / "session_cache.db"
+            # Use the main session DB path from settings for consistency
+            from ..config import get_settings
+
+            settings = get_settings()
+            db_path = Path(settings.session.db_path)
+            db_path.parent.mkdir(parents=True, exist_ok=True)
 
             SearchHistoryService._deduplicator = SQLiteSearchDeduplicator(
                 db_path=db_path,
                 ttl_hours=24,  # 24 hour TTL for search deduplication
             )
             logger.info(
-                f"[SEARCH_HISTORY] Initialized SQLite deduplicator at {db_path}"
+                f"[SEARCH_HISTORY] Initialized SQLite deduplicator at project-local path {db_path}"
             )
 
     async def clear_deduplication_cache(self, session_id: Optional[str] = None):
