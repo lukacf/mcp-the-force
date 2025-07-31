@@ -1,6 +1,7 @@
 """Unified configuration management using YAML with environment overlay."""
 
 import os
+import sys
 import yaml
 import logging
 from pathlib import Path
@@ -12,20 +13,15 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
 
-# Configuration file paths
-CONFIG_FILE = Path("config.yaml")
-SECRETS_FILE = Path("secrets.yaml")
+# Configuration file paths - these are just defaults, usually overridden by env vars
+CONFIG_FILE = Path(".mcp-the-force/config.yaml")
+SECRETS_FILE = Path(".mcp-the-force/secrets.yaml")
 
 
 class DeveloperLoggingConfig(BaseModel):
     """Developer logging settings."""
 
-    enabled: bool = Field(False, description="Enable developer logging mode")
-    port: int = Field(4711, description="ZMQ logging port")
-    db_path: str = Field(".mcp_logs.sqlite3", description="SQLite database path")
-    batch_size: int = Field(100, description="Batch size for database writes")
-    batch_timeout: float = Field(1.0, description="Batch timeout in seconds")
-    max_db_size_mb: int = Field(1000, description="Max database size before rotation")
+    enabled: bool = Field(False, description="Enable LogsQL debug query tool")
 
 
 class LoggingConfig(BaseModel):
@@ -36,7 +32,7 @@ class LoggingConfig(BaseModel):
         default_factory=DeveloperLoggingConfig
     )
     victoria_logs_url: str = Field(
-        "http://localhost:9428", description="Victoria Logs URL"
+        default="http://localhost:9428", description="Victoria Logs URL"
     )
     victoria_logs_enabled: bool = Field(True, description="Enable Victoria Logs")
     loki_app_tag: str = Field("mcp-the-force", description="Loki app tag")
@@ -103,7 +99,9 @@ class SessionConfig(BaseModel):
     ttl_seconds: int = Field(
         15552000, description="Session TTL in seconds (default: 6 months)", ge=60
     )
-    db_path: str = Field(".mcp_sessions.sqlite3", description="Session database path")
+    db_path: str = Field(
+        default=".mcp-the-force/sessions.sqlite3", description="Session database path"
+    )
     cleanup_probability: float = Field(
         0.01, description="Cleanup probability", ge=0.0, le=1.0
     )
@@ -157,7 +155,7 @@ class BackupConfig(BaseModel):
     """Configuration for backup scripts."""
 
     path: str = Field(
-        default_factory=lambda: str(Path.home() / ".mcp_backups"),
+        default=".mcp-the-force/backups",
         description="Directory for database backups",
     )
 
@@ -343,7 +341,6 @@ class Settings(BaseSettings):
     @classmethod
     def _yaml_config_source(cls) -> Dict[str, Any]:
         """Load configuration from YAML files."""
-        import sys
 
         config_data: Dict[str, Any] = {}
 

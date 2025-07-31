@@ -37,12 +37,13 @@ class OpenAICleanupManager:
         if db_path:
             self.db_path = Path(db_path)
         else:
-            # Try to find the MCP session database
-            home = Path.home()
-            cache_dir = home / ".cache" / "mcp-the-force"
-            self.db_path = (
-                cache_dir / "session_cache.db" if cache_dir.exists() else None
-            )
+            # Default to the project-local database path
+            self.db_path = Path(".mcp-the-force/sessions.sqlite3")
+            if not self.db_path.exists():
+                print(
+                    f"{YELLOW}Warning: Default database not found at {self.db_path}. Specify with --db=path/to/db.sqlite3{RESET}"
+                )
+                self.db_path = None
 
     async def get_stats(self) -> Tuple[int, int]:
         """Get current counts of vector stores and files."""
@@ -542,7 +543,7 @@ async def main():
             )
             print("\nOptions:")
             print(
-                "  --db=path  Path to SQLite database (default: ~/.cache/mcp-the-force/session_cache.db)"
+                "  --db=path  Path to SQLite database (default: .mcp-the-force/sessions.sqlite3)"
             )
             print("\nExamples:")
             print(

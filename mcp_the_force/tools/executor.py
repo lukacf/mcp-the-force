@@ -1,7 +1,6 @@
 """Executor for dataclass-based tools."""
 
 import asyncio
-import contextlib
 import logging
 import time
 import uuid
@@ -117,24 +116,105 @@ class ToolExecutor:
                 # Initialize cache
                 cache = StableListCache()
 
-                # Calculate token budget
+                # Calculate initial token budget
                 # Context window comes from tool metadata
                 model_limit = metadata.model_config.get("context_window", 128_000)
                 context_percentage = settings.mcp.context_percentage
 
                 # The context_percentage (default 0.85) already includes safety margin
                 # The remaining 15% is for system prompts, tool responses, etc.
-                token_budget = max(int(model_limit * context_percentage), 1000)
-                logger.debug(
-                    f"[TOKEN_BUDGET] Model: {metadata.model_config['model_name']}, limit: {model_limit:,}, "
-                    f"percentage: {context_percentage:.0%}, "
-                    f"budget: {token_budget:,}"
-                )
+                initial_token_budget = max(int(model_limit * context_percentage), 1000)
 
-                # Get context and priority_context paths
-                logger.debug("[STEP 7] Getting context and priority_context paths")
+                # Load session history FIRST to calculate its token cost
+                from ..unified_session_cache import unified_session_cache
+                from ..utils.token_counter import count_tokens
+                from ..utils.fs import gather_file_paths_async
+                from ..utils.file_tree import build_file_tree_from_paths
+                import json
+                import os
+
+                # Get project name
+                project_path = settings.logging.project_path
+                project = (
+                    os.path.basename(project_path)
+                    if project_path
+                    else os.path.basename(os.getcwd())
+                )
+                tool = metadata.id
+
+                history_tokens = 0
+                try:
+                    history = await unified_session_cache.get_history(
+                        project, tool, session_id
+                    )
+                    if history:
+                        # Serialize history for accurate token counting
+                        history_text_for_counting = " ".join(
+                            [json.dumps(msg) for msg in history]
+                        )
+                        history_tokens = count_tokens([history_text_for_counting])
+                        logger.debug(
+                            f"[TOKEN_BUDGET] Session history contains {len(history)} messages, {history_tokens:,} tokens"
+                        )
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to load session history for token calculation: {e}"
+                    )
+                    history_tokens = 0
+
+                # CRITICAL: Calculate file tree token cost BEFORE allocating budget for file content
+                # The file tree can be massive (50k+ tokens for large projects) and was never accounted for
                 context_paths = prompt_params.get("context", [])
                 priority_context_paths = prompt_params.get("priority_context", [])
+
+                # Gather all files to estimate file tree size
+                all_context_files = await gather_file_paths_async(context_paths)
+                priority_files = (
+                    await gather_file_paths_async(priority_context_paths)
+                    if priority_context_paths
+                    else []
+                )
+                all_requested_files = list(set(priority_files + all_context_files))
+
+                # Build estimated file tree (same as context builder will generate)
+                file_tree_estimate = build_file_tree_from_paths(
+                    all_paths=all_requested_files,
+                    attachment_paths=[],  # Don't need accurate attachments for token counting
+                    root_path=None,
+                )
+
+                # Count file tree tokens
+                file_tree_tokens = (
+                    count_tokens([file_tree_estimate]) if all_requested_files else 0
+                )
+                logger.debug(
+                    f"[TOKEN_BUDGET] File tree contains {len(all_requested_files)} files, {file_tree_tokens:,} tokens"
+                )
+
+                # Calculate overhead tokens (system prompts, XML structure, etc.)
+                instructions = prompt_params.get("instructions", "")
+                output_format = prompt_params.get("output_format", "")
+                overhead_tokens = (
+                    count_tokens([instructions, output_format]) + 500
+                )  # 500 buffer for XML tags
+
+                # Adjust token budget by subtracting ALL overhead
+                total_overhead = history_tokens + file_tree_tokens + overhead_tokens
+                token_budget = initial_token_budget - total_overhead
+                if token_budget < 0:
+                    token_budget = 0
+                    logger.warning(
+                        f"[TOKEN_BUDGET] Total overhead ({total_overhead:,} tokens) exceeds budget. No file content can be inlined."
+                    )
+
+                logger.debug(
+                    f"[TOKEN_BUDGET] Model: {metadata.model_config['model_name']}, limit: {model_limit:,}, "
+                    f"percentage: {context_percentage:.0%}, initial_budget: {initial_token_budget:,}, "
+                    f"history: {history_tokens:,}, file_tree: {file_tree_tokens:,}, overhead: {overhead_tokens:,}, "
+                    f"final_budget: {token_budget:,}"
+                )
+
+                # Context and priority_context paths already extracted above for file tree calculation
                 logger.debug(
                     f"[STEP 7.1] Context paths: {len(context_paths)}, Priority context paths: {len(priority_context_paths)}"
                 )
@@ -829,13 +909,14 @@ class ToolExecutor:
                 #         vector_store_manager.delete(vs_id), timeout=5.0
                 #     )
 
-            # Wait for memory tasks to complete
-            if memory_tasks:
-                with contextlib.suppress(asyncio.TimeoutError):
-                    await asyncio.wait_for(
-                        asyncio.gather(*memory_tasks, return_exceptions=True),
-                        timeout=120.0,  # Original timeout for memory storage
-                    )
+            # Don't wait for memory tasks - they're fire-and-forget
+            # This was blocking the response for 8+ seconds while uploading to vector store
+            # if memory_tasks:
+            #     with contextlib.suppress(asyncio.TimeoutError):
+            #         await asyncio.wait_for(
+            #             asyncio.gather(*memory_tasks, return_exceptions=True),
+            #             timeout=120.0,  # Original timeout for memory storage
+            #         )
 
             elapsed = asyncio.get_event_loop().time() - start_time
             logger.info(f"[{operation_id}] {tool_id} completed in {elapsed:.2f}s")

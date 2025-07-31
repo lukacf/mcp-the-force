@@ -182,7 +182,7 @@ PORT=3000
             assert settings.context_percentage == 0.85
             assert settings.default_temperature == 1.0
             assert settings.session_ttl_seconds == 7200
-            assert settings.session_db_path == ".mcp_sessions.sqlite3"
+            assert settings.session_db_path == ".mcp-the-force/sessions.sqlite3"
             assert settings.session_cleanup_probability == 0.01
             assert settings.memory_enabled is False
             assert settings.memory_rollover_limit == 5000

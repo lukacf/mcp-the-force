@@ -14,7 +14,20 @@ The Force is a Model Context Protocol (MCP) server that unifies the world's most
 
 ### 1. Install
 
-For Claude Code users, install with a single `uvx` command:
+First, ensure you have `uv` installed (a fast Python package manager):
+
+```bash
+# On macOS/Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# On Windows
+powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+
+# Or with Homebrew
+brew install uv
+```
+
+Then, for Claude Code users, install The Force with a single command:
 
 ```bash
 claude mcp add the-force -- \
@@ -22,11 +35,17 @@ claude mcp add the-force -- \
   mcp-the-force
 ```
 
+Note: `uvx` is included with `uv` and runs Python tools without installing them globally.
+
 ### 2. Configure
 
-On the first run, the server will create configuration files in `~/.config/mcp-the-force/`.
+On the first run, the server will create project-local configuration files in `./.mcp-the-force/`.
 
-- **Add API Keys**: Edit `~/.config/mcp-the-force/secrets.yaml` to add your API keys:
+**Note for Existing Users**: If you have previously used mcp-the-force with global configuration in `~/.config/mcp-the-force/`, you'll need to:
+- Copy your `secrets.yaml` to each project's `./.mcp-the-force/` directory
+- If you want to preserve conversation history, also copy `sessions.sqlite3` from the global config directory
+
+- **Add API Keys**: Edit `./.mcp-the-force/secrets.yaml` to add your API keys:
   ```yaml
   providers:
     openai:
@@ -40,7 +59,16 @@ On the first run, the server will create configuration files in `~/.config/mcp-t
   ```bash
   gcloud auth application-default login
   ```
-- Run `mcp-config init` to create these files manually if needed.
+- **Important**: Add `.mcp-the-force/` to your `.gitignore` file to prevent committing secrets.
+
+Alternatively, you can pass API keys directly as environment variables:
+```bash
+claude mcp add the-force -- \
+  uvx --from git+https://github.com/lukacf/mcp-the-force \
+  mcp-the-force \
+  --env OPENAI_API_KEY=sk-... \
+  --env XAI_API_KEY=xai-...
+```
 
 ### 3. Run
 
@@ -147,7 +175,8 @@ The Force continuously captures and indexes your development history:
 Install the git hook to capture commits:
 ```bash
 cd your-project
-bash ~/.config/mcp-the-force/scripts/install-memory-hook.sh
+# Run from the mcp-the-force repository directory:
+bash /path/to/mcp-the-force/scripts/install-memory-hook.sh
 ```
 
 ## Advanced Topics
@@ -179,21 +208,55 @@ vector_stores:
 - Windows: Install Microsoft C++ Build Tools
 
 The HNSW implementation includes:
-- Automatic persistence to `~/.cache/mcp-the-force/vectorstores/hnsw/`
+- Automatic persistence to `./.mcp-the-force/vectorstores/hnsw/`
 - Optimized search with `ef=50` for better accuracy
 - Thread-safe operations with proper locking
 - Dynamic index resizing as your knowledge base grows
 
 ### Developer Logging
-The Force integrates with VictoriaLogs for centralized debugging. Enable developer mode to search logs:
 
+The Force integrates with VictoriaLogs for centralized debugging. 
+
+#### Setting up VictoriaLogs
+
+1. Start VictoriaLogs using Docker:
+```bash
+docker run --rm -it -p 9428:9428 \
+  -v ./victoria-logs-data:/victoria-logs-data \
+  docker.io/victoriametrics/victoria-logs:v1.26.0 \
+  -storageDataPath=/victoria-logs-data
+```
+
+Note: The `victoria-logs-data/` directory is already in `.gitignore` to prevent accidentally committing logs.
+
+2. Enable developer mode to access log search:
 ```bash
 # Enable in environment
 LOGGING__DEVELOPER_MODE__ENABLED=true
+```
 
-# Search logs with LogsQL
+3. Search logs using LogsQL:
+```python
+# In Claude or any MCP client
 search_mcp_debug_logs(query='_time:10m error {app="mcp-the-force"}')
 ```
+
+VictoriaLogs UI is available at http://localhost:9428/vmui/
+
+### Known Issues
+
+#### MCP Server Crashes on Tool Cancellation (Claude Code 1.0.64+)
+
+**Issue**: When cancelling long-running tool calls (pressing Escape) in Claude Code version 1.0.64 or later, the MCP server crashes with an "AssertionError: Request already responded to" error and becomes unresponsive.
+
+**Cause**: Claude Code 1.0.64 changed the cancellation mechanism from regular asyncio cancellation to AnyIO cancel scopes, which kills the entire MCP server process instead of just the individual tool operation.
+
+**Workaround**: 
+- Avoid cancelling long-running operations
+- If the server crashes, restart Claude Code to restore MCP functionality
+- Consider downgrading to Claude Code 1.0.63 if cancellation is critical to your workflow
+
+**Status**: A fix has been implemented in the MCP Python SDK ([PR #1153](https://github.com/modelcontextprotocol/python-sdk/pull/1153)), but the client-side changes in Claude Code 1.0.64+ bypass this fix. The issue has been reported to the Claude Code team.
 
 ### Contributing
 See [CONTRIBUTING.md](CONTRIBUTING.md) for architecture details and development guidelines.

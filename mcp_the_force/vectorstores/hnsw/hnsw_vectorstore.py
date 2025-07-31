@@ -14,8 +14,11 @@ from ..errors import VectorStoreError
 from .embedding import get_embedding_model, get_embedding_dimensions
 from .chunker import chunk_text_by_paragraph
 
-# Define a shared persistence directory for all HNSW stores
-PERSISTENCE_DIR = Path.home() / ".cache" / "mcp-the-force" / "vectorstores" / "hnsw"
+
+# Persistence directory is computed lazily to ensure correct working directory
+def get_persistence_dir() -> Path:
+    """Get the project-local persistence directory for HNSW stores."""
+    return Path.cwd() / ".mcp-the-force" / "vectorstores" / "hnsw"
 
 
 class IndexProtocol(Protocol):
@@ -276,7 +279,7 @@ class HnswVectorStoreClient(VectorStoreClient):
         persist: bool = True,
     ):
         self._provider = "hnsw"
-        self.persistence_dir = PERSISTENCE_DIR
+        self.persistence_dir = get_persistence_dir()
         self._lock = Lock()
         self._index_factory = index_factory
         self._persist = persist

@@ -28,25 +28,25 @@ class TestConfigCLI:
         result = runner.invoke(app, ["init"])
 
         assert result.exit_code == 0
-        assert "[OK] Created config.yaml" in result.stdout
-        assert "[OK] Created secrets.yaml" in result.stdout
+        assert "[OK] Created .mcp-the-force/config.yaml" in result.stdout
+        assert "[OK] Created .mcp-the-force/secrets.yaml" in result.stdout
 
-        # Check files were created
-        assert (tmp_path / "config.yaml").exists()
-        assert (tmp_path / "secrets.yaml").exists()
+        # Check files were created in .mcp-the-force directory
+        assert (tmp_path / ".mcp-the-force" / "config.yaml").exists()
+        assert (tmp_path / ".mcp-the-force" / "secrets.yaml").exists()
 
         # Check file permissions on secrets.yaml (should be 600)
-        secrets_stat = (tmp_path / "secrets.yaml").stat()
+        secrets_stat = (tmp_path / ".mcp-the-force" / "secrets.yaml").stat()
         assert oct(secrets_stat.st_mode)[-3:] == "600"
 
         # Verify YAML content is valid
-        with open(tmp_path / "config.yaml") as f:
+        with open(tmp_path / ".mcp-the-force" / "config.yaml") as f:
             config = yaml.safe_load(f)
             assert "mcp" in config
             assert config["mcp"]["host"] == "127.0.0.1"
             assert config["mcp"]["port"] == 8000
 
-        with open(tmp_path / "secrets.yaml") as f:
+        with open(tmp_path / ".mcp-the-force" / "secrets.yaml") as f:
             secrets = yaml.safe_load(f)
             assert "providers" in secrets
             assert secrets["providers"]["openai"]["api_key"] == ""
@@ -55,27 +55,38 @@ class TestConfigCLI:
         """Test init command with existing files."""
         monkeypatch.chdir(tmp_path)
 
-        # Create existing files
-        (tmp_path / "config.yaml").write_text("existing: config")
-        (tmp_path / "secrets.yaml").write_text("existing: secrets")
+        # Create .mcp-the-force directory and existing files
+        (tmp_path / ".mcp-the-force").mkdir()
+        (tmp_path / ".mcp-the-force" / "config.yaml").write_text("existing: config")
+        (tmp_path / ".mcp-the-force" / "secrets.yaml").write_text("existing: secrets")
 
         # Without --force, should skip
         result = runner.invoke(app, ["init"])
         assert result.exit_code == 0
-        assert "[SKIP] Skipping config.yaml (already exists)" in result.stdout
-        assert "[SKIP] Skipping secrets.yaml (already exists)" in result.stdout
+        assert (
+            "[SKIP] Skipping .mcp-the-force/config.yaml (already exists)"
+            in result.stdout
+        )
+        assert (
+            "[SKIP] Skipping .mcp-the-force/secrets.yaml (already exists)"
+            in result.stdout
+        )
 
         # Verify files weren't overwritten
-        assert (tmp_path / "config.yaml").read_text() == "existing: config"
+        assert (
+            tmp_path / ".mcp-the-force" / "config.yaml"
+        ).read_text() == "existing: config"
 
         # With --force, should overwrite
         result = runner.invoke(app, ["init", "--force"])
         assert result.exit_code == 0
-        assert "[OK] Created config.yaml" in result.stdout
-        assert "[OK] Created secrets.yaml" in result.stdout
+        assert "[OK] Created .mcp-the-force/config.yaml" in result.stdout
+        assert "[OK] Created .mcp-the-force/secrets.yaml" in result.stdout
 
         # Verify files were overwritten
-        assert (tmp_path / "config.yaml").read_text() != "existing: config"
+        assert (
+            tmp_path / ".mcp-the-force" / "config.yaml"
+        ).read_text() != "existing: config"
 
     def test_validate_command_valid(self, tmp_path, monkeypatch):
         """Test validate command with valid configuration."""
@@ -299,19 +310,19 @@ MEMORY_ENABLED=false
         assert result.exit_code == 0
         assert "[OK] Successfully imported legacy configuration" in result.stdout
 
-        # Check created files
-        assert (tmp_path / "config.yaml").exists()
-        assert (tmp_path / "secrets.yaml").exists()
+        # Check created files in .mcp-the-force directory
+        assert (tmp_path / ".mcp-the-force" / "config.yaml").exists()
+        assert (tmp_path / ".mcp-the-force" / "secrets.yaml").exists()
 
         # Verify imported values
-        with open(tmp_path / "config.yaml") as f:
+        with open(tmp_path / ".mcp-the-force" / "config.yaml") as f:
             config = yaml.safe_load(f)
             assert config["mcp"]["host"] == "legacy-host"
             assert config["mcp"]["port"] == 7777
             assert config["logging"]["level"] == "WARNING"
             assert config["memory"]["enabled"] is False
 
-        with open(tmp_path / "secrets.yaml") as f:
+        with open(tmp_path / ".mcp-the-force" / "secrets.yaml") as f:
             secrets = yaml.safe_load(f)
             assert secrets["providers"]["openai"]["api_key"] == "legacy-key"
             assert (
@@ -432,12 +443,12 @@ class TestCLIIntegration:
         assert result.exit_code == 0
 
         # 2. Modify config files
-        config_path = tmp_path / "config.yaml"
+        config_path = tmp_path / ".mcp-the-force" / "config.yaml"
         config_content = config_path.read_text()
         config_content = config_content.replace("port: 8000", "port: 9999")
         config_path.write_text(config_content)
 
-        secrets_path = tmp_path / "secrets.yaml"
+        secrets_path = tmp_path / ".mcp-the-force" / "secrets.yaml"
         secrets_content = secrets_path.read_text()
         secrets_content = secrets_content.replace(
             'api_key: ""', 'api_key: "test-api-key"'
@@ -497,6 +508,7 @@ mcp:
             },
             clear=True,
         ):
+            get_settings.cache_clear()  # Clear cache inside env context
             result = runner.invoke(app, ["show", "mcp.port"])
             assert result.exit_code == 0
             assert "9999" in result.stdout  # Env var wins
