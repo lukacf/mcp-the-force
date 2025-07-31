@@ -323,9 +323,9 @@ class TestDescribeSessionService:
 
         # THE KEY TEST: Verify instructions do NOT contain conversation history
         instructions = kwargs.get("instructions", "")
-        assert "Hello" not in instructions, (
-            "Conversation history should NOT be in instructions"
-        )
+        assert (
+            "Hello" not in instructions
+        ), "Conversation history should NOT be in instructions"
         assert "Generate a structured JSON summary" in instructions
 
         # Verify a temp session was created with the history

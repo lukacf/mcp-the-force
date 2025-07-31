@@ -40,9 +40,9 @@ class TestMultiTurnErrors:
         assert data["model"] == "gemini-2.5-pro"
 
         # 2. Session ID was passed through to adapter
-        assert "session_id" in data["adapter_kwargs"], (
-            "Bug: session_id not passed to adapter!"
-        )
+        assert (
+            "session_id" in data["adapter_kwargs"]
+        ), "Bug: session_id not passed to adapter!"
         assert data["adapter_kwargs"]["session_id"] == "test-session-123"
 
         # 3. Other parameters were routed correctly
@@ -86,12 +86,12 @@ class TestMultiTurnErrors:
         data2 = parse_adapter_response(result2)
 
         # Both calls should have system_instruction in adapter_kwargs
-        assert "system_instruction" in data1["adapter_kwargs"], (
-            "First turn missing system_instruction"
-        )
-        assert "system_instruction" in data2["adapter_kwargs"], (
-            "Bug: Second turn missing system_instruction!"
-        )
+        assert (
+            "system_instruction" in data1["adapter_kwargs"]
+        ), "First turn missing system_instruction"
+        assert (
+            "system_instruction" in data2["adapter_kwargs"]
+        ), "Bug: Second turn missing system_instruction!"
 
         # Verify session continuity
         assert data1["adapter_kwargs"]["session_id"] == session_id
@@ -262,9 +262,9 @@ class TestMultiTurnErrors:
             for other in range(1, 6):
                 if other != session_num:
                     other_num = str(other * 100)
-                    assert other_num not in data["prompt"], (
-                        f"Session {session_num} has data from session {other}!"
-                    )
+                    assert (
+                        other_num not in data["prompt"]
+                    ), f"Session {session_num} has data from session {other}!"
 
         # Run 5 concurrent sessions
         await asyncio.gather(*[session_flow(i) for i in range(1, 6)])
