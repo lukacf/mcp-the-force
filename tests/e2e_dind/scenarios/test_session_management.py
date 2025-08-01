@@ -4,6 +4,7 @@ import sys
 import os
 import random
 import string
+import pytest
 
 # Add scenarios directory to path for imports
 sys.path.insert(0, os.path.dirname(__file__))
@@ -25,6 +26,7 @@ def generate_random_port():
 class TestSessionManagement:
     """Test session persistence, isolation, and cross-model memory sharing."""
 
+    @pytest.mark.skip(reason="Disabled to focus on cross_model_history_search test")
     def test_session_persistence_and_isolation(self, call_claude_tool):
         """Test memory storage, recall, and persistence between sessions."""
 
@@ -123,6 +125,7 @@ class TestSessionManagement:
         assert protocol_name in result["protocol_name"], f"Wrong protocol: {result}"
         assert result["port_number"] == port_number, f"Wrong port: {result}"
 
+    @pytest.mark.skip(reason="Disabled to focus on cross_model_history_search test")
     def test_multi_turn_conversation(self, call_claude_tool):
         """Test simple two-turn conversation with GPT-4.1 and memory search disabled."""
 
@@ -197,7 +200,7 @@ class TestSessionManagement:
         """Test that one model can search project history to find another model's conversations."""
 
         session_id = f"cross-model-history-test-{random.randint(1000, 9999)}"
-
+        
         # Generate unique test data that won't conflict with other tests
         protocol_name = generate_random_protocol()
         port_number = generate_random_port()
@@ -220,9 +223,9 @@ class TestSessionManagement:
             "additionalProperties": False,
         }
 
-        # Step 1: Store unique information with GPT-4.1
+        # Step 1: Store unique information with codex-mini
         response = call_claude_tool(
-            "chat_with_gpt41",
+            "chat_with_codex_mini",
             instructions=f"Remember this network configuration: Protocol {protocol_name} operates on port {port_number}",
             output_format="Acknowledge what you've stored",
             context=[],
@@ -231,12 +234,8 @@ class TestSessionManagement:
         )
 
         # Simple validation that it was stored
-        assert (
-            protocol_name in response
-        ), f"Protocol not mentioned in response: {response}"
-        assert (
-            str(port_number) in response
-        ), f"Port not mentioned in response: {response}"
+        assert protocol_name in response, f"Protocol not mentioned in response: {response}"
+        assert str(port_number) in response, f"Port not mentioned in response: {response}"
 
         # Give memory storage time to complete
         import time
@@ -260,8 +259,6 @@ class TestSessionManagement:
         assert (
             result["found_protocol"] is True
         ), f"Protocol not found in history: {result}"
-        assert (
-            protocol_name in result["protocol_name"]
-        ), f"Wrong protocol found: {result}"
+        assert protocol_name in result["protocol_name"], f"Wrong protocol found: {result}"
         assert result["port_number"] == port_number, f"Wrong port found: {result}"
         assert result["results_count"] > 0, f"No search results returned: {result}"

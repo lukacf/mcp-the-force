@@ -83,6 +83,7 @@ class CodexMiniCapabilities(OSeriesCapabilities):
     supports_web_search: bool = False  # Codex-mini doesn't support web search
     supports_live_search: bool = False  # Codex-mini doesn't support live search
     web_search_tool: str = ""  # No web search tool for codex-mini
+    native_vector_store_provider: str = ""  # Codex-mini doesn't support OpenAI vector stores
 
 
 @dataclass
@@ -138,6 +139,7 @@ OPENAI_MODEL_CAPABILITIES = {
     "o3": O3Capabilities(),
     "o3-pro": O3ProCapabilities(),
     "codex-mini": CodexMiniCapabilities(),
+    "codex-mini-latest": CodexMiniCapabilities(),  # Alias for codex-mini
     "gpt-4.1": GPT41Capabilities(),
     "o3-deep-research": O3DeepResearchCapabilities(),
     "o4-mini-deep-research": O4MiniDeepResearchCapabilities(),

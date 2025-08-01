@@ -378,9 +378,11 @@ class LiteLLMBaseAdapter:
             )
 
             # Get tool declarations
+            disable_memory_search_value = getattr(params, "disable_memory_search", False)
+            logger.debug(f"[LITELLM_BASE] params.disable_memory_search = {disable_memory_search_value}")
             tools = self._get_tool_declarations(
                 tool_dispatcher,
-                disable_memory_search=getattr(params, "disable_memory_search", False),
+                disable_memory_search=disable_memory_search_value,
                 additional_tools=kwargs.get("tools"),
             )
 

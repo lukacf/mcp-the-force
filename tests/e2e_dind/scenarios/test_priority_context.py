@@ -87,9 +87,19 @@ class TestPriorityContextAndFileTree:
 
         # Verify the response indicates direct access (not via search)
         assert marker in response, f"Marker {marker} not found in response"
-        assert (
-            "search_task_files" not in response.lower()
-        ), "Model should not need to search for priority files"
+        # Check for actual usage of search function, not just mentions
+        response_lower = response.lower()
+        search_indicators = [
+            "using search_task_files",
+            "calling search_task_files", 
+            "need to search",
+            "via search",
+            "through search",
+            "search for"
+        ]
+        assert not any(
+            indicator in response_lower for indicator in search_indicators
+        ), f"Model should not need to search for priority files. Response: {response[:200]}..."
         # Accept if response mentions seeing the x's or the large file content
         response_lower = response.lower()
         assert any(

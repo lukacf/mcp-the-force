@@ -144,6 +144,9 @@ class SearchHistoryService:
         results = result.get("results", [])
         # metadata = result.get("metadata", {})
 
+        # DEBUG: Log what we're formatting
+        logger.info(f"[SEARCH_HISTORY_DEBUG] Formatting {len(results)} results for display")
+
         if not results:
             return "No results found in project history."
 
@@ -274,6 +277,11 @@ class SearchHistoryService:
 
         # Sort by score
         formatted_results.sort(key=lambda x: x["score"], reverse=True)
+        
+        # DEBUG: Log results before deduplication
+        logger.info(f"[SEARCH_HISTORY_DEBUG] Before deduplication: {len(formatted_results)} results")
+        for i, result in enumerate(formatted_results[:3]):  # Show first 3 results
+            logger.info(f"[SEARCH_HISTORY_DEBUG] Result {i}: {result.get('content', '')[:100]}...")
 
         # Apply session-based deduplication if session_id is provided
         if session_id and SearchHistoryService._deduplicator:
@@ -294,6 +302,11 @@ class SearchHistoryService:
 
         # Limit total results
         formatted_results = formatted_results[:max_results]
+
+        # DEBUG: Log final results being returned
+        logger.info(f"[SEARCH_HISTORY_DEBUG] After deduplication: {len(formatted_results)} results")
+        for i, result in enumerate(formatted_results[:3]):  # Show first 3 results
+            logger.info(f"[SEARCH_HISTORY_DEBUG] Final result {i}: {result.get('content', '')[:100]}...")
 
         return {
             "results": formatted_results,

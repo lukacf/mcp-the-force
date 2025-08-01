@@ -33,6 +33,53 @@ from lxml import etree as ET
 logger = logging.getLogger(__name__)
 
 
+async def _maybe_store_memory(
+    session_id: str,
+    tool_id: str,
+    messages: List[Dict[str, Any]],
+    response: str,
+    disable_memory_store: bool,
+    memory_tasks: List[asyncio.Task],
+) -> None:
+    """Store conversation memory either synchronously or asynchronously based on settings."""
+    if disable_memory_store:
+        return
+    
+    settings = get_settings()
+    if not settings.memory_enabled:
+        return
+
+    if settings.memory.sync:
+        # Block (with timeout) so the CLI process can exit safely afterwards
+        logger.debug(f"[MEMORY] Storing conversation memory synchronously for {tool_id}")
+        try:
+            await asyncio.wait_for(
+                safe_store_conversation_memory(
+                    session_id=session_id,
+                    tool_name=tool_id,
+                    messages=messages,
+                    response=response,
+                ),
+                timeout=settings.memory.sync_timeout,
+            )
+        except asyncio.TimeoutError:
+            logger.warning(f"[MEMORY] Synchronous store timeout after {settings.memory.sync_timeout}s for {tool_id}")
+        except Exception as exc:
+            logger.warning(f"[MEMORY] Synchronous store failed for {tool_id}: {exc}")
+    else:
+        # Background task (original behavior)
+        logger.debug(f"[MEMORY] Creating background memory storage task for {tool_id}")
+        memory_task = asyncio.create_task(
+            safe_store_conversation_memory(
+                session_id=session_id,
+                tool_name=tool_id,
+                messages=messages,
+                response=response,
+            )
+        )
+        memory_tasks.append(memory_task)
+
+
 class ToolExecutor:
     """Orchestrates tool execution using specialized components."""
 
@@ -780,27 +827,22 @@ class ToolExecutor:
                 logger.debug("[STEP 17.6] Redaction complete")
 
                 # 8a. Store conversation in memory (with redacted content)
-                if settings.memory_enabled and session_id and not disable_memory_store:
-                    try:
-                        # Extract messages from prompt
-                        conv_messages = prompt_params.get("messages", [])
-                        if not isinstance(conv_messages, list):
-                            conv_messages = []
-                        # Re-enabled: Memory storage is important for context
-                        logger.debug(
-                            f"[MEMORY] Creating background memory storage task for {tool_id}"
-                        )
-                        memory_task = asyncio.create_task(
-                            safe_store_conversation_memory(
-                                session_id=session_id,
-                                tool_name=tool_id,
-                                messages=conv_messages,
-                                response=redacted_content,
-                            )
-                        )
-                        memory_tasks.append(memory_task)
-                    except Exception as e:
-                        logger.warning(f"Failed to store conversation memory: {e}")
+                try:
+                    # Extract messages from prompt
+                    conv_messages = prompt_params.get("messages", [])
+                    if not isinstance(conv_messages, list):
+                        conv_messages = []
+                    # Re-enabled: Memory storage is important for context
+                    await _maybe_store_memory(
+                        session_id=session_id,
+                        tool_id=tool_id,
+                        messages=conv_messages,
+                        response=redacted_content,
+                        disable_memory_store=disable_memory_store,
+                        memory_tasks=memory_tasks,
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to store conversation memory: {e}")
 
                 logger.debug(
                     f"[STEP 17.7] About to return redacted content, length: {len(redacted_content)}"
@@ -811,23 +853,21 @@ class ToolExecutor:
                 redacted_result = redact_secrets(str(result))
 
                 # Store conversation for Vertex models too (with redacted content)
-                if settings.memory_enabled and session_id and not disable_memory_store:
-                    try:
-                        conv_messages = prompt_params.get("messages", [])
-                        if not isinstance(conv_messages, list):
-                            conv_messages = []
-                        # Re-enabled: Memory storage is important for context
-                        memory_task = asyncio.create_task(
-                            safe_store_conversation_memory(
-                                session_id=session_id,
-                                tool_name=tool_id,
-                                messages=conv_messages,
-                                response=redacted_result,
-                            )
-                        )
-                        memory_tasks.append(memory_task)
-                    except Exception as e:
-                        logger.warning(f"Failed to store conversation memory: {e}")
+                try:
+                    conv_messages = prompt_params.get("messages", [])
+                    if not isinstance(conv_messages, list):
+                        conv_messages = []
+                    # Re-enabled: Memory storage is important for context
+                    await _maybe_store_memory(
+                        session_id=session_id,
+                        tool_id=tool_id,
+                        messages=conv_messages,
+                        response=redacted_result,
+                        disable_memory_store=disable_memory_store,
+                        memory_tasks=memory_tasks,
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to store conversation memory: {e}")
 
                 # Session management is now handled inside the adapters themselves
                 # No need to save sessions here for Vertex/Grok models
