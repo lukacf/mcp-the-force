@@ -1,10 +1,9 @@
-"""Session management test - comprehensive memory lifecycle, persistence, and isolation."""
+"""Session management test - comprehensive history lifecycle, persistence, and isolation."""
 
 import sys
 import os
 import random
 import string
-import pytest
 
 # Add scenarios directory to path for imports
 sys.path.insert(0, os.path.dirname(__file__))
@@ -24,11 +23,10 @@ def generate_random_port():
 
 
 class TestSessionManagement:
-    """Test session persistence, isolation, and cross-model memory sharing."""
+    """Test session persistence, isolation, and cross-model history sharing."""
 
-    @pytest.mark.skip(reason="Disabled to focus on cross_model_history_search test")
     def test_session_persistence_and_isolation(self, call_claude_tool):
-        """Test memory storage, recall, and persistence between sessions."""
+        """Test history storage, recall, and persistence between sessions."""
 
         session_id_a = f"session-mgmt-test-{random.randint(1000, 9999)}"
 
@@ -67,7 +65,8 @@ class TestSessionManagement:
             session_id=session_id_a,
             structured_output_schema=storage_schema,
             response_format="respond ONLY with the JSON",
-            disable_memory_search="true",
+            disable_history_search="true",
+            disable_history_record="true",
         )
 
         # Validate storage confirmation - should match our schema exactly
@@ -90,7 +89,8 @@ class TestSessionManagement:
             session_id=session_id_a,
             structured_output_schema=recall_schema,
             response_format="respond ONLY with the JSON",
-            disable_memory_search="true",
+            disable_history_search="true",
+            disable_history_record="true",
         )
 
         # Validate recall - should match our schema exactly
@@ -112,7 +112,8 @@ class TestSessionManagement:
             session_id=session_id_a,  # Back to original session
             structured_output_schema=recall_schema,
             response_format="respond ONLY with the JSON",
-            disable_memory_search="true",
+            disable_history_search="true",
+            disable_history_record="true",
         )
 
         # Original session should still remember
@@ -125,9 +126,8 @@ class TestSessionManagement:
         assert protocol_name in result["protocol_name"], f"Wrong protocol: {result}"
         assert result["port_number"] == port_number, f"Wrong port: {result}"
 
-    @pytest.mark.skip(reason="Disabled to focus on cross_model_history_search test")
     def test_multi_turn_conversation(self, call_claude_tool):
-        """Test simple two-turn conversation with GPT-4.1 and memory search disabled."""
+        """Test simple two-turn conversation with GPT-4.1 and history search disabled."""
 
         session_id = f"simple-gpt41-session-{random.randint(1000, 9999)}"
 
@@ -167,7 +167,8 @@ class TestSessionManagement:
             output_format="JSON confirming what was stored",
             context=[],
             session_id=session_id,
-            disable_memory_search="true",  # Disable project history search
+            disable_history_search="true",  # Disable project history search
+            disable_history_record="true",  # Disable storing to project history
             structured_output_schema=storage_schema,
             response_format="respond ONLY with the JSON",
         )
@@ -185,7 +186,8 @@ class TestSessionManagement:
             output_format="JSON with the recalled code",
             context=[],
             session_id=session_id,
-            disable_memory_search="true",  # Disable project history search
+            disable_history_search="true",  # Disable project history search
+            disable_history_record="true",  # Disable storing to project history
             structured_output_schema=recall_schema,
             response_format="respond ONLY with the JSON",
         )
@@ -200,7 +202,7 @@ class TestSessionManagement:
         """Test that one model can search project history to find another model's conversations."""
 
         session_id = f"cross-model-history-test-{random.randint(1000, 9999)}"
-        
+
         # Generate unique test data that won't conflict with other tests
         protocol_name = generate_random_protocol()
         port_number = generate_random_port()
@@ -230,14 +232,19 @@ class TestSessionManagement:
             output_format="Acknowledge what you've stored",
             context=[],
             session_id=session_id,
-            disable_memory_search="true",  # Ensure we're testing real session storage
+            disable_history_search="true",  # Ensure we're testing real session storage, not previous history
+            # Note: history_record is enabled so this conversation gets stored for Step 2 to find
         )
 
         # Simple validation that it was stored
-        assert protocol_name in response, f"Protocol not mentioned in response: {response}"
-        assert str(port_number) in response, f"Port not mentioned in response: {response}"
+        assert (
+            protocol_name in response
+        ), f"Protocol not mentioned in response: {response}"
+        assert (
+            str(port_number) in response
+        ), f"Port not mentioned in response: {response}"
 
-        # Give memory storage time to complete
+        # Give history storage time to complete
         import time
 
         time.sleep(2)
@@ -259,6 +266,8 @@ class TestSessionManagement:
         assert (
             result["found_protocol"] is True
         ), f"Protocol not found in history: {result}"
-        assert protocol_name in result["protocol_name"], f"Wrong protocol found: {result}"
+        assert (
+            protocol_name in result["protocol_name"]
+        ), f"Wrong protocol found: {result}"
         assert result["port_number"] == port_number, f"Wrong port found: {result}"
         assert result["results_count"] > 0, f"No search results returned: {result}"

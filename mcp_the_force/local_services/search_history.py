@@ -6,7 +6,7 @@ import asyncio
 from datetime import datetime, timezone
 from pathlib import Path
 
-from ..memory.async_config import get_async_memory_config
+from ..history.async_config import get_async_history_config
 from ..vectorstores.manager import VectorStoreManager
 from ..utils.redaction import redact_secrets
 from ..tools.search_dedup_sqlite import SQLiteSearchDeduplicator
@@ -43,12 +43,12 @@ def _calculate_relative_time(timestamp: int) -> str:
         return "just now"
 
 
-class SearchHistoryService:
+class HistorySearchService:
     """Local service for searching project history stores."""
 
     # Class-level singletons
     _vector_store_manager: Optional[VectorStoreManager] = None
-    _memory_config: Optional[Any] = None  # AsyncMemoryConfig
+    _memory_config: Optional[Any] = None  # AsyncHistoryStorageConfig
     _deduplicator = None
     _deduplicator_lock = asyncio.Lock()
     _init_lock = asyncio.Lock()
@@ -68,18 +68,18 @@ class SearchHistoryService:
             return
 
         # Otherwise, initialize singletons once
-        if SearchHistoryService._vector_store_manager is None:
-            SearchHistoryService._vector_store_manager = VectorStoreManager()
-        if SearchHistoryService._memory_config is None:
-            SearchHistoryService._memory_config = get_async_memory_config()
+        if HistorySearchService._vector_store_manager is None:
+            HistorySearchService._vector_store_manager = VectorStoreManager()
+        if HistorySearchService._memory_config is None:
+            HistorySearchService._memory_config = get_async_history_config()
 
-        self.vector_store_manager = SearchHistoryService._vector_store_manager
-        self.memory_config = SearchHistoryService._memory_config
+        self.vector_store_manager = HistorySearchService._vector_store_manager
+        self.memory_config = HistorySearchService._memory_config
         self._ensure_deduplicator()
 
     def _ensure_deduplicator(self):
         """Ensure the SQLite deduplicator is initialized."""
-        if SearchHistoryService._deduplicator is None:
+        if HistorySearchService._deduplicator is None:
             # Use the main session DB path from settings for consistency
             from ..config import get_settings
 
@@ -87,7 +87,7 @@ class SearchHistoryService:
             db_path = Path(settings.session.db_path)
             db_path.parent.mkdir(parents=True, exist_ok=True)
 
-            SearchHistoryService._deduplicator = SQLiteSearchDeduplicator(
+            HistorySearchService._deduplicator = SQLiteSearchDeduplicator(
                 db_path=db_path,
                 ttl_hours=24,  # 24 hour TTL for search deduplication
             )
@@ -102,8 +102,8 @@ class SearchHistoryService:
             session_id: If provided, only clear cache for this session.
                        If None, this is a no-op (we don't clear all sessions).
         """
-        if session_id and SearchHistoryService._deduplicator:
-            await SearchHistoryService._deduplicator.clear_session(session_id)
+        if session_id and HistorySearchService._deduplicator:
+            await HistorySearchService._deduplicator.clear_session(session_id)
             logger.info(
                 f"[SEARCH_HISTORY] Cleared deduplication cache for session {session_id}"
             )
@@ -145,7 +145,9 @@ class SearchHistoryService:
         # metadata = result.get("metadata", {})
 
         # DEBUG: Log what we're formatting
-        logger.info(f"[SEARCH_HISTORY_DEBUG] Formatting {len(results)} results for display")
+        logger.info(
+            f"[SEARCH_HISTORY_DEBUG] Formatting {len(results)} results for display"
+        )
 
         if not results:
             return "No results found in project history."
@@ -277,17 +279,22 @@ class SearchHistoryService:
 
         # Sort by score
         formatted_results.sort(key=lambda x: x["score"], reverse=True)
-        
+
         # DEBUG: Log results before deduplication
-        logger.info(f"[SEARCH_HISTORY_DEBUG] Before deduplication: {len(formatted_results)} results")
-        for i, result in enumerate(formatted_results[:3]):  # Show first 3 results
-            logger.info(f"[SEARCH_HISTORY_DEBUG] Result {i}: {result.get('content', '')[:100]}...")
+        logger.info(
+            f"[SEARCH_HISTORY_DEBUG] Before deduplication: {len(formatted_results)} results"
+        )
+        for i, result_item in enumerate(formatted_results[:3]):  # Show first 3 results
+            if isinstance(result_item, dict):
+                logger.info(
+                    f"[SEARCH_HISTORY_DEBUG] Result {i}: {result_item.get('content', '')[:100]}..."
+                )
 
         # Apply session-based deduplication if session_id is provided
-        if session_id and SearchHistoryService._deduplicator:
+        if session_id and HistorySearchService._deduplicator:
             # Call deduplicate_results with proper parameters
             deduplicated, duplicate_count = (
-                SearchHistoryService._deduplicator.deduplicate_results(
+                HistorySearchService._deduplicator.deduplicate_results(
                     all_results=formatted_results,
                     max_results=max_results,
                     session_id=session_id,
@@ -304,9 +311,14 @@ class SearchHistoryService:
         formatted_results = formatted_results[:max_results]
 
         # DEBUG: Log final results being returned
-        logger.info(f"[SEARCH_HISTORY_DEBUG] After deduplication: {len(formatted_results)} results")
-        for i, result in enumerate(formatted_results[:3]):  # Show first 3 results
-            logger.info(f"[SEARCH_HISTORY_DEBUG] Final result {i}: {result.get('content', '')[:100]}...")
+        logger.info(
+            f"[SEARCH_HISTORY_DEBUG] After deduplication: {len(formatted_results)} results"
+        )
+        for i, result_item in enumerate(formatted_results[:3]):  # Show first 3 results
+            if isinstance(result_item, dict):
+                logger.info(
+                    f"[SEARCH_HISTORY_DEBUG] Final result {i}: {result_item.get('content', '')[:100]}..."
+                )
 
         return {
             "results": formatted_results,

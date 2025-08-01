@@ -19,7 +19,7 @@ class MockToolParams:
 
     # Mock-specific parameters for testing
     temperature: float = 0.5
-    disable_memory_search: bool = False
+    disable_history_search: bool = False
 
 
 class MockAdapter:

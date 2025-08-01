@@ -175,7 +175,7 @@ class TestCapabilityBasedGeneration:
 
     def test_disable_memory_params_exist(self):
         """All tools should have memory control parameters."""
-        memory_params = ["disable_memory_search", "disable_memory_store"]
+        memory_params = ["disable_history_search", "disable_history_record"]
 
         for tool_name in ALL_CHAT_TOOL_NAMES:
             metadata = get_tool(tool_name)

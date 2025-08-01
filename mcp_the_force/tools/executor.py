@@ -18,7 +18,7 @@ from .capability_validator import CapabilityValidator
 # Import debug logger
 
 # Project history imports
-from .safe_memory import safe_store_conversation_memory
+from .safe_history import safe_record_conversation
 from ..config import get_settings
 from ..utils.redaction import redact_secrets
 from ..operation_manager import operation_manager
@@ -38,23 +38,25 @@ async def _maybe_store_memory(
     tool_id: str,
     messages: List[Dict[str, Any]],
     response: str,
-    disable_memory_store: bool,
+    disable_history_record: bool,
     memory_tasks: List[asyncio.Task],
 ) -> None:
     """Store conversation memory either synchronously or asynchronously based on settings."""
-    if disable_memory_store:
+    if disable_history_record:
         return
-    
+
     settings = get_settings()
     if not settings.memory_enabled:
         return
 
     if settings.memory.sync:
         # Block (with timeout) so the CLI process can exit safely afterwards
-        logger.debug(f"[MEMORY] Storing conversation memory synchronously for {tool_id}")
+        logger.debug(
+            f"[MEMORY] Storing conversation memory synchronously for {tool_id}"
+        )
         try:
             await asyncio.wait_for(
-                safe_store_conversation_memory(
+                safe_record_conversation(
                     session_id=session_id,
                     tool_name=tool_id,
                     messages=messages,
@@ -63,14 +65,16 @@ async def _maybe_store_memory(
                 timeout=settings.memory.sync_timeout,
             )
         except asyncio.TimeoutError:
-            logger.warning(f"[MEMORY] Synchronous store timeout after {settings.memory.sync_timeout}s for {tool_id}")
+            logger.warning(
+                f"[MEMORY] Synchronous store timeout after {settings.memory.sync_timeout}s for {tool_id}"
+            )
         except Exception as exc:
             logger.warning(f"[MEMORY] Synchronous store failed for {tool_id}: {exc}")
     else:
         # Background task (original behavior)
-        logger.debug(f"[MEMORY] Creating background memory storage task for {tool_id}")
+        logger.debug(f"[MEMORY] Creating background history storage task for {tool_id}")
         memory_task = asyncio.create_task(
-            safe_store_conversation_memory(
+            safe_record_conversation(
                 session_id=session_id,
                 tool_name=tool_id,
                 messages=messages,
@@ -120,7 +124,7 @@ class ToolExecutor:
         vs_id: Optional[Union[str, Dict[str, Any]]] = (
             None  # Initialize to avoid UnboundLocalError
         )
-        memory_tasks: List[asyncio.Task] = []  # Track memory storage tasks
+        memory_tasks: List[asyncio.Task] = []  # Track history storage tasks
         was_cancelled = False  # Track if the operation was cancelled
 
         try:
@@ -140,12 +144,12 @@ class ToolExecutor:
             prompt_params = routed_params["prompt"]
             assert isinstance(prompt_params, dict)  # Type hint for mypy
 
-            # Extract disable_memory_store from adapter params
+            # Extract disable_history_record from adapter params
             adapter_params_check = routed_params.get("adapter", {})
-            disable_memory_store = False
+            disable_history_record = False
             if isinstance(adapter_params_check, dict):
-                disable_memory_store = adapter_params_check.get(
-                    "disable_memory_store", False
+                disable_history_record = adapter_params_check.get(
+                    "disable_history_record", False
                 )
 
             # Get session info
@@ -737,11 +741,11 @@ class ToolExecutor:
                 # For Gemini models, pass system_instruction separately
                 if adapter_class_name == "google":
                     generate_kwargs["system_instruction"] = developer_prompt
-                    # Pass a copy to prevent mutations from affecting memory storage
+                    # Pass a copy to prevent mutations from affecting history storage
                     generate_kwargs["messages"] = messages.copy()
                 elif adapter_class_name in ["openai", "xai"]:
                     # OpenAI and Grok models use messages with developer role
-                    # Pass a copy to prevent mutations from affecting memory storage
+                    # Pass a copy to prevent mutations from affecting history storage
                     generate_kwargs["messages"] = messages.copy()
 
                 result = await operation_manager.run_with_timeout(
@@ -838,7 +842,7 @@ class ToolExecutor:
                         tool_id=tool_id,
                         messages=conv_messages,
                         response=redacted_content,
-                        disable_memory_store=disable_memory_store,
+                        disable_history_record=disable_history_record,
                         memory_tasks=memory_tasks,
                     )
                 except Exception as e:
@@ -863,7 +867,7 @@ class ToolExecutor:
                         tool_id=tool_id,
                         messages=conv_messages,
                         response=redacted_result,
-                        disable_memory_store=disable_memory_store,
+                        disable_history_record=disable_history_record,
                         memory_tasks=memory_tasks,
                     )
                 except Exception as e:
@@ -928,7 +932,7 @@ class ToolExecutor:
                     # bg_task.add_done_callback(lambda t: t.exception())
                 # Cancel memory tasks to free resources
                 logger.debug(
-                    f"[MEMORY] Cancelling {len(memory_tasks)} memory storage tasks due to operation cancellation"
+                    f"[MEMORY] Cancelling {len(memory_tasks)} history storage tasks due to operation cancellation"
                 )
                 for task in memory_tasks:  # type: ignore[assignment]
                     task.cancel()  # type: ignore[attr-defined]
@@ -955,7 +959,7 @@ class ToolExecutor:
             #     with contextlib.suppress(asyncio.TimeoutError):
             #         await asyncio.wait_for(
             #             asyncio.gather(*memory_tasks, return_exceptions=True),
-            #             timeout=120.0,  # Original timeout for memory storage
+            #             timeout=120.0,  # Original timeout for history storage
             #         )
 
             elapsed = asyncio.get_event_loop().time() - start_time

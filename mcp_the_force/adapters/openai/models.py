@@ -83,7 +83,9 @@ class CodexMiniCapabilities(OSeriesCapabilities):
     supports_web_search: bool = False  # Codex-mini doesn't support web search
     supports_live_search: bool = False  # Codex-mini doesn't support live search
     web_search_tool: str = ""  # No web search tool for codex-mini
-    native_vector_store_provider: str = ""  # Codex-mini doesn't support OpenAI vector stores
+    native_vector_store_provider: str = (
+        ""  # Codex-mini doesn't support OpenAI vector stores
+    )
 
 
 @dataclass
@@ -170,7 +172,7 @@ class OpenAIRequest(BaseModel):
     structured_output_schema: Optional[Dict[str, Any]] = Field(
         default=None, exclude=True
     )
-    disable_memory_search: bool = Field(default=False, exclude=True)
+    disable_history_search: bool = Field(default=False, exclude=True)
     return_debug: bool = Field(default=False, exclude=True)
     max_output_tokens: Optional[int] = Field(default=None, exclude=True)
     timeout: float = Field(default=300.0, exclude=True)

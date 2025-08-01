@@ -53,7 +53,7 @@ class TestParams:
     """Test parameters."""
 
     structured_output_schema: str = None
-    disable_memory_search: bool = False
+    disable_history_search: bool = False
 
 
 def create_responses_api_message(role: str, content: str) -> Dict[str, Any]:
