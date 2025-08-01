@@ -18,7 +18,7 @@ from .capability_validator import CapabilityValidator
 # Import debug logger
 
 # Project history imports
-from .safe_memory import safe_store_conversation_memory
+from .safe_history import safe_record_conversation
 from ..config import get_settings
 from ..utils.redaction import redact_secrets
 from ..operation_manager import operation_manager
@@ -31,6 +31,57 @@ from ..utils.stable_list_cache import StableListCache
 from lxml import etree as ET
 
 logger = logging.getLogger(__name__)
+
+
+async def _maybe_store_memory(
+    session_id: str,
+    tool_id: str,
+    messages: List[Dict[str, Any]],
+    response: str,
+    disable_history_record: bool,
+    memory_tasks: List[asyncio.Task],
+) -> None:
+    """Store conversation memory either synchronously or asynchronously based on settings."""
+    if disable_history_record:
+        return
+
+    settings = get_settings()
+    if not settings.memory_enabled:
+        return
+
+    if settings.memory.sync:
+        # Block (with timeout) so the CLI process can exit safely afterwards
+        logger.debug(
+            f"[MEMORY] Storing conversation memory synchronously for {tool_id}"
+        )
+        try:
+            await asyncio.wait_for(
+                safe_record_conversation(
+                    session_id=session_id,
+                    tool_name=tool_id,
+                    messages=messages,
+                    response=response,
+                ),
+                timeout=settings.memory.sync_timeout,
+            )
+        except asyncio.TimeoutError:
+            logger.warning(
+                f"[MEMORY] Synchronous store timeout after {settings.memory.sync_timeout}s for {tool_id}"
+            )
+        except Exception as exc:
+            logger.warning(f"[MEMORY] Synchronous store failed for {tool_id}: {exc}")
+    else:
+        # Background task (original behavior)
+        logger.debug(f"[MEMORY] Creating background history storage task for {tool_id}")
+        memory_task = asyncio.create_task(
+            safe_record_conversation(
+                session_id=session_id,
+                tool_name=tool_id,
+                messages=messages,
+                response=response,
+            )
+        )
+        memory_tasks.append(memory_task)
 
 
 class ToolExecutor:
@@ -73,7 +124,7 @@ class ToolExecutor:
         vs_id: Optional[Union[str, Dict[str, Any]]] = (
             None  # Initialize to avoid UnboundLocalError
         )
-        memory_tasks: List[asyncio.Task] = []  # Track memory storage tasks
+        memory_tasks: List[asyncio.Task] = []  # Track history storage tasks
         was_cancelled = False  # Track if the operation was cancelled
 
         try:
@@ -93,12 +144,12 @@ class ToolExecutor:
             prompt_params = routed_params["prompt"]
             assert isinstance(prompt_params, dict)  # Type hint for mypy
 
-            # Extract disable_memory_store from adapter params
+            # Extract disable_history_record from adapter params
             adapter_params_check = routed_params.get("adapter", {})
-            disable_memory_store = False
+            disable_history_record = False
             if isinstance(adapter_params_check, dict):
-                disable_memory_store = adapter_params_check.get(
-                    "disable_memory_store", False
+                disable_history_record = adapter_params_check.get(
+                    "disable_history_record", False
                 )
 
             # Get session info
@@ -690,11 +741,11 @@ class ToolExecutor:
                 # For Gemini models, pass system_instruction separately
                 if adapter_class_name == "google":
                     generate_kwargs["system_instruction"] = developer_prompt
-                    # Pass a copy to prevent mutations from affecting memory storage
+                    # Pass a copy to prevent mutations from affecting history storage
                     generate_kwargs["messages"] = messages.copy()
                 elif adapter_class_name in ["openai", "xai"]:
                     # OpenAI and Grok models use messages with developer role
-                    # Pass a copy to prevent mutations from affecting memory storage
+                    # Pass a copy to prevent mutations from affecting history storage
                     generate_kwargs["messages"] = messages.copy()
 
                 result = await operation_manager.run_with_timeout(
@@ -780,27 +831,22 @@ class ToolExecutor:
                 logger.debug("[STEP 17.6] Redaction complete")
 
                 # 8a. Store conversation in memory (with redacted content)
-                if settings.memory_enabled and session_id and not disable_memory_store:
-                    try:
-                        # Extract messages from prompt
-                        conv_messages = prompt_params.get("messages", [])
-                        if not isinstance(conv_messages, list):
-                            conv_messages = []
-                        # Re-enabled: Memory storage is important for context
-                        logger.debug(
-                            f"[MEMORY] Creating background memory storage task for {tool_id}"
-                        )
-                        memory_task = asyncio.create_task(
-                            safe_store_conversation_memory(
-                                session_id=session_id,
-                                tool_name=tool_id,
-                                messages=conv_messages,
-                                response=redacted_content,
-                            )
-                        )
-                        memory_tasks.append(memory_task)
-                    except Exception as e:
-                        logger.warning(f"Failed to store conversation memory: {e}")
+                try:
+                    # Extract messages from prompt
+                    conv_messages = prompt_params.get("messages", [])
+                    if not isinstance(conv_messages, list):
+                        conv_messages = []
+                    # Re-enabled: Memory storage is important for context
+                    await _maybe_store_memory(
+                        session_id=session_id,
+                        tool_id=tool_id,
+                        messages=conv_messages,
+                        response=redacted_content,
+                        disable_history_record=disable_history_record,
+                        memory_tasks=memory_tasks,
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to store conversation memory: {e}")
 
                 logger.debug(
                     f"[STEP 17.7] About to return redacted content, length: {len(redacted_content)}"
@@ -811,23 +857,21 @@ class ToolExecutor:
                 redacted_result = redact_secrets(str(result))
 
                 # Store conversation for Vertex models too (with redacted content)
-                if settings.memory_enabled and session_id and not disable_memory_store:
-                    try:
-                        conv_messages = prompt_params.get("messages", [])
-                        if not isinstance(conv_messages, list):
-                            conv_messages = []
-                        # Re-enabled: Memory storage is important for context
-                        memory_task = asyncio.create_task(
-                            safe_store_conversation_memory(
-                                session_id=session_id,
-                                tool_name=tool_id,
-                                messages=conv_messages,
-                                response=redacted_result,
-                            )
-                        )
-                        memory_tasks.append(memory_task)
-                    except Exception as e:
-                        logger.warning(f"Failed to store conversation memory: {e}")
+                try:
+                    conv_messages = prompt_params.get("messages", [])
+                    if not isinstance(conv_messages, list):
+                        conv_messages = []
+                    # Re-enabled: Memory storage is important for context
+                    await _maybe_store_memory(
+                        session_id=session_id,
+                        tool_id=tool_id,
+                        messages=conv_messages,
+                        response=redacted_result,
+                        disable_history_record=disable_history_record,
+                        memory_tasks=memory_tasks,
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to store conversation memory: {e}")
 
                 # Session management is now handled inside the adapters themselves
                 # No need to save sessions here for Vertex/Grok models
@@ -888,7 +932,7 @@ class ToolExecutor:
                     # bg_task.add_done_callback(lambda t: t.exception())
                 # Cancel memory tasks to free resources
                 logger.debug(
-                    f"[MEMORY] Cancelling {len(memory_tasks)} memory storage tasks due to operation cancellation"
+                    f"[MEMORY] Cancelling {len(memory_tasks)} history storage tasks due to operation cancellation"
                 )
                 for task in memory_tasks:  # type: ignore[assignment]
                     task.cancel()  # type: ignore[attr-defined]
@@ -915,7 +959,7 @@ class ToolExecutor:
             #     with contextlib.suppress(asyncio.TimeoutError):
             #         await asyncio.wait_for(
             #             asyncio.gather(*memory_tasks, return_exceptions=True),
-            #             timeout=120.0,  # Original timeout for memory storage
+            #             timeout=120.0,  # Original timeout for history storage
             #         )
 
             elapsed = asyncio.get_event_loop().time() - start_time

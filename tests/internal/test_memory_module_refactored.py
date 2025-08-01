@@ -18,7 +18,7 @@ class TestMemoryModuleRefactored:
         """Test that memory module has no direct OpenAI imports."""
         # Read the async_config.py file
         import inspect
-        import mcp_the_force.memory.async_config as async_config_module
+        import mcp_the_force.history.async_config as async_config_module
 
         source = inspect.getsource(async_config_module)
 
@@ -33,7 +33,7 @@ class TestMemoryModuleRefactored:
         """
         # 1. Mock the VectorStoreManager dependency at the module level where it's used
         with patch(
-            "mcp_the_force.memory.async_config.vector_store_manager",
+            "mcp_the_force.history.async_config.vector_store_manager",
             new_callable=AsyncMock,
         ) as mock_vsm:
             # Configure the mock to return a predictable value
@@ -46,10 +46,10 @@ class TestMemoryModuleRefactored:
             mock_vsm._get_client.return_value = mock_client
 
             # Import the class AFTER mocking is set up
-            from mcp_the_force.memory.async_config import AsyncMemoryConfig
+            from mcp_the_force.history.async_config import AsyncHistoryStorageConfig
 
             # 2. Arrange: Instantiate the class. The DB will be empty.
-            memory_config = AsyncMemoryConfig(
+            memory_config = AsyncHistoryStorageConfig(
                 db_path=isolate_test_databases / "memory.db"
             )
 
@@ -74,19 +74,19 @@ class TestMemoryModuleRefactored:
         Test that a new store is created when the active one is full.
         """
         with patch(
-            "mcp_the_force.memory.async_config.vector_store_manager",
+            "mcp_the_force.history.async_config.vector_store_manager",
             new_callable=AsyncMock,
         ) as mock_vsm:
             # Configure the mock to return the new store's ID
             mock_vsm.create.return_value = {"store_id": "vs_rollover_store"}
             mock_vsm.provider = "openai"
 
-            from mcp_the_force.memory.async_config import AsyncMemoryConfig
+            from mcp_the_force.history.async_config import AsyncHistoryStorageConfig
 
             # Arrange:
             # - Instantiate the config
             # - Manually set the state of the DB to have one full, active store
-            memory_config = AsyncMemoryConfig(
+            memory_config = AsyncHistoryStorageConfig(
                 db_path=isolate_test_databases / "memory.db"
             )
 
@@ -135,25 +135,27 @@ class TestMemoryModuleRefactored:
         """
         # Mock only the parts of the manager we need to control for this test
         with patch(
-            "mcp_the_force.memory.async_config.vector_store_manager.create",
+            "mcp_the_force.history.async_config.vector_store_manager.create",
             new_callable=AsyncMock,
         ) as mock_create:
             with patch(
-                "mcp_the_force.memory.async_config.vector_store_manager._get_client"
+                "mcp_the_force.history.async_config.vector_store_manager._get_client"
             ) as mock_get_client:
                 with patch(
-                    "mcp_the_force.memory.async_config.vector_store_manager.provider",
+                    "mcp_the_force.history.async_config.vector_store_manager.provider",
                     "openai",
                 ):
                     # Mock the provider's 'get' method to simulate successful verification
                     mock_provider_client = AsyncMock()
                     mock_get_client.return_value = mock_provider_client
 
-                    from mcp_the_force.memory.async_config import AsyncMemoryConfig
+                    from mcp_the_force.history.async_config import (
+                        AsyncHistoryStorageConfig,
+                    )
 
                     # Arrange:
                     # - Create a store entry that is active but NOT full
-                    memory_config = AsyncMemoryConfig(
+                    memory_config = AsyncHistoryStorageConfig(
                         db_path=isolate_test_databases / "memory.db"
                     )
                     db_conn = memory_config._sync_config._db
@@ -180,17 +182,17 @@ class TestMemoryModuleRefactored:
     async def test_error_handling_during_rollover(self, isolate_test_databases):
         """Test error handling during store rollover."""
         with patch(
-            "mcp_the_force.memory.async_config.vector_store_manager",
+            "mcp_the_force.history.async_config.vector_store_manager",
             new_callable=AsyncMock,
         ) as mock_vsm:
             # Make create fail
             mock_vsm.create.side_effect = Exception("Provider error")
             mock_vsm.provider = "openai"
 
-            from mcp_the_force.memory.async_config import AsyncMemoryConfig
+            from mcp_the_force.history.async_config import AsyncHistoryStorageConfig
 
             # Arrange: Create a full store that would trigger rollover
-            memory_config = AsyncMemoryConfig(
+            memory_config = AsyncHistoryStorageConfig(
                 db_path=isolate_test_databases / "memory.db"
             )
 
@@ -212,17 +214,17 @@ class TestMemoryModuleRefactored:
 
         for provider in providers:
             with patch(
-                "mcp_the_force.memory.async_config.vector_store_manager",
+                "mcp_the_force.history.async_config.vector_store_manager",
                 new_callable=AsyncMock,
             ) as mock_vsm:
                 # Configure mock for this provider
                 mock_vsm.create.return_value = {"store_id": f"vs_{provider}001"}
                 mock_vsm.provider = provider
 
-                from mcp_the_force.memory.async_config import AsyncMemoryConfig
+                from mcp_the_force.history.async_config import AsyncHistoryStorageConfig
 
                 # Each provider gets its own DB to avoid conflicts
-                memory_config = AsyncMemoryConfig(
+                memory_config = AsyncHistoryStorageConfig(
                     db_path=isolate_test_databases / f"memory_{provider}.db"
                 )
 

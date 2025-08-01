@@ -259,12 +259,12 @@ def mock_openai_client():
     mock.vector_stores.delete = AsyncMock()
     mock.beta.vector_stores.delete = AsyncMock()
 
-    # Mock vector store search for SearchHistoryService
+    # Mock vector store search for HistorySearchService
     mock_search_response = MagicMock()
     mock_search_response.data = []
     mock.vector_stores.search = MagicMock(return_value=mock_search_response)
 
-    # Mock vector store retrieve for memory config
+    # Mock vector store retrieve for history config
     # This should return the same store that was created
     def mock_retrieve(store_id):
         mock_retrieved = MagicMock()
@@ -280,8 +280,8 @@ def mock_openai_client():
 def mock_openai_factory(mock_openai_client, tmp_path, monkeypatch):
     """Patch OpenAIClientFactory to return the mock client."""
 
-    # First, ensure we're using test databases for memory config
-    test_db_path = tmp_path / "test_memory.db"
+    # First, ensure we're using test databases for history config
+    test_db_path = tmp_path / "test_history.db"
     monkeypatch.setenv("SESSION_DB_PATH", str(test_db_path))
 
     # Clear any cached settings
@@ -289,21 +289,21 @@ def mock_openai_factory(mock_openai_client, tmp_path, monkeypatch):
 
     get_settings.cache_clear()
 
-    # Clear any existing memory config instances
-    from mcp_the_force.memory import config as memory_config_module
-    from mcp_the_force.memory import async_config as async_config_module
+    # Clear any existing history config instances
+    from mcp_the_force.history import config as history_config_module
+    from mcp_the_force.history import async_config as async_config_module
 
-    if hasattr(memory_config_module, "_memory_config"):
-        memory_config_module._memory_config = None
-    if hasattr(async_config_module, "_async_memory_config"):
-        async_config_module._async_memory_config = None
+    if hasattr(history_config_module, "_history_config"):
+        history_config_module._history_config = None
+    if hasattr(async_config_module, "_async_history_config"):
+        async_config_module._async_history_config = None
 
-    # Clear SearchHistoryService singletons inside the context to avoid circular import
+    # Clear HistorySearchService singletons inside the context to avoid circular import
     try:
-        from mcp_the_force.local_services.search_history import SearchHistoryService
+        from mcp_the_force.local_services.search_history import HistorySearchService
 
-        SearchHistoryService._client = None
-        SearchHistoryService._memory_config = None
+        HistorySearchService._client = None
+        HistorySearchService._history_config = None
     except ImportError:
         # If there's a circular import, skip clearing
         pass
@@ -322,7 +322,7 @@ def mock_openai_factory(mock_openai_client, tmp_path, monkeypatch):
             new=mock_get_instance,
         ),
         patch(
-            "mcp_the_force.local_services.search_history.get_async_memory_config",
+            "mcp_the_force.local_services.search_history.get_async_history_config",
             return_value=Mock(
                 get_active_conversation_store=AsyncMock(return_value="test_store_conv"),
                 get_active_commit_store=AsyncMock(return_value="test_store_commit"),
@@ -428,12 +428,12 @@ def use_inmemory_vectorstore(monkeypatch):
 @pytest.fixture(autouse=True)
 def mock_vector_store_client(monkeypatch, mock_openai_client):
     """Mock vector store client to prevent real API calls."""
-    # This is the most critical patch. It replaces the store_conversation_memory
+    # This is the most critical patch. It replaces the record_conversation
     # function inside the executor module with a harmless AsyncMock. This prevents
     # the function from running at all, thus avoiding any real API calls for
-    # conversation memory.
+    # conversation history.
     monkeypatch.setattr(
-        "mcp_the_force.memory.conversation.store_conversation_memory",
+        "mcp_the_force.history.conversation.record_conversation",
         AsyncMock(return_value=None),
     )
 

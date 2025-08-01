@@ -7,7 +7,7 @@ from unittest.mock import patch, AsyncMock
 @pytest.fixture
 def mock_memory_store():
     """Mock memory store to prevent real database writes."""
-    with patch("mcp_the_force.memory_store.store_conversation") as mock_store:
+    with patch("mcp_the_force.history_store.store_conversation") as mock_store:
         mock_store.return_value = None
         yield mock_store
 

@@ -5,8 +5,7 @@ from .descriptors import Route
 from .base import ToolSpec
 from .registry import tool
 
-# Import static tool definitions
-from . import definitions  # noqa: F401
+# Static tool definitions imported lazily to avoid circular imports
 
 # Import service registrations
 from . import local_service  # noqa: F401

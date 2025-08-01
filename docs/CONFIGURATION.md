@@ -176,17 +176,17 @@ Configuration for vector store lifecycle management.
 
 ---
 
-## Memory (`memory`)
+## History (`history`)
 
-Configuration for the long-term memory system.
+Configuration for the long-term history system.
 
 | YAML Path | Environment Variable | Type | Default Value | Description |
 | :--- | :--- | :--- | :--- | :--- |
-| `memory.enabled` | `MCP__MEMORY__ENABLED` or `MEMORY_ENABLED` | `bool` | `True` | Globally enable or disable the memory system. |
-| `memory.rollover_limit` | `MCP__MEMORY__ROLLOVER_LIMIT` or `MEMORY_ROLLOVER_LIMIT` | `int` | `9500` | Token limit for memory stores before a rollover (summarization) is triggered. Must be at least `10`. |
-| `memory.session_cutoff_hours` | `MCP__MEMORY__SESSION_CUTOFF_HOURS` or `MEMORY_SESSION_CUTOFF_HOURS` | `int` | `2` | Time in hours after which a user's session history is considered for summarization. Must be at least `1`. |
-| `memory.summary_char_limit` | `MCP__MEMORY__SUMMARY_CHAR_LIMIT` or `MEMORY_SUMMARY_CHAR_LIMIT` | `int` | `200000`| Character limit for content sent to be summarized by the memory system. Must be at least `100`. |
-| `memory.max_files_per_commit` | `MCP__MEMORY__MAX_FILES_PER_COMMIT` or `MEMORY_MAX_FILES_PER_COMMIT` | `int` | `50` | Maximum number of files to include from a single commit when storing git history in memory. Must be at least `1`. |
+| `history.enabled` | `MCP__HISTORY__ENABLED` or `HISTORY_ENABLED` | `bool` | `True` | Globally enable or disable the history system. |
+| `history.rollover_limit` | `MCP__HISTORY__ROLLOVER_LIMIT` or `HISTORY_ROLLOVER_LIMIT` | `int` | `9500` | Token limit for history stores before a rollover (summarization) is triggered. Must be at least `10`. |
+| `history.session_cutoff_hours` | `MCP__HISTORY__SESSION_CUTOFF_HOURS` or `HISTORY_SESSION_CUTOFF_HOURS` | `int` | `2` | Time in hours after which a user's session history is considered for summarization. Must be at least `1`. |
+| `history.summary_char_limit` | `MCP__HISTORY__SUMMARY_CHAR_LIMIT` or `HISTORY_SUMMARY_CHAR_LIMIT` | `int` | `200000`| Character limit for content sent to be summarized by the history system. Must be at least `100`. |
+| `history.max_files_per_commit` | `MCP__HISTORY__MAX_FILES_PER_COMMIT` or `HISTORY_MAX_FILES_PER_COMMIT` | `int` | `50` | Maximum number of files to include from a single commit when storing git history. Must be at least `1`. |
 
 ---
 
@@ -293,7 +293,7 @@ logging:
 session:
   ttl_seconds: 604800  # 1 week
 
-memory:
+history:
   enabled: true
 ```
 

@@ -25,7 +25,7 @@ from .constants import (
     MAX_POLL_INTERVAL_SEC,
     STREAM_TIMEOUT_THRESHOLD,
 )
-from ..memory_search_declaration import create_search_history_declaration_openai
+from ..history_search_declaration import create_search_history_declaration_openai
 
 logger = logging.getLogger(__name__)
 
@@ -112,19 +112,41 @@ class BaseFlowStrategy(ABC):
         """Build the tools list for the API request."""
         tools = []
         capability = OPENAI_MODEL_CAPABILITIES.get(self.context.request.model)
+        logger.debug(
+            f"[FLOW_ORCHESTRATOR] Building tools for model: {self.context.request.model}"
+        )
+        logger.debug(f"[FLOW_ORCHESTRATOR] Capability found: {capability is not None}")
         if not capability:
             return []
 
+        logger.debug(
+            f"[FLOW_ORCHESTRATOR] capability.supports_custom_tools: {capability.supports_custom_tools}"
+        )
         if capability.supports_custom_tools:
-            if not self.context.request.disable_memory_search:
+            disable_history_search = self.context.request.disable_history_search
+            logger.debug(
+                f"[FLOW_ORCHESTRATOR] disable_history_search: {disable_history_search}"
+            )
+            logger.debug(
+                f"[FLOW_ORCHESTRATOR] not disable_history_search: {not disable_history_search}"
+            )
+            if not self.context.request.disable_history_search:
+                logger.debug("[FLOW_ORCHESTRATOR] Adding search_project_history tool")
                 tools.append(create_search_history_declaration_openai())
+            else:
+                logger.debug(
+                    "[FLOW_ORCHESTRATOR] NOT adding search_project_history tool - history search disabled"
+                )
             if self.context.request.tools:
                 tools.extend(self.context.request.tools)
 
         if capability.supports_web_search and capability.web_search_tool:
             tools.append({"type": capability.web_search_tool})
 
-        if self.context.request.vector_store_ids:
+        if (
+            self.context.request.vector_store_ids
+            and capability.native_vector_store_provider == "openai"
+        ):
             # Filter to only include OpenAI vector stores (those starting with 'vs_')
             openai_vector_stores = [
                 vs_id
@@ -143,7 +165,12 @@ class BaseFlowStrategy(ABC):
                 )
             else:
                 logger.debug("No OpenAI vector stores available for file_search tool")
+        elif self.context.request.vector_store_ids:
+            logger.debug(
+                f"Model {self.context.request.model} does not support OpenAI vector stores, skipping file_search tool"
+            )
 
+        logger.debug(f"[FLOW_ORCHESTRATOR] Final tools list length: {len(tools)}")
         return tools
 
     def _extract_content_from_output(self, response: Any) -> str:

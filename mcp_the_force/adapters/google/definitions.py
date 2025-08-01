@@ -54,7 +54,7 @@ class GeminiToolParams(BaseToolParams):  # type: ignore[misc]
         requires_capability=lambda c: c.supports_reasoning_effort,
     )
 
-    disable_memory_search: bool = Route.adapter(  # type: ignore[assignment]
+    disable_history_search: bool = Route.adapter(  # type: ignore[assignment]
         default=False,
         description=(
             "(Optional) If true, prevents the model from being able to use the search_project_history tool. "
@@ -62,7 +62,7 @@ class GeminiToolParams(BaseToolParams):  # type: ignore[misc]
             "without accessing the project's historical conversations and commits. "
             "Syntax: A boolean (true or false). "
             "Default: false. "
-            "Example: disable_memory_search=true"
+            "Example: disable_history_search=true"
         ),
     )
 

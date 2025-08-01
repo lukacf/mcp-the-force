@@ -485,10 +485,10 @@ class TestOpenAIAdapter:
         from mcp_the_force.vectorstores.openai import OpenAIClient
 
         with patch(
-            "mcp_the_force.vectorstores.openai.openai_vectorstore.AsyncOpenAI"
-        ) as mock_openai:
+            "mcp_the_force.vectorstores.openai.openai_vectorstore.OpenAIClientFactory.get_instance"
+        ) as mock_get_instance:
             mock_client = AsyncMock()
-            mock_openai.return_value = mock_client
+            mock_get_instance.return_value = mock_client
 
             # Mock vector store creation
             mock_client.vector_stores.create.return_value = MagicMock(
@@ -529,10 +529,10 @@ class TestOpenAIAdapter:
         from mcp_the_force.vectorstores.openai import OpenAIClient
 
         with patch(
-            "mcp_the_force.vectorstores.openai.openai_vectorstore.AsyncOpenAI"
-        ) as mock_openai:
+            "mcp_the_force.vectorstores.openai.openai_vectorstore.OpenAIClientFactory.get_instance"
+        ) as mock_get_instance:
             mock_client = AsyncMock()
-            mock_openai.return_value = mock_client
+            mock_get_instance.return_value = mock_client
 
             # Simulate quota error
             mock_client.vector_stores.create.side_effect = Exception(

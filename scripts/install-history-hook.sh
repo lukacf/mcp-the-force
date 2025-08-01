@@ -13,8 +13,8 @@ cat > "$HOOK_PATH" << 'EOF'
     # Ensure we're in the git root
     cd "$(git rev-parse --show-toplevel)"
     
-    # Run the memory capture
-    python -m mcp_the_force.memory.commit 2>/dev/null
+    # Run the history capture
+    python -m mcp_the_force.history.commit 2>/dev/null
 ) &
 EOF
 

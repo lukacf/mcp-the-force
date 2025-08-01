@@ -236,7 +236,7 @@ session:
   db_path: custom.db
   cleanup_probability: 0.02
 
-memory:
+history:
   enabled: true
   rollover_limit: 10000
   session_cutoff_hours: 3
@@ -399,9 +399,9 @@ class TestConfigurationSchema:
         assert hasattr(settings.session, "db_path")
 
         # Memory settings
-        assert hasattr(settings, "memory")
-        assert hasattr(settings.memory, "enabled")
-        assert hasattr(settings.memory, "rollover_limit")
+        assert hasattr(settings, "history")
+        assert hasattr(settings.history, "enabled")
+        assert hasattr(settings.history, "rollover_limit")
 
         # Security settings
         assert hasattr(settings, "security")
@@ -461,7 +461,7 @@ mcp:
   port: "8001"
 openai:
   max_parallel_tool_exec: "16"
-memory:
+history:
   enabled: "true"
 """)
 
@@ -470,7 +470,7 @@ memory:
 
         assert settings.mcp.port == 8001  # converted to int
         assert settings.openai.max_parallel_tool_exec == 16  # converted to int
-        assert settings.memory.enabled is True  # converted to bool
+        assert settings.history.enabled is True  # converted to bool
 
 
 class TestSingletonBehavior:
@@ -729,7 +729,7 @@ invalid: : syntax
         test_cases = [
             ("PORT", "not-a-number", "valid integer"),
             ("DEFAULT_TEMPERATURE", "not-a-float", "valid number"),
-            ("MEMORY__ENABLED", "maybe", "valid boolean"),
+            ("HISTORY__ENABLED", "maybe", "valid boolean"),
             ("SESSION__TTL_SECONDS", "1.5hours", "valid integer"),
         ]
 

@@ -13,8 +13,8 @@ from ..vectorstores.manager import vector_store_manager
 logger = logging.getLogger(__name__)
 
 
-class MemoryConfig:
-    """Manages memory store configuration and rollover using SQLite."""
+class HistoryStorageConfig:
+    """Manages history store configuration and rollover using SQLite."""
 
     def __init__(self, db_path: Optional[Path] = None):
         settings = get_settings()
@@ -23,7 +23,7 @@ class MemoryConfig:
         self.db_path = db_path or Path(settings.session_db_path)
 
         self._lock = threading.RLock()
-        self._rollover_limit = settings.memory_rollover_limit
+        self._rollover_limit = settings.history_rollover_limit
 
         # Initialize database connection
         self._db = sqlite3.connect(
@@ -57,7 +57,7 @@ class MemoryConfig:
                   ON stores (store_type) WHERE is_active = 1;
                 
                 -- Metadata table
-                CREATE TABLE IF NOT EXISTS memory_meta(
+                CREATE TABLE IF NOT EXISTS history_meta(
                     key         TEXT PRIMARY KEY,
                     value       TEXT NOT NULL
                 );
@@ -69,11 +69,11 @@ class MemoryConfig:
             """)
 
             # Initialize metadata if not exists
-            row = self._db.execute("SELECT COUNT(*) FROM memory_meta").fetchone()
+            row = self._db.execute("SELECT COUNT(*) FROM history_meta").fetchone()
             if row[0] == 0:
                 now = datetime.now(timezone.utc).isoformat()
                 self._db.executemany(
-                    "INSERT INTO memory_meta(key, value) VALUES(?, ?)",
+                    "INSERT INTO history_meta(key, value) VALUES(?, ?)",
                     [("created_at", now), ("last_gc", now)],
                 )
 
@@ -236,19 +236,19 @@ class MemoryConfig:
 
 # Global instance and lock
 # Use a dict to store per-path instances for test isolation
-_memory_configs: Dict[str, MemoryConfig] = {}
-_memory_config_lock = threading.RLock()
+_history_configs: Dict[str, HistoryStorageConfig] = {}
+_history_config_lock = threading.RLock()
 
 
-def get_memory_config() -> MemoryConfig:
-    """Get or create global memory configuration instance."""
-    global _memory_configs
+def get_history_config() -> HistoryStorageConfig:
+    """Get or create global history configuration instance."""
+    global _history_configs
 
     # Get the current session DB path
     settings = get_settings()
     db_path = settings.session_db_path
 
-    with _memory_config_lock:
-        if db_path not in _memory_configs:
-            _memory_configs[db_path] = MemoryConfig()
-        return _memory_configs[db_path]
+    with _history_config_lock:
+        if db_path not in _history_configs:
+            _history_configs[db_path] = HistoryStorageConfig()
+        return _history_configs[db_path]
