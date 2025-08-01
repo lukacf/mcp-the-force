@@ -133,6 +133,13 @@ class MemoryConfig(BaseModel):
         200000, description="Summary character limit", ge=100
     )
     max_files_per_commit: int = Field(50, description="Max files per commit", ge=1)
+    sync: bool = Field(
+        default_factory=lambda: os.getenv("MCP_MEMORY_SYNC", "0").lower() in ("1", "true", "yes"),
+        description="Block until conversation is stored (CLI/headless use)"
+    )
+    sync_timeout: int = Field(
+        120, description="Safety timeout in seconds for synchronous storage", ge=1
+    )
 
 
 class ToolsConfig(BaseModel):
@@ -439,6 +446,8 @@ class Settings(BaseSettings):
             "MEMORY_SESSION_CUTOFF_HOURS": ("memory", "session_cutoff_hours"),
             "MEMORY_SUMMARY_CHAR_LIMIT": ("memory", "summary_char_limit"),
             "MEMORY_MAX_FILES_PER_COMMIT": ("memory", "max_files_per_commit"),
+            "MCP_MEMORY_SYNC": ("memory", "sync"),
+            "MEMORY_SYNC_TIMEOUT": ("memory", "sync_timeout"),
             # Services
             "LOITER_KILLER_HOST": ("services", "loiter_killer_host"),
             "LOITER_KILLER_PORT": ("services", "loiter_killer_port"),
