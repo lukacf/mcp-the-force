@@ -563,9 +563,7 @@ class OpenAIClient:
             # Create vector store
             response = await client.vector_stores.create(name=name)
 
-            return OpenAIVectorStore(
-                client=client, store_id=response.id, name=name
-            )
+            return OpenAIVectorStore(client=client, store_id=response.id, name=name)
 
         except Exception as e:
             # Map errors
