@@ -22,7 +22,26 @@ def _ensure_populated() -> None:
     """Ensure tools are registered by importing definitions if needed."""
     global _autogen_loaded
 
-    if not TOOL_REGISTRY:
+    # Always check if we have the expected minimum tools
+    expected_tools = [
+        "search_project_history",
+        "count_project_tokens",
+        "list_sessions",
+        "describe_session",
+    ]
+    has_expected_tools = all(tool_id in TOOL_REGISTRY for tool_id in expected_tools)
+
+    if not TOOL_REGISTRY or not has_expected_tools:
+        # Force re-import to re-register tools
+        import sys
+
+        # Remove from cache to force re-registration
+        sys.modules.pop("mcp_the_force.tools.definitions", None)
+        sys.modules.pop("mcp_the_force.tools.search_history", None)
+        sys.modules.pop("mcp_the_force.tools.count_project_tokens", None)
+        sys.modules.pop("mcp_the_force.tools.list_sessions", None)
+        sys.modules.pop("mcp_the_force.tools.describe_session", None)
+
         # Importing this module registers every tool class via the @tool decorator
         from . import definitions  # noqa: F401
 

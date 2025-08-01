@@ -84,7 +84,7 @@ class BaseToolParams(ParamModel):
             "Example: 'debug-auth-issue-2024-07-16'"
         )
     )
-    disable_memory_store: bool = Route.adapter(  # type: ignore[assignment]
+    disable_history_record: bool = Route.adapter(  # type: ignore[assignment]
         default=False,
         description=(
             "(Optional) If true, prevents the current conversation turn from being saved to the long-term "

@@ -23,7 +23,7 @@ def test_smoke_all_models(claude, call_claude_tool, parse_response):
     assert result is not None, f"Failed to parse JSON from list_models: {response}"
     tool_ids = result.get("tool_ids", [])
 
-    # Check that expected tools are present
+    # Check that expected tools are present (expect short form tool IDs)
     assert "chat_with_gpt41" in tool_ids, f"Missing chat_with_gpt41 in: {tool_ids}"
     assert (
         "chat_with_gemini25_flash" in tool_ids
@@ -57,6 +57,8 @@ def test_smoke_all_models(claude, call_claude_tool, parse_response):
             context=[],
             session_id=f"smoke-{model_name}",
             structured_output_schema=math_schema,
+            disable_history_search="true",
+            disable_history_record="true",
         )
 
         # Parse and validate JSON response
@@ -90,6 +92,8 @@ def test_smoke_file_context(
         output_format="Just the color name",
         context=[test_file],
         session_id="smoke-context",
+        disable_history_search="true",
+        disable_history_record="true",
     )
 
     assert "red" in response.lower()

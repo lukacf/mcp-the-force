@@ -315,36 +315,66 @@ def stack(request):
         # Return compose instance for test use
         yield compose
     finally:
-        # CRITICAL: Nuke all OpenAI resources before destroying containers
+        # Clean up real vector stores created during E2E tests
         try:
-            print("\n🔥 NUKING all OpenAI vector stores created during E2E tests...")
+            print("\n🧹 Cleaning up vector stores created during E2E tests...")
             stdout, stderr, return_code = compose.exec_in_container(
                 [
-                    "curl",
-                    "-s",
-                    "-X",
-                    "POST",
-                    "-H",
-                    "Content-Type: application/json",
-                    "http://localhost:9876/nuke",
+                    "python3",
+                    "-c",
+                    """
+import asyncio
+import sys
+sys.path.insert(0, '/host-project')
+from mcp_the_force.vectorstores.manager import VectorStoreManager
+
+async def cleanup():
+    try:
+        manager = VectorStoreManager()
+        cache = manager.vector_store_cache
+        
+        # Get ALL vector stores from the cache (not just expired ones)
+        all_stores = []
+        async with cache._get_db() as db:
+            async with db.execute(
+                "SELECT vector_store_id, provider FROM vector_stores WHERE 1=1"
+            ) as cursor:
+                rows = await cursor.fetchall()
+                all_stores = [{'vector_store_id': row[0], 'provider': row[1]} for row in rows]
+        
+        print(f"Found {len(all_stores)} vector stores to clean up")
+        
+        # Delete each vector store
+        cleaned = 0
+        for store in all_stores:
+            try:
+                await manager.delete(store['vector_store_id'])
+                cleaned += 1
+                print(f"  ✅ Deleted: {store['vector_store_id']}")
+            except Exception as e:
+                print(f"  ⚠️ Failed to delete {store['vector_store_id']}: {e}")
+        
+        print(f"✅ Cleaned up {cleaned} vector stores")
+        return cleaned
+    except Exception as e:
+        print(f"⚠️ Cleanup failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return 0
+
+result = asyncio.run(cleanup())
+print(f"Cleanup completed with {result} stores removed")
+                    """,
                 ],
                 "server",
             )
             if return_code == 0:
-                try:
-                    result = json.loads(stdout)
-                    print(
-                        f"✅ NUKE COMPLETE: {result.get('message', 'Unknown result')}"
-                    )
-                except Exception:
-                    print(
-                        f"✅ NUKE completed (raw response: {stdout.strip()[:200]}...)"
-                    )
+                print(f"✅ CLEANUP COMPLETE: {stdout.strip()}")
             else:
-                print(f"⚠️  NUKE failed: {stderr}")
+                print(f"⚠️ CLEANUP failed: {stderr}")
         except Exception as e:
-            print(f"⚠️  Failed to nuke OpenAI resources: {e}")
-            print("⚠️  WARNING: OpenAI vector stores may be orphaned!")
+            print(f"⚠️ Failed to cleanup vector stores: {e}")
+            print("⚠️ WARNING: Vector stores may be orphaned!")
 
         # Clean up - testcontainers stop() doesn't accept extra parameters
         try:

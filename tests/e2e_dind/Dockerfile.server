@@ -29,6 +29,12 @@ RUN uv pip install --system .
 RUN mkdir -p /tmp && chmod 1777 /tmp
 RUN mkdir -p /app/data  # For any data needs
 
+# Create claude user with same UID/GID as test-runner container for consistent file permissions
+ARG CLAUDE_UID=1000
+ARG CLAUDE_GID=1000
+RUN groupadd -g $CLAUDE_GID claude \
+ && useradd -m -u $CLAUDE_UID -g claude -s /bin/bash claude
+
 # Create a startup script for the MCP server container
 RUN echo '#!/bin/bash\n\
 set -e\n\

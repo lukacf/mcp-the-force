@@ -67,7 +67,7 @@ class ToolHandler:
         async with scope_manager.scope(scope_id):
             try:
                 if tool_name == "search_project_history":
-                    return await self._execute_memory_search(tool_args, session_id)
+                    return await self._execute_history_search(tool_args, session_id)
                 elif tool_name == "search_task_files":
                     return await self._execute_task_files_search(
                         tool_args, vector_store_ids
@@ -80,13 +80,13 @@ class ToolHandler:
                 logger.error(f"Tool '{tool_name}' execution failed: {e}", exc_info=True)
                 raise
 
-    async def _execute_memory_search(
+    async def _execute_history_search(
         self, tool_args: Dict[str, Any], session_id: Optional[str] = None
     ) -> str:
         """Execute project history search tool."""
-        from ..tools.search_history import SearchHistoryService
+        from ..tools.search_history import HistorySearchService
 
-        history_service = SearchHistoryService()
+        history_service = HistorySearchService()
         # Pass session_id for deduplication
         return await history_service.execute(session_id=session_id, **tool_args)
 
@@ -107,7 +107,7 @@ class ToolHandler:
         self,
         capabilities: AdapterCapabilities,
         vector_store_ids: Optional[List[str]] = None,
-        disable_memory_search: bool = False,
+        disable_history_search: bool = False,
     ) -> List[Dict[str, Any]]:
         """
         Prepare tool declarations based on adapter capabilities.
@@ -117,7 +117,7 @@ class ToolHandler:
         Args:
             capabilities: Adapter capabilities
             vector_store_ids: Vector store IDs for attachment search
-            disable_memory_search: If True, skip search_project_history tool
+            disable_history_search: If True, skip search_project_history tool
 
         Returns:
             List of tool declarations in OpenAI format
@@ -129,11 +129,19 @@ class ToolHandler:
             f"  - capabilities.native_vector_store_provider: {capabilities.native_vector_store_provider}"
         )
         logger.debug(f"  - vector_store_ids: {vector_store_ids}")
-        logger.debug(f"  - disable_memory_search: {disable_memory_search}")
+        logger.debug(f"  - disable_history_search: {disable_history_search}")
 
         # All adapters get the project history search tool unless disabled
-        if not disable_memory_search:
-            declarations.append(self._get_memory_declaration_openai())
+        logger.debug(
+            f"[TOOL_HANDLER] disable_history_search={disable_history_search}, not disable_history_search={not disable_history_search}"
+        )
+        if not disable_history_search:
+            logger.debug("[TOOL_HANDLER] Adding search_project_history tool")
+            declarations.append(self._get_history_declaration_openai())
+        else:
+            logger.debug(
+                "[TOOL_HANDLER] Skipping search_project_history tool (history search disabled)"
+            )
 
         # Add task files search tool when vector stores are provided
         # Only for adapters without native file search (those with native_vector_store_provider use their own)
@@ -154,9 +162,9 @@ class ToolHandler:
         logger.debug(f"[TOOL_HANDLER] Returning {len(declarations)} tool declarations")
         return declarations
 
-    def _get_memory_declaration_openai(self) -> Dict[str, Any]:
-        """Get memory search tool declaration in OpenAI format."""
-        from .memory_search_declaration import create_search_history_declaration_openai
+    def _get_history_declaration_openai(self) -> Dict[str, Any]:
+        """Get history search tool declaration in OpenAI format."""
+        from .history_search_declaration import create_search_history_declaration_openai
 
         return create_search_history_declaration_openai()
 

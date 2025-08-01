@@ -24,13 +24,13 @@ class ToolDispatcher:
         self.vector_store_ids = vector_store_ids or []
 
     def get_tool_declarations(
-        self, capabilities: AdapterCapabilities, disable_memory_search: bool = False
+        self, capabilities: AdapterCapabilities, disable_history_search: bool = False
     ) -> List[Dict[str, Any]]:
         """Get tool declarations in the format expected by the adapter.
 
         Args:
             capabilities: Adapter capabilities
-            disable_memory_search: Whether to disable search_project_history tool
+            disable_history_search: Whether to disable search_project_history tool
 
         Returns:
             List of tool declarations in the appropriate format
@@ -38,7 +38,7 @@ class ToolDispatcher:
         return self.tool_handler.prepare_tool_declarations(
             capabilities=capabilities,
             vector_store_ids=self.vector_store_ids,
-            disable_memory_search=disable_memory_search,
+            disable_history_search=disable_history_search,
         )
 
     async def execute(

@@ -80,11 +80,11 @@ vector_stores:
   # Note: HNSW provider requires no additional configuration
   # It stores data locally in ~/.cache/mcp-the-force/vectorstores/hnsw/
 
-# Memory system for long-term project knowledge
-memory:
+# History system for long-term project knowledge
+history:
   enabled: true
   rollover_limit: 9500  # Token limit before summarization
-  session_cutoff_hours: 2  # Hours before session is eligible for memory storage
+  session_cutoff_hours: 2  # Hours before session is eligible for history recording
   summary_char_limit: 200000  # Max chars for summarization
   max_files_per_commit: 50  # Max files to include per git commit
 

@@ -131,14 +131,14 @@ class LiteLLMBaseAdapter:
     def _get_tool_declarations(
         self,
         tool_dispatcher: Optional[ToolDispatcher],
-        disable_memory_search: bool = False,
+        disable_history_search: bool = False,
         additional_tools: Optional[List[Dict[str, Any]]] = None,
     ) -> List[Dict[str, Any]]:
         """Get all tool declarations.
 
         Args:
             tool_dispatcher: Tool dispatcher instance
-            disable_memory_search: Whether to disable memory search
+            disable_history_search: Whether to disable memory search
             additional_tools: Additional tools to include
 
         Returns:
@@ -149,7 +149,7 @@ class LiteLLMBaseAdapter:
         if tool_dispatcher:
             built_in_tools = tool_dispatcher.get_tool_declarations(
                 capabilities=self.capabilities,
-                disable_memory_search=disable_memory_search,
+                disable_history_search=disable_history_search,
             )
             tools.extend(built_in_tools)
 
@@ -378,9 +378,15 @@ class LiteLLMBaseAdapter:
             )
 
             # Get tool declarations
+            disable_history_search_value = getattr(
+                params, "disable_history_search", False
+            )
+            logger.debug(
+                f"[LITELLM_BASE] params.disable_history_search = {disable_history_search_value}"
+            )
             tools = self._get_tool_declarations(
                 tool_dispatcher,
-                disable_memory_search=getattr(params, "disable_memory_search", False),
+                disable_history_search=disable_history_search_value,
                 additional_tools=kwargs.get("tools"),
             )
 

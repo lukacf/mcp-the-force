@@ -133,7 +133,7 @@ Tools are defined using a descriptor-based system with parameter routing:
 **Utility tools:**
 - `list_sessions`: List existing AI conversation sessions for the current project
 - `describe_session`: Generate an AI-powered summary of an existing session's conversation history
-- `search_project_history`: Search past conversations and git commits from the project's long-term memory
+- `search_project_history`: Search past conversations and git commits from the project's long-term history
 - `count_project_tokens`: Count tokens for specified files or directories
 - `search_mcp_debug_logs`: (Developer mode only) Run a raw LogsQL query against VictoriaLogs debug logs
 
@@ -174,7 +174,7 @@ mcp-config init
 - `mcp.default_temperature`: AI model temperature setting
 - `logging.level`: Logging verbosity
 - `session.ttl_seconds`: Session time-to-live (default: 15552000 = 6 months)
-- `memory.enabled`: Enable/disable long-term memory system
+- `history.enabled`: Enable/disable long-term history system
 
 The project uses a YAML-based configuration system managed by the `mcp-config` CLI tool. This is the recommended way to manage settings. Environment variables can also be used, which is particularly useful for integrating with clients like Claude Desktop, and they will override YAML settings.
 

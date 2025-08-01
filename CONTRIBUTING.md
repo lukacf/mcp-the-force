@@ -1,6 +1,6 @@
 # Contributing to MCP The-Force
 
-MCP The-Force is a protocol-based AI server designed to integrate multiple AI providers and tools. This guide covers how to extend its architecture to support additional AI providers, tools, and memory sources.
+MCP The-Force is a protocol-based AI server designed to integrate multiple AI providers and tools. This guide covers how to extend its architecture to support additional AI providers, tools, and history sources.
 
 
 ## Architecture Highlights
@@ -11,7 +11,7 @@ MCP The-Force is a protocol-based AI server designed to integrate multiple AI pr
 
 - **Automatic Capability Checking**: Model and tool capabilities are defined declaratively. Parameters are automatically validated against these capabilities at runtime. 
 
-- **Unified Memory Abstractions**: The VectorStoreManager and UnifiedSessionCache provide interfaces for working with embeddings and conversation history across providers, enabling long-term memory integration independent of vendor specifics.
+- **Unified History Abstractions**: The VectorStoreManager and UnifiedSessionCache provide interfaces for working with embeddings and conversation history across providers, enabling long-term history integration independent of vendor specifics.
 
 ## Development Setup
 
@@ -153,10 +153,10 @@ To enforce code quality and prevent regressions, the repository uses pre-commit 
 │  └───────────────────────────────┬────────────────────────────────┘   │
 │                                  │                                    │
 │  ┌───────────────────────────────┴────────────────────────────────┐   │
-│  │                    Memory & Storage                            │   │
+│  │                    History & Storage                           │   │
 │  │  ┌─────────────────┐  ┌─────────────────┐  ┌──────────────┐    │   │
 │  │  │ UnifiedSession  │  │   VectorStore   │  │  Long-term   │    │   │
-│  │  │  Cache (SQLite) │  │    Manager      │  │    Memory    │    │   │
+│  │  │  Cache (SQLite) │  │    Manager      │  │    History   │    │   │
 │  │  └─────────────────┘  └─────────────────┘  └──────────────┘    │   │
 │  └───────────────────────────────────────────────────────┬────────┘   │
 │                                                           │            │
@@ -275,15 +275,15 @@ Update capability classes to define `supports_new_feature`.
 </details>
 
 <details>  
-<summary>Adding Memory Sources</summary>
+<summary>Adding History Sources</summary>
 
-To add a new memory source beyond conversation history and git commits:
+To add a new history source beyond conversation history and git commits:
 
-1. Create a storage function in `mcp_the_force/memory/` that stores content and metadata via `VectorStoreManager` 
-2. Include the new source in the memory search function
+1. Create a storage function in `mcp_the_force/history/` that stores content and metadata via `VectorStoreManager` 
+2. Include the new source in the history search function
 3. Expose the updated search in the `search_project_history` tool
 
-The new memory source will now be included in historical searches.
+The new history source will now be included in historical searches.
 </details>
 
 <details>

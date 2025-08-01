@@ -1,4 +1,4 @@
-"""Session management test - comprehensive memory lifecycle, persistence, and isolation."""
+"""Session management test - comprehensive history lifecycle, persistence, and isolation."""
 
 import sys
 import os
@@ -23,10 +23,10 @@ def generate_random_port():
 
 
 class TestSessionManagement:
-    """Test session persistence, isolation, and cross-model memory sharing."""
+    """Test session persistence, isolation, and cross-model history sharing."""
 
     def test_session_persistence_and_isolation(self, call_claude_tool):
-        """Test memory storage, recall, and persistence between sessions."""
+        """Test history storage, recall, and persistence between sessions."""
 
         session_id_a = f"session-mgmt-test-{random.randint(1000, 9999)}"
 
@@ -65,7 +65,8 @@ class TestSessionManagement:
             session_id=session_id_a,
             structured_output_schema=storage_schema,
             response_format="respond ONLY with the JSON",
-            disable_memory_search="true",
+            disable_history_search="true",
+            disable_history_record="true",
         )
 
         # Validate storage confirmation - should match our schema exactly
@@ -88,7 +89,8 @@ class TestSessionManagement:
             session_id=session_id_a,
             structured_output_schema=recall_schema,
             response_format="respond ONLY with the JSON",
-            disable_memory_search="true",
+            disable_history_search="true",
+            disable_history_record="true",
         )
 
         # Validate recall - should match our schema exactly
@@ -110,7 +112,8 @@ class TestSessionManagement:
             session_id=session_id_a,  # Back to original session
             structured_output_schema=recall_schema,
             response_format="respond ONLY with the JSON",
-            disable_memory_search="true",
+            disable_history_search="true",
+            disable_history_record="true",
         )
 
         # Original session should still remember
@@ -124,7 +127,7 @@ class TestSessionManagement:
         assert result["port_number"] == port_number, f"Wrong port: {result}"
 
     def test_multi_turn_conversation(self, call_claude_tool):
-        """Test simple two-turn conversation with GPT-4.1 and memory search disabled."""
+        """Test simple two-turn conversation with GPT-4.1 and history search disabled."""
 
         session_id = f"simple-gpt41-session-{random.randint(1000, 9999)}"
 
@@ -164,7 +167,8 @@ class TestSessionManagement:
             output_format="JSON confirming what was stored",
             context=[],
             session_id=session_id,
-            disable_memory_search="true",  # Disable project history search
+            disable_history_search="true",  # Disable project history search
+            disable_history_record="true",  # Disable storing to project history
             structured_output_schema=storage_schema,
             response_format="respond ONLY with the JSON",
         )
@@ -182,7 +186,8 @@ class TestSessionManagement:
             output_format="JSON with the recalled code",
             context=[],
             session_id=session_id,
-            disable_memory_search="true",  # Disable project history search
+            disable_history_search="true",  # Disable project history search
+            disable_history_record="true",  # Disable storing to project history
             structured_output_schema=recall_schema,
             response_format="respond ONLY with the JSON",
         )
@@ -220,14 +225,15 @@ class TestSessionManagement:
             "additionalProperties": False,
         }
 
-        # Step 1: Store unique information with GPT-4.1
+        # Step 1: Store unique information with codex-mini
         response = call_claude_tool(
-            "chat_with_gpt41",
+            "chat_with_codex_mini",
             instructions=f"Remember this network configuration: Protocol {protocol_name} operates on port {port_number}",
             output_format="Acknowledge what you've stored",
             context=[],
             session_id=session_id,
-            disable_memory_search="true",  # Ensure we're testing real session storage
+            disable_history_search="true",  # Ensure we're testing real session storage, not previous history
+            # Note: history_record is enabled so this conversation gets stored for Step 2 to find
         )
 
         # Simple validation that it was stored
@@ -238,7 +244,7 @@ class TestSessionManagement:
             str(port_number) in response
         ), f"Port not mentioned in response: {response}"
 
-        # Give memory storage time to complete
+        # Give history storage time to complete
         import time
 
         time.sleep(2)

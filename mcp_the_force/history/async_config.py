@@ -1,10 +1,10 @@
-"""Async wrapper for MemoryConfig to handle blocking operations."""
+"""Async wrapper for HistoryStorageConfig to handle blocking operations."""
 
 import asyncio
 from typing import Optional, List
 from pathlib import Path
 
-from .config import MemoryConfig
+from .config import HistoryStorageConfig
 from ..vectorstores.manager import vector_store_manager
 
 import logging
@@ -12,11 +12,11 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-class AsyncMemoryConfig:
-    """Async wrapper around MemoryConfig to handle blocking operations."""
+class AsyncHistoryStorageConfig:
+    """Async wrapper around HistoryStorageConfig to handle blocking operations."""
 
     def __init__(self, db_path: Optional[Path] = None):
-        self._sync_config = MemoryConfig(db_path)
+        self._sync_config = HistoryStorageConfig(db_path)
 
     def _get_loop(self):
         """Get the current event loop."""
@@ -37,7 +37,7 @@ class AsyncMemoryConfig:
         store_id, need_create = await loop.run_in_executor(None, _check_active)
 
         if not need_create:
-            logger.debug(f"[MEMORY] Using existing store: {store_id}")
+            logger.debug(f"[HISTORY] Using existing store: {store_id}")
 
             # Verify the store actually exists in the vector store provider
             try:
@@ -45,11 +45,13 @@ class AsyncMemoryConfig:
                 provider = vector_store_manager.provider
                 client = vector_store_manager._get_client(provider)
                 await client.get(store_id)
-                logger.debug(f"[MEMORY] Verified store {store_id} exists in {provider}")
+                logger.debug(
+                    f"[HISTORY] Verified store {store_id} exists in {provider}"
+                )
             except Exception as e:
                 # Store doesn't exist in provider - mark for creation
                 logger.warning(
-                    f"[MEMORY] Store {store_id} not found in {provider}: {e}. Will create new store."
+                    f"[HISTORY] Store {store_id} not found in {provider}: {e}. Will create new store."
                 )
                 need_create = True
                 # Fall through to creation logic below
@@ -59,12 +61,12 @@ class AsyncMemoryConfig:
                 return str(store_id)
 
         # Need to create a new store - do this async
-        logger.info(f"[MEMORY] Need to create new store (current: {store_id})")
+        logger.info(f"[HISTORY] Need to create new store (current: {store_id})")
 
         if not store_id:
             # No stores exist, create first one
             name = "project-conversations-001"
-            logger.info(f"[MEMORY] Creating first conversation store: {name}")
+            logger.info(f"[HISTORY] Creating first conversation store: {name}")
 
             # Use VectorStoreManager to create the store
             result = await vector_store_manager.create(
@@ -76,7 +78,7 @@ class AsyncMemoryConfig:
 
             # Extract store_id from result
             store_id = result.get("store_id") if isinstance(result, dict) else result
-            logger.info(f"[MEMORY] Created conversation store: {store_id}")
+            logger.info(f"[HISTORY] Created conversation store: {store_id}")
 
             # Record in DB
             def _record_store():
@@ -125,7 +127,7 @@ class AsyncMemoryConfig:
         name = f"project-{store_type}s-{new_num:03d}"
 
         logger.info(
-            f"[MEMORY] Creating rollover store: {name} (from {current_store_id})"
+            f"[HISTORY] Creating rollover store: {name} (from {current_store_id})"
         )
 
         # Use VectorStoreManager to create the store with rollover_from
@@ -139,7 +141,7 @@ class AsyncMemoryConfig:
         # Extract store_id from result
         store_id = result.get("store_id") if isinstance(result, dict) else result
 
-        # The memory module's DB update below will mark old stores as inactive
+        # The history module's DB update below will mark old stores as inactive
 
         # Update DB
         def _update_db():
@@ -179,7 +181,7 @@ class AsyncMemoryConfig:
         store_id, need_create = await loop.run_in_executor(None, _check_active)
 
         if not need_create:
-            logger.debug(f"[MEMORY] Using existing store: {store_id}")
+            logger.debug(f"[HISTORY] Using existing store: {store_id}")
 
             # Verify the store actually exists in the vector store provider
             try:
@@ -187,11 +189,13 @@ class AsyncMemoryConfig:
                 provider = vector_store_manager.provider
                 client = vector_store_manager._get_client(provider)
                 await client.get(store_id)
-                logger.debug(f"[MEMORY] Verified store {store_id} exists in {provider}")
+                logger.debug(
+                    f"[HISTORY] Verified store {store_id} exists in {provider}"
+                )
             except Exception as e:
                 # Store doesn't exist in provider - mark for creation
                 logger.warning(
-                    f"[MEMORY] Store {store_id} not found in {provider}: {e}. Will create new store."
+                    f"[HISTORY] Store {store_id} not found in {provider}: {e}. Will create new store."
                 )
                 need_create = True
                 # Fall through to creation logic below
@@ -201,12 +205,12 @@ class AsyncMemoryConfig:
                 return str(store_id)
 
         # Need to create a new store - do this async
-        logger.info(f"[MEMORY] Need to create new store (current: {store_id})")
+        logger.info(f"[HISTORY] Need to create new store (current: {store_id})")
 
         if not store_id:
             # No stores exist, create first one
             name = "project-commits-001"
-            logger.info(f"[MEMORY] Creating first commit store: {name}")
+            logger.info(f"[HISTORY] Creating first commit store: {name}")
 
             # Use VectorStoreManager to create the store
             result = await vector_store_manager.create(
@@ -218,7 +222,7 @@ class AsyncMemoryConfig:
 
             # Extract store_id from result
             store_id = result.get("store_id") if isinstance(result, dict) else result
-            logger.info(f"[MEMORY] Created commit store: {store_id}")
+            logger.info(f"[HISTORY] Created commit store: {store_id}")
 
             # Record in DB
             def _record_store():
@@ -255,12 +259,12 @@ class AsyncMemoryConfig:
 
 
 # Global async config instance
-_async_memory_config: Optional[AsyncMemoryConfig] = None
+_async_history_config: Optional[AsyncHistoryStorageConfig] = None
 
 
-def get_async_memory_config() -> AsyncMemoryConfig:
-    """Get the global async memory configuration instance."""
-    global _async_memory_config
-    if _async_memory_config is None:
-        _async_memory_config = AsyncMemoryConfig()
-    return _async_memory_config
+def get_async_history_config() -> AsyncHistoryStorageConfig:
+    """Get the global async history configuration instance."""
+    global _async_history_config
+    if _async_history_config is None:
+        _async_history_config = AsyncHistoryStorageConfig()
+    return _async_history_config

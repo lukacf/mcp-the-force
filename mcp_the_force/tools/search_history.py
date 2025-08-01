@@ -9,7 +9,7 @@ from typing import List
 from .base import ToolSpec
 from .descriptors import Route
 from .registry import tool
-from ..local_services.search_history import SearchHistoryService
+from ..local_services.search_history import HistorySearchService
 
 
 @tool
@@ -26,14 +26,14 @@ class SearchProjectHistory(ToolSpec):
     )
 
     # Use local service instead of adapter
-    service_cls = SearchHistoryService
+    service_cls = HistorySearchService
     adapter_class = None  # Signal to executor that this runs locally
     timeout = 30  # 30 second timeout for searches
 
     # Parameters
     query: str = Route.prompt(  # type: ignore[assignment]
         description=(
-            "(Required) The query to search for in the project's long-term memory. Performs semantic "
+            "(Required) The query to search for in the project's history. Performs semantic "
             "search across all indexed conversations and git commits. For multiple queries, separate "
             "them with a semicolon (;). The search uses vector similarity to find relevant historical "
             "context, not exact string matching. "
@@ -53,7 +53,7 @@ class SearchProjectHistory(ToolSpec):
     )
     store_types: List[str] = Route.prompt(  # type: ignore[assignment]
         description=(
-            "(Optional) A list of memory store types to search. Allows scoping the search to specific "
+            "(Optional) A list of history store types to search. Allows scoping the search to specific "
             "types of historical data. Valid options are 'conversation' (past AI assistant interactions) "
             "and 'commit' (git commit messages and changes). You can search one or both types. "
             "Syntax: A JSON-formatted list of strings. "

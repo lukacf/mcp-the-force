@@ -65,7 +65,7 @@ class TestGrokAdapterUnit:
                     search_parameters=None,
                     return_citations=True,
                     reasoning_effort=None,
-                    disable_memory_search=False,
+                    disable_history_search=False,
                     structured_output_schema=None,
                 )
 
@@ -144,7 +144,7 @@ class TestGrokAdapterUnit:
                     search_parameters=None,
                     return_citations=True,
                     reasoning_effort=None,
-                    disable_memory_search=False,
+                    disable_history_search=False,
                     structured_output_schema=None,
                 )
 
@@ -206,7 +206,7 @@ class TestGrokAdapterUnit:
                     search_parameters=None,
                     return_citations=True,
                     reasoning_effort=None,
-                    disable_memory_search=False,
+                    disable_history_search=False,
                     structured_output_schema=None,
                 )
 

@@ -104,7 +104,7 @@ class TestToolExecutionIntegration:
             with (
                 patch.object(executor, "vector_store_manager", mock_vs_manager),
                 patch(
-                    "mcp_the_force.tools.safe_memory.safe_store_conversation_memory",
+                    "mcp_the_force.tools.safe_history.safe_record_conversation",
                     new_callable=AsyncMock,
                 ),
             ):

@@ -58,7 +58,7 @@ SELECT
 FROM vector_stores
 WHERE session_id IS NOT NULL;
 
--- Migrate memory stores back
+-- Migrate history stores back
 INSERT INTO stores_original (
     store_id,
     store_type,
@@ -103,4 +103,4 @@ COMMIT;
 -- Verify rollback success
 SELECT 'Rollback completed successfully. Restored ' || 
     (SELECT COUNT(*) FROM vector_stores) || ' session stores and ' ||
-    (SELECT COUNT(*) FROM stores) || ' memory stores.' as status;
+    (SELECT COUNT(*) FROM stores) || ' history stores.' as status;
