@@ -1,4 +1,5 @@
 # The Force MCP Server
+![Screenshot](docs/the-force.png)
 
 > Every AI assistant needs an AI assistant.
 
