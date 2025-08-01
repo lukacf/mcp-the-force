@@ -35,7 +35,7 @@ class CountProjectTokens(ToolSpec):
             "filtering logic as the context parameter - skips binaries, respects size limits "
             "(500KB/file, 50MB total), and supports 60+ text file types. "
             "Syntax: A JSON-formatted list of strings, where each string is an absolute path. "
-            "Example: ['/Users/luka/src/project/main.py', '/Users/luka/src/project/utils/']"
+            "Example: ['/path/to/project/main.py', '/path/to/project/utils/']"
         )
     )
 

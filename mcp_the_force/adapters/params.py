@@ -59,7 +59,7 @@ class BaseToolParams(ParamModel):
             "(for smaller files) or via a searchable vector store (for larger files). The system "
             "automatically handles this split based on the model's context window size. "
             "Syntax: A JSON-formatted list of strings, where each string is an absolute path. "
-            "Example: ['/Users/luka/src/project/main.py', '/Users/luka/src/project/utils/']"
+            "Example: ['/path/to/project/main.py', '/path/to/project/utils/']"
         ),
     )
     priority_context: List[str] = Route.prompt(  # type: ignore[assignment]
@@ -70,7 +70,7 @@ class BaseToolParams(ParamModel):
             "files are always directly in the model's context window, as long as they fit within the "
             "total token budget. Files in priority_context are processed before files in context. "
             "Syntax: A JSON-formatted list of strings (absolute paths). "
-            "Example: ['/Users/luka/src/project/critical_config.yaml']"
+            "Example: ['/path/to/project/critical_config.yaml']"
         ),
         default_factory=list,
     )
