@@ -101,6 +101,8 @@ class TestContextOverflowAndRag:
             output_format="For each token, state: 1) Found/Not found 2) The exact sentence containing it (if found)",
             context=[small_file, large_file],
             session_id=f"overflow-test-{uuid.uuid4().hex[:8]}",
+            disable_history_search="true",
+            disable_history_record="true",
         )
 
         print(f"✅ Response: {response}")
@@ -205,6 +207,8 @@ class TestContextOverflowAndRag:
             context=[large_regular_file],
             priority_context=[large_priority_file],
             session_id=f"priority-test-{uuid.uuid4().hex[:8]}",
+            disable_history_search="true",
+            disable_history_record="true",
         )
 
         print(f"✅ Response: {response}")
@@ -252,6 +256,8 @@ class TestContextOverflowAndRag:
             output_format="List of all markers found",
             context=files,
             session_id=session_id,
+            disable_history_search="true",
+            disable_history_record="true",
         )
         print(f"✅ First call response: {response1}")
 
@@ -265,6 +271,8 @@ class TestContextOverflowAndRag:
             output_format="List of all markers found",
             context=files,
             session_id=session_id,
+            disable_history_search="true",
+            disable_history_record="true",
         )
         print(f"✅ Second call response: {response2}")
 

@@ -13,18 +13,18 @@ from xml.etree import ElementTree as ET
 
 from ..config import get_settings
 from ..utils.redaction import redact_dict
-from .async_config import get_async_memory_config
+from .async_config import get_async_history_config
 
 logger = logging.getLogger(__name__)
 
 
-async def store_conversation_memory(
+async def record_conversation(
     session_id: str, tool_name: str, messages: List[Dict[str, Any]], response: str
 ) -> None:
     """Store conversation summary in vector store after tool call."""
-    # Memory storage is applied universally to all chat tools
+    # History storage is applied universally to all chat tools
     logger.info(
-        f"Storing conversation memory for tool {tool_name}, session {session_id}"
+        f"Storing conversation history for tool {tool_name}, session {session_id}"
     )
 
     try:
@@ -88,14 +88,14 @@ async def store_conversation_memory(
         doc = redact_dict(doc)
 
         # Get active store and upload
-        config = get_async_memory_config()
-        logger.debug("[MEMORY] Getting active conversation store...")
+        config = get_async_history_config()
+        logger.debug("[HISTORY] Getting active conversation store...")
         store_id = await config.get_active_conversation_store()
-        logger.debug(f"[MEMORY] Got store ID: {store_id}")
+        logger.debug(f"[HISTORY] Got store ID: {store_id}")
 
         # Create temporary file in thread pool to avoid blocking
         tmp_path = await loop.run_in_executor(None, _create_temp_file, doc, session_id)
-        logger.debug(f"[MEMORY] Created temp file: {tmp_path}")
+        logger.debug(f"[HISTORY] Created temp file: {tmp_path}")
 
         try:
             # Upload to vector store using the abstraction
@@ -129,7 +129,7 @@ async def store_conversation_memory(
 
     except Exception:
         # Log error but don't fail the tool call
-        logger.exception("Failed to store conversation memory")
+        logger.exception("Failed to store conversation history")
 
 
 class MessageComponents(TypedDict):
@@ -235,7 +235,7 @@ async def create_conversation_summary(
         settings = get_settings()
 
         # Sanitize the response to avoid LiteLLM misinterpreting tool call patterns
-        sanitized_response = response[: settings.memory_summary_char_limit]
+        sanitized_response = response[: settings.history_summary_char_limit]
         # Remove any JSON-like structures that might confuse LiteLLM
         # This is a workaround for LiteLLM potentially misinterpreting text as actual tool calls
         import re
@@ -306,15 +306,15 @@ Conversation to summarize:
         # Use a unique session ID to avoid contamination from previous runs
         import uuid
 
-        unique_session_id = f"memory-summarization-{uuid.uuid4().hex[:8]}"
+        unique_session_id = f"history-summarization-{uuid.uuid4().hex[:8]}"
 
         params = SimpleNamespace(
             temperature=0.3,
-            disable_memory_search=True,  # No tools needed for summarization
+            disable_history_search=True,  # No tools needed for summarization
         )
         ctx = CallContext(
             session_id=unique_session_id,
-            project="memory-system",
+            project="history-system",
             tool="gemini25_flash",
             vector_store_ids=None,
         )
@@ -334,7 +334,9 @@ Conversation to summarize:
         from ..unified_session_cache import UnifiedSessionCache
 
         await UnifiedSessionCache.delete_session(
-            project="memory-system", tool="gemini25_flash", session_id=unique_session_id
+            project="history-system",
+            tool="gemini25_flash",
+            session_id=unique_session_id,
         )
         logger.debug(f"Cleaned up temporary summarization session: {unique_session_id}")
 
@@ -360,7 +362,7 @@ def _create_fallback_summary(
     settings = get_settings()
 
     # Include actual response content in fallback
-    response_preview = response[: settings.memory_summary_char_limit]
+    response_preview = response[: settings.history_summary_char_limit]
 
     summary = f"""## AI Consultation Session
 

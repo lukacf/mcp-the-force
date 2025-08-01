@@ -7,7 +7,7 @@ import sqlite3
 
 import pytest
 
-from mcp_the_force.memory.config import MemoryConfig, get_memory_config
+from mcp_the_force.history.config import HistoryStorageConfig, get_history_config
 
 
 @pytest.fixture
@@ -30,12 +30,12 @@ def mock_client():
     return client
 
 
-class TestMemoryConfig:
+class TestHistoryStorageConfig:
     """Test memory configuration with SQLite."""
 
     def test_init_creates_database(self, temp_db, mock_client):
         """Test that initialization creates database tables."""
-        MemoryConfig(db_path=temp_db)
+        HistoryStorageConfig(db_path=temp_db)
 
         # Check tables were created
         conn = sqlite3.connect(temp_db)
@@ -46,15 +46,15 @@ class TestMemoryConfig:
         conn.close()
 
         assert "stores" in tables
-        assert "memory_meta" in tables
+        assert "history_meta" in tables
 
     def test_get_active_conversation_store_creates_first(self, temp_db, mock_client):
         """Test creating first conversation store."""
         with patch(
-            "mcp_the_force.memory.config.MemoryConfig._create_store"
+            "mcp_the_force.history.config.HistoryStorageConfig._create_store"
         ) as mock_create:
             mock_create.return_value = "vs_test_store_id"
-            config = MemoryConfig(db_path=temp_db)
+            config = HistoryStorageConfig(db_path=temp_db)
             store_id = config.get_active_conversation_store()
 
         assert store_id == "vs_test_store_id"
@@ -73,10 +73,10 @@ class TestMemoryConfig:
     def test_get_active_commit_store_creates_first(self, temp_db, mock_client):
         """Test creating first commit store."""
         with patch(
-            "mcp_the_force.memory.config.MemoryConfig._create_store"
+            "mcp_the_force.history.config.HistoryStorageConfig._create_store"
         ) as mock_create:
             mock_create.return_value = "vs_test_store_id"
-            config = MemoryConfig(db_path=temp_db)
+            config = HistoryStorageConfig(db_path=temp_db)
             store_id = config.get_active_commit_store()
 
         assert store_id == "vs_test_store_id"
@@ -85,11 +85,11 @@ class TestMemoryConfig:
     def test_increment_counts(self, temp_db, mock_client):
         """Test incrementing document counts."""
         with patch(
-            "mcp_the_force.memory.config.MemoryConfig._create_store"
+            "mcp_the_force.history.config.HistoryStorageConfig._create_store"
         ) as mock_create:
             # Mock different store IDs for conversation and commit
             mock_create.side_effect = ["vs_conversation_store", "vs_commit_store"]
-            config = MemoryConfig(db_path=temp_db)
+            config = HistoryStorageConfig(db_path=temp_db)
 
             # Create stores first
             config.get_active_conversation_store()
@@ -117,19 +117,19 @@ class TestMemoryConfig:
         """Test store rollover when limit is reached."""
         with (
             patch(
-                "mcp_the_force.memory.config.MemoryConfig._create_store"
+                "mcp_the_force.history.config.HistoryStorageConfig._create_store"
             ) as mock_create,
-            patch("mcp_the_force.memory.config.get_settings") as mock_settings,
+            patch("mcp_the_force.history.config.get_settings") as mock_settings,
         ):
             # Mock different store IDs
             mock_create.side_effect = ["vs_store_001", "vs_store_002"]
             # Set low rollover limit for testing
             settings = MagicMock()
-            settings.memory_rollover_limit = 2
+            settings.history_rollover_limit = 2
             settings.session_db_path = str(temp_db)
             mock_settings.return_value = settings
 
-            config = MemoryConfig(db_path=temp_db)
+            config = HistoryStorageConfig(db_path=temp_db)
 
             # Get first store
             store_id1 = config.get_active_conversation_store()
@@ -160,11 +160,11 @@ class TestMemoryConfig:
     def test_get_all_store_ids(self, temp_db, mock_client):
         """Test retrieving all store IDs."""
         with patch(
-            "mcp_the_force.memory.config.MemoryConfig._create_store"
+            "mcp_the_force.history.config.HistoryStorageConfig._create_store"
         ) as mock_create:
             # Mock creating multiple stores
             mock_create.side_effect = [f"vs_store_{i:03d}" for i in range(4)]
-            config = MemoryConfig(db_path=temp_db)
+            config = HistoryStorageConfig(db_path=temp_db)
 
             # Create some stores
             config.get_active_conversation_store()
@@ -178,15 +178,15 @@ class TestMemoryConfig:
         assert "vs_store_001" in all_ids
 
     def test_singleton_instance(self, temp_db, mock_client):
-        """Test that get_memory_config returns singleton."""
-        with patch("mcp_the_force.memory.config.get_settings") as mock_settings:
+        """Test that get_history_config returns singleton."""
+        with patch("mcp_the_force.history.config.get_settings") as mock_settings:
             settings = MagicMock()
             settings.session_db_path = str(temp_db)
-            settings.memory_rollover_limit = 9500
+            settings.history_rollover_limit = 9500
             mock_settings.return_value = settings
 
-            config1 = get_memory_config()
-            config2 = get_memory_config()
+            config1 = get_history_config()
+            config2 = get_history_config()
 
         assert config1 is config2
 
@@ -223,7 +223,7 @@ class TestMemoryConfig:
                 results.append((store_type, f"ERROR: {e}"))
 
         with patch(
-            "mcp_the_force.memory.config.MemoryConfig._create_store"
+            "mcp_the_force.history.config.HistoryStorageConfig._create_store"
         ) as mock_create:
             # Generate unique store IDs for concurrent access
             store_counter = [0]
@@ -234,7 +234,7 @@ class TestMemoryConfig:
                     return f"vs_{store_type}_{store_counter[0]:03d}"
 
             mock_create.side_effect = thread_safe_create_store
-            config = MemoryConfig(db_path=temp_db)
+            config = HistoryStorageConfig(db_path=temp_db)
 
             # Create threads
             threads = []

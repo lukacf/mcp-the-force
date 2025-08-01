@@ -1,7 +1,7 @@
 """Function declaration for search_project_history tool.
 
 This provides the function declaration that both OpenAI and Gemini
-models can use to call our unified memory search.
+models can use to call our unified history search.
 """
 
 from typing import Dict, Any

@@ -8,7 +8,7 @@ The Force is a Model Context Protocol (MCP) server that unifies the world's most
 
 - **Unified Multi-Model Access**: Work with premier models from OpenAI, Google, Anthropic, and xAI through one consistent set of tools. Leverage the best model for every task without switching contexts.
 - **Infinite Context**: Provide entire codebases as context, regardless of size. The Force intelligently includes critical files directly in the prompt and makes the rest available via high-performance vector search, effectively breaking through model context window limitations. It intelligently handles context updates when files change.
-- **Self-Building Project Memory**: Automatically captures and indexes every AI conversation and git commit. This creates a searchable, long-term memory of your project's design decisions, debates, and history.
+- **Self-Building Project History**: Automatically captures and indexes every AI conversation and git commit. This creates a searchable, long-term history of your project's design decisions, debates, and evolution.
 
 ## Quick Start
 
@@ -106,7 +106,7 @@ Use the-force chat_with_o3_pro with {"instructions": "Propose how to implement t
 
 ### 3. Search your project's entire history:
 
-> "Before I start, what were the key decisions made when we first implemented JWT authentication? Search the project's memory."
+> "Before I start, what were the key decisions made when we first implemented JWT authentication? Search the project's history."
 
 The assistant would call:
 ```
@@ -164,7 +164,7 @@ All conversations are managed by the `UnifiedSessionCache`, a persistent SQLite 
 - The default session Time-To-Live (TTL) is 6 months, giving you long-term conversational memory
 - Using descriptive `session_id`s helps build a rich, searchable project history
 
-### Project Memory: How It Works
+### Project History: How It Works
 
 The Force continuously captures and indexes your development history:
 
@@ -176,7 +176,7 @@ Install the git hook to capture commits:
 ```bash
 cd your-project
 # Run from the mcp-the-force repository directory:
-bash /path/to/mcp-the-force/scripts/install-memory-hook.sh
+bash /path/to/mcp-the-force/scripts/install-history-hook.sh
 ```
 
 ## Advanced Topics

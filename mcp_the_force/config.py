@@ -121,12 +121,12 @@ class VectorStoreConfig(BaseModel):
     )
 
 
-class MemoryConfig(BaseModel):
-    """Memory system configuration."""
+class HistoryStorageConfig(BaseModel):
+    """History system configuration."""
 
-    enabled: bool = Field(True, description="Enable memory system")
+    enabled: bool = Field(True, description="Enable history system")
     rollover_limit: int = Field(
-        9500, description="Rollover limit for memory stores", ge=10
+        9500, description="Rollover limit for history stores", ge=10
     )
     session_cutoff_hours: int = Field(2, description="Session cutoff in hours", ge=1)
     summary_char_limit: int = Field(
@@ -134,8 +134,9 @@ class MemoryConfig(BaseModel):
     )
     max_files_per_commit: int = Field(50, description="Max files per commit", ge=1)
     sync: bool = Field(
-        default_factory=lambda: os.getenv("MCP_MEMORY_SYNC", "0").lower() in ("1", "true", "yes"),
-        description="Block until conversation is stored (CLI/headless use)"
+        default_factory=lambda: os.getenv("MCP_HISTORY_SYNC", "0").lower()
+        in ("1", "true", "yes"),
+        description="Block until conversation is stored (CLI/headless use)",
     )
     sync_timeout: int = Field(
         120, description="Safety timeout in seconds for synchronous storage", ge=1
@@ -243,7 +244,7 @@ class Settings(BaseSettings):
     # Feature configs
     session: SessionConfig = Field(default_factory=SessionConfig)
     vector_stores: VectorStoreConfig = Field(default_factory=VectorStoreConfig)
-    memory: MemoryConfig = Field(default_factory=MemoryConfig)
+    history: HistoryStorageConfig = Field(default_factory=HistoryStorageConfig)
     tools: ToolsConfig = Field(default_factory=ToolsConfig)
     features: FeaturesConfig = Field(default_factory=FeaturesConfig)
     backup: BackupConfig = Field(default_factory=BackupConfig)
@@ -440,14 +441,20 @@ class Settings(BaseSettings):
             "SESSION_DB_PATH": ("session", "db_path"),
             "STABLE_LIST_DB_PATH": ("session", "db_path"),  # Use same DB as sessions
             "SESSION_CLEANUP_PROBABILITY": ("session", "cleanup_probability"),
-            # Memory settings
-            "MEMORY_ENABLED": ("memory", "enabled"),
-            "MEMORY_ROLLOVER_LIMIT": ("memory", "rollover_limit"),
-            "MEMORY_SESSION_CUTOFF_HOURS": ("memory", "session_cutoff_hours"),
-            "MEMORY_SUMMARY_CHAR_LIMIT": ("memory", "summary_char_limit"),
-            "MEMORY_MAX_FILES_PER_COMMIT": ("memory", "max_files_per_commit"),
-            "MCP_MEMORY_SYNC": ("memory", "sync"),
-            "MEMORY_SYNC_TIMEOUT": ("memory", "sync_timeout"),
+            # History settings
+            "MEMORY_ENABLED": (
+                "history",
+                "enabled",
+            ),  # Keep old env var for compatibility
+            "MEMORY_ROLLOVER_LIMIT": ("history", "rollover_limit"),
+            "MEMORY_SESSION_CUTOFF_HOURS": ("history", "session_cutoff_hours"),
+            "MEMORY_SUMMARY_CHAR_LIMIT": ("history", "summary_char_limit"),
+            "MEMORY_MAX_FILES_PER_COMMIT": ("history", "max_files_per_commit"),
+            "MCP_MEMORY_SYNC": (
+                "history",
+                "sync",
+            ),  # Keep old env var for compatibility
+            "MEMORY_SYNC_TIMEOUT": ("history", "sync_timeout"),
             # Services
             "LOITER_KILLER_HOST": ("services", "loiter_killer_host"),
             "LOITER_KILLER_PORT": ("services", "loiter_killer_port"),
@@ -525,26 +532,26 @@ class Settings(BaseSettings):
     def session_cleanup_probability(self) -> float:
         return self.session.cleanup_probability
 
-    # Memory properties
+    # History properties
     @property
-    def memory_enabled(self) -> bool:
-        return self.memory.enabled
+    def history_enabled(self) -> bool:
+        return self.history.enabled
 
     @property
-    def memory_rollover_limit(self) -> int:
-        return self.memory.rollover_limit
+    def history_rollover_limit(self) -> int:
+        return self.history.rollover_limit
 
     @property
-    def memory_session_cutoff_hours(self) -> int:
-        return self.memory.session_cutoff_hours
+    def history_session_cutoff_hours(self) -> int:
+        return self.history.session_cutoff_hours
 
     @property
-    def memory_summary_char_limit(self) -> int:
-        return self.memory.summary_char_limit
+    def history_summary_char_limit(self) -> int:
+        return self.history.summary_char_limit
 
     @property
-    def memory_max_files_per_commit(self) -> int:
-        return self.memory.max_files_per_commit
+    def history_max_files_per_commit(self) -> int:
+        return self.history.max_files_per_commit
 
     @property
     def vertex_endpoint(self) -> str:
@@ -573,12 +580,12 @@ class Settings(BaseSettings):
             "SESSION_TTL_SECONDS": str(self.session.ttl_seconds),
             "SESSION_DB_PATH": self.session.db_path,
             "SESSION_CLEANUP_PROBABILITY": str(self.session.cleanup_probability),
-            # Memory
-            "MEMORY_ENABLED": str(self.memory.enabled).lower(),
-            "MEMORY_ROLLOVER_LIMIT": str(self.memory.rollover_limit),
-            "MEMORY_SESSION_CUTOFF_HOURS": str(self.memory.session_cutoff_hours),
-            "MEMORY_SUMMARY_CHAR_LIMIT": str(self.memory.summary_char_limit),
-            "MEMORY_MAX_FILES_PER_COMMIT": str(self.memory.max_files_per_commit),
+            # History
+            "MEMORY_ENABLED": str(self.history.enabled).lower(),
+            "MEMORY_ROLLOVER_LIMIT": str(self.history.rollover_limit),
+            "MEMORY_SESSION_CUTOFF_HOURS": str(self.history.session_cutoff_hours),
+            "MEMORY_SUMMARY_CHAR_LIMIT": str(self.history.summary_char_limit),
+            "MEMORY_MAX_FILES_PER_COMMIT": str(self.history.max_files_per_commit),
             # Logging extras
             "VICTORIA_LOGS_URL": self.logging.victoria_logs_url,
             "VICTORIA_LOGS_ENABLED": str(self.logging.victoria_logs_enabled).lower(),

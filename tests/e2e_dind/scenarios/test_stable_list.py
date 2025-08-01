@@ -53,6 +53,8 @@ class TestStableInlineList:
             context=[small_file, large_file],  # All files are now in the context list
             priority_context=[],
             session_id="stable-list-test-split",
+            disable_history_search="true",
+            disable_history_record="true",
         )
         print(f"✅ First response: {response}")
 
@@ -91,6 +93,8 @@ class TestStableInlineList:
             context=[unchanged_file, context1_file],
             priority_context=[],
             session_id="stable-list-test-dedup",
+            disable_history_search="true",
+            disable_history_record="true",
         )
         print(f"✅ First response: {response1}")
         assert (
@@ -120,10 +124,12 @@ class TestStableInlineList:
             context=[unchanged_file, context2_file],  # Provide unchanged and new file
             priority_context=[],
             session_id="stable-list-test-dedup",  # Same session
+            disable_history_search="true",
+            disable_history_record="true",
         )
         print(f"✅ Second response: {response2}")
 
-        # Verify the model recalls the first token (from memory/session) and finds the new token
+        # Verify the model recalls the first token (from history/session) and finds the new token
         assert (
             MARKER_SMALL_FILE in response2
         ), "Failed to recall token from previous turn"
@@ -151,6 +157,8 @@ class TestStableInlineList:
             context=[changing_file],
             priority_context=[],
             session_id="stable-list-test-change",
+            disable_history_search="true",
+            disable_history_record="true",
         )
         print(f"✅ First response: {response1}")
         assert MARKER_SMALL_FILE in response1, "Failed to find original token"
@@ -180,6 +188,8 @@ class TestStableInlineList:
             context=[changing_file],  # Same file path, but content is modified
             priority_context=[],
             session_id="stable-list-test-change",  # Same session
+            disable_history_search="true",
+            disable_history_record="true",
         )
         print(f"✅ Second response: {response2}")
 

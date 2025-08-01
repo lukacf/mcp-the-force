@@ -83,6 +83,8 @@ class TestPriorityContextAndFileTree:
             context=[marker_file_path],
             priority_context=[large_file_path],
             session_id="priority-inline-test",
+            disable_history_search="true",
+            disable_history_record="true",
         )
 
         # Verify the response indicates direct access (not via search)
@@ -91,11 +93,11 @@ class TestPriorityContextAndFileTree:
         response_lower = response.lower()
         search_indicators = [
             "using search_task_files",
-            "calling search_task_files", 
+            "calling search_task_files",
             "need to search",
             "via search",
             "through search",
-            "search for"
+            "search for",
         ]
         assert not any(
             indicator in response_lower for indicator in search_indicators
@@ -199,6 +201,8 @@ class TestPriorityContextAndFileTree:
             context=[small1_path, small2_path, large_path],
             priority_context=[priority_large_path],
             session_id="file-tree-test",
+            disable_history_search="true",
+            disable_history_record="true",
         )
 
         # Verify small files and priority file are directly visible
@@ -304,6 +308,8 @@ class TestPriorityContextAndFileTree:
             output_format="List all markers you can see directly",
             context=[small1_path, small2_path],
             session_id="dynamic-overflow-test",
+            disable_history_search="true",
+            disable_history_record="true",
         )
 
         # Verify both small file markers are visible
@@ -331,6 +337,8 @@ class TestPriorityContextAndFileTree:
             output_format="List: 1) Markers visible directly 2) Files that would need search 3) Any changes from previous context",
             context=[small1_path, small2_path, large_path],
             session_id="dynamic-overflow-test",
+            disable_history_search="true",
+            disable_history_record="true",
         )
 
         # Verify the modified small file is visible
