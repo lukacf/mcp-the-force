@@ -132,8 +132,12 @@ class ToolHandler:
         logger.debug(f"  - disable_memory_search: {disable_memory_search}")
 
         # All adapters get the project history search tool unless disabled
+        logger.debug(f"[TOOL_HANDLER] disable_memory_search={disable_memory_search}, not disable_memory_search={not disable_memory_search}")
         if not disable_memory_search:
+            logger.debug("[TOOL_HANDLER] Adding search_project_history tool")
             declarations.append(self._get_memory_declaration_openai())
+        else:
+            logger.debug("[TOOL_HANDLER] Skipping search_project_history tool (memory search disabled)")
 
         # Add task files search tool when vector stores are provided
         # Only for adapters without native file search (those with native_vector_store_provider use their own)

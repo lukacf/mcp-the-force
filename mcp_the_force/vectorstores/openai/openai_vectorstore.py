@@ -10,6 +10,7 @@ import tempfile
 
 from openai import AsyncOpenAI
 
+from ...adapters.openai.client import OpenAIClientFactory
 from ..protocol import VectorStore, VSFile, SearchResult
 from ..errors import QuotaExceededError, AuthError, TransientError
 
@@ -538,24 +539,32 @@ class OpenAIVectorStore:
 
 
 class OpenAIClient:
-    """OpenAI vector store client."""
+    """OpenAI vector store client that uses the robust client factory."""
 
     def __init__(self, api_key: str):
         self.provider = "openai"
-        self._client = AsyncOpenAI(api_key=api_key)
+        self._api_key = api_key
+        self._client: Optional[AsyncOpenAI] = None
         self._closed = False
+
+    async def _get_client(self) -> AsyncOpenAI:
+        """Lazily initializes and returns the robust OpenAI client."""
+        if self._client is None:
+            self._client = await OpenAIClientFactory.get_instance(self._api_key)
+        return self._client
 
     async def create(self, name: str, ttl_seconds: Optional[int] = None) -> VectorStore:
         """Create a new vector store."""
         if self._closed:
             raise RuntimeError("Client is closed")
 
+        client = await self._get_client()
         try:
             # Create vector store
-            response = await self._client.vector_stores.create(name=name)
+            response = await client.vector_stores.create(name=name)
 
             return OpenAIVectorStore(
-                client=self._client, store_id=response.id, name=name
+                client=client, store_id=response.id, name=name
             )
 
         except Exception as e:
@@ -579,12 +588,13 @@ class OpenAIClient:
         if self._closed:
             raise RuntimeError("Client is closed")
 
+        client = await self._get_client()
         try:
             # Retrieve store to verify it exists
-            response = await self._client.vector_stores.retrieve(store_id)
+            response = await client.vector_stores.retrieve(store_id)
 
             return OpenAIVectorStore(
-                client=self._client, store_id=store_id, name=response.name or ""
+                client=client, store_id=store_id, name=response.name or ""
             )
 
         except Exception as e:
@@ -598,15 +608,17 @@ class OpenAIClient:
         if self._closed:
             raise RuntimeError("Client is closed")
 
+        client = await self._get_client()
         try:
-            await self._client.vector_stores.delete(store_id)
+            await client.vector_stores.delete(store_id)
         except Exception as e:
             logger.error(f"Failed to delete store {store_id}: {e}")
 
     async def close(self) -> None:
-        """Close the client."""
+        """Close the client. No-op as factory manages client lifecycle."""
         self._closed = True
-        await self._client.close()
+        # We no longer call self._client.close() directly.
+        # The factory's close_all() method can be used in tests for explicit cleanup.
 
     async def __aenter__(self):
         """Async context manager entry."""
