@@ -13,12 +13,12 @@ from typing import Optional, List
 from ..vectorstores.manager import vector_store_manager
 from ..vectorstores.protocol import VSFile
 from ..utils.redaction import redact_dict, redact_secrets
-from .config import get_memory_config
+from .config import get_history_config
 
 logger = logging.getLogger(__name__)
 
 
-def store_commit_memory(commit_sha: Optional[str] = None) -> None:
+def record_commit(commit_sha: Optional[str] = None) -> None:
     """Store commit information in vector store.
 
     Args:
@@ -90,7 +90,7 @@ def store_commit_memory(commit_sha: Optional[str] = None) -> None:
                 "commits_since_main": commits_since_main,
                 "timestamp": timestamp,
                 "datetime": datetime.fromtimestamp(timestamp).isoformat(),
-                "files_changed": changed_files[: settings.memory_max_files_per_commit],
+                "files_changed": changed_files[: settings.history_max_files_per_commit],
                 "session_id": session_id,  # May be None
             },
         }
@@ -99,7 +99,7 @@ def store_commit_memory(commit_sha: Optional[str] = None) -> None:
         doc = redact_dict(doc)
 
         # Get active store and upload
-        config = get_memory_config()
+        config = get_history_config()
         store_id = config.get_active_commit_store()
 
         # Create temporary file
@@ -149,7 +149,7 @@ def store_commit_memory(commit_sha: Optional[str] = None) -> None:
             Path(tmp_path).unlink(missing_ok=True)
 
     except Exception:
-        logger.exception("Failed to store commit memory")
+        logger.exception("Failed to store commit history")
 
 
 def find_recent_session_id() -> Optional[str]:
@@ -167,12 +167,12 @@ def find_recent_session_id() -> Optional[str]:
             return None
 
         # Look for sessions updated in the last 2 hours
-        cutoff_hours = settings.memory_session_cutoff_hours
+        cutoff_hours = settings.history_session_cutoff_hours
         cutoff = int(time.time()) - (cutoff_hours * 3600)
 
         with sqlite3.connect(db_path) as db:
             cur = db.execute(
-                "SELECT session_id FROM sessions WHERE updated_at > ? ORDER BY updated_at DESC LIMIT 1",
+                "SELECT session_id FROM unified_sessions WHERE updated_at > ? ORDER BY updated_at DESC LIMIT 1",
                 (cutoff,),
             )
             row = cur.fetchone()
@@ -238,7 +238,7 @@ def _git_command(args: List[str]) -> Optional[str]:
 
 def main():
     """Entry point for git hook."""
-    store_commit_memory()
+    record_commit()
 
 
 if __name__ == "__main__":

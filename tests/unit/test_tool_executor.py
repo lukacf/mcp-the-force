@@ -82,7 +82,7 @@ class TestToolExecutor:
         with (
             patch("mcp_the_force.tools.executor.get_adapter_class") as mock_get_class,
             patch(
-                "mcp_the_force.memory.conversation.store_conversation_memory"
+                "mcp_the_force.history.conversation.record_conversation"
             ) as mock_store,
         ):
             mock_get_class.return_value = mock_adapter_class
@@ -136,7 +136,7 @@ class TestToolExecutor:
         with (
             patch("mcp_the_force.tools.executor.get_adapter_class") as mock_get_class,
             patch(
-                "mcp_the_force.memory.conversation.store_conversation_memory"
+                "mcp_the_force.history.conversation.record_conversation"
             ) as mock_store,
         ):
             mock_get_class.return_value = mock_adapter_class
@@ -248,7 +248,7 @@ class TestToolExecutor:
 
         # Mock the service to avoid actual database access
         with patch(
-            "mcp_the_force.tools.search_history.SearchHistoryService.execute"
+            "mcp_the_force.tools.search_history.HistorySearchService.execute"
         ) as mock_execute:
             mock_execute.return_value = '{"results": [], "total": 0}'
 

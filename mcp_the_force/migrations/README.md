@@ -65,7 +65,7 @@ After migration 001, the unified schema includes:
 ```sql
 CREATE TABLE vector_stores (
     vector_store_id TEXT PRIMARY KEY,
-    name TEXT UNIQUE,              -- For named stores (memory system)
+    name TEXT UNIQUE,              -- For named stores (history system)
     session_id TEXT UNIQUE,        -- For session-specific stores
     provider TEXT NOT NULL,        -- Vector store provider
     provider_metadata TEXT,        -- Provider-specific JSON metadata

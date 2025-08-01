@@ -1,6 +1,6 @@
 """Unit tests for memory search declaration functions."""
 
-from mcp_the_force.adapters.memory_search_declaration import (
+from mcp_the_force.adapters.history_search_declaration import (
     create_search_history_declaration_openai,
     create_search_history_declaration_gemini,
 )

@@ -54,7 +54,7 @@ session:
   db_path: .mcp-the-force/sessions.sqlite3
   cleanup_probability: 0.01
 
-memory:
+history:
   enabled: true
   rollover_limit: 9500
   session_cutoff_hours: 2

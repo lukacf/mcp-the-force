@@ -114,8 +114,8 @@ class OpenAIProtocolAdapter:
                 "reasoning_effort": getattr(params, "reasoning_effort", None),
                 "temperature": getattr(params, "temperature", None),
                 "structured_output_schema": structured_output_schema,
-                "disable_memory_search": getattr(
-                    params, "disable_memory_search", False
+                "disable_history_search": getattr(
+                    params, "disable_history_search", False
                 ),
                 "session_id": ctx.session_id,
                 "project": ctx.project,
@@ -124,11 +124,15 @@ class OpenAIProtocolAdapter:
                 **kwargs,  # Pass through any other kwargs like timeout, etc.
             }
 
-            # Debug: Check disable_memory_search parameter
-            disable_mem_search = getattr(params, "disable_memory_search", False)
-            logger.debug(f"[OPENAI_ADAPTER] params.disable_memory_search = {disable_mem_search}")
-            logger.debug(f"[OPENAI_ADAPTER] request_data disable_memory_search = {request_data.get('disable_memory_search')}")
-            
+            # Debug: Check disable_history_search parameter
+            disable_history_search = getattr(params, "disable_history_search", False)
+            logger.debug(
+                f"[OPENAI_ADAPTER] params.disable_history_search = {disable_history_search}"
+            )
+            logger.debug(
+                f"[OPENAI_ADAPTER] request_data disable_history_search = {request_data.get('disable_history_search')}"
+            )
+
             # Create and run flow orchestrator
             orchestrator = FlowOrchestrator(tool_dispatcher=tool_dispatcher)
             result = await orchestrator.run(request_data)

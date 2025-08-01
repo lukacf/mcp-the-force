@@ -1,4 +1,4 @@
-"""Test GPT-4.1 multi-turn conversation without disable_memory_search."""
+"""Test GPT-4.1 multi-turn conversation without disable_history_search."""
 
 import sys
 import os
@@ -34,14 +34,15 @@ def test_gpt41_multi_turn_fixed(call_claude_tool):
         "additionalProperties": False,
     }
 
-    # Turn 1: Store a simple value using GPT-4.1 (WITHOUT disable_memory_search)
+    # Turn 1: Store a simple value using GPT-4.1 (WITHOUT disable_history_search)
     response = call_claude_tool(
         "chat_with_gpt41",
         instructions="Remember this code: ABC-123-XYZ",
         output_format="JSON confirming what was stored",
         context=[],
         session_id=session_id,
-        # disable_memory_search="true",  # REMOVED - this might be causing issues
+        disable_history_search="true",  # Re-enable for consistency
+        disable_history_record="true",  # Also disable history recording
         structured_output_schema=storage_schema,
         response_format="respond ONLY with the JSON",
     )
@@ -59,7 +60,8 @@ def test_gpt41_multi_turn_fixed(call_claude_tool):
         output_format="JSON with the recalled code",
         context=[],
         session_id=session_id,
-        # disable_memory_search="true",  # REMOVED
+        disable_history_search="true",  # Re-enable for consistency
+        disable_history_record="true",  # Also disable history recording
         structured_output_schema=recall_schema,
         response_format="respond ONLY with the JSON",
     )

@@ -184,11 +184,11 @@ PORT=3000
             assert settings.session_ttl_seconds == 7200
             assert settings.session_db_path == ".mcp-the-force/sessions.sqlite3"
             assert settings.session_cleanup_probability == 0.01
-            assert settings.memory_enabled is False
-            assert settings.memory_rollover_limit == 5000
-            assert settings.memory_session_cutoff_hours == 2
-            assert settings.memory_summary_char_limit == 200000
-            assert settings.memory_max_files_per_commit == 50
+            assert settings.history_enabled is False
+            assert settings.history_rollover_limit == 5000
+            assert settings.history_session_cutoff_hours == 2
+            assert settings.history_summary_char_limit == 200000
+            assert settings.history_max_files_per_commit == 50
 
     def test_vertex_oauth_configuration(self):
         """Test Vertex AI OAuth configuration for CI/CD environments."""
@@ -247,7 +247,7 @@ session:
   ttl_seconds: 7200
   db_path: custom_sessions.db
   
-memory:
+history:
   enabled: false
   rollover_limit: 5000
 """)
@@ -286,8 +286,8 @@ providers:
         assert settings.mcp.default_temperature == 0.3
         assert settings.logging.level == "DEBUG"
         assert settings.session.ttl_seconds == 7200
-        assert settings.memory.enabled is False
-        assert settings.memory.rollover_limit == 5000
+        assert settings.history.enabled is False
+        assert settings.history.rollover_limit == 5000
 
         # Test values from secrets.yaml
         assert settings.openai.api_key == "yaml-openai-key"
@@ -589,5 +589,5 @@ logging:
             assert settings.mcp.default_temperature == 1.0
             assert settings.logging.level == "INFO"
             assert settings.session.ttl_seconds == 15552000  # 6 months default
-            assert settings.memory.enabled is True
-            assert settings.memory.rollover_limit == 9500
+            assert settings.history.enabled is True
+            assert settings.history.rollover_limit == 9500

@@ -184,12 +184,12 @@ providers:
         """Test type coercion for environment variables."""
         test_cases = [
             # Boolean coercion
-            ("MEMORY_ENABLED", "true", lambda s: s.memory.enabled is True),
-            ("MEMORY_ENABLED", "TRUE", lambda s: s.memory.enabled is True),
-            ("MEMORY_ENABLED", "1", lambda s: s.memory.enabled is True),
-            ("MEMORY_ENABLED", "false", lambda s: s.memory.enabled is False),
-            ("MEMORY_ENABLED", "FALSE", lambda s: s.memory.enabled is False),
-            ("MEMORY_ENABLED", "0", lambda s: s.memory.enabled is False),
+            ("MEMORY_ENABLED", "true", lambda s: s.history.enabled is True),
+            ("MEMORY_ENABLED", "TRUE", lambda s: s.history.enabled is True),
+            ("MEMORY_ENABLED", "1", lambda s: s.history.enabled is True),
+            ("MEMORY_ENABLED", "false", lambda s: s.history.enabled is False),
+            ("MEMORY_ENABLED", "FALSE", lambda s: s.history.enabled is False),
+            ("MEMORY_ENABLED", "0", lambda s: s.history.enabled is False),
             # Integer coercion
             ("PORT", "8080", lambda s: s.mcp.port == 8080),
             ("SESSION_TTL_SECONDS", "7200", lambda s: s.session.ttl_seconds == 7200),
@@ -317,7 +317,7 @@ providers:
             get_settings.cache_clear()
             settings = Settings()
             assert settings.openai.api_key == "legacy-openai-key"
-            assert settings.memory.rollover_limit == 5000
+            assert settings.history.rollover_limit == 5000
 
         # 2. Migrate to new YAML configuration
         config_yaml = tmp_path / "config.yaml"
@@ -326,7 +326,7 @@ mcp:
   port: 8080  # Different from .env
 logging:
   level: DEBUG  # Different from .env
-memory:
+history:
   enabled: true
   rollover_limit: 7500  # Different from .env
 session:
@@ -359,7 +359,7 @@ providers:
             # YAML values should override .env
             assert settings.mcp.port == 8080
             assert settings.openai.api_key == "yaml-openai-key"
-            assert settings.memory.rollover_limit == 7500
+            assert settings.history.rollover_limit == 7500
             assert settings.session.ttl_seconds == 7200
             assert settings.vertex.project == "yaml-project"
             assert settings.logging.level == "DEBUG"
@@ -381,7 +381,7 @@ providers:
     enabled: true
     project: base-project
     location: us-central1
-memory:
+history:
   enabled: true
   rollover_limit: 9500
   session_cutoff_hours: 2
@@ -411,8 +411,8 @@ providers:
             assert settings.openai.enabled is True  # from config.yaml
             assert settings.openai.api_key == "secret-key"  # from secrets.yaml
             assert settings.vertex.project == "base-project"  # from config.yaml
-            assert settings.memory.rollover_limit == 10000  # from env
-            assert settings.memory.session_cutoff_hours == 2  # from config.yaml
+            assert settings.history.rollover_limit == 10000  # from env
+            assert settings.history.session_cutoff_hours == 2  # from config.yaml
 
     def test_configuration_with_real_world_values(self, tmp_path, monkeypatch):
         """Test configuration with realistic production values."""
@@ -442,7 +442,7 @@ session:
   db_path: /var/lib/mcp/sessions.db
   cleanup_probability: 0.01
 
-memory:
+history:
   enabled: true
   rollover_limit: 9500
   session_cutoff_hours: 2
@@ -476,7 +476,7 @@ providers:
             assert settings.openai.api_key.startswith("sk-proj-")
             assert settings.vertex.project == "my-production-project"
             assert settings.session.db_path == "/var/lib/mcp/sessions.db"
-            assert settings.memory.summary_char_limit == 200000
+            assert settings.history.summary_char_limit == 200000
 
             # Test export functionality with real values
             env_vars = settings.export_env()

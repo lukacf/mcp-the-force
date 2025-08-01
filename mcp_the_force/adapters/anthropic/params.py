@@ -41,14 +41,14 @@ class AnthropicToolParams(BaseToolParams):  # type: ignore[misc]
         requires_capability=lambda c: c.supports_structured_output
     )
 
-    # Memory control
-    disable_memory_search: bool = Route.adapter(  # type: ignore[assignment]
+    # History control
+    disable_history_search: bool = Route.adapter(  # type: ignore[assignment]
         default=False,
         description="Disable access to project history search",
     )
 
     # Session management
-    disable_memory_store: bool = Route.adapter(  # type: ignore[assignment]
+    disable_history_record: bool = Route.adapter(  # type: ignore[assignment]
         default=False,
         description="Prevent storing this conversation in project history",
     )
