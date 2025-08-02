@@ -214,15 +214,28 @@ class HistoryStorageConfig:
             return [row["store_id"] for row in rows]
 
     def get_store_ids_by_type(self, store_types: List[str]) -> List[str]:
-        """Get ACTIVE store IDs filtered by type."""
+        """Get ALL store IDs filtered by type for searching project history."""
         with self._lock:
             if not store_types:
                 return []
             placeholders = ",".join("?" for _ in store_types)
-            # Only return ACTIVE stores to avoid searching deleted vector stores
-            query = f"SELECT store_id FROM stores WHERE store_type IN ({placeholders}) AND is_active = 1"
+            # FIX: Remove "AND is_active = 1" to search all historical stores
+            # The purpose of search_project_history is to search the entire history,
+            # not just the currently active stores
+            query = f"SELECT store_id FROM stores WHERE store_type IN ({placeholders})"
             rows = self._db.execute(query, store_types).fetchall()
             return [row["store_id"] for row in rows]
+
+    def get_stores_with_types(self, store_types: List[str]) -> List[tuple[str, str]]:
+        """Get ALL (store_type, store_id) pairs filtered by type for searching project history."""
+        with self._lock:
+            if not store_types:
+                return []
+            placeholders = ",".join("?" for _ in store_types)
+            # FIX: Remove "AND is_active = 1" to search all historical stores
+            query = f"SELECT store_type, store_id FROM stores WHERE store_type IN ({placeholders})"
+            rows = self._db.execute(query, store_types).fetchall()
+            return [(row["store_type"], row["store_id"]) for row in rows]
 
     def close(self):
         """Close database connection."""

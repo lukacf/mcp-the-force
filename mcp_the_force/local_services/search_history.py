@@ -196,19 +196,22 @@ class HistorySearchService:
 
         stores_to_search = []
 
-        # Determine which stores to search
-        for store_type in store_types:
-            if store_type == "conversation":
-                if self.memory_config:
-                    store_id = await self.memory_config.get_active_conversation_store()
-                    if store_id:
-                        stores_to_search.append(("conversation", store_id))
-            elif store_type == "commit":
-                if self.memory_config:
-                    store_id = await self.memory_config.get_active_commit_store()
-                    if store_id:
-                        stores_to_search.append(("commit", store_id))
-            # Add more store types as needed
+        # Determine which stores to search - get ALL stores with their types
+        if self.memory_config:
+            # Get ALL (store_type, store_id) pairs for the requested types (not just active ones)
+            stores_with_types = self.memory_config.get_stores_with_types(store_types)
+            logger.info(
+                f"[SEARCH_HISTORY] Found {len(stores_with_types)} total stores to search: {stores_with_types}"
+            )
+
+            # Add each store with its correct type
+            for store_type, store_id in stores_with_types:
+                stores_to_search.append((store_type, store_id))
+                logger.debug(
+                    f"[SEARCH_HISTORY] Will search {store_type} store: {store_id}"
+                )
+        else:
+            logger.warning("[SEARCH_HISTORY] No memory config available")
 
         if not stores_to_search:
             logger.warning(

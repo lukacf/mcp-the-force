@@ -63,6 +63,7 @@ def stack(request):
     env_vars = {
         "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY", ""),
         "ANTHROPIC_API_KEY": os.getenv("ANTHROPIC_API_KEY", ""),
+        "XAI_API_KEY": os.getenv("XAI_API_KEY", ""),
         "VERTEX_PROJECT": os.getenv("VERTEX_PROJECT", ""),  # Don't default yet
         "VERTEX_LOCATION": os.getenv("VERTEX_LOCATION", "us-central1"),
     }
@@ -334,13 +335,11 @@ async def cleanup():
         cache = manager.vector_store_cache
         
         # Get ALL vector stores from the cache (not just expired ones)
-        all_stores = []
-        async with cache._get_db() as db:
-            async with db.execute(
-                "SELECT vector_store_id, provider FROM vector_stores WHERE 1=1"
-            ) as cursor:
-                rows = await cursor.fetchall()
-                all_stores = [{'vector_store_id': row[0], 'provider': row[1]} for row in rows]
+        rows = await cache._execute_async(
+            "SELECT vector_store_id, provider FROM vector_stores WHERE 1=1",
+            ()
+        )
+        all_stores = [{'vector_store_id': row[0], 'provider': row[1]} for row in rows]
         
         print(f"Found {len(all_stores)} vector stores to clean up")
         
@@ -440,6 +439,7 @@ def claude(stack, request) -> Callable[[str, int], str]:
         "env": {
             "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY", ""),
             "ANTHROPIC_API_KEY": os.getenv("ANTHROPIC_API_KEY", ""),
+            "XAI_API_KEY": os.getenv("XAI_API_KEY", ""),
             "VERTEX_PROJECT": resolved_vertex_project,
             "VERTEX_LOCATION": resolved_vertex_location,
             "GOOGLE_APPLICATION_CREDENTIALS": "/home/claude/.config/gcloud/application_default_credentials.json",
@@ -447,10 +447,11 @@ def claude(stack, request) -> Callable[[str, int], str]:
             "CI_E2E": "1",  # This MUST be set for the MCP server to allow /tmp paths
             "PYTHONPATH": "/host-project",
             "VICTORIA_LOGS_URL": "http://host.docker.internal:9428",  # Critical for logging!
-            "SESSION_DB_PATH": "/tmp/mcp_sessions.sqlite3",  # Use absolute path for session persistence across processes
+            # Let MCP server use default session DB path (.mcp-the-force/sessions.sqlite3) which auto-creates directories
             "LOKI_APP_TAG": os.getenv(
                 "LOKI_APP_TAG", "e2e-test-unknown"
             ),  # Pass test-specific tag
+            "MCP_HISTORY_SYNC": "1",  # Enable synchronous history storage for E2E tests
             # Stable list is now always enabled - no feature flag needed
         },
         "timeout": 60000,
@@ -787,6 +788,7 @@ def claude_with_low_context(stack, request) -> Callable[[str, int], str]:
         "env": {
             "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY", ""),
             "ANTHROPIC_API_KEY": os.getenv("ANTHROPIC_API_KEY", ""),
+            "XAI_API_KEY": os.getenv("XAI_API_KEY", ""),
             "VERTEX_PROJECT": resolved_vertex_project,
             "VERTEX_LOCATION": resolved_vertex_location,
             "GOOGLE_APPLICATION_CREDENTIALS": "/home/claude/.config/gcloud/application_default_credentials.json",
@@ -794,10 +796,11 @@ def claude_with_low_context(stack, request) -> Callable[[str, int], str]:
             "CI_E2E": "1",  # This MUST be set for the MCP server to allow /tmp paths
             "PYTHONPATH": "/host-project",
             "VICTORIA_LOGS_URL": "http://host.docker.internal:9428",  # Critical for logging!
-            "SESSION_DB_PATH": "/tmp/mcp_sessions.sqlite3",  # Use absolute path for session persistence across processes
+            # Let MCP server use default session DB path (.mcp-the-force/sessions.sqlite3) which auto-creates directories
             "LOKI_APP_TAG": os.getenv(
                 "LOKI_APP_TAG", "e2e-test-unknown"
             ),  # Pass test-specific tag
+            "MCP_HISTORY_SYNC": "1",  # Enable synchronous history storage for E2E tests
             "CONTEXT_PERCENTAGE": "0.01",  # Set to 1% to force overflow with smaller files
         },
         "timeout": 60000,

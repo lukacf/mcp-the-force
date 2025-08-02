@@ -340,12 +340,14 @@ Conversation to summarize:
         )
         logger.debug(f"Cleaned up temporary summarization session: {unique_session_id}")
 
+        final_summary = summary
+
         # Add metadata header
         return f"""## AI Consultation Session
 **Tool**: {tool_name}
 **Date**: {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")}
 
-{summary}
+{final_summary}
 """
 
     except Exception as e:

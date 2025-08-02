@@ -46,7 +46,7 @@ async def _maybe_store_memory(
         return
 
     settings = get_settings()
-    if not settings.memory_enabled:
+    if not settings.history_enabled:
         return
 
     if settings.memory.sync:
