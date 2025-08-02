@@ -115,6 +115,9 @@ class DeepResearchCapabilities(OSeriesCapabilities):
     force_background: bool = True  # Always background
     supports_streaming: bool = False
     supports_live_search: bool = True
+    web_search_tool: str = (
+        "web_search_preview"  # Deep research models require this tool
+    )
     description: str = "Ultra-deep research with autonomous web search (30-60+ min)"
 
 
