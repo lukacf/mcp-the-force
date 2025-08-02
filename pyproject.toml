@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mcp_the_force"
-version = "0.3.2"
+version = "1.0.0"
 description = "MCP server providing access to multiple AI models with intelligent context management for large codebases."
 authors = [{name = "Luka Crnkovic-Friis"}]
 readme = "README.md"
@@ -13,7 +13,7 @@ homepage = "https://github.com/lukacf/mcp-the-force"
 repository = "https://github.com/lukacf/mcp-the-force"
 keywords = ["mcp", "llm", "ai", "openai", "gemini", "grok", "claude"]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.13",
     "License :: OSI Approved :: MIT License",
