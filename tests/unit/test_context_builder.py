@@ -257,7 +257,7 @@ class TestBuildContextWithStableList:
             )
 
             # Mock file system - file2 has changed
-            def mock_stat(path):
+            def mock_stat(path, **kwargs):
                 stat = MagicMock()
                 if path == "/api/file2.py":
                     stat.st_size = 1500  # Changed size
