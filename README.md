@@ -41,36 +41,64 @@ Note: `uvx` is included with `uv` and runs Python tools without installing them 
 
 ### 2. Configure
 
-On the first run, the server will create project-local configuration files in `./.mcp-the-force/`.
+**Recommended approach**: Pass API keys directly as environment variables using the JSON format:
+
+```bash
+claude mcp add-json the-force '{
+  "command": "uvx",
+  "args": ["--from", "git+https://github.com/lukacf/mcp-the-force", "mcp-the-force"],
+  "env": {
+    "OPENAI_API_KEY": "sk-your-openai-key-here",
+    "GEMINI_API_KEY": "your-gemini-api-key-here",
+    "XAI_API_KEY": "xai-your-xai-key-here",
+    "ANTHROPIC_API_KEY": "sk-ant-your-anthropic-key-here"
+  }
+}'
+```
+
+**For Google Vertex AI models**: You need both API authentication and project configuration:
+1. **Authenticate with Google Cloud** for Vertex AI Gemini models:
+   ```bash
+   gcloud auth application-default login
+   ```
+2. **Add Vertex AI project and region to your configuration:**
+   ```bash
+   claude mcp add-json the-force '{
+     "command": "uvx",
+     "args": ["--from", "git+https://github.com/lukacf/mcp-the-force", "mcp-the-force"],
+     "env": {
+       "OPENAI_API_KEY": "sk-your-openai-key-here",
+       "VERTEX_PROJECT": "your-gcp-project-with-vertex-service-enabled",
+       "VERTEX_LOCATION": "us-central1"
+     }
+   }'
+   ```
+   - `VERTEX_PROJECT`: Your Google Cloud project ID with Vertex AI enabled
+   - `VERTEX_LOCATION`: GCP region (e.g., `us-central1`, `europe-west1`)
+
+**Alternative: Configuration files**
+On the first run, the server will create project-local configuration files in `./.mcp-the-force/`. You can edit `./.mcp-the-force/secrets.yaml`:
+
+```yaml
+providers:
+  openai:
+    api_key: "sk-..."           # For OpenAI models
+  gemini:
+    api_key: "your-key..."      # For Gemini models (alternative to Vertex)
+  xai:
+    api_key: "xai-..."          # For Grok models
+  anthropic:
+    api_key: "sk-ant-..."       # For Claude models
+  vertex:
+    project: "your-project"     # For Vertex AI Gemini models
+    location: "us-central1"
+```
+
+**Important**: Add `.mcp-the-force/` to your `.gitignore` file to prevent committing secrets.
 
 **Note for Existing Users**: If you have previously used mcp-the-force with global configuration in `~/.config/mcp-the-force/`, you'll need to:
 - Copy your `secrets.yaml` to each project's `./.mcp-the-force/` directory
 - If you want to preserve conversation history, also copy `sessions.sqlite3` from the global config directory
-
-- **Add API Keys**: Edit `./.mcp-the-force/secrets.yaml` to add your API keys:
-  ```yaml
-  providers:
-    openai:
-      api_key: "sk-..."      # For OpenAI models
-    xai:
-      api_key: "xai-..."      # For Grok models
-    anthropic:
-      api_key: "sk-ant-..."  # For Claude models
-  ```
-- **Set up Google Cloud**: For Gemini models, authenticate with the gcloud CLI:
-  ```bash
-  gcloud auth application-default login
-  ```
-- **Important**: Add `.mcp-the-force/` to your `.gitignore` file to prevent committing secrets.
-
-Alternatively, you can pass API keys directly as environment variables:
-```bash
-claude mcp add the-force -- \
-  uvx --from git+https://github.com/lukacf/mcp-the-force \
-  mcp-the-force \
-  --env OPENAI_API_KEY=sk-... \
-  --env XAI_API_KEY=xai-...
-```
 
 ### 3. Run
 
