@@ -1,5 +1,7 @@
 # The Force MCP Server
 
+![The Force MCP Server](docs/the-force.png)
+
 > Every AI assistant needs an AI assistant.
 
 The Force is a Model Context Protocol (MCP) server that unifies the world's most advanced AI models in a single interface. It intelligently manages context to overcome token limits and automatically builds a searchable knowledge base of your project's evolution. Works seamlessly with any MCP-compatible client, like Claude Code.
