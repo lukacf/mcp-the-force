@@ -55,14 +55,19 @@ The `victoria-logs-data/` directory is automatically created and ignored by git.
 <details>
 <summary>Pre-commit Hooks</summary>
 
-Pre-commit hooks ensure code quality:
+Pre-commit hooks ensure code quality and security:
 
 - **On every commit** (fast, <5 seconds):
   - Ruff linting and formatting
   - MyPy type checking
+  - **Secret detection** (detect-secrets + gitleaks)
   - Fast unit tests (excluding slow/integration)
 - **On push** (can skip with `--no-verify`): 
   - Full unit test suite
+
+**Secret Detection**: We use gitleaks to prevent API key leaks with custom rules for OpenAI, Anthropic, xAI, and Google API keys.
+
+If you need to add a legitimate secret pattern to tests or documentation, update the allowlist in `.gitleaks.toml`.
 </details>
 
 <details>

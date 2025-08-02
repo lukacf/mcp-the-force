@@ -1,0 +1,41 @@
+# Gitleaks configuration for detecting secrets
+title = "MCP The-Force Secret Detection"
+
+# Custom rules for common API key patterns
+[[rules]]
+id = "openai-api-key"
+description = "OpenAI API Key"
+regex = '''sk-[a-zA-Z0-9]{48}'''
+keywords = ["sk-"]
+
+[[rules]]
+id = "openai-project-key"
+description = "OpenAI Project API Key"
+regex = '''sk-proj-[a-zA-Z0-9]{48,}'''
+keywords = ["sk-proj-"]
+
+[[rules]]
+id = "anthropic-api-key"
+description = "Anthropic API Key"
+regex = '''sk-ant-[a-zA-Z0-9\-_]{95,}'''
+keywords = ["sk-ant-"]
+
+[[rules]]
+id = "xai-api-key"
+description = "xAI API Key"
+regex = '''xai-[a-zA-Z0-9]{48,}'''
+keywords = ["xai-"]
+
+[[rules]]
+id = "gemini-api-key"
+description = "Google Gemini API Key"
+regex = '''AIza[0-9A-Za-z\-_]{35}'''
+keywords = ["AIza"]
+
+# Allowlist for documentation placeholders and test keys
+[allowlist]
+regexes = [
+    '''sk-proj-abcdefghijklmnopqrstuvwxyz123456789''',  # Test key in config_edge_cases.py
+    '''sk-your-.*-key-here''',  # Placeholder in documentation
+    '''your-.*-api-key-here''',  # Placeholder in documentation
+]
