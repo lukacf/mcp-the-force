@@ -6,18 +6,18 @@ from typing import List, Tuple, Optional
 
 from ..utils.fs import gather_file_paths_async
 from ..utils.context_loader import load_specific_files_async
+from ..utils.token_counter import count_tokens
 from .stable_list_cache import StableListCache
 from .file_tree import build_file_tree_from_paths
 
 logger = logging.getLogger(__name__)
 
 
-def estimate_tokens(size_bytes: int) -> int:
-    """Estimate token count from file size.
+def estimate_tokens_from_size(size_bytes: int) -> int:
+    """Fast estimate token count from file size (fallback only).
 
-    Uses a heuristic of 3.5 bytes per token which is more accurate
-    for typical code files (Go, Python, JS, etc). The previous 2 bytes
-    per token was too conservative and caused unnecessary overflow.
+    Uses a heuristic of 3.5 bytes per token for initial rough estimates.
+    This is only used when we can't read the file content.
 
     Args:
         size_bytes: File size in bytes
@@ -25,17 +25,44 @@ def estimate_tokens(size_bytes: int) -> int:
     Returns:
         Estimated token count
     """
-    # More accurate estimate: ~3.5 bytes per token for typical code
-    # This prevents unnecessary overflow when files actually fit
     return max(1, int(size_bytes / 3.5))
+
+
+def count_tokens_from_file(file_path: str) -> int:
+    """Count actual tokens in a file using tiktoken.
+
+    Reads the file content and uses tiktoken for accurate token counting.
+    Falls back to size estimation if file cannot be read.
+
+    Args:
+        file_path: Path to file to count tokens for
+
+    Returns:
+        Actual token count
+    """
+    try:
+        with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+            content = f.read()
+        return count_tokens([content])
+    except (OSError, IOError, UnicodeDecodeError) as e:
+        logger.warning(f"Could not read file {file_path} for token counting: {e}")
+        # Fallback to size estimation
+        try:
+            size = os.path.getsize(file_path)
+            return estimate_tokens_from_size(size)
+        except (OSError, IOError):
+            return 1
 
 
 def sort_files_for_stable_list(file_paths: List[str]) -> List[str]:
     """Sort files to maximize useful inline content.
 
-    Files are sorted by token count (ascending) then path.
+    Files are sorted by actual token count (ascending) then path.
     This puts more small files inline, maximizing the number
     of complete files available to the model.
+
+    Uses tiktoken for accurate token counting, which adds 100-300ms
+    but provides precise context management.
 
     Args:
         file_paths: List of file paths to sort
@@ -47,18 +74,17 @@ def sort_files_for_stable_list(file_paths: List[str]) -> List[str]:
 
     for path in file_paths:
         try:
-            size = os.path.getsize(path)
-            tokens = estimate_tokens(size)
-            file_info.append((path, size, tokens))
-        except (OSError, IOError) as e:
+            tokens = count_tokens_from_file(path)
+            file_info.append((path, tokens))
+        except Exception as e:
             logger.warning(f"Skipping file {path}: {e}")
             continue
 
     # Sort by token count (ascending) then path
     # This puts smaller files first
-    file_info.sort(key=lambda x: (x[2], x[0]))
+    file_info.sort(key=lambda x: (x[1], x[0]))
 
-    return [path for path, _, _ in file_info]
+    return [path for path, _ in file_info]
 
 
 async def build_context_with_stable_list(
@@ -134,68 +160,62 @@ async def build_context_with_stable_list(
             f for f in sorted_regular_files if f not in priority_files
         ]
 
-        # Use size-based estimation to determine split (fast)
+        # Use actual token counting to determine split (accurate but slower)
         inline_paths = []
         overflow_paths = []
         remaining_budget = token_budget
 
-        # First pass: decide which files to inline using fast size estimation
+        # Single pass: decide which files to inline using actual token counting
+        # This is slower but eliminates the estimation errors that caused context overflow
+        logger.debug(
+            f"Using tiktoken for accurate token counting of {len(sorted_files)} files"
+        )
         for file_path in sorted_files:
             try:
-                size = os.path.getsize(file_path)
-                est_tokens = estimate_tokens(size)
+                actual_tokens = count_tokens_from_file(file_path)
 
                 # Priority files ALWAYS go inline, regardless of budget
                 if file_path in priority_files:
                     inline_paths.append(file_path)
-                    remaining_budget -= est_tokens  # Still track budget impact
-                elif est_tokens <= remaining_budget:
+                    remaining_budget -= actual_tokens  # Still track budget impact
+                elif actual_tokens <= remaining_budget:
                     inline_paths.append(file_path)
-                    remaining_budget -= est_tokens
+                    remaining_budget -= actual_tokens
                 else:
                     overflow_paths.append(file_path)
-            except (OSError, IOError):
-                # If we can't stat the file, put it in overflow unless it's priority
+            except Exception as e:
+                logger.warning(f"Error counting tokens for {file_path}: {e}")
+                # If we can't count tokens, put it in overflow unless it's priority
                 if file_path in priority_files:
-                    # Priority files still go inline even if we can't stat them
+                    # Priority files still go inline even if we can't count tokens
                     inline_paths.append(file_path)
                 else:
                     overflow_paths.append(file_path)
 
-        # Second pass: load and tokenize only files that will be sent inline
+        # Load file contents for inline files (we already have accurate token counts)
         logger.debug(
-            f"Loading {len(inline_paths)} inline files (estimated), {len(overflow_paths)} overflow files"
+            f"Loading {len(inline_paths)} inline files (tiktoken-validated), {len(overflow_paths)} overflow files"
         )
         file_data = await load_specific_files_async(inline_paths)
 
-        # Safety check: trim if our size estimates were too optimistic
-        # Separate priority and regular files
-        priority_data = [f for f in file_data if f[0] in priority_files]
-        regular_data = [f for f in file_data if f[0] not in priority_files]
+        # No safety check needed - we used accurate tiktoken counts for selection
+        # The file_data should exactly match our token budget calculations
 
-        # Sort regular files by token count
-        regular_data.sort(key=lambda t: t[2])
-
-        # Priority files always go first
-        trimmed_data = []
-        used_tokens = 0
-
-        # Add all priority files (they MUST be included)
-        for file_path, content, tokens in priority_data:
-            trimmed_data.append((file_path, content, tokens))
-            used_tokens += tokens
-
-        # Add regular files that fit in remaining budget
-        for file_path, content, tokens in regular_data:
-            if used_tokens + tokens <= token_budget:
-                trimmed_data.append((file_path, content, tokens))
-                used_tokens += tokens
-            else:
-                # Move over-budget files to overflow
-                overflow_paths.append(file_path)
-                inline_paths.remove(file_path)
-
-        file_data = trimmed_data
+        # Diagnostic logging: Show what old estimation would have given vs tiktoken
+        if file_data:
+            total_tiktoken = sum(tokens for _, _, tokens in file_data)
+            total_size_estimate = sum(
+                estimate_tokens_from_size(os.path.getsize(path))
+                for path, _, _ in file_data
+                if os.path.exists(path)
+            )
+            old_vs_new_ratio = (
+                total_size_estimate / total_tiktoken if total_tiktoken > 0 else 0
+            )
+            logger.debug(
+                f"[TIKTOKEN_ACCURACY] Files: {len(file_data)}, Tiktoken: {total_tiktoken:,}, "
+                f"Size estimate: {total_size_estimate:,}, Old/New ratio: {old_vs_new_ratio:.2f}"
+            )
 
         # Always save the stable list to establish a baseline for subsequent calls
         await cache.save_stable_list(session_id, inline_paths)

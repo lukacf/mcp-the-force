@@ -167,14 +167,19 @@ class ToolExecutor:
                 # Initialize cache
                 cache = StableListCache()
 
-                # Calculate initial token budget
+                # Calculate initial token budget using fixed reserve approach
                 # Context window comes from tool metadata
                 model_limit = metadata.model_config.get("context_window", 128_000)
-                context_percentage = settings.mcp.context_percentage
 
-                # The context_percentage (default 0.85) already includes safety margin
-                # The remaining 15% is for system prompts, tool responses, etc.
-                initial_token_budget = max(int(model_limit * context_percentage), 1000)
+                # Fixed 30k token reserve for system prompts, response generation, and future conversations
+                # This approach doesn't penalize large context models by hoarding unused percentage
+                FIXED_TOKEN_RESERVE = 30_000
+                initial_token_budget = max(model_limit - FIXED_TOKEN_RESERVE, 1000)
+
+                logger.debug(
+                    f"[TOKEN_BUDGET] Model limit: {model_limit:,}, Fixed reserve: {FIXED_TOKEN_RESERVE:,}, "
+                    f"Available for context: {initial_token_budget:,}"
+                )
 
                 # Load session history FIRST to calculate its token cost
                 from ..unified_session_cache import unified_session_cache
@@ -260,7 +265,7 @@ class ToolExecutor:
 
                 logger.debug(
                     f"[TOKEN_BUDGET] Model: {metadata.model_config['model_name']}, limit: {model_limit:,}, "
-                    f"percentage: {context_percentage:.0%}, initial_budget: {initial_token_budget:,}, "
+                    f"reserve: {FIXED_TOKEN_RESERVE:,}, initial_budget: {initial_token_budget:,}, "
                     f"history: {history_tokens:,}, file_tree: {file_tree_tokens:,}, overhead: {overhead_tokens:,}, "
                     f"final_budget: {token_budget:,}"
                 )

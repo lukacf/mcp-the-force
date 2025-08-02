@@ -46,6 +46,7 @@ OPENAI_SUPPORTED_EXTENSIONS = {
     ".tar",
     ".tex",
     ".ts",
+    ".tsx",
     ".txt",
     ".webp",
     ".xlsx",
@@ -211,7 +212,7 @@ class OpenAIVectorStore:
         self,
         files: Sequence[BinaryIO],
         batch_id: str,
-        timeout: float = 15.0,
+        timeout: float = 60.0,
     ) -> dict:
         """Upload a single batch of files without retry logic."""
         start = time.time()
