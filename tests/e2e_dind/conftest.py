@@ -63,7 +63,6 @@ def stack(request):
     env_vars = {
         "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY", ""),
         "ANTHROPIC_API_KEY": os.getenv("ANTHROPIC_API_KEY", ""),
-        "XAI_API_KEY": os.getenv("XAI_API_KEY", ""),
         "VERTEX_PROJECT": os.getenv("VERTEX_PROJECT", ""),  # Don't default yet
         "VERTEX_LOCATION": os.getenv("VERTEX_LOCATION", "us-central1"),
     }
@@ -264,6 +263,29 @@ def stack(request):
 
             time.sleep(1)
 
+        # Pre-create SQLite session database to avoid first-access delays
+        print("Pre-creating session database to avoid startup delays...")
+        try:
+            # Create the session database directory and file with proper ownership
+            db_setup_cmd = [
+                "bash",
+                "-c",
+                "mkdir -p /host-project/.mcp-the-force && "
+                "touch /host-project/.mcp-the-force/e2e_sessions.sqlite3 && "
+                "chown -R claude:claude /host-project/.mcp-the-force && "
+                "chmod 755 /host-project/.mcp-the-force && "
+                "chmod 644 /host-project/.mcp-the-force/e2e_sessions.sqlite3",
+            ]
+            stdout, stderr, return_code = compose.exec_in_container(
+                db_setup_cmd, "test-runner"
+            )
+            if return_code == 0:
+                print("✅ Session database pre-created")
+            else:
+                print(f"⚠️  Failed to pre-create session database: {stderr}")
+        except Exception as e:
+            print(f"⚠️  Exception pre-creating session database: {e}")
+
         # Inject Google Cloud credentials into the container if we found them
         if "ADC_JSON_B64" in env_vars:
             try:
@@ -439,19 +461,18 @@ def claude(stack, request) -> Callable[[str, int], str]:
         "env": {
             "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY", ""),
             "ANTHROPIC_API_KEY": os.getenv("ANTHROPIC_API_KEY", ""),
-            "XAI_API_KEY": os.getenv("XAI_API_KEY", ""),
             "VERTEX_PROJECT": resolved_vertex_project,
             "VERTEX_LOCATION": resolved_vertex_location,
             "GOOGLE_APPLICATION_CREDENTIALS": "/home/claude/.config/gcloud/application_default_credentials.json",
             "LOG_LEVEL": "DEBUG",
             "CI_E2E": "1",  # This MUST be set for the MCP server to allow /tmp paths
             "PYTHONPATH": "/host-project",
-            "VICTORIA_LOGS_URL": "http://host.docker.internal:9428",  # Critical for logging!
-            # Let MCP server use default session DB path (.mcp-the-force/sessions.sqlite3) which auto-creates directories
+            # "VICTORIA_LOGS_URL": "http://host.docker.internal:9428",  # Disabled to test if this causes hanging
+            "SESSION_DB_PATH": "/tmp/mcp_sessions.sqlite3",  # Use absolute path for session persistence across processes
             "LOKI_APP_TAG": os.getenv(
                 "LOKI_APP_TAG", "e2e-test-unknown"
             ),  # Pass test-specific tag
-            "MCP_HISTORY_SYNC": "1",  # Enable synchronous history storage for E2E tests
+            # "MCP_HISTORY_SYNC": "1",  # Disabled to minimize startup complexity
             # Stable list is now always enabled - no feature flag needed
         },
         "timeout": 60000,
@@ -788,19 +809,18 @@ def claude_with_low_context(stack, request) -> Callable[[str, int], str]:
         "env": {
             "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY", ""),
             "ANTHROPIC_API_KEY": os.getenv("ANTHROPIC_API_KEY", ""),
-            "XAI_API_KEY": os.getenv("XAI_API_KEY", ""),
             "VERTEX_PROJECT": resolved_vertex_project,
             "VERTEX_LOCATION": resolved_vertex_location,
             "GOOGLE_APPLICATION_CREDENTIALS": "/home/claude/.config/gcloud/application_default_credentials.json",
             "LOG_LEVEL": "DEBUG",
             "CI_E2E": "1",  # This MUST be set for the MCP server to allow /tmp paths
             "PYTHONPATH": "/host-project",
-            "VICTORIA_LOGS_URL": "http://host.docker.internal:9428",  # Critical for logging!
-            # Let MCP server use default session DB path (.mcp-the-force/sessions.sqlite3) which auto-creates directories
+            # "VICTORIA_LOGS_URL": "http://host.docker.internal:9428",  # Disabled to test if this causes hanging
+            "SESSION_DB_PATH": "/tmp/mcp_sessions.sqlite3",  # Use absolute path for session persistence across processes
             "LOKI_APP_TAG": os.getenv(
                 "LOKI_APP_TAG", "e2e-test-unknown"
             ),  # Pass test-specific tag
-            "MCP_HISTORY_SYNC": "1",  # Enable synchronous history storage for E2E tests
+            # "MCP_HISTORY_SYNC": "1",  # Disabled to minimize startup complexity
             "CONTEXT_PERCENTAGE": "0.01",  # Set to 1% to force overflow with smaller files
         },
         "timeout": 60000,
