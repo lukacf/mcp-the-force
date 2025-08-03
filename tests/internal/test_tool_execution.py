@@ -82,22 +82,16 @@ class TestToolExecutionIntegration:
         test_file = temp_project / "test.py"
         test_file.write_text("def hello(): pass")
 
-        # Mock the context builder to simulate overflow (patch both locations)
-        with (
-            patch(
-                "mcp_the_force.tools.executor.build_context_with_stable_list"
-            ) as mock_builder,
-            patch(
-                "mcp_the_force.utils.context_builder.build_context_with_stable_list"
-            ) as mock_builder_utils,
-        ):
+        # Mock the context builder to simulate overflow
+        with patch(
+            "mcp_the_force.utils.context_builder.build_context_with_stable_list"
+        ) as mock_builder_utils:
             # Simulate that files overflow to vector store
             mock_response = (
                 [],  # inline_files (empty, all overflowed)
                 [str(test_file)],  # overflow_files
                 "📁 test.py (attached)",  # file_tree
             )
-            mock_builder.return_value = mock_response
             mock_builder_utils.return_value = mock_response
 
             # Mock vector store creation
