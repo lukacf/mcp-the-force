@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] - 2025-08-03
+
+### Added
+- **TokenBudgetOptimizer**: New intelligent context management system with tiktoken-based optimization for precise context window utilization
+- **Optimization Module**: Complete `mcp_the_force.optimization` package with prompt building and token budget management
+- **E2E Test Reliability**: Comprehensive retry mechanisms for OpenAI vector store eventual consistency handling
+- **Victoria Logs Integration**: Restored full logging integration for E2E test environments
+
+### Fixed
+- **Critical Context Overflow Bug**: Resolved context window overflow issues with new TokenBudgetOptimizer implementation
+- **History Storage Bug**: Fixed `settings.memory.sync` → `settings.history.sync` configuration error preventing history storage
+- **Cross-Model History Search**: Implemented 5-attempt retry mechanism with adaptive delays for OpenAI vector store race conditions
+- **E2E Session Persistence**: Removed problematic SESSION_DB_PATH override to restore proper session continuity
+- **Environment Variables**: Added missing XAI_API_KEY and Docker image environment variables for E2E tests
+- **Integration Test Mocking**: Added proper mock object handling to prevent TypeError in test environments
+- **Tool Registration**: Fixed OpenAI tool registration failures in mock mode and CI environments
+
+### Changed
+- **Context Builder**: Major refactoring of context building logic with optimized token utilization
+- **Tool Executor**: Streamlined execution flow with improved error handling and resource management
+- **Test Infrastructure**: Enhanced E2E test reliability with deterministic retry patterns and proper environment setup
+
+### Technical Improvements
+- **File Tree Optimization**: Enhanced stable list caching for consistent multi-turn context behavior
+- **Token Counting**: More accurate tiktoken-based token counting across all operations
+- **Mock Adapter**: Improved mock adapter functionality for better testing coverage
+- **CI/CD Stability**: Resolved tool registration failures and improved test isolation
+
 ## [1.0.1] - 2025-08-02
 
 ### Added
