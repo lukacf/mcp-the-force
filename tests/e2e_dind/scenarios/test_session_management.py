@@ -34,6 +34,11 @@ class TestSessionManagement:
         protocol_name = generate_random_protocol()
         port_number = generate_random_port()
 
+        # Add a small delay to ensure database operations complete
+        import time
+
+        time.sleep(0.5)
+
         # Define schemas for structured responses
         storage_schema = {
             "type": "object",
@@ -80,6 +85,9 @@ class TestSessionManagement:
             str(port_number) in result["stored_content"]
         ), f"Port not stored: {result}"
 
+        # Add delay to ensure session is fully persisted
+        time.sleep(1.0)
+
         # Step 2: Test immediate recall in same session
         response = call_claude_tool(
             "chat_with_gemini25_pro",
@@ -102,6 +110,9 @@ class TestSessionManagement:
         # Accept both protocol name alone or with "Protocol" prefix
         assert protocol_name in result["protocol_name"], f"Wrong protocol: {result}"
         assert result["port_number"] == port_number, f"Wrong port: {result}"
+
+        # Add delay to ensure session updates are persisted
+        time.sleep(1.0)
 
         # Step 3: Test session persistence (return to original session)
         response = call_claude_tool(
@@ -233,7 +244,7 @@ class TestSessionManagement:
             context=[],
             session_id=session_id,
             disable_history_search="true",  # Ensure we're testing real session storage, not previous history
-            # Note: history_record is enabled so this conversation gets stored for Step 2 to find
+            disable_history_record="false",  # ENABLE history recording so this conversation gets stored for Step 2 to find
         )
 
         # Simple validation that it was stored
@@ -244,30 +255,58 @@ class TestSessionManagement:
             str(port_number) in response
         ), f"Port not mentioned in response: {response}"
 
-        # Give history storage time to complete
+        # Give history storage time to start processing
         import time
 
-        time.sleep(2)
+        time.sleep(2)  # Small initial delay to allow storage to begin
 
-        # Step 2: Use Gemini Flash to search project history for the information
-        response = call_claude_tool(
-            "chat_with_gemini25_flash",
-            instructions=f"Use the search_project_history function to search for information about Protocol {protocol_name} and its port number",
-            output_format="JSON with search results based on what you find",
-            context=[],
-            session_id=f"different-session-{random.randint(1000, 9999)}",  # Different session to ensure it's using history search
-            structured_output_schema=search_schema,
-            response_format="respond ONLY with the JSON",
-        )
+        # Step 2: Use Gemini Flash to search project history with retry logic
+        # Account for OpenAI vector store indexing delays
+        search_attempts = 5
+        retry_delay_seconds = 3
+        found = False
+        response = None
 
-        # Validate that Gemini found the information through history search
-        result = safe_json(response)
-        assert result is not None, f"Failed to parse JSON: {response}"
+        for attempt in range(search_attempts):
+            response = call_claude_tool(
+                "chat_with_gemini25_flash",
+                instructions=f"Use the search_project_history function to search for information about Protocol {protocol_name} and its port number",
+                output_format="JSON with search results based on what you find",
+                context=[],
+                session_id=f"different-session-{random.randint(1000, 9999)}-{attempt}",  # Unique session per attempt
+                structured_output_schema=search_schema,
+                response_format="respond ONLY with the JSON",
+            )
+
+            result = safe_json(response)
+            if result and result.get("found_protocol") is True:
+                found = True
+                print(f"Found protocol on attempt {attempt + 1}")
+                break
+            else:
+                print(
+                    f"Attempt {attempt + 1}/{search_attempts}: Protocol not found. Retrying in {retry_delay_seconds}s..."
+                )
+                if attempt < search_attempts - 1:  # Don't sleep after the last attempt
+                    time.sleep(retry_delay_seconds)
+
+        # Assert that the information was eventually found
+        assert found, f"Protocol not found in history after {search_attempts} attempts. Last response: {response}"
+
+        # Final validation on the successful response
+        final_result = safe_json(response)
         assert (
-            result["found_protocol"] is True
-        ), f"Protocol not found in history: {result}"
+            final_result is not None
+        ), f"Failed to parse JSON from final response: {response}"
         assert (
-            protocol_name in result["protocol_name"]
-        ), f"Wrong protocol found: {result}"
-        assert result["port_number"] == port_number, f"Wrong port found: {result}"
-        assert result["results_count"] > 0, f"No search results returned: {result}"
+            final_result["found_protocol"] is True
+        ), f"Protocol not found in history: {final_result}"
+        assert (
+            protocol_name in final_result["protocol_name"]
+        ), f"Wrong protocol found: {final_result}"
+        assert (
+            final_result["port_number"] == port_number
+        ), f"Wrong port found: {final_result}"
+        assert (
+            final_result["results_count"] > 0
+        ), f"No search results returned: {final_result}"

@@ -74,6 +74,9 @@ temp/
 .gitlab-ci.yml
 .travis.yml
 
+# Build cache (created by optimized Docker builds)
+.buildx-cache/
+
 # Don't ignore test files we need
 !tests/e2e_dind/
 !tests/e2e_dind/**

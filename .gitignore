@@ -85,3 +85,16 @@ secrets.yaml
 
 # Victoria Logs data (should never be committed)
 victoria-logs-data/
+.buildx-cache/
+
+# Debug files (temporary debugging scripts)  
+debug_session*.py
+
+# Additional cache and temporary directories that shouldn't be committed
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# UV package manager files
+.venv*/
+venv*/

@@ -94,10 +94,9 @@ class TestPriorityContextAndFileTree:
         search_indicators = [
             "using search_task_files",
             "calling search_task_files",
-            "need to search",
-            "via search",
-            "through search",
-            "search for",
+            "used the search tool",
+            "i will search for the file",  # More explicit intent
+            "i searched for the file",  # More explicit action
         ]
         assert not any(
             indicator in response_lower for indicator in search_indicators

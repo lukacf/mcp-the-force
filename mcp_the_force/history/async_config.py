@@ -257,6 +257,11 @@ class AsyncHistoryStorageConfig:
         # This is a quick DB operation, can stay sync
         return self._sync_config.get_store_ids_by_type(store_types)
 
+    def get_stores_with_types(self, store_types: List[str]) -> List[tuple[str, str]]:
+        """Get (store_type, store_id) pairs filtered by type."""
+        # This is a quick DB operation, can stay sync
+        return self._sync_config.get_stores_with_types(store_types)
+
 
 # Global async config instance
 _async_history_config: Optional[AsyncHistoryStorageConfig] = None
