@@ -58,7 +58,7 @@ async def test_describe_session_passes_full_history_to_model(isolate_test_databa
 
     # Verify that the summarization instruction is also present
     assert (
-        "Summarize this conversation" in final_prompt
+        "Generate a structured JSON summary of this conversation" in final_prompt
     ), "Summarization instruction was missing from the prompt."
 
     # Verify the session_id in the mock response is the temp session

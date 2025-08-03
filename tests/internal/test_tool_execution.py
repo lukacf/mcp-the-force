@@ -82,16 +82,35 @@ class TestToolExecutionIntegration:
         test_file = temp_project / "test.py"
         test_file.write_text("def hello(): pass")
 
-        # Mock the context builder to simulate overflow
+        # Mock the TokenBudgetOptimizer to simulate overflow
         with patch(
-            "mcp_the_force.tools.executor.build_context_with_stable_list"
-        ) as mock_builder:
-            # Simulate that files overflow to vector store
-            mock_builder.return_value = (
-                [],  # inline_files (empty, all overflowed)
-                [str(test_file)],  # overflow_files
-                "📁 test.py (attached)",  # file_tree
+            "mcp_the_force.optimization.token_budget_optimizer.TokenBudgetOptimizer"
+        ) as mock_optimizer_class:
+            # Create mock optimizer instance
+            mock_optimizer = AsyncMock()
+            mock_optimizer_class.return_value = mock_optimizer
+
+            # Create mock optimization plan with overflow
+            from mcp_the_force.optimization.models import Plan, FileInfo
+
+            mock_plan = Plan(
+                inline_files=[],  # Empty - all files overflowed
+                overflow_files=[
+                    FileInfo(
+                        path=str(test_file), content="", size=100, tokens=50, mtime=0
+                    )
+                ],  # Files that overflowed
+                file_tree="📁 test.py (attached)",
+                optimized_prompt="<instructions>\nAnalyze the large project\n</instructions>\n\n<output_format>\nsummary\n</output_format>",
+                messages=[
+                    {"role": "developer", "content": "Test developer prompt"},
+                    {"role": "user", "content": "Analyze the large project"},
+                ],
+                total_prompt_tokens=1500,
+                iterations=1,
+                overflow_paths=[str(test_file)],  # For backward compatibility
             )
+            mock_optimizer.optimize.return_value = mock_plan
 
             # Mock vector store creation
             mock_vs_manager = AsyncMock()

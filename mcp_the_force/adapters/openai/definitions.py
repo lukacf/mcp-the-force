@@ -85,7 +85,7 @@ class OpenAIBaseCapabilities(AdapterCapabilities):
     """Base capabilities for all OpenAI models."""
 
     provider: str = "openai"
-    native_vector_store_provider: str = (
+    native_vector_store_provider: Optional[str] = (
         "openai"  # OpenAI models require OpenAI vector stores
     )
     model_family: str = ""
@@ -135,7 +135,9 @@ class CodexMiniCapabilities(OSeriesCapabilities):
     supports_web_search: bool = False  # Codex-mini doesn't support web search
     supports_live_search: bool = False  # Codex-mini doesn't support live search
     web_search_tool: str = ""  # No web search tool for codex-mini
-    native_vector_store_provider: None = None  # type: ignore[assignment]  # Codex-mini doesn't support file search
+    native_vector_store_provider: Optional[str] = (
+        None  # Codex-mini doesn't support file search
+    )
 
 
 @dataclass
@@ -242,6 +244,64 @@ def _calculate_timeout(model_name: str) -> int:
 
 def _generate_and_register_blueprints():
     """Generate and register blueprints for all OpenAI models."""
+    # Check if OpenAI API key is available before registering any blueprints
+    from ...config import get_settings
+    import os
+    from pydantic import SecretStr
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    settings = get_settings()
+    api_key = settings.openai_api_key
+    logger.debug(f"[OPENAI_DEFINITIONS] Raw api_key: {type(api_key)} = {api_key}")
+
+    if isinstance(api_key, SecretStr):
+        api_key = api_key.get_secret_value()
+
+    # Fallback to env-vars so tests can inject a key with monkeypatch.setenv
+    env_key1 = os.getenv("OPENAI_API_KEY")
+    env_key2 = os.getenv("MCP_OPENAI_API_KEY")
+    logger.debug(
+        f"[OPENAI_DEFINITIONS] Env vars: OPENAI_API_KEY={env_key1}, MCP_OPENAI_API_KEY={env_key2}"
+    )
+
+    api_key = api_key or env_key1 or env_key2
+    logger.debug(f"[OPENAI_DEFINITIONS] Final api_key: {repr(api_key)}")
+
+    # Check if we're in mock mode - if so, allow registration without API key for test discoverability
+    mock_mode = settings.adapter_mock  # Use config system instead of direct env var
+    logger.debug(
+        f"[OPENAI_DEFINITIONS] Mock mode check: settings.adapter_mock={mock_mode}, MCP_ADAPTER_MOCK={os.getenv('MCP_ADAPTER_MOCK')}"
+    )
+
+    if not (api_key and str(api_key).strip()) and not mock_mode:
+        # No valid key and not in mock mode → skip registration and remove any existing OpenAI tools
+        from ...tools.registry import TOOL_REGISTRY
+
+        openai_tools_to_remove = []
+
+        for tool_name, tool_meta in TOOL_REGISTRY.items():
+            if tool_meta.model_config.get("adapter_class") == "openai":
+                openai_tools_to_remove.append(tool_name)
+
+        for tool_name in openai_tools_to_remove:
+            del TOOL_REGISTRY[tool_name]
+
+        logger.debug(
+            f"[OPENAI_DEFINITIONS] No API key found and not in mock mode, removed {len(openai_tools_to_remove)} OpenAI tools from registry"
+        )
+        return
+
+    if mock_mode and not (api_key and str(api_key).strip()):
+        logger.debug(
+            f"[OPENAI_DEFINITIONS] Mock mode enabled, registering {len(OPENAI_MODEL_CAPABILITIES)} OpenAI tools for test discoverability (no API key required)"
+        )
+    else:
+        logger.debug(
+            f"[OPENAI_DEFINITIONS] API key found, registering {len(OPENAI_MODEL_CAPABILITIES)} OpenAI tools"
+        )
+
     blueprints = []
 
     for model_name, capabilities in OPENAI_MODEL_CAPABILITIES.items():

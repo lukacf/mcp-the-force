@@ -201,6 +201,47 @@ class StableListCache(BaseSQLiteCache):
             logger.warning(f"Cannot stat file {file_path}")
             return True
 
+    async def get_file_change_status(
+        self, session_id: str, file_paths: List[str]
+    ) -> Tuple[List[str], List[str]]:
+        """
+        Get change status for files compared to last sent state.
+
+        Returns:
+            (changed_files, unchanged_files) where:
+            - changed_files: files that changed since last send OR never sent before
+            - unchanged_files: files that haven't changed since last send
+        """
+        self._validate_session_id(session_id)
+
+        changed_files = []
+        unchanged_files = []
+
+        for file_path in file_paths:
+            if await self.file_changed_since_last_send(session_id, file_path):
+                changed_files.append(file_path)
+            else:
+                unchanged_files.append(file_path)
+
+        return changed_files, unchanged_files
+
+    async def get_previous_inline_list(self, session_id: str) -> List[str]:
+        """
+        Get the previous inline file list for this session.
+        Pure history query - no decision making.
+
+        Returns:
+            List of file paths that were inline in the last optimization,
+            or empty list if this is the first call.
+        """
+        stable_list = await self.get_stable_list(session_id)
+        return stable_list if stable_list is not None else []
+
+    async def is_first_call(self, session_id: str) -> bool:
+        """Check if this is the first call for this session."""
+        stable_list = await self.get_stable_list(session_id)
+        return stable_list is None
+
     async def reset_session(self, session_id: str):
         """Reset all data for a session."""
         self._validate_session_id(session_id)

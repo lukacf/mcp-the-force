@@ -23,12 +23,9 @@ from ..config import get_settings
 from ..utils.redaction import redact_secrets
 from ..operation_manager import operation_manager
 
-# Stable list imports
-from ..utils.context_builder import build_context_with_stable_list
-from ..utils.stable_list_cache import StableListCache
+# Context builder import
 
 # Context window now comes from tool metadata, no central registry needed
-from lxml import etree as ET
 
 logger = logging.getLogger(__name__)
 
@@ -140,7 +137,7 @@ class ToolExecutor:
             # 2. Route parameters
             routed_params = self.router.route(metadata, validated_params)
 
-            # 3. Build prompt
+            # 3. Build optimized prompt using TokenBudgetOptimizer
             prompt_params = routed_params["prompt"]
             assert isinstance(prompt_params, dict)  # Type hint for mypy
 
@@ -157,253 +154,110 @@ class ToolExecutor:
             assert isinstance(session_params, dict)  # Type hint for mypy
             session_id = session_params.get("session_id")
 
-            # Use stable-inline list for context management
+            # Load settings and model configuration
             settings = get_settings()
-
-            # Session ID is required for stable list functionality
-            if session_id:
-                logger.debug(f"Using stable-inline list for session {session_id}")
-
-                # Initialize cache
-                cache = StableListCache()
-
-                # Calculate initial token budget using fixed reserve approach
-                # Context window comes from tool metadata
-                model_limit = metadata.model_config.get("context_window", 128_000)
-
-                # Fixed 30k token reserve for system prompts, response generation, and future conversations
-                # This approach doesn't penalize large context models by hoarding unused percentage
-                FIXED_TOKEN_RESERVE = 30_000
-                initial_token_budget = max(model_limit - FIXED_TOKEN_RESERVE, 1000)
-
-                logger.debug(
-                    f"[TOKEN_BUDGET] Model limit: {model_limit:,}, Fixed reserve: {FIXED_TOKEN_RESERVE:,}, "
-                    f"Available for context: {initial_token_budget:,}"
-                )
-
-                # Load session history FIRST to calculate its token cost
-                from ..unified_session_cache import unified_session_cache
-                from ..utils.token_counter import count_tokens
-                from ..utils.fs import gather_file_paths_async
-                from ..utils.file_tree import build_file_tree_from_paths
-                import json
-                import os
-
-                # Get project name
-                project_path = settings.logging.project_path
-                project = (
-                    os.path.basename(project_path)
-                    if project_path
-                    else os.path.basename(os.getcwd())
-                )
-                tool = metadata.id
-
-                history_tokens = 0
-                try:
-                    history = await unified_session_cache.get_history(
-                        project, tool, session_id
-                    )
-                    if history:
-                        # Serialize history for accurate token counting
-                        history_text_for_counting = " ".join(
-                            [json.dumps(msg) for msg in history]
-                        )
-                        history_tokens = count_tokens([history_text_for_counting])
-                        logger.debug(
-                            f"[TOKEN_BUDGET] Session history contains {len(history)} messages, {history_tokens:,} tokens"
-                        )
-                except Exception as e:
-                    logger.warning(
-                        f"Failed to load session history for token calculation: {e}"
-                    )
-                    history_tokens = 0
-
-                # CRITICAL: Calculate file tree token cost BEFORE allocating budget for file content
-                # The file tree can be massive (50k+ tokens for large projects) and was never accounted for
-                context_paths = prompt_params.get("context", [])
-                priority_context_paths = prompt_params.get("priority_context", [])
-
-                # Gather all files to estimate file tree size
-                all_context_files = await gather_file_paths_async(context_paths)
-                priority_files = (
-                    await gather_file_paths_async(priority_context_paths)
-                    if priority_context_paths
-                    else []
-                )
-                all_requested_files = list(set(priority_files + all_context_files))
-
-                # Build estimated file tree (same as context builder will generate)
-                file_tree_estimate = build_file_tree_from_paths(
-                    all_paths=all_requested_files,
-                    attachment_paths=[],  # Don't need accurate attachments for token counting
-                    root_path=None,
-                )
-
-                # Count file tree tokens
-                file_tree_tokens = (
-                    count_tokens([file_tree_estimate]) if all_requested_files else 0
-                )
-                logger.debug(
-                    f"[TOKEN_BUDGET] File tree contains {len(all_requested_files)} files, {file_tree_tokens:,} tokens"
-                )
-
-                # Calculate overhead tokens (system prompts, XML structure, etc.)
-                instructions = prompt_params.get("instructions", "")
-                output_format = prompt_params.get("output_format", "")
-                overhead_tokens = (
-                    count_tokens([instructions, output_format]) + 500
-                )  # 500 buffer for XML tags
-
-                # Adjust token budget by subtracting ALL overhead
-                total_overhead = history_tokens + file_tree_tokens + overhead_tokens
-                token_budget = initial_token_budget - total_overhead
-                if token_budget < 0:
-                    token_budget = 0
-                    logger.warning(
-                        f"[TOKEN_BUDGET] Total overhead ({total_overhead:,} tokens) exceeds budget. No file content can be inlined."
-                    )
-
-                logger.debug(
-                    f"[TOKEN_BUDGET] Model: {metadata.model_config['model_name']}, limit: {model_limit:,}, "
-                    f"reserve: {FIXED_TOKEN_RESERVE:,}, initial_budget: {initial_token_budget:,}, "
-                    f"history: {history_tokens:,}, file_tree: {file_tree_tokens:,}, overhead: {overhead_tokens:,}, "
-                    f"final_budget: {token_budget:,}"
-                )
-
-                # Context and priority_context paths already extracted above for file tree calculation
-                logger.debug(
-                    f"[STEP 7.1] Context paths: {len(context_paths)}, Priority context paths: {len(priority_context_paths)}"
-                )
-
-                # Call the new context builder
-                logger.debug("[STEP 8] Calling context builder with stable list")
-                (
-                    inline_files,
-                    overflow_files,
-                    file_tree,
-                ) = await build_context_with_stable_list(
-                    context_paths=context_paths,
-                    session_id=session_id,
-                    cache=cache,
-                    token_budget=token_budget,
-                    priority_context=priority_context_paths,
-                )
-                logger.debug(
-                    f"[STEP 8.1] Context builder returned: {len(inline_files)} inline files, {len(overflow_files)} overflow files, file tree generated"
-                )
-
-                # Format the prompt with inline files
-                logger.debug("[STEP 9] Formatting prompt with inline files")
-                task = ET.Element("Task")
-                ET.SubElement(task, "Instructions").text = prompt_params.get(
-                    "instructions", ""
-                )
-                ET.SubElement(task, "OutputFormat").text = prompt_params.get(
-                    "output_format", ""
-                )
-
-                # Add file map with legend
-                file_map = ET.SubElement(task, "file_map")
-                file_map.text = (
-                    file_tree
-                    + "\n\nLegend: Files marked 'attached' are available via search_task_files. Unmarked files are included below."
-                )
-
-                CTX = ET.SubElement(task, "CONTEXT")
-
-                # Helper function to create file elements
-                def _create_file_element(path: str, content: str) -> Any:
-                    el = ET.Element("file", path=path)
-                    safe_content = "".join(
-                        c for c in content if ord(c) >= 32 or c in "\t\n\r"
-                    )
-                    el.text = safe_content
-                    return el
-
-                for path, content, _ in inline_files:
-                    CTX.append(_create_file_element(path, content))
-
-                prompt = ET.tostring(task, encoding="unicode")
-                logger.debug(f"[STEP 9.1] Prompt built: {len(prompt)} chars")
-                if overflow_files:
-                    prompt += "\n\n<instructions_on_use>The files in the file tree but not included in <CONTEXT> you access via the search_task_files MCP function. They are stored in a vector database and the search function does semantic search.</instructions_on_use>"
-
-                # Store overflow files for vector store creation
-                files_for_vector_store = overflow_files
-            else:
-                # Fallback for cases without session_id (backwards compatibility)
-                logger.debug(
-                    "No session_id provided, using original prompt engine for backwards compatibility"
-                )
-                prompt = await self.prompt_engine.build(
-                    metadata.spec_class, prompt_params
-                )
-                files_for_vector_store = None
-
-            # Build messages in OpenAI format - ALL adapters will handle this
-            from ..prompts import get_developer_prompt
-            from ..unified_session_cache import unified_session_cache
-            import os
-
             model_name = metadata.model_config["model_name"]
+            model_limit = metadata.model_config.get("context_window", 128_000)
+
+            # Load developer prompt for session history and optimization
+            from ..prompts import get_developer_prompt
+
             developer_prompt = get_developer_prompt(model_name)
 
-            # Get project name from config or current directory
+            # Extract context paths
+            context_paths = prompt_params.get("context", [])
+            priority_context_paths = prompt_params.get("priority_context", [])
+            instructions = prompt_params.get("instructions", "")
+            output_format = prompt_params.get("output_format", "")
+
+            # Get project name and tool name for all code paths
+            import os
+
             project_path = settings.logging.project_path
-            project = (
+            project_name = (
                 os.path.basename(project_path)
                 if project_path
                 else os.path.basename(os.getcwd())
             )
-            tool = metadata.id  # Use tool ID as the tool name
+            tool_name = metadata.id
 
-            # Load conversation history if we have a session
-            messages = []
+            # Use TokenBudgetOptimizer for all prompt building
             if session_id:
-                # Load existing conversation history
+                from ..optimization.token_budget_optimizer import TokenBudgetOptimizer
+
+                # Fixed reserve for response generation and system overhead
+                FIXED_TOKEN_RESERVE = 30_000
+
+                optimizer = TokenBudgetOptimizer(
+                    model_limit=model_limit,
+                    fixed_reserve=FIXED_TOKEN_RESERVE,
+                    session_id=session_id,
+                    context_paths=context_paths,
+                    priority_paths=priority_context_paths,
+                    developer_prompt=developer_prompt,
+                    instructions=instructions,
+                    output_format=output_format,
+                    project_name=project_name,
+                    tool_name=tool_name,
+                )
+
                 try:
-                    history = await unified_session_cache.get_history(
-                        project, tool, session_id
+                    plan = await optimizer.optimize()
+                    logger.info(
+                        f"[EXECUTOR] Optimization complete: {plan.total_prompt_tokens:,} tokens "
+                        f"in {plan.iterations} iterations"
                     )
-                    if history:
-                        messages.extend(history)
+
+                    # Use the optimized prompt and messages from the plan
+                    final_prompt = plan.optimized_prompt
+                    files_for_vector_store = plan.overflow_paths
+                    messages = (
+                        plan.messages
+                    )  # Complete message list with session history
+
+                except Exception as e:
+                    logger.error(f"[EXECUTOR] Token budget optimization failed: {e}")
+                    # Minimal fallback - use instructions/output format only
+                    final_prompt = f"<instructions>\n{instructions}\n</instructions>\n\n<output_format>\n{output_format}\n</output_format>"
+
+                    # Fallback: gather individual files from context directories for vector store
+                    try:
+                        from ..utils.fs import gather_file_paths_async
+
+                        individual_files = await gather_file_paths_async(context_paths)
+                        files_for_vector_store = individual_files
                         logger.debug(
-                            f"Loaded {len(history)} messages from session {session_id}"
+                            f"[EXECUTOR] Fallback gathered {len(individual_files)} files for vector store"
                         )
-                except AttributeError as e:
-                    # Handle case where unified_session_cache has been replaced during testing
-                    logger.warning(
-                        f"Session cache error: {e}. Type: {type(unified_session_cache)}"
-                    )
-                    # Try to use UnifiedSessionCache directly
-                    from ..unified_session_cache import UnifiedSessionCache
-
-                    history = await UnifiedSessionCache.get_history(
-                        project, tool, session_id
-                    )
-                    if history:
-                        messages.extend(history)
-                        logger.debug(
-                            f"Loaded {len(history)} messages from session {session_id} (fallback)"
+                    except Exception as fs_error:
+                        logger.warning(
+                            f"[EXECUTOR] Could not gather files for fallback: {fs_error}"
+                        )
+                        files_for_vector_store = (
+                            context_paths  # Last resort: use directories
                         )
 
-            # Add developer prompt if not already in history
-            if not messages or messages[0].get("role") != "developer":
-                messages.insert(0, {"role": "developer", "content": developer_prompt})
+                    # Build fallback messages without session history to avoid overflow
+                    messages = [
+                        {"role": "developer", "content": developer_prompt},
+                        {"role": "user", "content": final_prompt},
+                    ]
+            else:
+                # Fallback for sessions without ID - use legacy prompt engine
+                final_prompt = await self.prompt_engine.build(
+                    spec_class=metadata.spec_class,
+                    prompt_params=prompt_params,
+                )
+                files_for_vector_store = []  # No optimization without session ID
 
-            # Add current user message
-            messages.append({"role": "user", "content": prompt})
-
-            adapter_params = routed_params["adapter"]
-            assert isinstance(adapter_params, dict)  # Type hint for mypy
-            # Don't add messages to adapter_params - they'll be passed separately
+                # Build messages for legacy prompt engine (no session optimization)
+                messages = [
+                    {"role": "developer", "content": developer_prompt},
+                    {"role": "user", "content": final_prompt},
+                ]
 
             # Store messages for conversation memory
             prompt_params["messages"] = messages
-
-            # For backwards compatibility, keep final_prompt
-            final_prompt = prompt
-
             # 4. Prepare vector store data for later creation
             vs_id = None
             vector_store_ids = None
@@ -708,8 +562,8 @@ class ToolExecutor:
 
             call_context = CallContext(
                 session_id=session_id or "",
-                project=project,
-                tool=tool,
+                project=project_name,
+                tool=tool_name,
                 vector_store_ids=vector_store_ids,
             )
 
@@ -752,6 +606,22 @@ class ToolExecutor:
                     # OpenAI and Grok models use messages with developer role
                     # Pass a copy to prevent mutations from affecting history storage
                     generate_kwargs["messages"] = messages.copy()
+
+                # DEBUG: Log exact messages sent to API for token analysis
+                debug_data = {
+                    "session_id": session_id,
+                    "final_prompt": final_prompt,
+                    "messages": generate_kwargs.get("messages", []),
+                    "developer_prompt": developer_prompt
+                    if adapter_class_name == "google"
+                    else None,
+                    "adapter_class": adapter_class_name,
+                    "estimated_tokens": getattr(plan, "total_prompt_tokens", "unknown")
+                    if "plan" in locals()
+                    else "no_plan",
+                }
+
+                # Debug JSON file saving removed to reduce clutter
 
                 result = await operation_manager.run_with_timeout(
                     operation_id,

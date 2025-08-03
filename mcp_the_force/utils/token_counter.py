@@ -6,7 +6,7 @@ logger = logging.getLogger(__name__)
 try:
     import tiktoken
 
-    _enc: Optional[tiktoken.Encoding] = tiktoken.get_encoding("cl100k_base")
+    _enc: Optional[tiktoken.Encoding] = tiktoken.get_encoding("o200k_base")
 except Exception:
     _enc = None
 

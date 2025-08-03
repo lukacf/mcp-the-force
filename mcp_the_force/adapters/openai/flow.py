@@ -7,7 +7,7 @@ import random
 import json
 import jsonschema
 from abc import ABC, abstractmethod
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, cast
 from dataclasses import dataclass
 from uuid import uuid4
 
@@ -25,7 +25,6 @@ from .constants import (
     MAX_POLL_INTERVAL_SEC,
     STREAM_TIMEOUT_THRESHOLD,
 )
-from ..history_search_declaration import create_search_history_declaration_openai
 
 logger = logging.getLogger(__name__)
 
@@ -109,40 +108,31 @@ class BaseFlowStrategy(ABC):
         return api_params
 
     def _build_tools_list(self) -> List[Dict[str, Any]]:
-        """Build the tools list for the API request."""
-        tools = []
+        """Build the tools list for the API request using the tool_dispatcher."""
         capability = OPENAI_MODEL_CAPABILITIES.get(self.context.request.model)
         logger.debug(
             f"[FLOW_ORCHESTRATOR] Building tools for model: {self.context.request.model}"
         )
-        logger.debug(f"[FLOW_ORCHESTRATOR] Capability found: {capability is not None}")
         if not capability:
             return []
 
-        logger.debug(
-            f"[FLOW_ORCHESTRATOR] capability.supports_custom_tools: {capability.supports_custom_tools}"
+        # FIXED: Use the tool_dispatcher to get the correct tools (including search_task_files)
+        # The dispatcher handles custom tools (search_project_history, search_task_files)
+        tools = self.context.tool_dispatcher.get_tool_declarations(
+            capabilities=capability,
+            disable_history_search=self.context.request.disable_history_search,
         )
-        if capability.supports_custom_tools:
-            disable_history_search = self.context.request.disable_history_search
-            logger.debug(
-                f"[FLOW_ORCHESTRATOR] disable_history_search: {disable_history_search}"
-            )
-            logger.debug(
-                f"[FLOW_ORCHESTRATOR] not disable_history_search: {not disable_history_search}"
-            )
-            if not self.context.request.disable_history_search:
-                logger.debug("[FLOW_ORCHESTRATOR] Adding search_project_history tool")
-                tools.append(create_search_history_declaration_openai())
-            else:
-                logger.debug(
-                    "[FLOW_ORCHESTRATOR] NOT adding search_project_history tool - history search disabled"
-                )
-            if self.context.request.tools:
-                tools.extend(self.context.request.tools)
+        logger.debug(f"[FLOW_ORCHESTRATOR] Got {len(tools)} tools from dispatcher")
 
+        # Add any additional tools from the request
+        if self.context.request.tools:
+            tools.extend(self.context.request.tools)
+
+        # Add provider-specific native tools
         if capability.supports_web_search and capability.web_search_tool:
             tools.append({"type": capability.web_search_tool})
 
+        # Add native OpenAI file_search if vector stores are present and model supports it
         if (
             self.context.request.vector_store_ids
             and capability.native_vector_store_provider == "openai"
@@ -161,17 +151,19 @@ class BaseFlowStrategy(ABC):
                     }
                 )
                 logger.debug(
-                    f"Added file_search tool with {len(openai_vector_stores)} OpenAI vector stores"
+                    f"[FLOW_ORCHESTRATOR] Added native file_search tool with {len(openai_vector_stores)} OpenAI vector stores"
                 )
             else:
-                logger.debug("No OpenAI vector stores available for file_search tool")
+                logger.debug(
+                    "[FLOW_ORCHESTRATOR] No OpenAI vector stores available for file_search tool"
+                )
         elif self.context.request.vector_store_ids:
             logger.debug(
-                f"Model {self.context.request.model} does not support OpenAI vector stores, skipping file_search tool"
+                f"[FLOW_ORCHESTRATOR] Model {self.context.request.model} does not support OpenAI vector stores, skipping file_search tool"
             )
 
         logger.debug(f"[FLOW_ORCHESTRATOR] Final tools list length: {len(tools)}")
-        return tools
+        return cast(List[Dict[str, Any]], tools)
 
     def _extract_content_from_output(self, response: Any) -> str:
         """Extract text content from the response object's output array."""
@@ -284,6 +276,31 @@ class BackgroundFlowStrategy(BaseFlowStrategy):
         if self.context.tools:
             api_params["tools"] = self.context.tools
 
+        # DEBUG: Log exact API request for token analysis
+        import os
+        from ...utils.token_counter import count_tokens
+
+        debug_file = f".mcp-the-force/debug_api_request_{self.context.session_id}.json"
+        os.makedirs(os.path.dirname(debug_file), exist_ok=True)
+
+        # Calculate actual tokens that will be sent to API
+        api_content_parts = []
+        if "input" in api_params:
+            api_content_parts.append(api_params["input"])
+        if "instructions" in api_params:
+            api_content_parts.append(api_params["instructions"])
+        if "messages" in api_params:
+            for msg in api_params["messages"]:
+                if isinstance(msg, dict) and "content" in msg:
+                    api_content_parts.append(msg["content"])
+
+        actual_api_tokens = count_tokens(api_content_parts)
+
+        # Debug JSON file saving removed to reduce clutter
+        logger.debug(
+            f"[OPENAI] API request with {actual_api_tokens:,} tokens for session {self.context.session_id}"
+        )
+
         initial_response = await self.context.client.responses.create(**api_params)
         response_id = initial_response.id
 
@@ -342,6 +359,33 @@ class StreamingFlowStrategy(BaseFlowStrategy):
         api_params = self._prepare_api_params()
         if self.context.tools:
             api_params["tools"] = self.context.tools
+
+        # DEBUG: Log exact API request for token analysis (streaming)
+        import os
+        from ...utils.token_counter import count_tokens
+
+        debug_file = (
+            f".mcp-the-force/debug_api_request_streaming_{self.context.session_id}.json"
+        )
+        os.makedirs(os.path.dirname(debug_file), exist_ok=True)
+
+        # Calculate actual tokens that will be sent to API
+        api_content_parts = []
+        if "input" in api_params:
+            api_content_parts.append(api_params["input"])
+        if "instructions" in api_params:
+            api_content_parts.append(api_params["instructions"])
+        if "messages" in api_params:
+            for msg in api_params["messages"]:
+                if isinstance(msg, dict) and "content" in msg:
+                    api_content_parts.append(msg["content"])
+
+        actual_api_tokens = count_tokens(api_content_parts)
+
+        # Debug JSON file saving removed to reduce clutter
+        logger.debug(
+            f"[OPENAI] Streaming API request with {actual_api_tokens:,} tokens for session {self.context.session_id}"
+        )
 
         stream = await asyncio.wait_for(
             self.context.client.responses.create(**api_params),
