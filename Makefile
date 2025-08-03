@@ -5,8 +5,13 @@
 PYTEST := pytest
 FAST_UNIT_MARKER := "not slow and not e2e and not integration"
 
+# Docker image versioning based on Git SHA to avoid unnecessary rebuilds
+SHA := $(shell git rev-parse --short HEAD)
+RUNNER_IMG := the-force-e2e-runner:$(SHA)
+SERVER_IMG := the-force-e2e-server:$(SHA)
+
 # Phony targets ensure these are always run, regardless of file names.
-.PHONY: help install-hooks lint test test-unit test-integration e2e test-all ci clean backup
+.PHONY: help install-hooks lint test test-unit test-integration e2e test-all ci clean backup build-e2e-images
 
 help:
 	@echo "Usage: make <target>"
@@ -30,6 +35,17 @@ install-hooks:
 	@echo "✓ Pre-commit hooks installed!"
 	@echo "  - Fast checks will run on every commit"
 	@echo "  - Full unit tests will run on push (skip with --no-verify)"
+
+build-e2e-images:
+	@echo "Building E2E Docker images with SHA-based tags..."
+	@if ! docker image inspect $(RUNNER_IMG) >/dev/null 2>&1 ; then \
+		echo "🔨  Building $(RUNNER_IMG)..."; \
+		docker build -f tests/e2e_dind/Dockerfile.runner -t $(RUNNER_IMG) . ; \
+	else echo "✅  $(RUNNER_IMG) already present — skipping build"; fi
+	@if ! docker image inspect $(SERVER_IMG) >/dev/null 2>&1 ; then \
+		echo "🔨  Building $(SERVER_IMG)..."; \
+		docker build -f tests/e2e_dind/Dockerfile.server -t $(SERVER_IMG) . ; \
+	else echo "✅  $(SERVER_IMG) already present — skipping build"; fi
 
 lint:
 	@echo "Running linting and static analysis..."
@@ -82,6 +98,7 @@ e2e-setup:
 					-w /host-project \
 					-e OPENAI_API_KEY="$${OPENAI_API_KEY}" \
 					-e ANTHROPIC_API_KEY="$${ANTHROPIC_API_KEY}" \
+					-e XAI_API_KEY="$${XAI_API_KEY}" \
 					-e VERTEX_PROJECT="$${VERTEX_PROJECT}" \
 					-e VERTEX_LOCATION="$${VERTEX_LOCATION:-us-central1}" \
 					-e GOOGLE_APPLICATION_CREDENTIALS="/home/claude/.config/gcloud/application_default_credentials.json" \
@@ -118,8 +135,9 @@ e2e-setup:
 
 e2e:
 	@echo "Running Docker-in-Docker e2e tests..."
-	@# Check for Google Cloud credentials (ADC pattern)
-	@ADC_PATH="$(PWD)/.gcp/adc-credentials.json"; \
+	@# Check for Google Cloud credentials (ADC pattern) and export image variables
+	@export RUNNER_IMG=$(RUNNER_IMG) SERVER_IMG=$(SERVER_IMG); \
+	ADC_PATH="$(PWD)/.gcp/adc-credentials.json"; \
 	GLOBAL_ADC_PATH="$$HOME/.config/gcloud/application_default_credentials.json"; \
 	if [ -f "$$ADC_PATH" ]; then \
 		echo "Found project-local ADC at $$ADC_PATH"; \
@@ -131,8 +149,7 @@ e2e:
 		echo "Run 'mcp-config setup-adc' or 'gcloud auth application-default login'"; \
 		exit 1; \
 	fi; \
-	docker build -f tests/e2e_dind/Dockerfile.runner -t the-force-e2e-runner .; \
-	docker build -f tests/e2e_dind/Dockerfile.server -t the-force-e2e-server .; \
+	$(MAKE) build-e2e-images; \
 	if [ -n "$(TEST)" ]; then \
 		echo "Running specific e2e test: $(TEST)"; \
 		TEST_NAME=$$(basename $(TEST) .py); \
@@ -146,11 +163,14 @@ e2e:
 			-w /host-project/tests/e2e_dind \
 			-e OPENAI_API_KEY="$${OPENAI_API_KEY}" \
 			-e ANTHROPIC_API_KEY="$${ANTHROPIC_API_KEY}" \
+			-e XAI_API_KEY="$${XAI_API_KEY}" \
 			-e VERTEX_PROJECT="$${VERTEX_PROJECT}" \
 			-e VERTEX_LOCATION="$${VERTEX_LOCATION:-us-central1}" \
 			-e GOOGLE_APPLICATION_CREDENTIALS="/home/claude/.config/gcloud/application_default_credentials.json" \
 			-e SHARED_TMP_VOLUME="$$VOL" \
-			the-force-e2e-runner $(TEST) -v -s --tb=short; \
+			-e RUNNER_IMG="$(RUNNER_IMG)" \
+			-e SERVER_IMG="$(SERVER_IMG)" \
+			$(RUNNER_IMG) $(TEST) -v -s --tb=short; \
 		EXIT_CODE=$$?; \
 		docker volume rm "$$VOL" >/dev/null 2>&1 || true; \
 		exit $$EXIT_CODE; \
@@ -170,11 +190,14 @@ e2e:
 						-w /host-project/tests/e2e_dind \
 						-e OPENAI_API_KEY="$${OPENAI_API_KEY}" \
 						-e ANTHROPIC_API_KEY="$${ANTHROPIC_API_KEY}" \
+						-e XAI_API_KEY="$${XAI_API_KEY}" \
 						-e VERTEX_PROJECT="$${VERTEX_PROJECT}" \
 						-e VERTEX_LOCATION="$${VERTEX_LOCATION:-us-central1}" \
 						-e GOOGLE_APPLICATION_CREDENTIALS="/home/claude/.config/gcloud/application_default_credentials.json" \
 						-e SHARED_TMP_VOLUME="$$VOL" \
-						the-force-e2e-runner scenarios/test_$$scenario.py -v --tb=short; \
+						-e RUNNER_IMG="$(RUNNER_IMG)" \
+						-e SERVER_IMG="$(SERVER_IMG)" \
+						$(RUNNER_IMG) scenarios/test_$$scenario.py -v --tb=short; \
 					EXIT_CODE=$$?; \
 					docker volume rm "$$VOL" >/dev/null 2>&1 || true; \
 					if [ $$EXIT_CODE -eq 0 ]; then \

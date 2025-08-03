@@ -46,10 +46,10 @@ async def _maybe_store_memory(
         return
 
     settings = get_settings()
-    if not settings.memory_enabled:
+    if not settings.history_enabled:
         return
 
-    if settings.memory.sync:
+    if settings.history.sync:
         # Block (with timeout) so the CLI process can exit safely afterwards
         logger.debug(
             f"[MEMORY] Storing conversation memory synchronously for {tool_id}"
@@ -62,11 +62,11 @@ async def _maybe_store_memory(
                     messages=messages,
                     response=response,
                 ),
-                timeout=settings.memory.sync_timeout,
+                timeout=settings.history.sync_timeout,
             )
         except asyncio.TimeoutError:
             logger.warning(
-                f"[MEMORY] Synchronous store timeout after {settings.memory.sync_timeout}s for {tool_id}"
+                f"[MEMORY] Synchronous store timeout after {settings.history.sync_timeout}s for {tool_id}"
             )
         except Exception as exc:
             logger.warning(f"[MEMORY] Synchronous store failed for {tool_id}: {exc}")
