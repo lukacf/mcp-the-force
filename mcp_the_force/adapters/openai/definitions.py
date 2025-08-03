@@ -268,7 +268,10 @@ def _generate_and_register_blueprints():
     logger.debug(f"[OPENAI_DEFINITIONS] Final api_key: {repr(api_key)}")
 
     # Check if we're in mock mode - if so, allow registration without API key for test discoverability
-    mock_mode = os.getenv("MCP_ADAPTER_MOCK") == "1"
+    mock_mode = settings.adapter_mock  # Use config system instead of direct env var
+    logger.debug(
+        f"[OPENAI_DEFINITIONS] Mock mode check: settings.adapter_mock={mock_mode}, MCP_ADAPTER_MOCK={os.getenv('MCP_ADAPTER_MOCK')}"
+    )
 
     if not (api_key and str(api_key).strip()) and not mock_mode:
         # No valid key and not in mock mode → skip registration and remove any existing OpenAI tools
