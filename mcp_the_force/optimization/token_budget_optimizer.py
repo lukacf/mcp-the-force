@@ -1,18 +1,24 @@
-"""Token budget optimizer with iterative convergence."""
+"""Token budget optimization with proper architectural separation."""
 
 import logging
+import json
 from typing import List, Optional, Tuple
 
 from ..utils.token_counter import count_tokens
-from ..utils.stable_list_cache import StableListCache
-from .models import FileInfo, Plan, BudgetSnapshot
+from .models import Plan, FileInfo
 from .prompt_builder import PromptBuilder
+from ..utils.stable_list_cache import StableListCache
 
 logger = logging.getLogger(__name__)
 
 
 class TokenBudgetOptimizer:
-    """Optimizes token budget to fit prompts within model context windows."""
+    """
+    Single authority for inline/overflow decisions.
+
+    This class owns ALL decisions about which files go inline vs vector store.
+    StableListCache is used purely for history tracking.
+    """
 
     def __init__(
         self,
@@ -39,11 +45,11 @@ class TokenBudgetOptimizer:
         self.tool_name = tool_name
 
         self.prompt_builder = PromptBuilder()
-        self.max_iterations = 10
 
     async def optimize(self) -> Plan:
         """
         Multi-pass optimization to fit prompt within model limits.
+        Now owns ALL inline/overflow decisions every call.
 
         Returns:
             Plan with optimized file distribution and final prompt
@@ -57,7 +63,6 @@ class TokenBudgetOptimizer:
         if self.project_name and self.tool_name:
             try:
                 from ..unified_session_cache import unified_session_cache
-                import json
 
                 history = await unified_session_cache.get_history(
                     self.project_name, self.tool_name, self.session_id
@@ -101,215 +106,482 @@ class TokenBudgetOptimizer:
                 session_history_tokens = 0
                 session_messages = []
 
-        # Use existing context builder to get initial split
+        # Initialize history tracker (no decision making)
         cache = StableListCache()
 
-        # Calculate initial budget including session history overhead
-        initial_budget = self.model_limit - self.fixed_reserve - session_history_tokens
-
-        # Get initial file split from context builder - import here to match test mocking
-        from ..utils.context_builder import build_context_with_stable_list
-
-        inline_files, overflow_files, file_tree = await build_context_with_stable_list(
-            context_paths=self.context_paths,
-            session_id=self.session_id,
-            cache=cache,
-            token_budget=initial_budget,
-            priority_context=self.priority_paths,
+        # Calculate available budget including session history overhead
+        available_budget = (
+            self.model_limit - self.fixed_reserve - session_history_tokens
         )
+        logger.info(f"[OPTIMIZER] Available budget: {available_budget:,} tokens")
 
-        # Debug logging for the tuple issue
+        # STEP 1: Gather all files from context paths
+        from ..utils.fs import gather_file_paths_async
+
+        all_file_paths = await gather_file_paths_async(self.context_paths)
+        logger.info(f"[OPTIMIZER] Found {len(all_file_paths)} total files")
+
+        # STEP 2: Get history information (no decisions)
+        previous_inline = await cache.get_previous_inline_list(self.session_id)
+        is_first_call = await cache.is_first_call(self.session_id)
+
+        logger.info(f"[OPTIMIZER] Previous inline files: {len(previous_inline)}")
+        logger.info(f"[OPTIMIZER] Is first call: {is_first_call}")
+
+        # Get change status for all files
+        changed_files, unchanged_files = await cache.get_file_change_status(
+            self.session_id, all_file_paths
+        )
         logger.info(
-            f"[OPTIMIZER] Initial split: {len(inline_files)} inline, {len(overflow_files)} overflow"
+            f"[OPTIMIZER] Changed files: {len(changed_files)}, Unchanged: {len(unchanged_files)}"
         )
-        logger.debug(f"[OPTIMIZER] inline_files structure: {inline_files}")
-        logger.debug(f"[OPTIMIZER] overflow_files structure: {overflow_files}")
-        logger.debug(f"[OPTIMIZER] file_tree structure: {file_tree}")
 
-        # Build initial prompt
+        # STEP 3: Make inline/overflow decisions (optimizer's job)
+
+        # DECISION PHASE: Include all files that could be inline
+        # - Previous inline files (for demotion decisions)
+        # - Priority files (always considered)
+        # - Changed files (need decisions)
+        # - New files (promotion candidates)
+        candidate_inline = set()
+
+        if not is_first_call:
+            # Include previous inline for decision-making (may demote some)
+            candidate_inline.update(previous_inline)
+
+        # Always include priority files in decisions
+        candidate_inline.update(self.priority_paths)
+
+        # Always include changed files in decisions
+        candidate_inline.update(changed_files)
+
+        # Convert to list and filter to files that actually exist
+        candidate_inline_list = [
+            path for path in candidate_inline if path in all_file_paths
+        ]
+
+        logger.info(f"[OPTIMIZER] Candidate inline files: {len(candidate_inline_list)}")
+
+        # STEP 4: Token-based optimization
+
+        # Import file loading here to match test mocking patterns
+        from ..utils.context_loader import load_specific_files_async
+        from ..utils.file_tree import build_file_tree_from_paths
+
+        # Load all candidate files for decision-making
+        inline_file_data = await load_specific_files_async(candidate_inline_list)
+
+        # CRITICAL FIX: Only count tokens for files we'll SEND (delta), not all candidates
+        files_to_send_this_turn = []
+        if is_first_call:
+            # First call: send all inline files
+            files_to_send_this_turn = inline_file_data
+        else:
+            # Subsequent calls: only send changed files or newly promoted files
+            files_to_send_this_turn = [
+                file_data
+                for file_data in inline_file_data
+                if file_data[0] in changed_files  # Changed files must be re-sent
+                # Note: newly promoted files will be handled later in optimization
+            ]
+
+        # Calculate tokens for ONLY files being sent this turn (no double-counting)
+        send_token_cost = sum(tokens for _, _, tokens in files_to_send_this_turn)
+
+        # Build file tree (check if first call - only include tree on first call)
+        file_tree = ""
+        file_tree_tokens = 0
+
+        if is_first_call:
+            # Only include file tree on first session message
+            overflow_paths = [
+                path for path in all_file_paths if path not in candidate_inline_list
+            ]
+            file_tree = build_file_tree_from_paths(all_file_paths, overflow_paths)
+            file_tree_tokens = count_tokens([file_tree])
+            logger.info(f"[OPTIMIZER] File tree tokens: {file_tree_tokens:,}")
+        else:
+            # Subsequent calls: no tree, AI already has context
+            logger.info("[OPTIMIZER] Skipping file tree - not first call")
+
+        # Calculate total prompt tokens needed (NO double-counting!)
+        base_prompt_tokens = count_tokens(
+            [self.developer_prompt, self.instructions, self.output_format]
+        )
+
+        # session_history_tokens already includes unchanged inline files from previous messages
+        # so we only add the cost of NEW files being sent this turn
+        total_needed = (
+            base_prompt_tokens
+            + send_token_cost  # Only new/changed files, not unchanged ones
+            + file_tree_tokens
+            + session_history_tokens  # Already includes previous unchanged inline files
+        )
+
+        logger.info(
+            f"[OPTIMIZER] Token breakdown: base={base_prompt_tokens}, "
+            f"send_delta={send_token_cost}, tree={file_tree_tokens}, "
+            f"history={session_history_tokens}, total={total_needed:,}"
+        )
+
+        # STEP 5: Make inline/overflow decisions and adjust if needed
+
+        # Start with all candidates as potential inline
+        potential_inline = inline_file_data[:]
+        overflow_files = [
+            path for path in all_file_paths if path not in candidate_inline_list
+        ]
+
+        # Check if we need to make adjustments
+        if is_first_call:
+            # First call: use traditional budget-based selection
+            if total_needed > available_budget:
+                # Over budget - demote files
+                logger.warning(
+                    f"[OPTIMIZER] Over budget by {total_needed - available_budget:,} tokens"
+                )
+                potential_inline, additional_overflow = (
+                    self._demote_files_to_fit_budget(
+                        potential_inline,
+                        available_budget
+                        - base_prompt_tokens
+                        - file_tree_tokens
+                        - session_history_tokens,
+                    )
+                )
+                overflow_files.extend(additional_overflow)
+
+        else:
+            # Subsequent calls: we can keep more inline since unchanged files don't cost tokens
+            # Only the send_delta counts against budget
+            if total_needed > available_budget:
+                # This should be rare since we're only sending changed files
+                logger.warning(
+                    f"[OPTIMIZER] Over budget by {total_needed - available_budget:,} tokens on subsequent call"
+                )
+                # Demote some changed files if necessary
+                files_to_send_this_turn, additional_overflow = (
+                    self._demote_files_to_fit_budget(
+                        files_to_send_this_turn,
+                        available_budget
+                        - base_prompt_tokens
+                        - file_tree_tokens
+                        - session_history_tokens,
+                    )
+                )
+                overflow_files.extend(additional_overflow)
+
+        # Final inline decision
+        final_inline_files = potential_inline
+
+        if total_needed > available_budget:
+            # Over budget - demote largest non-priority files
+            logger.warning(
+                f"[OPTIMIZER] Over budget by {total_needed - available_budget:,} tokens"
+            )
+
+            # Separate priority from non-priority inline files
+            priority_files = []
+            demotable_files = []
+
+            for file_data in inline_file_data:
+                file_path = file_data[0]
+                if file_path in self.priority_paths:
+                    priority_files.append(file_data)
+                else:
+                    demotable_files.append(file_data)
+
+            # Sort demotable files by token count (largest first)
+            demotable_files.sort(key=lambda x: x[2], reverse=True)
+
+            # Keep removing files until we fit
+            final_inline_files = priority_files[:]
+            current_cost = sum(tokens for _, _, tokens in priority_files)
+
+            for file_data in demotable_files:
+                test_cost = current_cost + file_data[2]
+                if (
+                    base_prompt_tokens
+                    + test_cost
+                    + file_tree_tokens
+                    + session_history_tokens
+                    <= available_budget
+                ):
+                    final_inline_files.append(file_data)
+                    current_cost = test_cost
+                else:
+                    overflow_files.append(file_data[0])
+
+            logger.info(
+                f"[OPTIMIZER] After demotion: {len(final_inline_files)} inline, {len(overflow_files)} overflow"
+            )
+
+        elif total_needed < available_budget * 0.8:  # Under 80% budget usage
+            # Under budget - try to promote some overflow files
+            remaining_budget = available_budget - total_needed
+            logger.info(
+                f"[OPTIMIZER] Under budget - {remaining_budget:,} tokens available for promotion"
+            )
+
+            # Load potential promotion candidates (smallest first for efficiency)
+            promotable_paths = [
+                path for path in overflow_files if path not in self.priority_paths
+            ]
+            if promotable_paths:
+                # Sample some files to check (don't load all for performance)
+                sample_size = min(50, len(promotable_paths))
+                sample_paths = promotable_paths[:sample_size]
+                sample_data = await load_specific_files_async(sample_paths)
+
+                # Sort by token count (smallest first - more files fit)
+                sample_data.sort(key=lambda x: x[2])
+
+                promoted_tokens = 0
+                for file_data in sample_data:
+                    if promoted_tokens + file_data[2] <= remaining_budget:
+                        final_inline_files.append(file_data)
+                        promoted_tokens += file_data[2]
+                        overflow_files.remove(file_data[0])
+                    else:
+                        break
+
+                if promoted_tokens > 0:
+                    logger.info(
+                        f"[OPTIMIZER] Promoted {promoted_tokens:,} tokens worth of files"
+                    )
+
+        # STEP 6: Save the new inline decision to cache
+        final_inline_paths = [file_data[0] for file_data in final_inline_files]
+        await cache.save_stable_list(self.session_id, final_inline_paths)
+
+        # Update sent file info for files we're sending
+        files_to_send = []
+        if is_first_call:
+            # First call: send all inline files
+            files_to_send = final_inline_files
+        else:
+            # Subsequent calls: send only changed inline files
+            files_to_send = [
+                file_data
+                for file_data in final_inline_files
+                if file_data[0] in changed_files
+            ]
+
+        # Update cache with sent file info
+        files_to_update = []
+        for file_path, _, _ in files_to_send:
+            try:
+                import os
+
+                stat = os.stat(file_path)
+                files_to_update.append(
+                    (file_path, int(stat.st_size), int(stat.st_mtime_ns))
+                )
+            except OSError as e:
+                logger.warning(f"Could not stat file {file_path} for cache update: {e}")
+
+        if files_to_update:
+            await cache.batch_update_sent_files(self.session_id, files_to_update)
+
+        # STEP 7: Build the optimized prompt
         prompt = self.prompt_builder.build_prompt(
             instructions=self.instructions,
             output_format=self.output_format,
-            inline_files=inline_files,
+            inline_files=files_to_send,  # Only files being sent in this message
             all_files=self.context_paths,
             overflow_files=overflow_files,
         )
 
-        # Start iterative optimization
-        iteration = 0
-        while iteration < self.max_iterations:
-            iteration += 1
-
-            # Calculate complete prompt tokens
-            complete_tokens = self.prompt_builder.calculate_complete_prompt_tokens(
-                self.developer_prompt, prompt
-            )
-
-            snapshot = BudgetSnapshot(
-                model_limit=self.model_limit,
-                fixed_reserve=self.fixed_reserve,
-                history_tokens=0,  # Included in developer_prompt
-                overhead_tokens=0,  # Included in complete calculation
-                available_budget=self.model_limit - self.fixed_reserve,
-                prompt_tokens=complete_tokens,
-            )
-
-            logger.info(
-                f"[OPTIMIZER][ITER_{iteration}] Prompt: {complete_tokens:,} tokens, "
-                f"Limit: {self.model_limit:,}, Overage: {snapshot.overage:,}"
-            )
-
-            if snapshot.fits:
-                logger.info(f"[OPTIMIZER] Converged in {iteration} iterations")
-                break
-
-            # Need to move files from inline to overflow
-            if not inline_files:
-                logger.error("[OPTIMIZER] No inline files left to move")
-                break
-
-            # Find movable files (non-priority)
-            try:
-                movable_files = [
-                    (path, content, tokens)
-                    for path, content, tokens in inline_files
-                    if path not in self.priority_paths
-                ]
-            except ValueError as e:
-                logger.error(f"[OPTIMIZER] Error unpacking inline_files tuples: {e}")
-                logger.error(f"[OPTIMIZER] inline_files structure: {inline_files}")
-                raise
-
-            if not movable_files:
-                logger.error(
-                    "[OPTIMIZER] Only priority files remain, cannot optimize further"
-                )
-                break
-
-            # Move largest files to free up enough tokens
-            tokens_to_free = snapshot.overage + 1000  # Add buffer
-            moved_files = self._move_largest_files(
-                movable_files, overflow_files, tokens_to_free
-            )
-
-            # Update inline_files list
-            try:
-                moved_paths = {path for path, _, _ in moved_files}
-                inline_files = [
-                    (path, content, tokens)
-                    for path, content, tokens in inline_files
-                    if path not in moved_paths
-                ]
-            except ValueError as e:
-                logger.error(
-                    f"[OPTIMIZER] Error unpacking moved_files or inline_files: {e}"
-                )
-                logger.error(f"[OPTIMIZER] moved_files structure: {moved_files}")
-                logger.error(f"[OPTIMIZER] inline_files structure: {inline_files}")
-                raise
-
-            logger.info(f"[OPTIMIZER] Moved {len(moved_files)} files to vector store")
-
-            # Rebuild prompt with updated file distribution
-            prompt = self.prompt_builder.build_prompt(
-                instructions=self.instructions,
-                output_format=self.output_format,
-                inline_files=inline_files,
-                all_files=self.context_paths,
-                overflow_files=overflow_files,
-            )
-
-        # Final check
         final_tokens = self.prompt_builder.calculate_complete_prompt_tokens(
             self.developer_prompt, prompt
         )
 
+        # CRITICAL: Check if final result exceeds model limit and demote if needed
         if final_tokens > self.model_limit:
-            overage = final_tokens - self.model_limit
-            raise RuntimeError(
-                f"Failed to optimize prompt after {iteration} iterations. "
-                f"Final: {final_tokens:,} tokens exceeds limit {self.model_limit:,} by {overage:,}"
+            logger.warning(
+                f"[OPTIMIZER] Final prompt {final_tokens:,} exceeds model limit {self.model_limit:,}, demoting files"
             )
 
-        # Create final plan
-        inline_file_infos = [
-            FileInfo(
-                path=path,
-                size=0,
-                est_tokens=tokens,
-                exact_tokens=tokens,
-                priority=path in self.priority_paths,
+            # Calculate how much we need to reduce (for logging/debugging)
+            excess_tokens = final_tokens - self.model_limit
+            logger.debug(f"[OPTIMIZER] Need to reduce by {excess_tokens:,} tokens")
+
+            # Demote files until we fit (retry mechanism)
+            retry_count = 0
+            max_retries = 3
+
+            while final_tokens > self.model_limit and retry_count < max_retries:
+                retry_count += 1
+
+                # Demote some files to reduce token count
+                if files_to_send:
+                    # Remove largest files first
+                    files_to_send.sort(
+                        key=lambda x: x[2], reverse=True
+                    )  # Sort by tokens desc
+                    demoted_file = files_to_send.pop(0)  # Remove largest
+                    overflow_files.append(demoted_file[0])  # Add to overflow
+
+                    logger.info(
+                        f"[OPTIMIZER] Demoted {demoted_file[0]} ({demoted_file[2]} tokens) - retry {retry_count}"
+                    )
+
+                    # Rebuild prompt and recalculate
+                    final_inline_paths = [f[0] for f in files_to_send]
+                    prompt = self.prompt_builder.build_prompt(
+                        instructions=self.instructions,
+                        output_format=self.output_format,
+                        inline_files=files_to_send,
+                        all_files=all_file_paths,
+                        overflow_files=overflow_files,
+                    )
+
+                    final_tokens = self.prompt_builder.calculate_complete_prompt_tokens(
+                        self.developer_prompt, prompt
+                    )
+
+                    logger.info(f"[OPTIMIZER] After demotion: {final_tokens:,} tokens")
+                else:
+                    break  # No more files to demote
+
+            if final_tokens > self.model_limit:
+                error_msg = f"Failed to optimize prompt: {final_tokens:,} tokens still exceeds model limit {self.model_limit:,} after {max_retries} retries"
+                logger.error(f"[OPTIMIZER] {error_msg}")
+                raise RuntimeError(error_msg)
+
+        logger.info(
+            f"[OPTIMIZER] Final plan: {len(files_to_send)} files to send, "
+            f"{len(final_inline_paths)} total inline, {len(overflow_files)} overflow, "
+            f"{final_tokens:,} tokens"
+        )
+
+        # Create the optimized prompt by combining developer and user prompts
+        optimized_prompt = f"{self.developer_prompt}\\n\\n{prompt}"
+
+        # Convert to FileInfo objects for the plan
+        inline_file_infos = []
+        for file_path, content, tokens in files_to_send:
+            try:
+                import os
+
+                size = os.path.getsize(file_path)
+                mtime = int(os.path.getmtime(file_path))
+            except OSError:
+                size = len(content.encode("utf-8"))
+                mtime = 0
+
+            inline_file_infos.append(
+                FileInfo(
+                    path=file_path,
+                    content=content,
+                    size=size,
+                    tokens=tokens,
+                    mtime=mtime,
+                )
             )
-            for path, _, tokens in inline_files
-        ]
 
-        overflow_file_infos = [
-            FileInfo(
-                path=path, size=0, est_tokens=0, priority=path in self.priority_paths
+        overflow_file_infos = []
+        for file_path in overflow_files:
+            try:
+                import os
+
+                size = os.path.getsize(file_path)
+                mtime = int(os.path.getmtime(file_path))
+            except OSError:
+                size = 0
+                mtime = 0
+
+            overflow_file_infos.append(
+                FileInfo(
+                    path=file_path,
+                    content="",  # Overflow files don't have content
+                    size=size,
+                    tokens=0,  # Will be in vector store
+                    mtime=mtime,
+                )
             )
-            for path in overflow_files
-        ]
 
-        # Build complete message list (dev prompt + session history + user prompt)
-        messages = []
+        # Build complete message list (dev + history + user)
+        complete_messages = []
 
-        # Add developer prompt if not already in session history
-        if not session_messages or session_messages[0].get("role") != "developer":
-            messages.append({"role": "developer", "content": self.developer_prompt})
+        # Add developer prompt if provided
+        if self.developer_prompt:
+            complete_messages.append(
+                {"role": "developer", "content": self.developer_prompt}
+            )
 
         # Add session history
-        messages.extend(session_messages)
+        complete_messages.extend(session_messages)
 
-        # Add current user message with optimized prompt
-        messages.append({"role": "user", "content": prompt})
+        # Add current user message (use only the user prompt part, not the combined optimized_prompt)
+        if (
+            prompt
+        ):  # Changed from self.instructions to prompt to handle empty instructions case
+            complete_messages.append(
+                {
+                    "role": "user",
+                    "content": prompt,  # Use only the user prompt part (without developer prompt)
+                }
+            )
 
-        plan = Plan(
+        # Return the optimization plan
+        return Plan(
             inline_files=inline_file_infos,
             overflow_files=overflow_file_infos,
             file_tree=file_tree,
             total_prompt_tokens=final_tokens,
-            iterations=iteration,
-            optimized_prompt=prompt,  # Store the final optimized prompt
-            messages=messages,  # Complete message list including history
+            iterations=1,  # New architecture doesn't need multiple iterations
+            optimized_prompt=optimized_prompt,
+            messages=complete_messages,  # Complete message list
+            overflow_paths=[
+                info.path for info in overflow_file_infos
+            ],  # Add overflow paths for vector store
         )
 
-        logger.info(
-            f"[OPTIMIZER] Final plan: {len(plan.inline_files)} inline files, "
-            f"{len(plan.overflow_files)} overflow files, {final_tokens:,} tokens"
-        )
+    def _demote_files_to_fit_budget(
+        self, file_data_list: List[Tuple[str, str, int]], budget: int
+    ) -> Tuple[List[Tuple[str, str, int]], List[str]]:
+        """
+        Demote files to fit within budget, prioritizing smaller files.
 
-        return plan
+        Args:
+            file_data_list: List of (path, content, tokens) tuples
+            budget: Available token budget
 
-    def _move_largest_files(
-        self,
-        movable_files: List[Tuple[str, str, int]],
-        overflow_files: List[str],
-        tokens_to_free: int,
-    ) -> List[Tuple[str, str, int]]:
-        """Move largest files to overflow until enough tokens are freed."""
-        # Sort by token count descending
-        sorted_files = sorted(movable_files, key=lambda x: x[2], reverse=True)
+        Returns:
+            (remaining_files, demoted_paths) where:
+            - remaining_files: Files that fit within budget
+            - demoted_paths: Paths of files that were demoted
+        """
+        if not file_data_list:
+            return [], []
 
-        moved_files = []
-        tokens_freed = 0
+        # Separate priority from non-priority files
+        priority_files = []
+        demotable_files = []
 
-        for file_path, content, file_tokens in sorted_files:
-            if tokens_freed >= tokens_to_free:
-                break
+        for file_data in file_data_list:
+            file_path = file_data[0]
+            if file_path in self.priority_paths:
+                priority_files.append(file_data)
+            else:
+                demotable_files.append(file_data)
 
-            # Add to overflow
-            if file_path not in overflow_files:
-                overflow_files.append(file_path)
+        # Sort demotable files by token count (largest first for efficient removal)
+        demotable_files.sort(key=lambda x: x[2], reverse=True)
 
-            moved_files.append((file_path, content, file_tokens))
+        # Start with priority files (they always stay)
+        remaining_files = priority_files[:]
+        current_tokens = sum(tokens for _, _, tokens in priority_files)
 
-            # Include both content tokens AND wrapper token overhead when calculating freed tokens
-            wrapper_tokens = self.prompt_builder.file_wrapper_tokens(file_path)
-            total_freed = file_tokens + wrapper_tokens
-            tokens_freed += total_freed
+        # Add demotable files while they fit
+        demoted_paths = []
+        for file_data in demotable_files:
+            if current_tokens + file_data[2] <= budget:
+                remaining_files.append(file_data)
+                current_tokens += file_data[2]
+            else:
+                demoted_paths.append(file_data[0])
 
-            logger.debug(
-                f"[OPTIMIZER] Moved {file_path} ({file_tokens:,} content + {wrapper_tokens:,} wrapper = {total_freed:,} total tokens) to overflow"
-            )
-
-        return moved_files
+        logger.info(f"Demoted {len(demoted_paths)} files to fit budget")
+        return remaining_files, demoted_paths

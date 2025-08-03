@@ -137,6 +137,64 @@ class MockAdapter:
         # This is what the tests expect to see
         full_prompt = pretty_history
 
+        # Extract user instructions for prompt_preview
+        # For Gemini models, the prompt parameter may be the developer instructions
+        # but the user instructions are in the messages or the prompt itself
+        prompt_preview = prompt[:200] + "..." if len(prompt) > 200 else prompt
+
+        # For test compatibility, try to extract user instructions from various sources
+        # First check if messages have the correct user content (for Gemini models)
+        if history:
+            last_user_msg = None
+            for msg in reversed(history):
+                if msg.get("role") == "user":
+                    last_user_msg = msg
+                    break
+            if last_user_msg:
+                # If the user message contains instructions, use that for prompt_preview
+                if (
+                    "<Instructions>" in last_user_msg["content"]
+                    or "<instructions>" in last_user_msg["content"]
+                ):
+                    import re
+
+                    # Try both capitalized and lowercase versions
+                    instructions_match = re.search(
+                        r"<Instructions>(.*?)</Instructions>",
+                        last_user_msg["content"],
+                        re.DOTALL,
+                    )
+                    if not instructions_match:
+                        instructions_match = re.search(
+                            r"<instructions>(.*?)</instructions>",
+                            last_user_msg["content"],
+                            re.DOTALL,
+                        )
+
+                    if instructions_match:
+                        user_instructions = instructions_match.group(1).strip()
+                        prompt_preview = (
+                            user_instructions[:200] + "..."
+                            if len(user_instructions) > 200
+                            else user_instructions
+                        )
+
+        # Fallback: try to extract from prompt parameter (for non-Gemini models)
+        if prompt_preview == (prompt[:200] + "..." if len(prompt) > 200 else prompt):
+            if "<instructions>" in prompt and "</instructions>" in prompt:
+                import re
+
+                instructions_match = re.search(
+                    r"<instructions>(.*?)</instructions>", prompt, re.DOTALL
+                )
+                if instructions_match:
+                    user_instructions = instructions_match.group(1).strip()
+                    prompt_preview = (
+                        user_instructions[:200] + "..."
+                        if len(user_instructions) > 200
+                        else user_instructions
+                    )
+
         # ------------------------------------------------------------------
         # 4. Produce a "mock response" that includes all the metadata
         # ------------------------------------------------------------------
@@ -165,7 +223,7 @@ class MockAdapter:
             "mock": True,  # Add this field that the test expects
             "model": self.model_name,
             "prompt": full_prompt,  # Use full conversation history for tests
-            "prompt_preview": prompt[:200] + "..." if len(prompt) > 200 else prompt,
+            "prompt_preview": prompt_preview,  # Now extracts user instructions when possible
             "prompt_length": len(full_prompt),
             "session_id": session_id,
             "vector_store_ids": sorted(vector_store_ids) if vector_store_ids else [],
@@ -175,8 +233,7 @@ class MockAdapter:
             "adapter_kwargs": adapter_kwargs,  # Add this for test compatibility
         }
 
-        # Add mock response to history
-        mock_response = json.dumps(metadata)  # Return pure JSON for integration tests
+        # Save mock response to history if needed
         if session_id and not session_id.startswith("temp-"):
             # For history, save a simpler response to avoid SQLite size limits
             # Don't persist history for temporary sessions (like describe_session uses)
@@ -193,5 +250,6 @@ class MockAdapter:
                 ctx.project, ctx.tool, session_id, history
             )
 
-        # Return dict format as per MCPAdapter protocol
-        return {"content": mock_response}
+        # Return the metadata dict directly in content field
+        # Integration tests expect to parse this as JSON
+        return {"content": json.dumps(metadata)}

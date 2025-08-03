@@ -9,15 +9,10 @@ class FileInfo:
     """Information about a file for optimization decisions."""
 
     path: str
+    content: str  # File content (empty for overflow files)
     size: int
-    est_tokens: int
-    exact_tokens: Optional[int] = None
-    priority: bool = False
-
-    @property
-    def tokens(self) -> int:
-        """Get the most accurate token count available."""
-        return self.exact_tokens if self.exact_tokens is not None else self.est_tokens
+    tokens: int  # Exact token count
+    mtime: int  # Modification time for change detection
 
 
 @dataclass
@@ -31,15 +26,17 @@ class Plan:
     iterations: int
     optimized_prompt: str  # The final optimized XML prompt
     messages: List[dict]  # Complete message list (dev + history + user)
+    overflow_paths: Optional[List[str]] = None  # For backward compatibility
 
     @property
     def inline_paths(self) -> List[str]:
         """Get list of inline file paths."""
         return [f.path for f in self.inline_files]
 
-    @property
-    def overflow_paths(self) -> List[str]:
+    def get_overflow_paths(self) -> List[str]:
         """Get list of overflow file paths."""
+        if self.overflow_paths is not None:
+            return self.overflow_paths
         return [f.path for f in self.overflow_files]
 
 
