@@ -139,6 +139,11 @@ def _build_structure(all_paths: List[str]) -> Tuple[Path, Dict[str, Any]]:
             rel = Path(p.name)
 
         cur = tree
+
+        # Skip empty paths (can happen with root directories or empty strings)
+        if not rel.parts:
+            continue
+
         # Traverse path parts to create directory nodes
         for part in rel.parts[:-1]:
             cur = cur.setdefault(part, {})

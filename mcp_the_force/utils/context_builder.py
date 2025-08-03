@@ -9,6 +9,7 @@ from ..utils.context_loader import load_specific_files_async
 from ..utils.token_counter import count_tokens
 from .stable_list_cache import StableListCache
 from .file_tree import build_file_tree_from_paths
+from .token_utils import file_wrapper_tokens
 
 logger = logging.getLogger(__name__)
 
@@ -172,7 +173,9 @@ async def build_context_with_stable_list(
         )
         for file_path in sorted_files:
             try:
-                actual_tokens = count_tokens_from_file(file_path)
+                content_tokens = count_tokens_from_file(file_path)
+                wrapper_tokens = file_wrapper_tokens(file_path)
+                actual_tokens = content_tokens + wrapper_tokens
 
                 # Priority files ALWAYS go inline, regardless of budget
                 if file_path in priority_files:

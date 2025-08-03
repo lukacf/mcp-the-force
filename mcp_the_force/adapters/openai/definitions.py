@@ -242,6 +242,53 @@ def _calculate_timeout(model_name: str) -> int:
 
 def _generate_and_register_blueprints():
     """Generate and register blueprints for all OpenAI models."""
+    # Check if OpenAI API key is available before registering any blueprints
+    from ...config import get_settings
+    import os
+    from pydantic import SecretStr
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    settings = get_settings()
+    api_key = settings.openai_api_key
+    logger.debug(f"[OPENAI_DEFINITIONS] Raw api_key: {type(api_key)} = {api_key}")
+
+    if isinstance(api_key, SecretStr):
+        api_key = api_key.get_secret_value()
+
+    # Fallback to env-vars so tests can inject a key with monkeypatch.setenv
+    env_key1 = os.getenv("OPENAI_API_KEY")
+    env_key2 = os.getenv("MCP_OPENAI_API_KEY")
+    logger.debug(
+        f"[OPENAI_DEFINITIONS] Env vars: OPENAI_API_KEY={env_key1}, MCP_OPENAI_API_KEY={env_key2}"
+    )
+
+    api_key = api_key or env_key1 or env_key2
+    logger.debug(f"[OPENAI_DEFINITIONS] Final api_key: {repr(api_key)}")
+
+    if not (api_key and str(api_key).strip()):
+        # No valid key → skip registration and remove any existing OpenAI tools
+        from ...tools.registry import TOOL_REGISTRY
+
+        openai_tools_to_remove = []
+
+        for tool_name, tool_meta in TOOL_REGISTRY.items():
+            if tool_meta.model_config.get("adapter_class") == "openai":
+                openai_tools_to_remove.append(tool_name)
+
+        for tool_name in openai_tools_to_remove:
+            del TOOL_REGISTRY[tool_name]
+
+        logger.debug(
+            f"[OPENAI_DEFINITIONS] No API key found, removed {len(openai_tools_to_remove)} OpenAI tools from registry"
+        )
+        return
+
+    logger.debug(
+        f"[OPENAI_DEFINITIONS] API key found, registering {len(OPENAI_MODEL_CAPABILITIES)} OpenAI tools"
+    )
+
     blueprints = []
 
     for model_name, capabilities in OPENAI_MODEL_CAPABILITIES.items():

@@ -383,7 +383,6 @@ class TestBuildContextWithStableList:
             os.unlink(db_path)
 
     @pytest.mark.asyncio
-    @pytest.mark.skip(reason="Needs adjustment for tiktoken-based approach")
     async def test_priority_context_always_inline(self):
         """Test that priority_context files always go inline even on subsequent calls."""
         with tempfile.NamedTemporaryFile(suffix=".sqlite3", delete=False) as f:
@@ -392,7 +391,7 @@ class TestBuildContextWithStableList:
         try:
             cache = StableListCache(db_path=db_path, ttl=3600)
 
-            def mock_stat(path):
+            def mock_stat(path, **kwargs):
                 stat = MagicMock()
                 # Tokens directly mapped in mock_count_tokens_from_file
                 if path == "/api/file1.py":
@@ -432,53 +431,63 @@ class TestBuildContextWithStableList:
             def mock_load_files(paths):
                 return [(p, files[p][0], files[p][1]) for p in paths if p in files]
 
+            def mock_count_tokens_from_file(path):
+                """Mock tiktoken-based token counting."""
+                return files[path][1] if path in files else 0
+
             with patch("os.stat", side_effect=mock_stat):
                 with patch(
                     "os.path.getsize", side_effect=lambda p: mock_stat(p).st_size
                 ):
                     with patch(
-                        "mcp_the_force.utils.context_builder.gather_file_paths_async",
-                        side_effect=mock_gather_files,
+                        "mcp_the_force.utils.context_builder.count_tokens_from_file",
+                        side_effect=mock_count_tokens_from_file,
                     ):
                         with patch(
-                            "mcp_the_force.utils.context_builder.load_specific_files_async",
-                            side_effect=mock_load_files,
+                            "mcp_the_force.utils.context_builder.gather_file_paths_async",
+                            side_effect=mock_gather_files,
                         ):
-                            # First call without priority context
-                            (
-                                inline_files,
-                                overflow_files,
-                                _,
-                            ) = await build_context_with_stable_list(
-                                context_paths=["/api"],
-                                session_id="test_session",
-                                cache=cache,
-                                token_budget=500,
-                            )
+                            with patch(
+                                "mcp_the_force.utils.context_builder.load_specific_files_async",
+                                side_effect=mock_load_files,
+                            ):
+                                # First call without priority context
+                                (
+                                    inline_files,
+                                    overflow_files,
+                                    _,
+                                ) = await build_context_with_stable_list(
+                                    context_paths=["/api"],
+                                    session_id="test_session",
+                                    cache=cache,
+                                    token_budget=500,
+                                )
 
-                            # file1, file2, file3 should be inline (total 450 tokens)
-                            assert len(inline_files) == 3
-                            assert "/api/file4.py" in overflow_files
+                                # file1, file2, file3 should be inline (total 450 tokens)
+                                assert len(inline_files) == 3
+                                assert "/api/file4.py" in overflow_files
 
-                            # Second call WITH priority context
-                            (
-                                inline_files,
-                                overflow_files,
-                                _,
-                            ) = await build_context_with_stable_list(
-                                context_paths=["/api"],
-                                session_id="test_session",
-                                cache=cache,
-                                token_budget=500,
-                                priority_context=["/api/priority.py"],
-                            )
+                                # Second call WITH priority context
+                                (
+                                    inline_files,
+                                    overflow_files,
+                                    _,
+                                ) = await build_context_with_stable_list(
+                                    context_paths=["/api"],
+                                    session_id="test_session",
+                                    cache=cache,
+                                    token_budget=500,
+                                    priority_context=["/api/priority.py"],
+                                )
 
-                            # priority.py should be sent inline even though it wasn't in stable list
-                            assert len(inline_files) == 1  # Only priority.py (new file)
-                            assert inline_files[0][0] == "/api/priority.py"
-                            assert (
-                                "/api/file4.py" in overflow_files
-                            )  # Still in overflow
+                                # priority.py should be sent inline even though it wasn't in stable list
+                                assert (
+                                    len(inline_files) == 1
+                                )  # Only priority.py (new file)
+                                assert inline_files[0][0] == "/api/priority.py"
+                                assert (
+                                    "/api/file4.py" in overflow_files
+                                )  # Still in overflow
 
             cache.close()
         finally:

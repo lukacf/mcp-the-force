@@ -177,8 +177,9 @@ class MockAdapter:
 
         # Add mock response to history
         mock_response = json.dumps(metadata)  # Return pure JSON for integration tests
-        if session_id:
+        if session_id and not session_id.startswith("temp-"):
             # For history, save a simpler response to avoid SQLite size limits
+            # Don't persist history for temporary sessions (like describe_session uses)
             simple_response = f"Mock response from {self.model_name}"
             history.append({"role": "assistant", "content": simple_response})
             session_key = f"{session_id}:{self.model_name}"

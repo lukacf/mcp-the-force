@@ -145,28 +145,25 @@ def isolate_test_databases(tmp_path, monkeypatch):
 
 
 @pytest.fixture(scope="session", autouse=True)
-def verify_mock_adapter_for_integration():
-    """Verify MockAdapter is properly activated for integration tests."""
-    # Only check if we're in internal, MCP integration, or multi-turn tests
+def auto_enable_mock_adapters_for_integration():
+    """Automatically enable MockAdapter for integration tests."""
+    # Check if we're running integration tests that should use mock adapters
     if any(
         arg
         for arg in sys.argv
         if "tests/internal" in arg
         or "tests/integration_mcp" in arg
-        or "tests/integration/multi_turn" in arg
+        or "tests/integration" in arg
     ):
-        if os.getenv("MCP_ADAPTER_MOCK") != "1":
-            pytest.fail(
-                "FATAL: MCP_ADAPTER_MOCK=1 must be set in the environment *before* running pytest.\n"
-                "For example: MCP_ADAPTER_MOCK=1 pytest tests/internal"
-            )
+        # Automatically enable mock adapter mode for integration tests
+        os.environ["MCP_ADAPTER_MOCK"] = "1"
+        print("INFO: Auto-enabled MockAdapter for integration tests")
 
         # Clear instance cache to prevent state leakage between tests
         try:
             from mcp_the_force.adapters import _ADAPTER_CACHE
 
             _ADAPTER_CACHE.clear()
-            # Use print since logger might not be configured yet in test setup
             print("INFO: Cleared adapter cache for integration tests")
         except ImportError:
             pass  # If we can't import, tests will fail for other reasons

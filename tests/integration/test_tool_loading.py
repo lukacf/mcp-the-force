@@ -5,7 +5,7 @@ from mcp_the_force.tools.registry import list_tools, TOOL_REGISTRY
 
 
 @pytest.mark.integration
-def test_missing_openai_api_key_hides_tools(monkeypatch):
+def test_missing_openai_api_key_hides_tools(request, monkeypatch):
     """
     Given no OpenAI API key is configured,
     When the tool registry is initialized,
@@ -19,22 +19,26 @@ def test_missing_openai_api_key_hides_tools(monkeypatch):
         TOOL_REGISTRY.clear()
         TOOL_REGISTRY.update(original_registry)
 
-    monkeypatch.setattr("tests.integration.test_tool_loading._cleanup", cleanup)
+    # Register cleanup to run after test
+    request.addfinalizer(cleanup)
 
-    # Unload the autogen module to prevent premature tool registration
+    # Unload the autogen module and adapter definitions to prevent premature tool registration
     monkeypatch.delitem(sys.modules, "mcp_the_force.tools.autogen", raising=False)
+    monkeypatch.delitem(
+        sys.modules, "mcp_the_force.adapters.openai.definitions", raising=False
+    )
+
+    # Also clear any other adapter modules that might be cached
+    for module_name in list(sys.modules.keys()):
+        if "mcp_the_force.adapters" in module_name and "definitions" in module_name:
+            monkeypatch.delitem(sys.modules, module_name, raising=False)
 
     # Clear the tool registry to ensure a clean state
     TOOL_REGISTRY.clear()
 
-    # Register cleanup
-    monkeypatch.undo = cleanup
-
-    # Use a custom config file that disables the openai provider
-    monkeypatch.setenv(
-        "MCP_CONFIG_FILE",
-        "/Users/luka/src/cc/gemini-vertex-improved/tests/integration/test_config.yaml",
-    )
+    # Remove any OpenAI API key to ensure OpenAI tools are not loaded
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("MCP_OPENAI_API_KEY", raising=False)
 
     # Reload the settings to reflect the change
     from mcp_the_force.config import get_settings
@@ -42,6 +46,7 @@ def test_missing_openai_api_key_hides_tools(monkeypatch):
     get_settings.cache_clear()
 
     # Re-import the autogen module to trigger tool registration
+    import mcp_the_force.tools.autogen  # noqa: F401
 
     # List available tools
     available_tools = list_tools()
@@ -51,7 +56,7 @@ def test_missing_openai_api_key_hides_tools(monkeypatch):
 
 
 @pytest.mark.integration
-def test_openai_api_key_enables_tools(monkeypatch):
+def test_openai_api_key_enables_tools(request, monkeypatch):
     """
     Given an OpenAI API key is configured,
     When the tool registry is initialized,
@@ -65,14 +70,22 @@ def test_openai_api_key_enables_tools(monkeypatch):
         TOOL_REGISTRY.clear()
         TOOL_REGISTRY.update(original_registry)
 
-    # Unload the autogen module to prevent premature tool registration
+    # Register cleanup to run after test
+    request.addfinalizer(cleanup)
+
+    # Unload the autogen module and adapter definitions to prevent premature tool registration
     monkeypatch.delitem(sys.modules, "mcp_the_force.tools.autogen", raising=False)
+    monkeypatch.delitem(
+        sys.modules, "mcp_the_force.adapters.openai.definitions", raising=False
+    )
+
+    # Also clear any other adapter modules that might be cached
+    for module_name in list(sys.modules.keys()):
+        if "mcp_the_force.adapters" in module_name and "definitions" in module_name:
+            monkeypatch.delitem(sys.modules, module_name, raising=False)
 
     # Clear the tool registry to ensure a clean state
     TOOL_REGISTRY.clear()
-
-    # Register cleanup
-    monkeypatch.undo = cleanup
 
     # Set the OPENAI_API_KEY environment variable
     monkeypatch.setenv("OPENAI_API_KEY", "test_key")
@@ -83,6 +96,7 @@ def test_openai_api_key_enables_tools(monkeypatch):
     get_settings.cache_clear()
 
     # Re-import the autogen module to trigger tool registration
+    import mcp_the_force.tools.autogen  # noqa: F401
 
     # List available tools
     available_tools = list_tools()
