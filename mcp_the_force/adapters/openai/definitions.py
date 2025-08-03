@@ -267,8 +267,11 @@ def _generate_and_register_blueprints():
     api_key = api_key or env_key1 or env_key2
     logger.debug(f"[OPENAI_DEFINITIONS] Final api_key: {repr(api_key)}")
 
-    if not (api_key and str(api_key).strip()):
-        # No valid key → skip registration and remove any existing OpenAI tools
+    # Check if we're in mock mode - if so, allow registration without API key for test discoverability
+    mock_mode = os.getenv("MCP_ADAPTER_MOCK") == "1"
+
+    if not (api_key and str(api_key).strip()) and not mock_mode:
+        # No valid key and not in mock mode → skip registration and remove any existing OpenAI tools
         from ...tools.registry import TOOL_REGISTRY
 
         openai_tools_to_remove = []
@@ -281,13 +284,18 @@ def _generate_and_register_blueprints():
             del TOOL_REGISTRY[tool_name]
 
         logger.debug(
-            f"[OPENAI_DEFINITIONS] No API key found, removed {len(openai_tools_to_remove)} OpenAI tools from registry"
+            f"[OPENAI_DEFINITIONS] No API key found and not in mock mode, removed {len(openai_tools_to_remove)} OpenAI tools from registry"
         )
         return
 
-    logger.debug(
-        f"[OPENAI_DEFINITIONS] API key found, registering {len(OPENAI_MODEL_CAPABILITIES)} OpenAI tools"
-    )
+    if mock_mode and not (api_key and str(api_key).strip()):
+        logger.debug(
+            f"[OPENAI_DEFINITIONS] Mock mode enabled, registering {len(OPENAI_MODEL_CAPABILITIES)} OpenAI tools for test discoverability (no API key required)"
+        )
+    else:
+        logger.debug(
+            f"[OPENAI_DEFINITIONS] API key found, registering {len(OPENAI_MODEL_CAPABILITIES)} OpenAI tools"
+        )
 
     blueprints = []
 
