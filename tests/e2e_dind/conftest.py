@@ -469,7 +469,7 @@ def claude(stack, request) -> Callable[[str, int], str]:
             "LOG_LEVEL": "DEBUG",
             "CI_E2E": "1",  # This MUST be set for the MCP server to allow /tmp paths
             "PYTHONPATH": "/host-project",
-            # "VICTORIA_LOGS_URL": "http://host.docker.internal:9428",  # Disabled to test if this causes hanging
+            "VICTORIA_LOGS_URL": "http://host.docker.internal:9428",
             "LOKI_APP_TAG": os.getenv(
                 "LOKI_APP_TAG", "e2e-test-unknown"
             ),  # Pass test-specific tag
@@ -817,7 +817,7 @@ def claude_with_low_context(stack, request) -> Callable[[str, int], str]:
             "LOG_LEVEL": "DEBUG",
             "CI_E2E": "1",  # This MUST be set for the MCP server to allow /tmp paths
             "PYTHONPATH": "/host-project",
-            # "VICTORIA_LOGS_URL": "http://host.docker.internal:9428",  # Disabled to test if this causes hanging
+            "VICTORIA_LOGS_URL": "http://host.docker.internal:9428",
             "LOKI_APP_TAG": os.getenv(
                 "LOKI_APP_TAG", "e2e-test-unknown"
             ),  # Pass test-specific tag
