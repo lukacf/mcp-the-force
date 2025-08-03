@@ -23,16 +23,29 @@ def _ensure_populated() -> None:
     global _autogen_loaded
 
     # Always check if we have the expected minimum tools
-    expected_tools = [
+    expected_utility_tools = [
         "search_project_history",
         "count_project_tokens",
         "list_sessions",
         "describe_session",
     ]
-    has_expected_tools = all(tool_id in TOOL_REGISTRY for tool_id in expected_tools)
 
-    if not TOOL_REGISTRY or not has_expected_tools:
-        # Force re-import to re-register tools
+    # Also check for critical model tools that should always be available
+    expected_model_tools = [
+        "chat_with_gemini25_pro",
+        "chat_with_gemini25_flash",
+        "chat_with_o3",
+    ]
+
+    has_utility_tools = all(
+        tool_id in TOOL_REGISTRY for tool_id in expected_utility_tools
+    )
+    has_model_tools = any(
+        tool_id in TOOL_REGISTRY for tool_id in expected_model_tools
+    )  # At least one model tool
+
+    if not TOOL_REGISTRY or not has_utility_tools:
+        # Force re-import to re-register utility tools
         import sys
 
         # Remove from cache to force re-registration
@@ -45,7 +58,19 @@ def _ensure_populated() -> None:
         # Importing this module registers every tool class via the @tool decorator
         from . import definitions  # noqa: F401
 
-    if not _autogen_loaded:
+    # Always try to load autogen if not loaded or if we don't have model tools
+    if not _autogen_loaded or not has_model_tools:
+        logger.debug(
+            f"Loading autogen: _autogen_loaded={_autogen_loaded}, has_model_tools={has_model_tools}"
+        )
+
+        # Force re-import of autogen if model tools are missing
+        if not has_model_tools:
+            import sys
+
+            sys.modules.pop("mcp_the_force.tools.autogen", None)
+            logger.debug("Forcing autogen re-import due to missing model tools")
+
         # Import autogen to generate dynamic tools
         from . import autogen  # noqa: F401
 
