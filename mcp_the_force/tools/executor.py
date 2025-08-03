@@ -607,6 +607,22 @@ class ToolExecutor:
                     # Pass a copy to prevent mutations from affecting history storage
                     generate_kwargs["messages"] = messages.copy()
 
+                # DEBUG: Log exact messages sent to API for token analysis
+                debug_data = {
+                    "session_id": session_id,
+                    "final_prompt": final_prompt,
+                    "messages": generate_kwargs.get("messages", []),
+                    "developer_prompt": developer_prompt
+                    if adapter_class_name == "google"
+                    else None,
+                    "adapter_class": adapter_class_name,
+                    "estimated_tokens": getattr(plan, "total_prompt_tokens", "unknown")
+                    if "plan" in locals()
+                    else "no_plan",
+                }
+
+                # Debug JSON file saving removed to reduce clutter
+
                 result = await operation_manager.run_with_timeout(
                     operation_id,
                     adapter.generate(

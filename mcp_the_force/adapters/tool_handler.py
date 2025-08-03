@@ -124,12 +124,12 @@ class ToolHandler:
         """
         declarations = []
 
-        logger.debug("[TOOL_HANDLER] prepare_tool_declarations called with:")
-        logger.debug(
+        logger.info("[TOOL_HANDLER] prepare_tool_declarations called with:")
+        logger.info(
             f"  - capabilities.native_vector_store_provider: {capabilities.native_vector_store_provider}"
         )
-        logger.debug(f"  - vector_store_ids: {vector_store_ids}")
-        logger.debug(f"  - disable_history_search: {disable_history_search}")
+        logger.info(f"  - vector_store_ids: {vector_store_ids}")
+        logger.info(f"  - disable_history_search: {disable_history_search}")
 
         # All adapters get the project history search tool unless disabled
         logger.debug(

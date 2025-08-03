@@ -196,57 +196,81 @@ class TestTokenBudgetOptimizer:
     async def test_optimization_convergence(self, temp_files):
         """Test that optimization converges within model limits."""
         with (
+            patch("mcp_the_force.utils.fs.gather_file_paths_async") as mock_gather,
             patch(
-                "mcp_the_force.utils.context_builder.build_context_with_stable_list"
-            ) as mock_context,
-            patch(
-                "mcp_the_force.utils.token_counter.count_tokens"
-            ) as mock_count_tokens,
+                "mcp_the_force.utils.context_loader.load_specific_files_async"
+            ) as mock_load,
             patch(
                 "mcp_the_force.unified_session_cache.unified_session_cache"
             ) as mock_cache,
             patch(
-                "mcp_the_force.optimization.prompt_builder.PromptBuilder.calculate_complete_prompt_tokens"
-            ) as mock_calc_tokens,
+                "mcp_the_force.optimization.token_budget_optimizer.count_tokens"
+            ) as mock_count_tokens,
+            patch(
+                "mcp_the_force.utils.file_tree.build_file_tree_from_paths"
+            ) as mock_tree,
         ):
             # Mock session history (empty)
             mock_cache.get_history = AsyncMock(return_value=[])
 
-            # Mock large inline files that exceed budget
-            mock_context.return_value = (
-                [
-                    (temp_files[0], "large content 1", 800),
-                    (temp_files[1], "large content 2", 700),
-                    (temp_files[2], "large content 3", 600),
-                ],
-                [],  # No initial overflow
-                "file tree",
-            )
+            # Mock file gathering to return all files
+            mock_gather.return_value = temp_files
 
-            # Mock session history token counting (only called once)
-            mock_count_tokens.return_value = 0  # Empty session history
+            # Mock file loading to return large files that exceed budget
+            mock_load.return_value = [
+                (temp_files[0], "large content 1", 800),
+                (temp_files[1], "large content 2", 700),
+                (temp_files[2], "large content 3", 600),
+            ]
 
-            # Mock prompt token calculation to simulate convergence behavior
-            calc_call_count = 0
+            # Mock tree building
+            mock_tree.return_value = "file tree"
 
-            def mock_calc_prompt_tokens(dev_prompt, user_prompt):
-                nonlocal calc_call_count
-                calc_call_count += 1
-                # First calculation - exceeds limit
-                if calc_call_count == 1:
-                    return 2500  # Exceeds 2000 limit
-                # Second calculation - still too big
-                elif calc_call_count == 2:
-                    return 1800  # Still exceeds budget with reserve
-                # Third calculation - fits
+            # Mock token counting to simulate optimization
+            call_count = 0
+
+            def smart_count_tokens(texts):
+                nonlocal call_count
+                call_count += 1
+                combined_text = " ".join(texts)
+
+                # First few calls are for setup (session history, base prompt, file tree)
+                if call_count <= 3:
+                    return len(combined_text) // 4  # Realistic estimation
+                # Later calls contain the full content and should trigger demotion
+                elif "large content" in combined_text and len(texts) > 1:
+                    # Return a value that forces some files to overflow
+                    if (
+                        "large content 1" in combined_text
+                        and "large content 2" in combined_text
+                        and "large content 3" in combined_text
+                    ):
+                        return 2500  # All 3 files - exceeds budget (1500)
+                    elif (
+                        (
+                            "large content 1" in combined_text
+                            and "large content 2" in combined_text
+                        )
+                        or (
+                            "large content 1" in combined_text
+                            and "large content 3" in combined_text
+                        )
+                        or (
+                            "large content 2" in combined_text
+                            and "large content 3" in combined_text
+                        )
+                    ):
+                        return 1400  # 2 files - fits within budget
+                    else:
+                        return 800  # 1 file - definitely fits
                 else:
-                    return 1200  # Fits within limit
+                    return len(combined_text) // 4
 
-            mock_calc_tokens.side_effect = mock_calc_prompt_tokens
+            mock_count_tokens.side_effect = smart_count_tokens
 
             optimizer = TokenBudgetOptimizer(
                 model_limit=2000,
-                fixed_reserve=500,  # So effective limit is 1500
+                fixed_reserve=500,  # So available budget is 1500
                 session_id="test-session",
                 context_paths=temp_files,
                 priority_paths=[],
@@ -260,7 +284,6 @@ class TestTokenBudgetOptimizer:
             plan = await optimizer.optimize()
 
             # Should have optimized to fit within budget
-            # Available budget = 2000 - 500 = 1500, so final prompt should be reasonable
             assert plan.total_prompt_tokens <= 2000  # Should fit within model limit
             assert len(plan.overflow_files) > 0  # Some files moved to overflow
             assert plan.iterations == 1  # New architecture is single-pass
@@ -382,24 +405,46 @@ class TestTokenBudgetOptimizer:
     async def test_optimization_failure_handling(self, temp_files):
         """Test handling when optimization cannot converge."""
         with (
+            patch("mcp_the_force.utils.fs.gather_file_paths_async") as mock_gather,
             patch(
-                "mcp_the_force.utils.context_builder.build_context_with_stable_list"
-            ) as mock_context,
+                "mcp_the_force.utils.context_loader.load_specific_files_async"
+            ) as mock_load,
             patch(
                 "mcp_the_force.unified_session_cache.unified_session_cache"
             ) as mock_cache,
+            patch(
+                "mcp_the_force.optimization.token_budget_optimizer.count_tokens"
+            ) as mock_count_tokens,
+            patch(
+                "mcp_the_force.utils.file_tree.build_file_tree_from_paths"
+            ) as mock_tree,
         ):
             # Mock session history (empty)
             mock_cache.get_history = AsyncMock(return_value=[])
 
-            # Mock only priority files that cannot be moved
-            mock_context.return_value = (
-                [
-                    (temp_files[0], "huge priority content", 2000)
-                ],  # Too big for any budget
-                [],
-                "file tree",
-            )
+            # Mock file gathering to return all files
+            mock_gather.return_value = temp_files
+
+            # Mock file loading to return huge priority content
+            mock_load.return_value = [
+                (temp_files[0], "huge priority content", 2000)  # Too big for any budget
+            ]
+
+            # Mock tree building
+            mock_tree.return_value = "file tree"
+
+            # Mock token counting to return realistic values except for final calculation
+            def smart_count_tokens(texts):
+                # Check what we're counting based on content
+                combined_text = " ".join(texts)
+                if "huge priority content" in combined_text:
+                    # Final message calculation - exceed budget
+                    return 1500  # Always exceeds available budget (800)
+                else:
+                    # Other calculations (base prompt, session history, etc) - realistic values
+                    return len(combined_text) // 4  # Estimate ~4 chars per token
+
+            mock_count_tokens.side_effect = smart_count_tokens
 
             optimizer = TokenBudgetOptimizer(
                 model_limit=1000,
@@ -414,14 +459,9 @@ class TestTokenBudgetOptimizer:
                 tool_name="test-tool",
             )
 
-            with patch.object(
-                optimizer.prompt_builder, "calculate_complete_prompt_tokens"
-            ) as mock_calc:
-                mock_calc.return_value = 1500  # Always exceeds limit
-
-                # Should raise RuntimeError when cannot optimize
-                with pytest.raises(RuntimeError, match="Failed to optimize prompt"):
-                    await optimizer.optimize()
+            # Should raise RuntimeError when cannot optimize
+            with pytest.raises(RuntimeError, match="Failed to optimize prompt"):
+                await optimizer.optimize()
 
 
 class TestFileWrapperTokens:
@@ -565,16 +605,16 @@ class TestOptimizationIntegration:
                 assert dev_msg["role"] == "developer"
                 assert user_msg["role"] == "user"
                 # FIXED: User message should NOT contain the developer prompt (that was the bug!)
-                # The user content should be the user part only, not the combined optimized_prompt
+                # The optimized_prompt is just the user part, developer prompt is separate
                 assert (
-                    dev_msg["content"] in plan.optimized_prompt
-                )  # Developer content is part of optimized prompt
+                    dev_msg["content"] == "System prompt for testing"
+                )  # Developer prompt is separate
                 assert (
-                    user_msg["content"] in plan.optimized_prompt
-                )  # User content is also part of optimized prompt
+                    user_msg["content"] == plan.optimized_prompt
+                )  # User content equals optimized prompt
                 assert (
-                    user_msg["content"] != plan.optimized_prompt
-                )  # But user content is NOT the full optimized prompt
+                    dev_msg["content"] not in plan.optimized_prompt
+                )  # Developer content is NOT in optimized prompt
 
                 # Verify the user message contains the expected task structure
                 assert "<Task>" in user_msg["content"]

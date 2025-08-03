@@ -5,11 +5,32 @@ import json
 from typing import List, Optional, Tuple
 
 from ..utils.token_counter import count_tokens
+from ..utils.token_utils import file_wrapper_tokens
 from .models import Plan, FileInfo
 from .prompt_builder import PromptBuilder
 from ..utils.stable_list_cache import StableListCache
 
 logger = logging.getLogger(__name__)
+
+
+def _extract_message_text(msg_content) -> str:
+    """Extract text from message content, handling both string and list formats.
+
+    OpenAI format: content is a string
+    LiteLLM format: content is a list like [{"type": "text", "text": "..."}]
+    """
+    if isinstance(msg_content, str):
+        return msg_content
+    elif isinstance(msg_content, list):
+        # Extract text from LiteLLM format
+        text_parts = []
+        for item in msg_content:
+            if isinstance(item, dict) and item.get("type") == "text":
+                text_parts.append(item.get("text", ""))
+        return "".join(text_parts)
+    else:
+        # Fallback for unknown formats
+        return str(msg_content) if msg_content else ""
 
 
 class TokenBudgetOptimizer:
@@ -188,6 +209,14 @@ class TokenBudgetOptimizer:
         # Calculate tokens for ONLY files being sent this turn (no double-counting)
         send_token_cost = sum(tokens for _, _, tokens in files_to_send_this_turn)
 
+        # Add XML wrapper tokens for each inline file
+        from ..utils.token_utils import file_wrapper_tokens
+
+        wrapper_token_cost = sum(
+            file_wrapper_tokens(path) for path, _, _ in files_to_send_this_turn
+        )
+        send_token_cost += wrapper_token_cost
+
         # Build file tree (check if first call - only include tree on first call)
         file_tree = ""
         file_tree_tokens = 0
@@ -271,52 +300,14 @@ class TokenBudgetOptimizer:
                 )
                 overflow_files.extend(additional_overflow)
 
-        # Final inline decision
+        # Final inline decision (use the result from _demote_files_to_fit_budget)
         final_inline_files = potential_inline
 
-        if total_needed > available_budget:
-            # Over budget - demote largest non-priority files
-            logger.warning(
-                f"[OPTIMIZER] Over budget by {total_needed - available_budget:,} tokens"
-            )
+        logger.info(
+            f"[OPTIMIZER] After optimization: {len(final_inline_files)} inline, {len(overflow_files)} overflow"
+        )
 
-            # Separate priority from non-priority inline files
-            priority_files = []
-            demotable_files = []
-
-            for file_data in inline_file_data:
-                file_path = file_data[0]
-                if file_path in self.priority_paths:
-                    priority_files.append(file_data)
-                else:
-                    demotable_files.append(file_data)
-
-            # Sort demotable files by token count (largest first)
-            demotable_files.sort(key=lambda x: x[2], reverse=True)
-
-            # Keep removing files until we fit
-            final_inline_files = priority_files[:]
-            current_cost = sum(tokens for _, _, tokens in priority_files)
-
-            for file_data in demotable_files:
-                test_cost = current_cost + file_data[2]
-                if (
-                    base_prompt_tokens
-                    + test_cost
-                    + file_tree_tokens
-                    + session_history_tokens
-                    <= available_budget
-                ):
-                    final_inline_files.append(file_data)
-                    current_cost = test_cost
-                else:
-                    overflow_files.append(file_data[0])
-
-            logger.info(
-                f"[OPTIMIZER] After demotion: {len(final_inline_files)} inline, {len(overflow_files)} overflow"
-            )
-
-        elif total_needed < available_budget * 0.8:  # Under 80% budget usage
+        if total_needed < available_budget * 0.8:  # Under 80% budget usage
             # Under budget - try to promote some overflow files
             remaining_budget = available_budget - total_needed
             logger.info(
@@ -392,60 +383,101 @@ class TokenBudgetOptimizer:
             overflow_files=overflow_files,
         )
 
-        final_tokens = self.prompt_builder.calculate_complete_prompt_tokens(
-            self.developer_prompt, prompt
+        # Calculate tokens for complete message list (dev + session history + user)
+        # Build the complete message list to get accurate token count
+        temp_complete_messages = []
+        if self.developer_prompt:
+            temp_complete_messages.append(
+                {"role": "developer", "content": self.developer_prompt}
+            )
+        temp_complete_messages.extend(session_messages)
+        if prompt:
+            temp_complete_messages.append({"role": "user", "content": prompt})
+
+        # Count tokens for all messages that will be sent to API
+        final_tokens = count_tokens(
+            [_extract_message_text(msg["content"]) for msg in temp_complete_messages]
         )
 
-        # CRITICAL: Check if final result exceeds model limit and demote if needed
-        if final_tokens > self.model_limit:
+        # CRITICAL: Check if final result exceeds available budget and demote if needed
+        if final_tokens > available_budget:
             logger.warning(
-                f"[OPTIMIZER] Final prompt {final_tokens:,} exceeds model limit {self.model_limit:,}, demoting files"
+                f"[OPTIMIZER] Final prompt {final_tokens:,} exceeds available budget {available_budget:,}, demoting files"
             )
 
             # Calculate how much we need to reduce (for logging/debugging)
-            excess_tokens = final_tokens - self.model_limit
+            excess_tokens = final_tokens - available_budget
             logger.debug(f"[OPTIMIZER] Need to reduce by {excess_tokens:,} tokens")
 
-            # Demote files until we fit (retry mechanism)
+            # Demote files until we fit (no arbitrary retry limit)
             retry_count = 0
-            max_retries = 3
 
-            while final_tokens > self.model_limit and retry_count < max_retries:
+            while final_tokens > available_budget and files_to_send:
                 retry_count += 1
 
-                # Demote some files to reduce token count
+                # Remove largest files first, but skip priority files
+                files_to_send.sort(
+                    key=lambda x: x[2], reverse=True
+                )  # Sort by tokens desc
+
+                # Find the first non-priority file to demote
+                demoted_file = None
+                for i, file_data in enumerate(files_to_send):
+                    if file_data[0] not in self.priority_paths:
+                        demoted_file = files_to_send.pop(i)
+                        break
+
+                if demoted_file is None:
+                    # All remaining files are priority files - cannot demote further
+                    # This is a failure condition if we're still over budget
+                    break
+
+                overflow_files.append(demoted_file[0])  # Add to overflow
+
+                # Deduplicate overflow_files to prevent any duplicate issues
+                overflow_files = list(dict.fromkeys(overflow_files))
+
+                # Log with total tokens saved (content + wrapper)
+                total_saved = demoted_file[2] + file_wrapper_tokens(demoted_file[0])
+                logger.info(
+                    f"[OPTIMIZER] Demoted {demoted_file[0]} (saved {total_saved} tokens) - retry {retry_count}"
+                )
+
+                # Rebuild prompt and recalculate
+                # Use the SAME all_files list we used the first time to avoid
+                # ballooning the file_map tree with individual file paths
+                prompt = self.prompt_builder.build_prompt(
+                    instructions=self.instructions,
+                    output_format=self.output_format,
+                    inline_files=files_to_send,
+                    all_files=self.context_paths,  # Keep original directory list constant
+                    overflow_files=overflow_files,
+                )
+
+                # Calculate tokens for complete message list (dev + session history + user)
+                temp_complete_messages = []
+                if self.developer_prompt:
+                    temp_complete_messages.append(
+                        {"role": "developer", "content": self.developer_prompt}
+                    )
+                temp_complete_messages.extend(session_messages)
+                if prompt:
+                    temp_complete_messages.append({"role": "user", "content": prompt})
+
+                final_tokens = count_tokens(
+                    [
+                        _extract_message_text(msg["content"])
+                        for msg in temp_complete_messages
+                    ]
+                )
+
+                logger.info(f"[OPTIMIZER] After demotion: {final_tokens:,} tokens")
+
+            if final_tokens > available_budget:
                 if files_to_send:
-                    # Remove largest files first
-                    files_to_send.sort(
-                        key=lambda x: x[2], reverse=True
-                    )  # Sort by tokens desc
-                    demoted_file = files_to_send.pop(0)  # Remove largest
-                    overflow_files.append(demoted_file[0])  # Add to overflow
-
-                    logger.info(
-                        f"[OPTIMIZER] Demoted {demoted_file[0]} ({demoted_file[2]} tokens) - retry {retry_count}"
-                    )
-
-                    # Rebuild prompt and recalculate
-                    final_inline_paths = [f[0] for f in files_to_send]
-                    prompt = self.prompt_builder.build_prompt(
-                        instructions=self.instructions,
-                        output_format=self.output_format,
-                        inline_files=files_to_send,
-                        all_files=all_file_paths,
-                        overflow_files=overflow_files,
-                    )
-
-                    final_tokens = self.prompt_builder.calculate_complete_prompt_tokens(
-                        self.developer_prompt, prompt
-                    )
-
-                    logger.info(f"[OPTIMIZER] After demotion: {final_tokens:,} tokens")
+                    error_msg = f"Failed to optimize prompt: {final_tokens:,} tokens still exceeds available budget {available_budget:,} after {retry_count} retries"
                 else:
-                    break  # No more files to demote
-
-            if final_tokens > self.model_limit:
-                error_msg = f"Failed to optimize prompt: {final_tokens:,} tokens still exceeds model limit {self.model_limit:,} after {max_retries} retries"
+                    error_msg = f"Failed to optimize prompt: {final_tokens:,} tokens still exceeds available budget {available_budget:,} - no more files to demote"
                 logger.error(f"[OPTIMIZER] {error_msg}")
                 raise RuntimeError(error_msg)
 
@@ -455,8 +487,8 @@ class TokenBudgetOptimizer:
             f"{final_tokens:,} tokens"
         )
 
-        # Create the optimized prompt by combining developer and user prompts
-        optimized_prompt = f"{self.developer_prompt}\\n\\n{prompt}"
+        # Don't concatenate developer prompt - it's sent separately in messages
+        optimized_prompt = prompt
 
         # Convert to FileInfo objects for the plan
         inline_file_infos = []
@@ -556,6 +588,10 @@ class TokenBudgetOptimizer:
         if not file_data_list:
             return [], []
 
+        def _file_total_tokens(path: str, content_tokens: int) -> int:
+            """Calculate total tokens including XML wrapper"""
+            return content_tokens + file_wrapper_tokens(path)
+
         # Separate priority from non-priority files
         priority_files = []
         demotable_files = []
@@ -567,21 +603,26 @@ class TokenBudgetOptimizer:
             else:
                 demotable_files.append(file_data)
 
-        # Sort demotable files by token count (largest first for efficient removal)
-        demotable_files.sort(key=lambda x: x[2], reverse=True)
+        # Sort demotable files by TOTAL token count (smallest first to maximize files in context)
+        demotable_files.sort(
+            key=lambda fd: _file_total_tokens(fd[0], fd[2]), reverse=False
+        )
 
         # Start with priority files (they always stay)
         remaining_files = priority_files[:]
-        current_tokens = sum(tokens for _, _, tokens in priority_files)
+        current_tokens = sum(
+            _file_total_tokens(path, tokens) for path, _, tokens in priority_files
+        )
 
         # Add demotable files while they fit
         demoted_paths = []
-        for file_data in demotable_files:
-            if current_tokens + file_data[2] <= budget:
-                remaining_files.append(file_data)
-                current_tokens += file_data[2]
+        for path, content, content_tokens in demotable_files:
+            total_tokens = _file_total_tokens(path, content_tokens)
+            if current_tokens + total_tokens <= budget:
+                remaining_files.append((path, content, content_tokens))
+                current_tokens += total_tokens
             else:
-                demoted_paths.append(file_data[0])
+                demoted_paths.append(path)
 
         logger.info(f"Demoted {len(demoted_paths)} files to fit budget")
         return remaining_files, demoted_paths

@@ -46,7 +46,6 @@ OPENAI_SUPPORTED_EXTENSIONS = {
     ".tar",
     ".tex",
     ".ts",
-    ".tsx",
     ".txt",
     ".webp",
     ".xlsx",
@@ -78,8 +77,6 @@ class OpenAIVectorStore:
         for file in files:
             if self._is_supported_file(file):
                 supported_files.append(file)
-            else:
-                logger.warning(f"Skipping unsupported file type: {file.path}")
 
         if not supported_files:
             return []
