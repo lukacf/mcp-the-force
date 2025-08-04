@@ -4,7 +4,7 @@ import logging
 import time
 import asyncio
 import gzip
-from typing import Dict, List, Sequence, Optional, Any, BinaryIO
+from typing import Dict, List, Sequence, Optional, Any
 from pathlib import Path
 
 from openai import AsyncOpenAI
@@ -21,8 +21,8 @@ logger = logging.getLogger(__name__)
 # Number of parallel batches for upload
 PARALLEL_BATCHES = 10
 
-# OpenAI batch size limit for file associations
-ASSOCIATION_BATCH_SIZE = 100
+# OpenAI batch size limit for file associations (2025 API supports up to 500)
+ASSOCIATION_BATCH_SIZE = 500
 
 # OpenAI supported file extensions
 OPENAI_SUPPORTED_EXTENSIONS = {
@@ -86,7 +86,7 @@ class OpenAIVectorStore:
         if not supported_files:
             return []
 
-        # DEDUPLICATION: Check for cached files and separate new ones
+        # DEDUPLICATION: Atomic cache check to prevent race conditions
         files_to_upload = []
         cached_file_ids = []
         failed_cached_files = []  # Files that failed cache association, need to be uploaded
@@ -95,14 +95,29 @@ class OpenAIVectorStore:
         for file in supported_files:
             try:
                 content_hash = compute_content_hash(file.content)
-                cached_file_id = cache.get_file_id(content_hash)
+                # Use atomic operation to prevent race conditions
+                file_id, we_are_uploader = cache.atomic_cache_or_get(content_hash)
 
-                if cached_file_id:
+                if we_are_uploader:
+                    # We won the race - this process must upload the file
+                    logger.debug(f"DEDUP: We are uploader for {file.path}")
+                    files_to_upload.append(file)
+                elif file_id and file_id != "PENDING":
+                    # File was already uploaded and cached
+                    logger.debug(f"DEDUP: Found cached file {file_id} for {file.path}")
+                    cached_file_ids.append(file_id)
+                elif file_id == "PENDING":
+                    # Another process is currently uploading this file
                     logger.debug(
-                        f"DEDUP: Found cached file {cached_file_id} for {file.path}"
+                        f"DEDUP: Another process is uploading {file.path}, skipping"
                     )
-                    cached_file_ids.append(cached_file_id)
+                    # Skip this file - it will be available when the other process finishes
+                    continue
                 else:
+                    # Unexpected state - fallback to upload
+                    logger.warning(
+                        f"DEDUP: Unexpected cache state for {file.path}, will upload"
+                    )
                     files_to_upload.append(file)
 
             except Exception as e:
@@ -294,20 +309,30 @@ class OpenAIVectorStore:
             )
             file_id: str = upload_response.id
 
-            # Cache the file mapping immediately with reliable file_id
+            # Finalize the cache mapping with the real file_id
             try:
                 content_hash = compute_content_hash(file.content)
-                cache.cache_file(content_hash, file_id)
+                cache.finalize_file_id(content_hash, file_id)
                 logger.debug(
-                    f"DEDUP: Cached uploaded file {file_id} for content hash {content_hash[:12]}..."
+                    f"DEDUP: Finalized cache entry {file_id} for content hash {content_hash[:12]}..."
                 )
             except Exception as e:
-                logger.warning(f"Failed to cache uploaded file {file_id}: {e}")
+                logger.warning(f"Failed to finalize cached file {file_id}: {e}")
 
             return file_id
 
         except Exception as e:
             logger.error(f"Failed to upload file {file.path}: {e}")
+
+            # Clean up the PENDING placeholder if upload failed
+            try:
+                content_hash = compute_content_hash(file.content)
+                cache.cleanup_failed_upload(content_hash)
+            except Exception as cleanup_e:
+                logger.warning(
+                    f"Failed to cleanup failed upload for {file.path}: {cleanup_e}"
+                )
+
             return None
 
     async def _batch_associate_files(
@@ -315,7 +340,7 @@ class OpenAIVectorStore:
     ) -> None:
         """Associate multiple files with the vector store using concurrent, chunked batches.
 
-        Handles the 100-file batch limit by splitting large file lists into smaller chunks
+        Handles the 500-file batch limit by splitting large file lists into smaller chunks
         and processing them concurrently with retry logic and rate limit protection.
 
         Args:
@@ -341,7 +366,7 @@ class OpenAIVectorStore:
                 )
                 return
 
-        # Split file_ids into chunks respecting the 100-file batch limit
+        # Split file_ids into chunks respecting the 500-file batch limit
         batches = [
             file_ids[i : i + ASSOCIATION_BATCH_SIZE]
             for i in range(0, len(file_ids), ASSOCIATION_BATCH_SIZE)
@@ -401,251 +426,6 @@ class OpenAIVectorStore:
                 f"Batch association partially failed: {successful_batches}/{len(batches)} batches succeeded. "
                 f"Some {description} files may not be associated with the vector store."
             )
-
-    async def _upload_single_batch(
-        self,
-        files: Sequence[BinaryIO],
-        batch_id: str,
-        timeout: float = 60.0,
-    ) -> dict:
-        """Upload a single batch of files without retry logic."""
-        start = time.time()
-        file_names = []
-        for file in files:
-            try:
-                if hasattr(file, "name"):
-                    file_names.append(file.name)
-                else:
-                    file_names.append(str(file))
-            except Exception:
-                file_names.append("<unknown>")
-
-        logger.info(f"Batch {batch_id}: Uploading {len(files)} files")
-
-        try:
-            file_batch = await asyncio.wait_for(
-                self._client.vector_stores.file_batches.upload_and_poll(
-                    vector_store_id=self.id, files=files
-                ),
-                timeout=timeout,
-            )
-
-            elapsed = time.time() - start
-            completed = file_batch.file_counts.completed
-            failed = file_batch.file_counts.failed
-            total = file_batch.file_counts.total
-
-            if failed > 0:
-                logger.warning(
-                    f"Batch {batch_id}: Completed with failures in {elapsed:.2f}s - "
-                    f"{completed}/{total} succeeded, {failed} failed"
-                )
-            else:
-                logger.info(
-                    f"Batch {batch_id}: Completed successfully in {elapsed:.2f}s - "
-                    f"{completed} files uploaded"
-                )
-
-            return {
-                "batch": file_batch,
-                "batch_num": batch_id,
-                "elapsed": elapsed,
-                "completed": completed,
-                "failed": failed,
-                "total": total,
-                "files": files,
-                "failed_files": list(files)
-                if failed > 0
-                else [],  # Can't tell which failed
-            }
-
-        except asyncio.TimeoutError:
-            logger.error(f"Batch {batch_id}: Timeout after {timeout}s")
-            return {
-                "batch": None,
-                "batch_num": batch_id,
-                "elapsed": time.time() - start,
-                "completed": 0,
-                "failed": len(files),
-                "total": len(files),
-                "files": files,
-                "failed_files": list(files),
-                "error": f"Timeout after {timeout}s",
-            }
-
-        except Exception as e:
-            elapsed = time.time() - start
-            error_msg = str(e)
-            logger.error(f"Batch {batch_id}: Failed after {elapsed:.2f}s - {error_msg}")
-
-            # Map to our error types for proper handling
-            if "storage limit" in error_msg.lower() or "quota" in error_msg.lower():
-                raise QuotaExceededError(f"OpenAI quota exceeded: {error_msg}")
-            elif (
-                "authentication" in error_msg.lower() or "api key" in error_msg.lower()
-            ):
-                raise AuthError(f"OpenAI authentication failed: {error_msg}")
-            elif "rate limit" in error_msg.lower():
-                # Extract retry_after if available
-                retry_after = None
-                if hasattr(e, "response") and hasattr(e.response, "headers"):
-                    retry_after = e.response.headers.get("Retry-After")
-                    if retry_after:
-                        retry_after = float(retry_after)
-                raise TransientError(
-                    f"Rate limited: {error_msg}", retry_after=retry_after
-                )
-
-            # For other errors, return failure dict
-            return {
-                "batch": None,
-                "batch_num": batch_id,
-                "elapsed": elapsed,
-                "completed": 0,
-                "failed": len(files),
-                "total": len(files),
-                "files": files,
-                "failed_files": list(files),
-                "error": str(e),
-            }
-
-    async def _upload_batch_with_retry(
-        self,
-        files: Sequence[BinaryIO],
-        batch_num: int,
-        max_retries: int = 3,
-    ) -> dict:
-        """
-        Upload batch with exponential backoff and progressive batch splitting.
-
-        On retry, failed batches are split into smaller chunks and uploaded in parallel.
-        """
-        backoff_base = 2
-        current_files = list(files)  # Convert to list for easier manipulation
-        total_completed = 0
-        start_time = time.time()
-
-        for attempt in range(max_retries):
-            if attempt > 0:
-                # Exponential backoff: 2s, 4s, 8s...
-                wait_time = backoff_base**attempt
-                logger.info(
-                    f"Batch {batch_num}: Retry attempt {attempt + 1}/{max_retries} after {wait_time}s backoff"
-                )
-                await asyncio.sleep(wait_time)
-
-                # Reset file pointers for retry
-                for file in current_files:
-                    try:
-                        if hasattr(file, "seek"):
-                            file.seek(0)
-                    except Exception as e:
-                        logger.warning(f"Could not reset file pointer: {e}")
-
-            try:
-                # Determine batch splitting strategy
-                if attempt == 0 or len(current_files) <= 3:
-                    # Initial attempt or small batch: upload as single batch
-                    result = await self._upload_single_batch(
-                        current_files, str(batch_num)
-                    )
-
-                    if result["failed"] == 0:
-                        # Full success
-                        result["batch_num"] = batch_num
-                        return result
-                    elif result["completed"] > 0:
-                        # Partial success - track completed and retry failed
-                        total_completed += result["completed"]
-                        # LIMITATION: OpenAI batch API doesn't tell us which files failed
-                        # So we retry ALL files in the batch, which may re-upload successful ones
-                        # This wastes bandwidth but ensures failed files get retried
-                        current_files = result["failed_files"]
-                        logger.info(
-                            f"Batch {batch_num}: Partial success {result['completed']}/{result['total']}, "
-                            f"will retry all {len(current_files)} files in batch"
-                        )
-                    else:
-                        # Total failure - retry all files
-                        current_files = result["failed_files"]
-
-                else:
-                    # Split failed batch into smaller chunks for parallel retry
-                    split_factor = min(attempt + 1, 4)  # Max 4-way split
-                    chunk_size = max(1, len(current_files) // split_factor)
-                    sub_batches = []
-                    for i in range(0, len(current_files), chunk_size):
-                        sub_batches.append(current_files[i : i + chunk_size])
-
-                    logger.info(
-                        f"Batch {batch_num}: Splitting {len(current_files)} files into "
-                        f"{len(sub_batches)} sub-batches of ~{chunk_size} files each"
-                    )
-
-                    # Upload sub-batches in parallel
-                    sub_results: List[Any] = await asyncio.gather(
-                        *[
-                            self._upload_single_batch(sub_batch, f"{batch_num}.{i + 1}")
-                            for i, sub_batch in enumerate(sub_batches)
-                        ],
-                        return_exceptions=True,
-                    )
-
-                    # Aggregate results
-                    batch_completed = 0
-                    failed_files = []
-
-                    for i, result in enumerate(sub_results):
-                        if isinstance(result, Exception):
-                            logger.error(
-                                f"Sub-batch {batch_num}.{i + 1} failed with exception: {result}"
-                            )
-                            failed_files.extend(sub_batches[i])
-                        elif isinstance(result, dict):
-                            batch_completed += result.get("completed", 0)
-                            failed_files.extend(result.get("failed_files", []))
-
-                    total_completed += batch_completed
-
-                    if not failed_files:
-                        # All sub-batches succeeded
-                        return {
-                            "batch_num": batch_num,
-                            "elapsed": time.time() - start_time,
-                            "completed": total_completed,
-                            "failed": 0,
-                            "total": len(files),
-                            "files": files,
-                            "failed_files": [],
-                        }
-                    else:
-                        # Some sub-batches failed, retry with failed files
-                        current_files = failed_files
-                        logger.warning(
-                            f"Batch {batch_num}: {len(failed_files)} files still failing after split"
-                        )
-
-            except Exception as e:
-                logger.error(f"Batch {batch_num}: Unexpected error in retry logic: {e}")
-                # Continue to next retry attempt
-                continue
-
-        # Max retries exhausted
-        logger.error(
-            f"Batch {batch_num}: Failed after {max_retries} attempts. "
-            f"Completed: {total_completed}/{len(files)}"
-        )
-
-        return {
-            "batch_num": batch_num,
-            "elapsed": time.time() - start_time,
-            "completed": total_completed,
-            "failed": len(files) - total_completed,
-            "total": len(files),
-            "files": files,
-            "failed_files": current_files,
-            "error": "Max retries exhausted",
-        }
 
     async def delete_files(self, file_ids: Sequence[str]) -> None:
         """Delete files from the vector store."""

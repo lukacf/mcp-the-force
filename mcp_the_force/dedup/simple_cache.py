@@ -185,6 +185,132 @@ class SimpleVectorStoreCache:
         except sqlite3.Error as e:
             logger.error(f"Error during cleanup: {e}")
 
+    def atomic_cache_or_get(
+        self, content_hash: str, placeholder: str = "PENDING"
+    ) -> tuple[Optional[str], bool]:
+        """
+        Atomically reserve a hash or retrieve an existing file_id.
+
+        This method prevents race conditions by using an atomic INSERT OR IGNORE
+        operation. Only one process can successfully insert a given content_hash,
+        making that process responsible for uploading the file.
+
+        Args:
+            content_hash: SHA-256 hash of file content
+            placeholder: Placeholder value to indicate upload in progress
+
+        Returns:
+            Tuple of (file_id, we_are_uploader) where:
+            - file_id: OpenAI file_id if already cached, None if upload needed,
+                      or "PENDING" if another process is uploading
+            - we_are_uploader: True if this process should perform the upload
+        """
+        try:
+            now = int(time.time())
+            with self._get_connection() as conn:
+                # Use BEGIN IMMEDIATE to avoid write starvation under high concurrency
+                conn.execute("BEGIN IMMEDIATE")
+
+                try:
+                    # Attempt to atomically reserve this content hash
+                    cursor = conn.execute(
+                        """
+                        INSERT INTO file_cache (content_hash, file_id, created_at)
+                        VALUES (?, ?, ?)
+                        ON CONFLICT(content_hash) DO NOTHING
+                        """,
+                        (content_hash, placeholder, now),
+                    )
+
+                    we_are_uploader = cursor.rowcount == 1
+
+                    if not we_are_uploader:
+                        # Another process already has this hash - fetch the current value
+                        cursor = conn.execute(
+                            "SELECT file_id FROM file_cache WHERE content_hash = ?",
+                            (content_hash,),
+                        )
+                        result = cursor.fetchone()
+                        file_id = result[0] if result else None
+                        conn.commit()
+                        return (file_id, False)
+
+                    # We successfully reserved this hash - we are the uploader
+                    conn.commit()
+                    return (None, True)
+
+                except Exception:
+                    conn.rollback()
+                    raise
+
+        except sqlite3.Error as e:
+            logger.error(f"Error in atomic_cache_or_get for hash {content_hash}: {e}")
+            # Return safe defaults that prevent duplicate uploads
+            return (None, False)
+
+    def finalize_file_id(self, content_hash: str, file_id: str) -> None:
+        """
+        Replace the placeholder with the real OpenAI file_id.
+
+        This method safely updates the cached entry after a successful upload.
+        It only updates entries that still have the PENDING placeholder,
+        making it safe to call even if another process already finalized.
+
+        Args:
+            content_hash: SHA-256 hash of file content
+            file_id: OpenAI file identifier from successful upload
+        """
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.execute(
+                    """
+                    UPDATE file_cache
+                    SET file_id = ?,
+                        created_at = COALESCE(created_at, ?)
+                    WHERE content_hash = ? AND file_id = 'PENDING'
+                    """,
+                    (file_id, int(time.time()), content_hash),
+                )
+
+                if cursor.rowcount == 0:
+                    # Row was already finalized by another process, or hash doesn't exist
+                    logger.debug(
+                        f"File {content_hash} was already finalized or not found"
+                    )
+                else:
+                    logger.debug(
+                        f"Finalized cache entry for {content_hash} -> {file_id}"
+                    )
+
+        except sqlite3.Error as e:
+            logger.error(f"Error finalizing file_id for hash {content_hash}: {e}")
+
+    def cleanup_failed_upload(self, content_hash: str) -> None:
+        """
+        Clean up a failed upload by removing the PENDING placeholder.
+
+        This allows another process to retry the upload later.
+
+        Args:
+            content_hash: SHA-256 hash of file content that failed to upload
+        """
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.execute(
+                    "DELETE FROM file_cache WHERE content_hash = ? AND file_id = 'PENDING'",
+                    (content_hash,),
+                )
+
+                if cursor.rowcount > 0:
+                    logger.debug(
+                        f"Cleaned up failed upload placeholder for {content_hash}"
+                    )
+
+        except sqlite3.Error as e:
+            logger.error(
+                f"Error cleaning up failed upload for hash {content_hash}: {e}"
+            )
+
     def get_stats(self) -> Dict[str, Any]:
         """Get cache statistics."""
         try:
@@ -195,9 +321,16 @@ class SimpleVectorStoreCache:
                 cursor2 = conn.execute("SELECT COUNT(*) FROM store_cache")
                 store_count = cursor2.fetchone()[0]
 
+                # Count pending uploads
+                cursor3 = conn.execute(
+                    "SELECT COUNT(*) FROM file_cache WHERE file_id = 'PENDING'"
+                )
+                pending_count = cursor3.fetchone()[0]
+
                 return {
                     "file_count": file_count,
                     "store_count": store_count,
+                    "pending_uploads": pending_count,
                     "cache_type": "SimpleVectorStoreCache",
                 }
 
@@ -206,6 +339,7 @@ class SimpleVectorStoreCache:
             return {
                 "file_count": 0,
                 "store_count": 0,
+                "pending_uploads": 0,
                 "cache_type": "SimpleVectorStoreCache",
             }
 
