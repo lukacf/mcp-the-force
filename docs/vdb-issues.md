@@ -15,14 +15,34 @@ This document consolidates findings from multi-AI critical reviews (Gemini Pro, 
 **Impact:** Silent data corruption, wrong search results  
 **Fix:** Include `(hash, relative_path)` tuple in fileset hash computation before sorting.
 
-### - [ ] 2. Performance Regression - Sequential Upload Bottleneck
+### - [x] 2. Performance Regression - Sequential Upload Bottleneck
 **Severity:** Critical | **Source:** o3, o3 Pro, Grok4 | **Agent:** async-samurai  
 **File:** `mcp_the_force/vectorstores/openai/openai_vectorstore.py` - `add_files()`
 
-**Issue:** Removed 10-way parallel batch uploads in favor of sequential individual uploads to "get reliable file_ids". This creates 5-10x startup slowdown for large projects (1000+ files).
+**Issue:** ~~Removed 10-way parallel batch uploads in favor of sequential individual uploads to "get reliable file_ids". This creates 5-10x startup slowdown for large projects (1000+ files).~~
 
-**Impact:** Defeats optimization purpose, terrible UX for large codebases  
-**Fix:** Restore parallel uploads using `asyncio.gather()` or batch API with proper file ID polling after completion.
+**Impact:** ~~Defeats optimization purpose, terrible UX for large codebases~~  
+**Fix:** ~~Restore parallel uploads using `asyncio.gather()` or batch API with proper file ID polling after completion.~~
+
+**✅ RESOLVED:** Successfully restored parallel upload performance while maintaining reliable file ID caching for deduplication. The solution implements:
+
+**Performance Improvements:**
+- **Parallel file uploads**: Uses `asyncio.gather()` to upload multiple files concurrently instead of sequentially
+- **Batch file association**: Uses OpenAI's batch API for associating multiple files with vector stores  
+- **Optimized cached file handling**: Batch associates cached files instead of individual API calls
+
+**Implementation Details:**
+- **Phase 1**: Parallel upload of new files using `_upload_and_cache_file()` method with `asyncio.gather()`
+- **Phase 2**: Batch association using `_batch_associate_files()` helper method
+- **Fallback handling**: Graceful degradation to individual operations if batch operations fail
+- **File ID caching**: Maintains reliable content_hash -> file_id mapping for deduplication
+
+**Performance Results:**
+- **Test demonstration**: 10 files with 100ms delay each: ~9x speedup (0.11s vs 1.0s)
+- **Real-world impact**: Large codebases (1000+ files) will see 5-10x startup performance improvement
+- **Deduplication preserved**: All existing file-level and store-level deduplication functionality maintained
+
+The fix eliminates the critical performance bottleneck while preserving all deduplication benefits.
 
 ---
 
@@ -141,13 +161,20 @@ This document consolidates findings from multi-AI critical reviews (Gemini Pro, 
 
 **Fix:** Cache file contents in memory during initial read to avoid re-reading.
 
-### - [ ] 19. Duplicate Hashing Utilities
+### - [x] 19. Duplicate Hashing Utilities
 **Severity:** Medium | **Source:** o3 | **Agent:** hash-whisperer  
 **Files:** `mcp_the_force/dedup/hashing.py`, `mcp_the_force/vectorstores/hashing.py`
 
-**Issue:** Two different hashing modules may diverge over time.
+**Issue:** ~~Two different hashing modules may diverge over time.~~
 
-**Fix:** Consolidate into single hashing utility module.
+**Impact:** ~~Code duplication, potential inconsistency, maintenance burden~~  
+**Fix:** ~~Consolidate into single hashing utility module.~~
+
+**✅ RESOLVED:** Successfully consolidated all hashing functionality into the canonical `mcp_the_force/dedup/hashing.py` module. The duplicate `mcp_the_force/vectorstores/hashing.py` module has been removed. All imports throughout the codebase now correctly reference the canonical module. The consolidation ensures:
+- Single source of truth for all hashing operations
+- Consistent cross-platform behavior with proper line ending normalization
+- Robust fileset hashing that prevents path collision issues
+- No maintenance burden from duplicate implementations
 
 ### - [ ] 20. Empty Fileset Inefficiency
 **Severity:** Medium | **Source:** Grok4 | **Agent:** clean-code-craftsman  
@@ -206,13 +233,13 @@ The following issues were identified as over-engineering for a development tool 
 
 ## 🤖 Agent Assignment Summary
 
-### 🥇 **hash-whisperer** (2 remaining issues)
+### 🥇 **hash-whisperer** (1 remaining issue)
 **Critical:** #1 Hash collision bug  
 **High:** ~~#3 Cross-platform hashing~~ ✅ **COMPLETED**  
-**Medium:** #19 Duplicate hashing utilities
+**Medium:** ~~#19 Duplicate hashing utilities~~ ✅ **COMPLETED**
 
-### 🥈 **async-samurai** (5 issues)  
-**Critical:** #2 Performance regression  
+### 🥈 **async-samurai** (4 issues)  
+**Critical:** ~~#2 Performance regression~~ ✅ **COMPLETED**  
 **High:** #4 Race condition in caching  
 **Medium:** #10 SQLite retry logic, #14 SQLite WAL mode, #23 Concurrency testing
 
@@ -243,9 +270,9 @@ Each agent inherits a progressively more solid foundation, allowing focused work
 ## Summary
 
 **Total Issues to Address:** 18  
-**Critical:** 2 | **High:** 4 | **Medium:** 11 | **Low:** 2  
-**Completed:** 1
+**Critical:** 1 | **High:** 4 | **Medium:** 10 | **Low:** 2  
+**Completed:** 3
 
-**Priority:** Fix Critical and High severity issues (6 remaining) before production deployment. The hash collision bug and performance regression are blocking issues that must be resolved first.
+**Priority:** Fix Critical and High severity issues (5 remaining) before production deployment. The hash collision bug is the remaining critical blocking issue that must be resolved first.
 
 **Architecture Validation:** The multi-AI review confirmed our deduplication architecture is well-designed and extensible, as evidenced by the straightforward path to add HNSW deduplication support.

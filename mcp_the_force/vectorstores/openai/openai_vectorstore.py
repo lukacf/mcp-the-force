@@ -86,6 +86,7 @@ class OpenAIVectorStore:
         # DEDUPLICATION: Check for cached files and separate new ones
         files_to_upload = []
         cached_file_ids = []
+        failed_cached_files = []  # Files that failed cache association, need to be uploaded
         cache = get_cache()
 
         for file in supported_files:
@@ -95,21 +96,9 @@ class OpenAIVectorStore:
 
                 if cached_file_id:
                     logger.debug(
-                        f"DEDUP: Reusing cached file {cached_file_id} for {file.path}"
+                        f"DEDUP: Found cached file {cached_file_id} for {file.path}"
                     )
                     cached_file_ids.append(cached_file_id)
-
-                    # Associate cached file with this vector store
-                    try:
-                        await self._client.vector_stores.files.create(
-                            vector_store_id=self.id, file_id=cached_file_id
-                        )
-                    except Exception as e:
-                        logger.warning(
-                            f"Failed to associate cached file {cached_file_id}: {e}"
-                        )
-                        # If association fails, upload the file instead
-                        files_to_upload.append(file)
                 else:
                     files_to_upload.append(file)
 
@@ -118,11 +107,65 @@ class OpenAIVectorStore:
                 files_to_upload.append(file)
 
         logger.info(
-            f"DEDUP: Reusing {len(cached_file_ids)} cached files, uploading {len(files_to_upload)} new files"
+            f"DEDUP: Found {len(cached_file_ids)} cached files, need to upload {len(files_to_upload)} new files"
         )
 
+        # OPTIMIZATION: Batch associate cached files if we have any
+        if cached_file_ids:
+            try:
+                if len(cached_file_ids) > 1:
+                    # Use batch association for multiple cached files
+                    await self._client.vector_stores.file_batches.create_and_poll(
+                        vector_store_id=self.id, file_ids=cached_file_ids
+                    )
+                    logger.debug(
+                        f"Batch associated {len(cached_file_ids)} cached files with vector store"
+                    )
+                else:
+                    # Single cached file - use individual association
+                    await self._client.vector_stores.files.create(
+                        vector_store_id=self.id, file_id=cached_file_ids[0]
+                    )
+                    logger.debug(
+                        f"Associated single cached file {cached_file_ids[0]} with vector store"
+                    )
+            except Exception as e:
+                logger.warning(f"Failed to associate cached files: {e}")
+                # If batch association fails, we need to identify which files to re-upload
+                # For safety, we'll try individual association for each cached file
+                successfully_associated = []
+                for cached_file_id in cached_file_ids:
+                    try:
+                        await self._client.vector_stores.files.create(
+                            vector_store_id=self.id, file_id=cached_file_id
+                        )
+                        successfully_associated.append(cached_file_id)
+                    except Exception as individual_e:
+                        logger.warning(
+                            f"Failed to associate cached file {cached_file_id}: {individual_e}"
+                        )
+                        # Find the original file that corresponds to this cached file and re-upload it
+                        for file in supported_files:
+                            try:
+                                content_hash = compute_content_hash(file.content)
+                                if cache.get_file_id(content_hash) == cached_file_id:
+                                    failed_cached_files.append(file)
+                                    break
+                            except Exception:
+                                pass
+
+                # Update cached_file_ids to only include successfully associated files
+                cached_file_ids = successfully_associated
+                # Add failed cached files to upload queue
+                files_to_upload.extend(failed_cached_files)
+
+                logger.info(
+                    f"DEDUP Fallback: {len(successfully_associated)} cached files associated, "
+                    f"{len(failed_cached_files)} failed cached files will be re-uploaded"
+                )
+
         if not files_to_upload:
-            # All files were cached, return the cached file IDs
+            # All files were cached and successfully associated
             return cached_file_ids
 
         start_time = time.time()
@@ -130,47 +173,42 @@ class OpenAIVectorStore:
             f"Starting upload of {len(files_to_upload)} new files to vector store {self.id}"
         )
 
-        # FILE CACHING FIX: Upload files individually to get reliable file IDs for caching
+        # PARALLEL UPLOAD OPTIMIZATION: Upload files in parallel while maintaining reliable file ID caching
         uploaded_file_ids = []
 
         try:
-            for file in files_to_upload:
-                # Create temp file
-                suffix = Path(file.path).suffix
-                tf = tempfile.NamedTemporaryFile(mode="w", suffix=suffix, delete=False)
-                tf.write(file.content)
-                tf.close()
+            if files_to_upload:
+                # Phase 1: Parallel upload of new files to get reliable file IDs
+                upload_tasks = []
+                for file in files_to_upload:
+                    task = self._upload_and_cache_file(file, cache)
+                    upload_tasks.append(task)
 
-                try:
-                    # Upload individual file to get reliable file_id
-                    with open(tf.name, "rb") as file_stream:
-                        upload_response = await self._client.files.create(
-                            file=file_stream, purpose="assistants"
+                # Execute all uploads concurrently - this is the key performance improvement
+                logger.debug(f"Starting parallel upload of {len(upload_tasks)} files")
+                upload_results = await asyncio.gather(
+                    *upload_tasks, return_exceptions=True
+                )
+
+                # Process results and handle any exceptions
+                for i, result in enumerate(upload_results):
+                    if isinstance(result, Exception):
+                        logger.error(
+                            f"Failed to upload file {files_to_upload[i].path}: {result}"
                         )
-                        file_id = upload_response.id
-                        uploaded_file_ids.append(file_id)
+                    elif isinstance(result, str):
+                        # Only add string file_ids, skip None results
+                        uploaded_file_ids.append(result)
 
-                        # Cache the file mapping immediately with reliable file_id
-                        try:
-                            content_hash = compute_content_hash(file.content)
-                            cache.cache_file(content_hash, file_id)
-                            logger.debug(
-                                f"DEDUP: Cached uploaded file {file_id} for content hash {content_hash[:12]}..."
-                            )
-                        except Exception as e:
-                            logger.warning(
-                                f"Failed to cache uploaded file {file_id}: {e}"
-                            )
+                logger.debug(
+                    f"Parallel upload completed: {len(uploaded_file_ids)}/{len(files_to_upload)} files successful"
+                )
 
-                        # Associate file with vector store
-                        await self._client.vector_stores.files.create(
-                            vector_store_id=self.id, file_id=file_id
-                        )
-
-                finally:
-                    # Clean up temp file
-                    if os.path.exists(tf.name):
-                        os.unlink(tf.name)
+                # Phase 2: Batch associate newly uploaded files with vector store
+                if uploaded_file_ids:
+                    await self._batch_associate_files(
+                        uploaded_file_ids, "newly uploaded"
+                    )
 
             logger.info(
                 f"Successfully uploaded and cached {len(uploaded_file_ids)} files in {time.time() - start_time:.2f}s"
@@ -182,6 +220,114 @@ class OpenAIVectorStore:
         except Exception as e:
             logger.error(f"Error uploading files: {e}")
             return cached_file_ids  # Return at least the cached files
+
+    async def _upload_and_cache_file(self, file: VSFile, cache) -> Optional[str]:
+        """Upload a single file, cache its ID, and return the file ID.
+
+        This method handles the complete lifecycle of a single file upload:
+        1. Create temporary file with proper extension
+        2. Upload to OpenAI to get reliable file_id
+        3. Cache the content_hash -> file_id mapping
+        4. Clean up temporary file
+
+        Args:
+            file: The VSFile to upload
+            cache: The deduplication cache instance
+
+        Returns:
+            The OpenAI file_id if successful, None if failed
+        """
+        tf_path = None
+        try:
+            # Create temp file with proper extension
+            suffix = Path(file.path).suffix
+            tf = tempfile.NamedTemporaryFile(mode="w", suffix=suffix, delete=False)
+            tf.write(file.content)
+            tf.close()
+            tf_path = tf.name
+
+            # Upload file to get reliable file_id
+            with open(tf_path, "rb") as file_stream:
+                upload_response = await self._client.files.create(
+                    file=file_stream, purpose="assistants"
+                )
+                file_id: str = upload_response.id
+
+                # Cache the file mapping immediately with reliable file_id
+                try:
+                    content_hash = compute_content_hash(file.content)
+                    cache.cache_file(content_hash, file_id)
+                    logger.debug(
+                        f"DEDUP: Cached uploaded file {file_id} for content hash {content_hash[:12]}..."
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to cache uploaded file {file_id}: {e}")
+
+                return file_id
+
+        except Exception as e:
+            logger.error(f"Failed to upload file {file.path}: {e}")
+            return None
+        finally:
+            # Always clean up temp file
+            if tf_path and os.path.exists(tf_path):
+                try:
+                    os.unlink(tf_path)
+                except Exception as cleanup_e:
+                    logger.warning(
+                        f"Failed to cleanup temp file {tf_path}: {cleanup_e}"
+                    )
+
+    async def _batch_associate_files(
+        self, file_ids: List[str], description: str
+    ) -> None:
+        """Associate multiple files with the vector store using batch operations when possible.
+
+        Args:
+            file_ids: List of OpenAI file IDs to associate
+            description: Description for logging (e.g., "cached" or "newly uploaded")
+        """
+        if not file_ids:
+            return
+
+        try:
+            if len(file_ids) > 1:
+                # Use batch association for multiple files
+                await self._client.vector_stores.file_batches.create_and_poll(
+                    vector_store_id=self.id, file_ids=file_ids
+                )
+                logger.debug(
+                    f"Batch associated {len(file_ids)} {description} files with vector store"
+                )
+            else:
+                # Single file - use individual association
+                await self._client.vector_stores.files.create(
+                    vector_store_id=self.id, file_id=file_ids[0]
+                )
+                logger.debug(
+                    f"Associated single {description} file {file_ids[0]} with vector store"
+                )
+        except Exception as e:
+            logger.warning(
+                f"Batch association failed for {description} files, falling back to individual: {e}"
+            )
+            # Fallback to individual association if batch fails
+            successful_count = 0
+            for file_id in file_ids:
+                try:
+                    await self._client.vector_stores.files.create(
+                        vector_store_id=self.id, file_id=file_id
+                    )
+                    successful_count += 1
+                except Exception as individual_e:
+                    logger.error(
+                        f"Failed to associate {description} file {file_id}: {individual_e}"
+                    )
+
+            if successful_count > 0:
+                logger.info(
+                    f"Individual fallback: {successful_count}/{len(file_ids)} {description} files associated"
+                )
 
     async def _upload_single_batch(
         self,

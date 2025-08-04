@@ -507,16 +507,19 @@ class TestOpenAIAdapter:
             ]
 
             # Should filter internally
-            # Mock the batch upload API that's actually used
-            mock_client.vector_stores.file_batches.upload_and_poll = AsyncMock()
-            mock_batch = AsyncMock()
-            mock_batch.status = "completed"
-            mock_batch.file_counts.completed = 3
-            mock_batch.file_counts.failed = 0
-            mock_batch.file_counts.total = 3
-            mock_client.vector_stores.file_batches.upload_and_poll.return_value = (
-                mock_batch
-            )
+            # Mock the new parallel upload API that's actually used
+            # Mock individual file uploads
+            mock_upload_responses = []
+            for i in range(3):  # 3 supported files
+                mock_response = MagicMock()
+                mock_response.id = f"file_{i}"
+                mock_upload_responses.append(mock_response)
+            
+            mock_client.files.create.side_effect = mock_upload_responses
+            
+            # Mock batch file association
+            mock_client.vector_stores.file_batches.create_and_poll = AsyncMock()
+            mock_client.vector_stores.files.create = AsyncMock()  # For single file fallback
 
             file_ids = await store.add_files(files)
 
