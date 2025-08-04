@@ -2,10 +2,12 @@
 
 This document consolidates findings from multi-AI critical reviews (Gemini Pro, o3, o3 Pro, Grok4) of the deduplication implementation. Issues are filtered to focus on fit-for-purpose fixes for this development tool MCP server.
 
+**🤖 Agent Workflow:** Each issue is assigned to a specialized agent in `.claude/agents/` for sequential resolution: hash-whisperer → async-samurai → resilience-architect → clean-code-craftsman → integration-virtuoso.
+
 ## 🚨 CRITICAL - Must Fix Before Production
 
 ### - [ ] 1. Hash Collision Bug - Data Corruption Risk
-**Severity:** Critical | **Source:** o3 Pro  
+**Severity:** Critical | **Source:** o3 Pro | **Agent:** hash-whisperer  
 **File:** `mcp_the_force/dedup/hashing.py` - `compute_fileset_hash()`
 
 **Issue:** Fileset hash only considers file content, not file paths. Two different files with identical content (e.g., `README` copied to `docs/README`) generate the same fileset hash, causing wrong store reuse and returning incorrect embeddings.
@@ -14,7 +16,7 @@ This document consolidates findings from multi-AI critical reviews (Gemini Pro, 
 **Fix:** Include `(hash, relative_path)` tuple in fileset hash computation before sorting.
 
 ### - [ ] 2. Performance Regression - Sequential Upload Bottleneck
-**Severity:** Critical | **Source:** o3, o3 Pro, Grok4  
+**Severity:** Critical | **Source:** o3, o3 Pro, Grok4 | **Agent:** async-samurai  
 **File:** `mcp_the_force/vectorstores/openai/openai_vectorstore.py` - `add_files()`
 
 **Issue:** Removed 10-way parallel batch uploads in favor of sequential individual uploads to "get reliable file_ids". This creates 5-10x startup slowdown for large projects (1000+ files).
@@ -27,7 +29,7 @@ This document consolidates findings from multi-AI critical reviews (Gemini Pro, 
 ## 🔥 HIGH - Major Reliability Issues
 
 ### - [ ] 3. Cross-Platform Hashing Non-Determinism
-**Severity:** High | **Source:** Grok4  
+**Severity:** High | **Source:** Grok4 | **Agent:** hash-whisperer  
 **File:** `mcp_the_force/dedup/hashing.py` - `compute_content_hash()`
 
 **Issue:** Hash function may not normalize line endings, causing Windows (`\r\n`) vs Unix (`\n`) to generate different hashes for identical logical content.
@@ -36,7 +38,7 @@ This document consolidates findings from multi-AI critical reviews (Gemini Pro, 
 **Fix:** Normalize line endings before hashing: `content.replace('\r\n', '\n').replace('\r', '\n')`
 
 ### - [ ] 4. Race Condition in File Caching
-**Severity:** High | **Source:** o3 Pro  
+**Severity:** High | **Source:** o3 Pro | **Agent:** async-samurai  
 **File:** `mcp_the_force/vectorstores/openai/openai_vectorstore.py` - `add_files()`
 
 **Issue:** Non-atomic `get_file_id()` + `cache_file()` sequence allows two processes to both miss cache and upload the same file simultaneously.
@@ -45,7 +47,7 @@ This document consolidates findings from multi-AI critical reviews (Gemini Pro, 
 **Fix:** Use atomic `INSERT ... ON CONFLICT DO NOTHING RETURNING file_id` pattern.
 
 ### - [ ] 5. Cache Pollution from Failed Associations
-**Severity:** High | **Source:** Grok4  
+**Severity:** High | **Source:** Grok4 | **Agent:** resilience-architect  
 **File:** `mcp_the_force/vectorstores/openai/openai_vectorstore.py` - `add_files()`
 
 **Issue:** If `vector_stores.files.create()` (association) fails but upload succeeded, stale cache entries remain. Future sessions try to associate invalid file_ids.
@@ -54,7 +56,7 @@ This document consolidates findings from multi-AI critical reviews (Gemini Pro, 
 **Fix:** Add cache invalidation on association failure and transactional upload-cache-associate operations.
 
 ### - [ ] 6. Silent Cache Failures
-**Severity:** High | **Source:** o3 Pro  
+**Severity:** High | **Source:** o3 Pro | **Agent:** resilience-architect  
 **File:** `mcp_the_force/vectorstores/manager.py` - Exception handling
 
 **Issue:** Cache write errors are only logged, not re-raised. Upstream can't retry, leading to silent data corruption.
@@ -63,7 +65,7 @@ This document consolidates findings from multi-AI critical reviews (Gemini Pro, 
 **Fix:** Re-raise wrapped custom exceptions for cache failures to enable upstream retry logic.
 
 ### - [ ] 7. Code Complexity - Monolithic Method
-**Severity:** High | **Source:** o3  
+**Severity:** High | **Source:** o3 | **Agent:** clean-code-craftsman  
 **File:** `mcp_the_force/vectorstores/manager.py` - `create()` method (~180 LOC)
 
 **Issue:** Single method handles I/O, deduplication, retries, and metrics. Hard to test, maintain, and debug.
@@ -76,7 +78,7 @@ This document consolidates findings from multi-AI critical reviews (Gemini Pro, 
 ## ⚠️ MEDIUM - Operational & Maintainability Issues
 
 ### - [ ] 8. File Orphaning on Upload Errors
-**Severity:** Medium | **Source:** o3  
+**Severity:** Medium | **Source:** o3 | **Agent:** resilience-architect  
 **File:** `mcp_the_force/vectorstores/openai/openai_vectorstore.py`
 
 **Issue:** If `files.create()` succeeds but caching fails, uploaded file becomes orphaned (billed but not tracked).
@@ -84,7 +86,7 @@ This document consolidates findings from multi-AI critical reviews (Gemini Pro, 
 **Fix:** Wrap upload+cache in transaction, call `files.delete()` on cache failure.
 
 ### - [ ] 10. Missing SQLite Retry Logic
-**Severity:** Medium | **Source:** o3  
+**Severity:** Medium | **Source:** o3 | **Agent:** async-samurai  
 **File:** `mcp_the_force/dedup/simple_cache.py`
 
 **Issue:** No retry loop for `OperationalError`/`IntegrityError` despite documentation mentioning it.
@@ -92,7 +94,7 @@ This document consolidates findings from multi-AI critical reviews (Gemini Pro, 
 **Fix:** Add exponential backoff retry for SQLite busy/lock errors.
 
 ### - [ ] 11. Cross-Layer Coupling Violation
-**Severity:** Medium | **Source:** o3 Pro  
+**Severity:** Medium | **Source:** o3 Pro | **Agent:** clean-code-craftsman  
 **File:** `mcp_the_force/vectorstores/manager.py` - `cleanup_expired()`
 
 **Issue:** VectorStoreManager directly manipulates deduplication cache internals, breaking encapsulation.
@@ -100,7 +102,7 @@ This document consolidates findings from multi-AI critical reviews (Gemini Pro, 
 **Fix:** Expose `purge(store_id)` method on `SimpleVectorStoreCache`.
 
 ### - [ ] 14. Incomplete SQLite WAL Mode Application
-**Severity:** Medium | **Source:** o3 Pro  
+**Severity:** Medium | **Source:** o3 Pro | **Agent:** async-samurai  
 **File:** `mcp_the_force/dedup/simple_cache.py` - `_get_connection()`
 
 **Issue:** WAL mode set in `_init_db()` but `_get_connection()` creates new connections that inherit default (delete) mode.
@@ -108,7 +110,7 @@ This document consolidates findings from multi-AI critical reviews (Gemini Pro, 
 **Fix:** Apply `PRAGMA journal_mode=WAL` in every `_get_connection()` call.
 
 ### - [ ] 15. Global Singleton Cache Leakage
-**Severity:** Medium | **Source:** Grok4  
+**Severity:** Medium | **Source:** Grok4 | **Agent:** clean-code-craftsman  
 **File:** `mcp_the_force/dedup/simple_cache.py` - `get_cache()`
 
 **Issue:** Module-level singleton risks state leakage in multi-tenant environments.
@@ -116,21 +118,21 @@ This document consolidates findings from multi-AI critical reviews (Gemini Pro, 
 **Fix:** Inject cache dependency or use project-scoped singletons.
 
 ### - [ ] 16. Logging Flood at INFO Level
-**Severity:** Medium | **Source:** o3
+**Severity:** Medium | **Source:** o3 | **Agent:** integration-virtuoso
 
 **Issue:** Every cache hit logs at INFO level. Large projects will spam logs.
 
 **Fix:** Downgrade to DEBUG level after initial verification period.
 
 ### - [ ] 17. Fragile Error Detection
-**Severity:** Medium | **Source:** o3
+**Severity:** Medium | **Source:** o3 | **Agent:** resilience-architect
 
 **Issue:** QuotaExceeded detection uses brittle string matching instead of error codes.
 
 **Fix:** Parse `e.error.code` from OpenAI SDK structured errors.
 
 ### - [ ] 18. Redundant File Reading
-**Severity:** Medium | **Source:** Gemini Pro  
+**Severity:** Medium | **Source:** Gemini Pro | **Agent:** integration-virtuoso  
 **File:** `mcp_the_force/vectorstores/manager.py` - `create()`
 
 **Issue:** Files read twice - once for hashing, once for upload if creating new store.
@@ -138,7 +140,7 @@ This document consolidates findings from multi-AI critical reviews (Gemini Pro, 
 **Fix:** Cache file contents in memory during initial read to avoid re-reading.
 
 ### - [ ] 19. Duplicate Hashing Utilities
-**Severity:** Medium | **Source:** o3  
+**Severity:** Medium | **Source:** o3 | **Agent:** hash-whisperer  
 **Files:** `mcp_the_force/dedup/hashing.py`, `mcp_the_force/vectorstores/hashing.py`
 
 **Issue:** Two different hashing modules may diverge over time.
@@ -146,7 +148,7 @@ This document consolidates findings from multi-AI critical reviews (Gemini Pro, 
 **Fix:** Consolidate into single hashing utility module.
 
 ### - [ ] 20. Empty Fileset Inefficiency
-**Severity:** Medium | **Source:** Grok4  
+**Severity:** Medium | **Source:** Grok4 | **Agent:** clean-code-craftsman  
 **File:** `mcp_the_force/vectorstores/manager.py`
 
 **Issue:** Creates unnecessary vector stores for empty filesets.
@@ -154,7 +156,7 @@ This document consolidates findings from multi-AI critical reviews (Gemini Pro, 
 **Fix:** Return sentinel "empty" store ID without API calls.
 
 ### - [ ] 23. Inadequate Concurrency Testing
-**Severity:** Medium | **Source:** Grok4  
+**Severity:** Medium | **Source:** Grok4 | **Agent:** async-samurai  
 **File:** `tests/internal/test_vector_store_deduplication.py`
 
 **Issue:** No tests for concurrent operations, race conditions, or failure scenarios.
@@ -166,14 +168,14 @@ This document consolidates findings from multi-AI critical reviews (Gemini Pro, 
 ## 📝 LOW - Minor Improvements
 
 ### - [ ] 21. Provider Agnosticism - HNSW Deduplication Extension
-**Severity:** Low | **Source:** Grok4  
+**Severity:** Low | **Source:** Grok4 | **Agent:** integration-virtuoso  
 
 **Issue:** File-level deduplication only implemented for OpenAI. HNSW could benefit from embedding cache reuse.
 
 **Fix:** Extend deduplication to HNSW provider for CPU-intensive embedding reuse. *Note: Architecture is well-designed and extensible - this validates our abstraction.*
 
 ### - [ ] 24. SQLite Pattern Inconsistency
-**Severity:** Low | **Source:** Gemini Pro  
+**Severity:** Low | **Source:** Gemini Pro | **Agent:** integration-virtuoso  
 **File:** `mcp_the_force/dedup/simple_cache.py`
 
 **Issue:** Doesn't inherit from existing `BaseSQLiteCache` pattern used elsewhere.
@@ -195,6 +197,44 @@ The following issues were identified as over-engineering for a development tool 
 - **#27 - Missing foreign key constraints**: Existing cleanup logic sufficient for this use case.
 - **#28 - Fuzzy deduplication**: Complex feature with marginal benefit for development workflows.
 - **#29 - Missing observability metrics**: Production-scale monitoring overkill for individual developers.
+
+---
+
+---
+
+## 🤖 Agent Assignment Summary
+
+### 🥇 **hash-whisperer** (3 issues)
+**Critical:** #1 Hash collision bug  
+**High:** #3 Cross-platform hashing  
+**Medium:** #19 Duplicate hashing utilities
+
+### 🥈 **async-samurai** (5 issues)  
+**Critical:** #2 Performance regression  
+**High:** #4 Race condition in caching  
+**Medium:** #10 SQLite retry logic, #14 SQLite WAL mode, #23 Concurrency testing
+
+### 🥉 **resilience-architect** (4 issues)
+**High:** #5 Cache pollution, #6 Silent failures  
+**Medium:** #8 File orphaning, #17 Fragile error detection
+
+### 🏅 **clean-code-craftsman** (4 issues)
+**High:** #7 Code complexity  
+**Medium:** #11 Coupling violations, #15 Singleton leakage, #20 Empty fileset inefficiency
+
+### 🎖️ **integration-virtuoso** (3 issues)
+**Medium:** #16 Logging flood, #18 Redundant file reading  
+**Low:** #21 Provider agnosticism, #24 SQLite pattern consistency
+
+## 🔄 Sequential Workflow Strategy
+
+**Phase 1:** Hash Whisperer establishes bulletproof cryptographic foundations  
+**Phase 2:** Async Samurai optimizes performance & concurrency patterns  
+**Phase 3:** Resilience Architect hardens error handling & fault tolerance  
+**Phase 4:** Clean Code Craftsman refactors for maintainability & architecture  
+**Phase 5:** Integration Virtuoso polishes user experience & system integration
+
+Each agent inherits a progressively more solid foundation, allowing focused work on their specialty without fundamental conflicts.
 
 ---
 

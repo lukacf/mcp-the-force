@@ -155,15 +155,34 @@ class VectorStoreManager:
         # DEDUPLICATION: Check if we have an identical fileset cached
         if files and provider != "inmemory":  # Skip deduplication for inmemory provider
             try:
-                # Read file contents and compute fileset hash
-                file_contents = []
+                # Read file contents and compute fileset hash with paths for collision avoidance
+                files_with_content = []
+                project_root = Path.cwd()
+
                 for file_path in files:
                     content = self._read_file_content(file_path)
                     if content:
-                        file_contents.append(content)
+                        # Normalize path for cross-platform determinism and collision prevention
+                        path_obj = Path(file_path)
+                        try:
+                            # Use relative path when possible for real project files
+                            relative_path = path_obj.relative_to(project_root)
+                            normalized_path = str(
+                                relative_path.as_posix()
+                            )  # Use forward slashes for consistency
+                        except ValueError:
+                            # For files outside project root (e.g., tests), create a deterministic path
+                            # by using parent directory name + filename to prevent collisions
+                            parent_name = (
+                                path_obj.parent.name
+                                if path_obj.parent.name != "/"
+                                else "root"
+                            )
+                            normalized_path = f"{parent_name}/{path_obj.name}"
+                        files_with_content.append((normalized_path, content))
 
-                if file_contents:
-                    fileset_hash = compute_fileset_hash(file_contents)
+                if files_with_content:
+                    fileset_hash = compute_fileset_hash(files_with_content)
                     cache = get_cache()
 
                     # Check if we already have a store for this exact fileset
@@ -377,14 +396,33 @@ class VectorStoreManager:
             if files and provider_to_use != "inmemory":
                 try:
                     # Re-read file contents to compute fileset hash (we may have read them earlier)
-                    file_contents = []
+                    files_with_content = []
+                    project_root = Path.cwd()
+
                     for file_path in files:
                         content = self._read_file_content(file_path)
                         if content:
-                            file_contents.append(content)
+                            # Normalize path for cross-platform determinism and collision prevention
+                            path_obj = Path(file_path)
+                            try:
+                                # Use relative path when possible for real project files
+                                relative_path = path_obj.relative_to(project_root)
+                                normalized_path = str(
+                                    relative_path.as_posix()
+                                )  # Use forward slashes for consistency
+                            except ValueError:
+                                # For files outside project root (e.g., tests), create a deterministic path
+                                # by using parent directory name + filename to prevent collisions
+                                parent_name = (
+                                    path_obj.parent.name
+                                    if path_obj.parent.name != "/"
+                                    else "root"
+                                )
+                                normalized_path = f"{parent_name}/{path_obj.name}"
+                            files_with_content.append((normalized_path, content))
 
-                    if file_contents:
-                        fileset_hash = compute_fileset_hash(file_contents)
+                    if files_with_content:
+                        fileset_hash = compute_fileset_hash(files_with_content)
                         cache = get_cache()
                         cache.cache_store(fileset_hash, store.id, provider_to_use)
                         logger.info(

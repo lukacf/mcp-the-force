@@ -187,13 +187,57 @@ class TestFileLevelDeduplication:
         """Test that fileset hash is order-independent."""
         content1 = temp_files["file1"]["content"]
         content2 = temp_files["file2"]["content"]
+        path1 = "file1.txt"
+        path2 = "file2.txt"
 
-        hash_a = compute_fileset_hash([content1, content2])
-        hash_b = compute_fileset_hash([content2, content1])  # Different order
+        hash_a = compute_fileset_hash([(path1, content1), (path2, content2)])
+        hash_b = compute_fileset_hash(
+            [(path2, content2), (path1, content1)]
+        )  # Different order
 
         # Should produce the same hash regardless of order
         assert hash_a == hash_b
         assert len(hash_a) == 64  # SHA-256 hex length
+
+    def test_fileset_hash_collision_prevention(self):
+        """Test that identical content with different paths produces different hashes.
+
+        This test prevents the critical hash collision bug where files with
+        identical content but different paths would generate the same fileset hash,
+        causing wrong vector store reuse and data corruption.
+        """
+        # Same content, different paths - this is the collision scenario
+        identical_content = "def hello(): return 'world'"
+
+        # Scenario A: Files from different directories with same content
+        fileset_a = [
+            ("app/v1/routes.py", identical_content),
+            ("app/common.py", "# Common utilities"),
+        ]
+
+        fileset_b = [
+            ("app/v2/routes.py", identical_content),  # Same content, different path
+            ("app/common.py", "# Common utilities"),
+        ]
+
+        hash_a = compute_fileset_hash(fileset_a)
+        hash_b = compute_fileset_hash(fileset_b)
+
+        # CRITICAL: These must be different to prevent data corruption
+        assert hash_a != hash_b, (
+            "Hash collision detected! Files with identical content but different paths "
+            "are generating the same fileset hash, which will cause vector store reuse "
+            "and return wrong embeddings. This is a critical data corruption bug."
+        )
+
+        # However, truly identical filesets should still produce the same hash
+        fileset_c = [
+            ("app/v1/routes.py", identical_content),
+            ("app/common.py", "# Common utilities"),
+        ]
+
+        hash_c = compute_fileset_hash(fileset_c)
+        assert hash_a == hash_c, "Identical filesets should produce identical hashes"
 
 
 class TestCacheIntegration:

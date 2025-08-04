@@ -35,10 +35,13 @@ def test_hashing():
     assert hash1 == hash2, "Cross-platform line ending normalization failed"
     assert hash1 != hash3, "Different content should have different hashes"
 
-    # Test fileset hashing
-    fileset1 = [content1, content3]
-    fileset2 = [content3, content1]  # Same content, different order
-    fileset3 = [content1, content2]  # Different content
+    # Test fileset hashing with paths
+    fileset1 = [("file1.txt", content1), ("file3.txt", content3)]
+    fileset2 = [
+        ("file3.txt", content3),
+        ("file1.txt", content1),
+    ]  # Same files, different order
+    fileset3 = [("file1.txt", content1), ("file2.txt", content2)]  # Different content
 
     fhash1 = compute_fileset_hash(fileset1)
     fhash2 = compute_fileset_hash(fileset2)
