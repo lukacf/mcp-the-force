@@ -21,11 +21,12 @@ jobs:
       fail-fast: false
       matrix:
         scenario:
-          - smoke          # ~75s
-          - attachments    # ~89s
-          - failures       # ~129s
-          - cross_model    # ~170s
-          - memory         # ~281s
+          - smoke               # Basic health check for all adapters
+          - attachments         # File attachment handling  
+          - stable_list         # List operations stability
+          - priority_context    # Context prioritization
+          - session_management  # Session continuity
+          - environment         # Environment setup validation
 
     steps:
       - name: Checkout repository

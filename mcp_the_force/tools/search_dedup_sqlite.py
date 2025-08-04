@@ -1,11 +1,12 @@
 """SQLite-based deduplication for search results that persists across sessions."""
 
-import hashlib
 import sqlite3
 import time
 from typing import Dict, Any, List, Tuple
 from pathlib import Path
 import logging
+
+from ..dedup.hashing import compute_content_hash
 
 logger = logging.getLogger(__name__)
 
@@ -43,11 +44,16 @@ class SQLiteSearchDeduplicator:
             conn.commit()
 
     @staticmethod
-    def compute_content_hash(content: str, file_id: str = "") -> str:
-        """Compute a hash for deduplication based on content and file_id."""
+    def compute_content_hash_for_dedup(content: str, file_id: str = "") -> str:
+        """Compute a hash for deduplication based on content and file_id.
+
+        Uses the centralized hashing function that normalizes line endings
+        for cross-platform consistency.
+        """
         # Include both content and file_id to handle same content from different files
         combined = f"{content}:{file_id}"
-        return hashlib.sha256(combined.encode()).hexdigest()[:16]
+        # Use the centralized hashing function that normalizes line endings
+        return compute_content_hash(combined)[:16]
 
     def _cleanup_expired(self, conn: sqlite3.Connection):
         """Remove expired cache entries."""
@@ -115,7 +121,7 @@ class SQLiteSearchDeduplicator:
                 ):
                     file_id = search_result["metadata"]["file_id"]
 
-                content_hash = self.compute_content_hash(content, file_id)
+                content_hash = self.compute_content_hash_for_dedup(content, file_id)
 
                 # Check if we've seen this content before in this session
                 if content_hash not in existing_hashes:

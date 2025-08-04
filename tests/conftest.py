@@ -28,6 +28,8 @@ PRODUCTION_DBS = {
     "sessions.sqlite3",
     "stable_list_cache.sqlite3",
     "logs.sqlite3",
+    # Deduplication cache
+    "vdb_cache.db",
 }
 
 # Note: Adapter mocking is controlled by MCP_ADAPTER_MOCK environment variable
@@ -241,20 +243,15 @@ def mock_openai_client():
     mock_vs.id = f"vs_test_{uuid.uuid4().hex[:8]}"
     mock_vs.status = "completed"
 
-    # Mock both paths - some code uses client.vector_stores, some uses client.beta.vector_stores
+    # Mock vector store operations (async) - using GA API endpoints only
     mock.vector_stores.create = AsyncMock(return_value=mock_vs)
-    mock.beta.vector_stores.create = AsyncMock(return_value=mock_vs)
 
     mock_batch = MagicMock()
     mock_batch.status = "completed"
     mock_batch.file_counts = MagicMock(completed=3, failed=0, total=3)
     mock.vector_stores.file_batches.upload_and_poll = AsyncMock(return_value=mock_batch)
-    mock.beta.vector_stores.file_batches.upload_and_poll = AsyncMock(
-        return_value=mock_batch
-    )
 
     mock.vector_stores.delete = AsyncMock()
-    mock.beta.vector_stores.delete = AsyncMock()
 
     # Mock vector store search for HistorySearchService
     mock_search_response = MagicMock()
