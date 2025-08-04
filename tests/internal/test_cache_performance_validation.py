@@ -237,7 +237,7 @@ class TestConcurrencyPerformance:
         def hold_long_transaction():
             """Hold a database lock for extended period."""
             nonlocal lock_held_time
-            conn = cache._get_connection()
+            conn = cache._conn
             try:
                 start_time = time.time()
                 conn.execute("BEGIN IMMEDIATE")

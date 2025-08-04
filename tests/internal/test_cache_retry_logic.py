@@ -114,12 +114,12 @@ class TestCacheFileRetry:
                 # Success on 3rd attempt
                 return MagicMock()
 
-            with patch.object(cache, "_get_connection") as mock_conn:
-                mock_connection = MagicMock()
-                mock_conn.return_value = mock_connection
-                mock_connection.__enter__.return_value = mock_connection
-                mock_connection.execute = mock_execute
+            mock_conn = MagicMock()
+            mock_conn.__enter__ = MagicMock(return_value=mock_conn)
+            mock_conn.__exit__ = MagicMock(return_value=None)
+            mock_conn.execute = mock_execute
 
+            with patch.object(cache, "_conn", mock_conn):
                 # Should succeed after retries
                 await cache.cache_file("hash123", "file-123")
 
@@ -131,12 +131,12 @@ class TestCacheFileRetry:
         with tempfile.NamedTemporaryFile() as tmp:
             cache = DeduplicationCache(tmp.name)
 
-            with patch.object(cache, "_get_connection") as mock_conn:
-                mock_connection = MagicMock()
-                mock_conn.return_value = mock_connection
-                mock_connection.__enter__.return_value = mock_connection
-                mock_connection.execute.side_effect = sqlite3.Error("constraint failed")
+            mock_conn = MagicMock()
+            mock_conn.__enter__ = MagicMock(return_value=mock_conn)
+            mock_conn.__exit__ = MagicMock(return_value=None)
+            mock_conn.execute.side_effect = sqlite3.Error("constraint failed")
 
+            with patch.object(cache, "_conn", mock_conn):
                 # Should fail immediately without retries
                 with pytest.raises(CacheWriteError) as exc_info:
                     await cache.cache_file("hash123", "file-123")
@@ -145,7 +145,7 @@ class TestCacheFileRetry:
                     exc_info.value
                 )
                 # Should only be called once (no retries for non-retryable errors)
-                assert mock_connection.execute.call_count == 1
+                assert mock_conn.execute.call_count == 1
 
 
 class TestCacheStoreRetry:
@@ -166,12 +166,12 @@ class TestCacheStoreRetry:
                 # Success on 2nd attempt
                 return MagicMock()
 
-            with patch.object(cache, "_get_connection") as mock_conn:
-                mock_connection = MagicMock()
-                mock_conn.return_value = mock_connection
-                mock_connection.__enter__.return_value = mock_connection
-                mock_connection.execute = mock_execute
+            mock_conn = MagicMock()
+            mock_conn.__enter__ = MagicMock(return_value=mock_conn)
+            mock_conn.__exit__ = MagicMock(return_value=None)
+            mock_conn.execute = mock_execute
 
+            with patch.object(cache, "_conn", mock_conn):
                 # Should succeed after retry
                 await cache.cache_store("fileset123", "store-456", "openai")
 
@@ -199,12 +199,12 @@ class TestCleanupOldEntriesRetry:
                 mock_cursor.rowcount = 5
                 return mock_cursor
 
-            with patch.object(cache, "_get_connection") as mock_conn:
-                mock_connection = MagicMock()
-                mock_conn.return_value = mock_connection
-                mock_connection.__enter__.return_value = mock_connection
-                mock_connection.execute = mock_execute
+            mock_conn = MagicMock()
+            mock_conn.__enter__ = MagicMock(return_value=mock_conn)
+            mock_conn.__exit__ = MagicMock(return_value=None)
+            mock_conn.execute = mock_execute
 
+            with patch.object(cache, "_conn", mock_conn):
                 # Should succeed after retries
                 await cache.cleanup_old_entries(max_age_days=30)
 
@@ -229,15 +229,15 @@ class TestGetStoreIdRetry:
                     raise sqlite3.Error("database is busy")
                 # Success on 2nd attempt
                 mock_cursor = MagicMock()
-                mock_cursor.fetchone.return_value = ("store-123", "openai")
+                mock_cursor.fetchall.return_value = [("store-123", "openai")]
                 return mock_cursor
 
-            with patch.object(cache, "_get_connection") as mock_conn:
-                mock_connection = MagicMock()
-                mock_conn.return_value = mock_connection
-                mock_connection.__enter__.return_value = mock_connection
-                mock_connection.execute = mock_execute
+            mock_conn = MagicMock()
+            mock_conn.__enter__ = MagicMock(return_value=mock_conn)
+            mock_conn.__exit__ = MagicMock(return_value=None)
+            mock_conn.execute = mock_execute
 
+            with patch.object(cache, "_conn", mock_conn):
                 # Should succeed after retry
                 result = await cache.get_store_id("fileset123")
 
@@ -268,12 +268,12 @@ class TestGetStatsRetry:
                 mock_cursor.fetchone.return_value = [10]  # Mock count
                 return mock_cursor
 
-            with patch.object(cache, "_get_connection") as mock_conn:
-                mock_connection = MagicMock()
-                mock_conn.return_value = mock_connection
-                mock_connection.__enter__.return_value = mock_connection
-                mock_connection.execute = mock_execute
+            mock_conn = MagicMock()
+            mock_conn.__enter__ = MagicMock(return_value=mock_conn)
+            mock_conn.__exit__ = MagicMock(return_value=None)
+            mock_conn.execute = mock_execute
 
+            with patch.object(cache, "_conn", mock_conn):
                 # Should succeed after retries
                 stats = await cache.get_stats()
 
@@ -304,31 +304,29 @@ class TestRetryIntegration:
                     raise sqlite3.Error("database is busy")
                 return MagicMock()
 
-            with patch.object(cache, "_get_connection") as mock_conn:
-                mock_connection = MagicMock()
-                mock_conn.return_value = mock_connection
-                mock_connection.__enter__.return_value = mock_connection
-                mock_connection.execute = mock_execute_retryable
+            mock_conn = MagicMock()
+            mock_conn.__enter__ = MagicMock(return_value=mock_conn)
+            mock_conn.__exit__ = MagicMock(return_value=None)
+            mock_conn.execute = mock_execute_retryable
 
+            with patch.object(cache, "_conn", mock_conn):
                 # Should succeed after retry
                 await cache.cache_file("hash1", "file-1")
                 assert call_count == 2
 
             # Second operation: non-retryable error that fails immediately
-            with patch.object(cache, "_get_connection") as mock_conn2:
-                mock_connection2 = MagicMock()
-                mock_conn2.return_value = mock_connection2
-                mock_connection2.__enter__.return_value = mock_connection2
-                mock_connection2.execute.side_effect = sqlite3.Error(
-                    "constraint failed"
-                )
+            mock_conn2 = MagicMock()
+            mock_conn2.__enter__ = MagicMock(return_value=mock_conn2)
+            mock_conn2.__exit__ = MagicMock(return_value=None)
+            mock_conn2.execute.side_effect = sqlite3.Error("constraint failed")
 
+            with patch.object(cache, "_conn", mock_conn2):
                 # Should fail immediately
                 with pytest.raises(CacheWriteError):
                     await cache.cache_file("hash2", "file-2")
 
                 # Should only be called once (no retries)
-                assert mock_connection2.execute.call_count == 1
+                assert mock_conn2.execute.call_count == 1
 
     async def test_retry_timing_behavior(self):
         """Test that retry delays are actually applied."""
@@ -343,12 +341,12 @@ class TestRetryIntegration:
                     raise sqlite3.Error("database is busy")
                 return MagicMock()
 
-            with patch.object(cache, "_get_connection") as mock_conn:
-                mock_connection = MagicMock()
-                mock_conn.return_value = mock_connection
-                mock_connection.__enter__.return_value = mock_connection
-                mock_connection.execute = mock_execute
+            mock_conn = MagicMock()
+            mock_conn.__enter__ = MagicMock(return_value=mock_conn)
+            mock_conn.__exit__ = MagicMock(return_value=None)
+            mock_conn.execute = mock_execute
 
+            with patch.object(cache, "_conn", mock_conn):
                 await cache.cache_file("hash123", "file-123")
 
                 # Should have 3 calls total

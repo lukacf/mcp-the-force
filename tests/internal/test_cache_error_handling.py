@@ -288,7 +288,7 @@ class TestCacheErrorHandling:
     # ======================
     # Goal: Verify that exceptions contain proper context, including the original error.
 
-    def test_cache_write_error_contains_original_exception(self):
+    async def test_cache_write_error_contains_original_exception(self):
         """
         Verify: CacheWriteError properly chains the underlying sqlite3.Error.
         """
@@ -296,15 +296,15 @@ class TestCacheErrorHandling:
             cache = DeduplicationCache(tmp.name)
 
             # GIVEN: The database connection will raise a specific sqlite3.Error
-            with patch.object(cache, "_get_connection") as mock_conn:
-                mock_connection = MagicMock()
-                mock_conn.return_value = mock_connection
-                mock_connection.__enter__.return_value = mock_connection
-                mock_connection.execute.side_effect = sqlite3.Error("disk I/O error")
+            mock_conn = MagicMock()
+            mock_conn.__enter__ = MagicMock(return_value=mock_conn)
+            mock_conn.__exit__ = MagicMock(return_value=None)
+            mock_conn.execute.side_effect = sqlite3.Error("disk I/O error")
 
+            with patch.object(cache, "_conn", mock_conn):
                 # WHEN: A cache write operation is performed
                 with pytest.raises(CacheWriteError) as exc_info:
-                    cache.cache_file("hash123", "file-123")
+                    await cache.cache_file("hash123", "file-123")
 
                 # THEN: The raised exception contains the original cause
                 assert isinstance(exc_info.value.__cause__, sqlite3.Error)
@@ -319,14 +319,12 @@ class TestCacheErrorHandling:
             cache = DeduplicationCache(tmp.name)
 
             # GIVEN: The database connection will raise a specific sqlite3.Error during atomic operation
-            with patch.object(cache, "_get_connection") as mock_conn:
-                mock_connection = MagicMock()
-                mock_conn.return_value = mock_connection
-                mock_connection.__enter__.return_value = mock_connection
-                mock_connection.execute.side_effect = sqlite3.Error(
-                    "database is locked"
-                )
+            mock_conn = MagicMock()
+            mock_conn.__enter__ = MagicMock(return_value=mock_conn)
+            mock_conn.__exit__ = MagicMock(return_value=None)
+            mock_conn.execute.side_effect = sqlite3.Error("database is locked")
 
+            with patch.object(cache, "_conn", mock_conn):
                 # WHEN: An atomic cache operation is performed
                 with pytest.raises(CacheTransactionError) as exc_info:
                     await cache.atomic_cache_or_get("hash123")
@@ -346,14 +344,12 @@ class TestCacheErrorHandling:
             cache = DeduplicationCache(tmp.name)
 
             # GIVEN: The database connection will raise a specific sqlite3.Error during read
-            with patch.object(cache, "_get_connection") as mock_conn:
-                mock_connection = MagicMock()
-                mock_conn.return_value = mock_connection
-                mock_connection.__enter__.return_value = mock_connection
-                mock_connection.execute.side_effect = sqlite3.Error(
-                    "database corrupted"
-                )
+            mock_conn = MagicMock()
+            mock_conn.__enter__ = MagicMock(return_value=mock_conn)
+            mock_conn.__exit__ = MagicMock(return_value=None)
+            mock_conn.execute.side_effect = sqlite3.Error("database corrupted")
 
+            with patch.object(cache, "_conn", mock_conn):
                 # WHEN: A cache read operation is performed
                 with pytest.raises(CacheReadError) as exc_info:
                     await cache.get_file_id("hash123")
@@ -375,12 +371,12 @@ class TestCacheErrorHandling:
             cache = DeduplicationCache(tmp.name)
 
             # GIVEN: A corrupted database connection
-            with patch.object(cache, "_get_connection") as mock_conn:
-                mock_connection = MagicMock()
-                mock_conn.return_value = mock_connection
-                mock_connection.__enter__.return_value = mock_connection
-                mock_connection.execute.side_effect = sqlite3.Error("constraint failed")
+            mock_conn = MagicMock()
+            mock_conn.__enter__ = MagicMock(return_value=mock_conn)
+            mock_conn.__exit__ = MagicMock(return_value=None)
+            mock_conn.execute.side_effect = sqlite3.Error("constraint failed")
 
+            with patch.object(cache, "_conn", mock_conn):
                 # WHEN: finalize_file_id is called
                 # THEN: It should raise CacheWriteError (not return silently)
                 with pytest.raises(CacheWriteError) as exc_info:
@@ -396,12 +392,12 @@ class TestCacheErrorHandling:
             cache = DeduplicationCache(tmp.name)
 
             # GIVEN: A failing database connection
-            with patch.object(cache, "_get_connection") as mock_conn:
-                mock_connection = MagicMock()
-                mock_conn.return_value = mock_connection
-                mock_connection.__enter__.return_value = mock_connection
-                mock_connection.execute.side_effect = sqlite3.Error("disk full")
+            mock_conn = MagicMock()
+            mock_conn.__enter__ = MagicMock(return_value=mock_conn)
+            mock_conn.__exit__ = MagicMock(return_value=None)
+            mock_conn.execute.side_effect = sqlite3.Error("disk full")
 
+            with patch.object(cache, "_conn", mock_conn):
                 # WHEN: cleanup_failed_upload is called
                 # THEN: It should raise CacheWriteError (not return silently)
                 with pytest.raises(CacheWriteError) as exc_info:
@@ -417,12 +413,12 @@ class TestCacheErrorHandling:
             cache = DeduplicationCache(tmp.name)
 
             # GIVEN: A failing database connection
-            with patch.object(cache, "_get_connection") as mock_conn:
-                mock_connection = MagicMock()
-                mock_conn.return_value = mock_connection
-                mock_connection.__enter__.return_value = mock_connection
-                mock_connection.execute.side_effect = sqlite3.Error("database locked")
+            mock_conn = MagicMock()
+            mock_conn.__enter__ = MagicMock(return_value=mock_conn)
+            mock_conn.__exit__ = MagicMock(return_value=None)
+            mock_conn.execute.side_effect = sqlite3.Error("database locked")
 
+            with patch.object(cache, "_conn", mock_conn):
                 # WHEN: atomic_cache_or_get is called
                 # THEN: It should raise CacheTransactionError (not return (None, False))
                 with pytest.raises(CacheTransactionError) as exc_info:

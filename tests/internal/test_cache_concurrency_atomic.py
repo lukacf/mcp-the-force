@@ -17,6 +17,7 @@ import sqlite3
 import tempfile
 import asyncio
 from pathlib import Path
+from unittest.mock import MagicMock
 
 from mcp_the_force.dedup.simple_cache import DeduplicationCache
 
@@ -403,22 +404,26 @@ class TestHighConcurrencyScenarios:
         # Simulate a long-running transaction that holds a lock
         def long_running_transaction():
             """Hold a write lock for extended period."""
-            conn = cache._get_connection()
+            # Create a separate connection to avoid interfering with cache._conn
+            import sqlite3
+
+            separate_conn = sqlite3.connect(cache.db_path)
+            separate_conn.execute("PRAGMA busy_timeout = 30000")
             try:
-                conn.execute("BEGIN IMMEDIATE")
+                separate_conn.execute("BEGIN IMMEDIATE")
                 # Insert something to acquire write lock
-                conn.execute(
+                separate_conn.execute(
                     "INSERT OR IGNORE INTO file_cache (content_hash, file_id, created_at) VALUES (?, ?, ?)",
                     ("lock_holder", "PENDING", int(time.time())),
                 )
                 # Hold lock for a while
                 time.sleep(2)
-                conn.commit()
+                separate_conn.commit()
             except Exception:
-                conn.rollback()
+                separate_conn.rollback()
                 raise
             finally:
-                conn.close()
+                separate_conn.close()
 
         # Start the long-running transaction in background
         lock_holder_thread = threading.Thread(target=long_running_transaction)
@@ -587,14 +592,17 @@ class TestEdgeCasesAndErrorHandling:
         content_hash = content_hashes[0]
 
         # Test with temporarily inaccessible database
-        original_get_connection = cache._get_connection
+        original_conn = cache._conn
 
-        def failing_connection():
-            """Simulate database connection failure."""
-            raise sqlite3.OperationalError("Database is locked")
+        # Mock connection that raises errors
+        failing_conn = MagicMock()
+        failing_conn.__enter__ = MagicMock(
+            side_effect=sqlite3.OperationalError("Database is locked")
+        )
+        failing_conn.__exit__ = MagicMock(return_value=None)
 
         # Temporarily break database access
-        cache._get_connection = failing_connection
+        cache._conn = failing_conn
 
         try:
             # These should now raise proper exceptions instead of returning safe defaults
@@ -618,7 +626,7 @@ class TestEdgeCasesAndErrorHandling:
 
         finally:
             # Restore normal operation
-            cache._get_connection = original_get_connection
+            cache._conn = original_conn
 
         # Verify normal operation restored
         file_id, we_are_uploader = await cache.atomic_cache_or_get(content_hash)
@@ -633,11 +641,13 @@ class TestEdgeCasesAndErrorHandling:
         # Create a stale PENDING entry by directly inserting old timestamp
         old_timestamp = int(time.time()) - 3600  # 1 hour ago
 
-        with cache._get_connection() as conn:
-            conn.execute(
-                "INSERT INTO file_cache (content_hash, file_id, created_at) VALUES (?, ?, ?)",
-                (content_hash, "PENDING", old_timestamp),
-            )
+        with cache._lock:
+            if cache._conn is not None:
+                cache._conn.execute(
+                    "INSERT INTO file_cache (content_hash, file_id, created_at) VALUES (?, ?, ?)",
+                    (content_hash, "PENDING", old_timestamp),
+                )
+                cache._conn.commit()
 
         # Verify the stale entry exists
         cached_file_id = await cache.get_file_id(content_hash)

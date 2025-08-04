@@ -291,6 +291,13 @@ class TestCacheIntegration:
         """Test cache statistics and cleanup functionality."""
         cache = initialized_cache
 
+        # Clear any existing entries from previous tests by directly deleting from database
+        with cache._lock:
+            if cache._conn is not None:
+                cache._conn.execute("DELETE FROM file_cache")
+                cache._conn.execute("DELETE FROM store_cache")
+                cache._conn.commit()
+
         # Initially empty
         stats = await cache.get_stats()
         assert stats["file_count"] == 0
@@ -321,6 +328,13 @@ class TestConcurrencySafety:
     async def test_concurrent_cache_operations(self, initialized_cache):
         """Test that concurrent cache operations don't conflict."""
         cache = initialized_cache
+
+        # Clear any existing entries from previous tests by directly deleting from database
+        with cache._lock:
+            if cache._conn is not None:
+                cache._conn.execute("DELETE FROM file_cache")
+                cache._conn.execute("DELETE FROM store_cache")
+                cache._conn.commit()
 
         async def cache_operation(i):
             """Simulate concurrent cache operations."""
