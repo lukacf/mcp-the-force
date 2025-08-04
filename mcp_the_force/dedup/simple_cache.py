@@ -7,6 +7,12 @@ from pathlib import Path
 from typing import Optional, Dict, Any
 
 from .errors import CacheReadError, CacheWriteError, CacheTransactionError
+from .retry import (
+    retry_sqlite_operation,
+    DEFAULT_RETRY_CONFIG,
+    ATOMIC_OPERATION_RETRY_CONFIG,
+    READ_OPERATION_RETRY_CONFIG,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -84,8 +90,15 @@ class SimpleVectorStoreCache:
                 "CREATE INDEX IF NOT EXISTS idx_store_cache_created ON store_cache(created_at)"
             )
 
+    @retry_sqlite_operation(
+        config=READ_OPERATION_RETRY_CONFIG,
+        wrap_exception=CacheReadError,
+        operation_description="Cache read operation",
+    )
     def get_file_id(self, content_hash: str) -> Optional[str]:
         """Get cached file_id for content hash.
+
+        Includes lightweight retry logic for transient database errors.
 
         Args:
             content_hash: SHA-256 hash of file content
@@ -94,47 +107,48 @@ class SimpleVectorStoreCache:
             OpenAI file_id if cached, None otherwise
 
         Raises:
-            CacheReadError: If database operation fails
+            CacheReadError: If database operation fails after retries
         """
-        try:
-            with self._get_connection() as conn:
-                cursor = conn.execute(
-                    "SELECT file_id FROM file_cache WHERE content_hash = ?",
-                    (content_hash,),
-                )
-                result = cursor.fetchone()
-                return result[0] if result else None
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                "SELECT file_id FROM file_cache WHERE content_hash = ?",
+                (content_hash,),
+            )
+            result = cursor.fetchone()
+            return result[0] if result else None
 
-        except sqlite3.Error as e:
-            logger.error(f"Error retrieving file_id for hash {content_hash}: {e}")
-            raise CacheReadError(
-                f"Failed to read file_id from cache for hash {content_hash[:12]}...: {e}"
-            ) from e
-
+    @retry_sqlite_operation(
+        config=DEFAULT_RETRY_CONFIG,
+        wrap_exception=CacheWriteError,
+        operation_description="Cache file operation",
+    )
     def cache_file(self, content_hash: str, file_id: str) -> None:
         """Cache content_hash -> file_id mapping.
+
+        Includes retry logic to handle transient SQLite errors during write operations.
 
         Args:
             content_hash: SHA-256 hash of file content
             file_id: OpenAI file identifier
 
         Raises:
-            CacheWriteError: If database operation fails
+            CacheWriteError: If database operation fails after retries
         """
-        try:
-            with self._get_connection() as conn:
-                conn.execute(
-                    "INSERT OR IGNORE INTO file_cache (content_hash, file_id, created_at) VALUES (?, ?, ?)",
-                    (content_hash, file_id, int(time.time())),
-                )
-        except sqlite3.Error as e:
-            logger.error(f"Error caching file {content_hash}: {e}")
-            raise CacheWriteError(
-                f"Failed to cache file_id {file_id} for hash {content_hash[:12]}...: {e}"
-            ) from e
+        with self._get_connection() as conn:
+            conn.execute(
+                "INSERT OR IGNORE INTO file_cache (content_hash, file_id, created_at) VALUES (?, ?, ?)",
+                (content_hash, file_id, int(time.time())),
+            )
 
+    @retry_sqlite_operation(
+        config=READ_OPERATION_RETRY_CONFIG,
+        wrap_exception=CacheReadError,
+        operation_description="Cache store read operation",
+    )
     def get_store_id(self, fileset_hash: str) -> Optional[Dict[str, Any]]:
         """Get cached store for fileset hash.
+
+        Includes lightweight retry logic for transient database errors.
 
         Args:
             fileset_hash: Hash of complete file set
@@ -143,27 +157,27 @@ class SimpleVectorStoreCache:
             Dictionary with store_id and provider, or None if not found
 
         Raises:
-            CacheReadError: If database operation fails
+            CacheReadError: If database operation fails after retries
         """
-        try:
-            with self._get_connection() as conn:
-                cursor = conn.execute(
-                    "SELECT store_id, provider FROM store_cache WHERE fileset_hash = ?",
-                    (fileset_hash,),
-                )
-                result = cursor.fetchone()
-                if result:
-                    return {"store_id": result[0], "provider": result[1]}
-                return None
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                "SELECT store_id, provider FROM store_cache WHERE fileset_hash = ?",
+                (fileset_hash,),
+            )
+            result = cursor.fetchone()
+            if result:
+                return {"store_id": result[0], "provider": result[1]}
+            return None
 
-        except sqlite3.Error as e:
-            logger.error(f"Error retrieving store for hash {fileset_hash}: {e}")
-            raise CacheReadError(
-                f"Failed to read store_id from cache for hash {fileset_hash[:12]}...: {e}"
-            ) from e
-
+    @retry_sqlite_operation(
+        config=DEFAULT_RETRY_CONFIG,
+        wrap_exception=CacheWriteError,
+        operation_description="Cache store operation",
+    )
     def cache_store(self, fileset_hash: str, store_id: str, provider: str) -> None:
         """Cache fileset_hash -> store_id mapping.
+
+        Includes retry logic to handle transient SQLite errors during write operations.
 
         Args:
             fileset_hash: Hash of complete file set
@@ -171,48 +185,49 @@ class SimpleVectorStoreCache:
             provider: Vector store provider (e.g., 'openai')
 
         Raises:
-            CacheWriteError: If database operation fails
+            CacheWriteError: If database operation fails after retries
         """
-        try:
-            with self._get_connection() as conn:
-                conn.execute(
-                    "INSERT OR IGNORE INTO store_cache (fileset_hash, store_id, provider, created_at) VALUES (?, ?, ?, ?)",
-                    (fileset_hash, store_id, provider, int(time.time())),
-                )
-        except sqlite3.Error as e:
-            logger.error(f"Error caching store {fileset_hash}: {e}")
-            raise CacheWriteError(
-                f"Failed to cache store_id {store_id} for hash {fileset_hash[:12]}...: {e}"
-            ) from e
+        with self._get_connection() as conn:
+            conn.execute(
+                "INSERT OR IGNORE INTO store_cache (fileset_hash, store_id, provider, created_at) VALUES (?, ?, ?, ?)",
+                (fileset_hash, store_id, provider, int(time.time())),
+            )
 
+    @retry_sqlite_operation(
+        config=DEFAULT_RETRY_CONFIG,
+        wrap_exception=CacheWriteError,
+        operation_description="Cache cleanup operation",
+    )
     def cleanup_old_entries(self, max_age_days: int = 30) -> None:
         """Clean up old cache entries.
+
+        Includes retry logic to handle transient SQLite errors during cleanup operations.
 
         Args:
             max_age_days: Maximum age in days before cleanup
 
         Raises:
-            CacheWriteError: If database operation fails
+            CacheWriteError: If database operation fails after retries
         """
         cutoff_time = int(time.time()) - (max_age_days * 24 * 3600)
 
-        try:
-            with self._get_connection() as conn:
-                cursor1 = conn.execute(
-                    "DELETE FROM file_cache WHERE created_at < ?", (cutoff_time,)
-                )
-                cursor2 = conn.execute(
-                    "DELETE FROM store_cache WHERE created_at < ?", (cutoff_time,)
-                )
+        with self._get_connection() as conn:
+            cursor1 = conn.execute(
+                "DELETE FROM file_cache WHERE created_at < ?", (cutoff_time,)
+            )
+            cursor2 = conn.execute(
+                "DELETE FROM store_cache WHERE created_at < ?", (cutoff_time,)
+            )
 
-                logger.info(
-                    f"Cleaned up {cursor1.rowcount} files and {cursor2.rowcount} stores"
-                )
+            logger.info(
+                f"Cleaned up {cursor1.rowcount} files and {cursor2.rowcount} stores"
+            )
 
-        except sqlite3.Error as e:
-            logger.error(f"Error during cleanup: {e}")
-            raise CacheWriteError(f"Failed to cleanup old cache entries: {e}") from e
-
+    @retry_sqlite_operation(
+        config=ATOMIC_OPERATION_RETRY_CONFIG,
+        wrap_exception=CacheTransactionError,
+        operation_description="Atomic cache or get operation",
+    )
     def atomic_cache_or_get(
         self, content_hash: str, placeholder: str = "PENDING"
     ) -> tuple[Optional[str], bool]:
@@ -222,6 +237,9 @@ class SimpleVectorStoreCache:
         This method prevents race conditions by using an atomic INSERT OR IGNORE
         operation. Only one process can successfully insert a given content_hash,
         making that process responsible for uploading the file.
+
+        This operation includes retry logic with exponential backoff to handle
+        SQLite lock contention gracefully in high-concurrency scenarios.
 
         Args:
             content_hash: SHA-256 hash of file content
@@ -233,50 +251,48 @@ class SimpleVectorStoreCache:
                       or "PENDING" if another process is uploading
             - we_are_uploader: True if this process should perform the upload
         """
-        try:
-            now = int(time.time())
-            with self._get_connection() as conn:
-                # Use BEGIN IMMEDIATE to avoid write starvation under high concurrency
-                conn.execute("BEGIN IMMEDIATE")
+        now = int(time.time())
+        with self._get_connection() as conn:
+            # Use BEGIN IMMEDIATE to avoid write starvation under high concurrency
+            conn.execute("BEGIN IMMEDIATE")
 
-                try:
-                    # Attempt to atomically reserve this content hash
+            try:
+                # Attempt to atomically reserve this content hash
+                cursor = conn.execute(
+                    """
+                    INSERT INTO file_cache (content_hash, file_id, created_at)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(content_hash) DO NOTHING
+                    """,
+                    (content_hash, placeholder, now),
+                )
+
+                we_are_uploader = cursor.rowcount == 1
+
+                if not we_are_uploader:
+                    # Another process already has this hash - fetch the current value
                     cursor = conn.execute(
-                        """
-                        INSERT INTO file_cache (content_hash, file_id, created_at)
-                        VALUES (?, ?, ?)
-                        ON CONFLICT(content_hash) DO NOTHING
-                        """,
-                        (content_hash, placeholder, now),
+                        "SELECT file_id FROM file_cache WHERE content_hash = ?",
+                        (content_hash,),
                     )
-
-                    we_are_uploader = cursor.rowcount == 1
-
-                    if not we_are_uploader:
-                        # Another process already has this hash - fetch the current value
-                        cursor = conn.execute(
-                            "SELECT file_id FROM file_cache WHERE content_hash = ?",
-                            (content_hash,),
-                        )
-                        result = cursor.fetchone()
-                        file_id = result[0] if result else None
-                        conn.commit()
-                        return (file_id, False)
-
-                    # We successfully reserved this hash - we are the uploader
+                    result = cursor.fetchone()
+                    file_id = result[0] if result else None
                     conn.commit()
-                    return (None, True)
+                    return (file_id, False)
 
-                except Exception:
-                    conn.rollback()
-                    raise
+                # We successfully reserved this hash - we are the uploader
+                conn.commit()
+                return (None, True)
 
-        except sqlite3.Error as e:
-            logger.error(f"Error in atomic_cache_or_get for hash {content_hash}: {e}")
-            raise CacheTransactionError(
-                f"Atomic cache operation failed for hash {content_hash[:12]}...: {e}"
-            ) from e
+            except Exception:
+                conn.rollback()
+                raise
 
+    @retry_sqlite_operation(
+        config=DEFAULT_RETRY_CONFIG,
+        wrap_exception=CacheWriteError,
+        operation_description="Cache finalization operation",
+    )
     def finalize_file_id(self, content_hash: str, file_id: str) -> None:
         """
         Replace the placeholder with the real OpenAI file_id.
@@ -285,96 +301,128 @@ class SimpleVectorStoreCache:
         It only updates entries that still have the PENDING placeholder,
         making it safe to call even if another process already finalized.
 
+        Includes retry logic to handle transient SQLite errors during finalization.
+
         Args:
             content_hash: SHA-256 hash of file content
             file_id: OpenAI file identifier from successful upload
         """
-        try:
-            with self._get_connection() as conn:
-                cursor = conn.execute(
-                    """
-                    UPDATE file_cache
-                    SET file_id = ?,
-                        created_at = COALESCE(created_at, ?)
-                    WHERE content_hash = ? AND file_id = 'PENDING'
-                    """,
-                    (file_id, int(time.time()), content_hash),
-                )
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE file_cache
+                SET file_id = ?,
+                    created_at = COALESCE(created_at, ?)
+                WHERE content_hash = ? AND file_id = 'PENDING'
+                """,
+                (file_id, int(time.time()), content_hash),
+            )
 
-                if cursor.rowcount == 0:
-                    # Row was already finalized by another process, or hash doesn't exist
-                    logger.debug(
-                        f"File {content_hash} was already finalized or not found"
-                    )
-                else:
-                    logger.debug(
-                        f"Finalized cache entry for {content_hash} -> {file_id}"
-                    )
+            if cursor.rowcount == 0:
+                # Row was already finalized by another process, or hash doesn't exist
+                logger.debug(f"File {content_hash} was already finalized or not found")
+            else:
+                logger.debug(f"Finalized cache entry for {content_hash} -> {file_id}")
 
-        except sqlite3.Error as e:
-            logger.error(f"Error finalizing file_id for hash {content_hash}: {e}")
-            raise CacheWriteError(
-                f"Failed to finalize cache for hash {content_hash[:12]}...: {e}"
-            ) from e
-
+    @retry_sqlite_operation(
+        config=DEFAULT_RETRY_CONFIG,
+        wrap_exception=CacheWriteError,
+        operation_description="Cache cleanup operation",
+    )
     def cleanup_failed_upload(self, content_hash: str) -> None:
         """
         Clean up a failed upload by removing the PENDING placeholder.
 
         This allows another process to retry the upload later.
+        Includes retry logic to handle transient SQLite errors during cleanup.
 
         Args:
             content_hash: SHA-256 hash of file content that failed to upload
         """
-        try:
-            with self._get_connection() as conn:
-                cursor = conn.execute(
-                    "DELETE FROM file_cache WHERE content_hash = ? AND file_id = 'PENDING'",
-                    (content_hash,),
-                )
-
-                if cursor.rowcount > 0:
-                    logger.debug(
-                        f"Cleaned up failed upload placeholder for {content_hash}"
-                    )
-
-        except sqlite3.Error as e:
-            logger.error(
-                f"Error cleaning up failed upload for hash {content_hash}: {e}"
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                "DELETE FROM file_cache WHERE content_hash = ? AND file_id = 'PENDING'",
+                (content_hash,),
             )
-            raise CacheWriteError(
-                f"Failed to cleanup cache for hash {content_hash[:12]}...: {e}"
-            ) from e
 
-    def get_stats(self) -> Dict[str, Any]:
-        """Get cache statistics."""
-        try:
-            with self._get_connection() as conn:
-                cursor1 = conn.execute("SELECT COUNT(*) FROM file_cache")
-                file_count = cursor1.fetchone()[0]
+            if cursor.rowcount > 0:
+                logger.debug(f"Cleaned up failed upload placeholder for {content_hash}")
 
-                cursor2 = conn.execute("SELECT COUNT(*) FROM store_cache")
-                store_count = cursor2.fetchone()[0]
+    @retry_sqlite_operation(
+        config=DEFAULT_RETRY_CONFIG,
+        wrap_exception=CacheWriteError,
+        operation_description="Stale PENDING cleanup operation",
+    )
+    def cleanup_stale_pending_entries(self, max_age_minutes: int = 60) -> int:
+        """Clean up stale PENDING entries that may have been left by crashed processes.
 
-                # Count pending uploads
-                cursor3 = conn.execute(
-                    "SELECT COUNT(*) FROM file_cache WHERE file_id = 'PENDING'"
+        This method removes PENDING entries that are older than the specified age,
+        allowing future uploads of the same content to proceed. This addresses the
+        issue where a process crash after reserving a hash but before finalizing
+        would permanently block that content hash.
+
+        Args:
+            max_age_minutes: Maximum age in minutes for a PENDING entry before cleanup
+
+        Returns:
+            Number of stale entries cleaned up
+
+        Raises:
+            CacheWriteError: If database operation fails after retries
+        """
+        cutoff_time = int(time.time()) - (max_age_minutes * 60)
+
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                "DELETE FROM file_cache WHERE file_id = 'PENDING' AND created_at < ?",
+                (cutoff_time,),
+            )
+
+            cleanup_count = cursor.rowcount
+            if cleanup_count > 0:
+                logger.info(
+                    f"Cleaned up {cleanup_count} stale PENDING entries older than {max_age_minutes} minutes"
                 )
-                pending_count = cursor3.fetchone()[0]
+            else:
+                logger.debug(
+                    f"No stale PENDING entries found (older than {max_age_minutes} minutes)"
+                )
 
-                return {
-                    "file_count": file_count,
-                    "store_count": store_count,
-                    "pending_uploads": pending_count,
-                    "cache_type": "SimpleVectorStoreCache",
-                }
+            return cleanup_count
 
-        except sqlite3.Error as e:
-            logger.error(f"Error getting stats: {e}")
+    @retry_sqlite_operation(
+        config=READ_OPERATION_RETRY_CONFIG,
+        wrap_exception=CacheReadError,
+        operation_description="Cache statistics read operation",
+    )
+    def get_stats(self) -> Dict[str, Any]:
+        """Get cache statistics.
+
+        Includes lightweight retry logic for transient database errors.
+
+        Returns:
+            Dictionary with cache statistics
+
+        Raises:
+            CacheReadError: If database operation fails after retries
+        """
+        with self._get_connection() as conn:
+            cursor1 = conn.execute("SELECT COUNT(*) FROM file_cache")
+            file_count = cursor1.fetchone()[0]
+
+            cursor2 = conn.execute("SELECT COUNT(*) FROM store_cache")
+            store_count = cursor2.fetchone()[0]
+
+            # Count pending uploads
+            cursor3 = conn.execute(
+                "SELECT COUNT(*) FROM file_cache WHERE file_id = 'PENDING'"
+            )
+            pending_count = cursor3.fetchone()[0]
+
             return {
-                "file_count": 0,
-                "store_count": 0,
-                "pending_uploads": 0,
+                "file_count": file_count,
+                "store_count": store_count,
+                "pending_uploads": pending_count,
                 "cache_type": "SimpleVectorStoreCache",
             }
 

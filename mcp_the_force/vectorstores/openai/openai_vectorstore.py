@@ -4,7 +4,8 @@ import logging
 import time
 import asyncio
 import gzip
-from typing import Dict, List, Sequence, Optional, Any, Tuple
+import sqlite3
+from typing import Dict, List, Sequence, Optional, Any, Tuple, cast
 from pathlib import Path
 
 from openai import AsyncOpenAI
@@ -15,6 +16,7 @@ from ..errors import QuotaExceededError, AuthError, TransientError
 from ...dedup.hashing import compute_content_hash
 from ...dedup.simple_cache import get_cache
 from ...dedup.errors import CacheWriteError, CacheReadError, CacheTransactionError
+from ...dedup.retry import RetryConfig, calculate_delay, is_retryable_sqlite_error
 from ...config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -75,6 +77,76 @@ class OpenAIVectorStore:
         ext = path.suffix.lower()
         return ext in OPENAI_SUPPORTED_EXTENSIONS
 
+    async def _atomic_cache_or_get_with_retry(
+        self, cache: Any, content_hash: str, file_path: str
+    ) -> Tuple[Optional[str], bool]:
+        """Atomic cache operation with async retry logic for SQLite lock contention.
+
+        This method implements application-level retry logic that uses asyncio.sleep
+        instead of blocking the worker thread. It handles transient SQLite errors
+        like database locks with exponential backoff.
+
+        Args:
+            cache: The cache instance to operate on
+            content_hash: SHA-256 hash of file content
+            file_path: File path for logging purposes
+
+        Returns:
+            Tuple of (file_id, we_are_uploader) same as atomic_cache_or_get
+
+        Raises:
+            CacheTransactionError: For non-retryable errors or after max retries
+        """
+        retry_config = RetryConfig(max_attempts=3, base_delay=0.05, max_delay=1.0)
+        last_error: Optional[Exception] = None
+
+        for attempt in range(retry_config.max_attempts):
+            try:
+                result = cache.atomic_cache_or_get(content_hash)
+                return cast(Tuple[Optional[str], bool], result)
+
+            except CacheTransactionError as e:
+                last_error = e
+
+                # Check if the underlying SQLite error is retryable
+                if hasattr(e, "__cause__") and isinstance(e.__cause__, Exception):
+                    sqlite_error = e.__cause__
+                    if hasattr(sqlite_error, "__cause__") and isinstance(
+                        sqlite_error.__cause__, Exception
+                    ):
+                        # Handle wrapped SQLite errors
+                        actual_sqlite_error = sqlite_error.__cause__
+                        if isinstance(
+                            actual_sqlite_error, sqlite3.Error
+                        ) and is_retryable_sqlite_error(actual_sqlite_error):
+                            if attempt < retry_config.max_attempts - 1:
+                                delay = calculate_delay(attempt, retry_config)
+                                logger.warning(
+                                    f"Cache operation for {file_path} failed (attempt {attempt + 1}/{retry_config.max_attempts}): {e}. "
+                                    f"Retrying in {delay:.3f}s..."
+                                )
+                                await asyncio.sleep(delay)
+                                continue
+
+                # Non-retryable error or max retries exhausted
+                logger.debug(
+                    f"Cache operation failed for {file_path}, not retryable: {e}"
+                )
+                raise
+
+            except Exception as e:
+                # Non-cache exceptions are not retried
+                logger.debug(f"Non-cache error for {file_path}: {e}")
+                raise
+
+        # This should not be reached due to the logic above, but included for completeness
+        if last_error:
+            raise last_error
+        else:
+            raise CacheTransactionError(
+                f"Cache operation failed for {file_path} after {retry_config.max_attempts} attempts"
+            )
+
     async def add_files(self, files: Sequence[VSFile]) -> Sequence[str]:
         """Add files to the vector store using transactional parallel batch uploads."""
         # Filter supported files
@@ -96,8 +168,10 @@ class OpenAIVectorStore:
         for file in supported_files:
             try:
                 content_hash = compute_content_hash(file.content)
-                # Use atomic operation to prevent race conditions
-                file_id, we_are_uploader = cache.atomic_cache_or_get(content_hash)
+                # Use atomic operation with async retry logic to prevent race conditions
+                file_id, we_are_uploader = await self._atomic_cache_or_get_with_retry(
+                    cache, content_hash, file.path
+                )
 
                 if we_are_uploader:
                     # We won the race - this process must upload the file

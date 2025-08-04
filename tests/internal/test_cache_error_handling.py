@@ -309,7 +309,7 @@ class TestCacheErrorHandling:
                 # THEN: The raised exception contains the original cause
                 assert isinstance(exc_info.value.__cause__, sqlite3.Error)
                 assert "disk I/O error" in str(exc_info.value.__cause__)
-                assert "Failed to cache file_id" in str(exc_info.value)
+                assert "Cache file operation failed after" in str(exc_info.value)
 
     def test_cache_transaction_error_contains_original_exception(self):
         """
@@ -334,7 +334,9 @@ class TestCacheErrorHandling:
                 # THEN: The raised exception contains the original cause
                 assert isinstance(exc_info.value.__cause__, sqlite3.Error)
                 assert "database is locked" in str(exc_info.value.__cause__)
-                assert "Atomic cache operation failed" in str(exc_info.value)
+                assert "Atomic cache or get operation failed after" in str(
+                    exc_info.value
+                )
 
     def test_cache_read_error_contains_original_exception(self):
         """
@@ -359,7 +361,7 @@ class TestCacheErrorHandling:
                 # THEN: The raised exception contains the original cause
                 assert isinstance(exc_info.value.__cause__, sqlite3.Error)
                 assert "database corrupted" in str(exc_info.value.__cause__)
-                assert "Failed to read file_id from cache" in str(exc_info.value)
+                assert "Cache read operation failed" in str(exc_info.value)
 
     # 6. Integration Tests - Real Cache Behavior
     # ==========================================
@@ -384,9 +386,7 @@ class TestCacheErrorHandling:
                 with pytest.raises(CacheWriteError) as exc_info:
                     cache.finalize_file_id("hash123", "file-123")
 
-                assert "Failed to finalize cache for hash hash123..." in str(
-                    exc_info.value
-                )
+                assert "Cache finalization operation failed" in str(exc_info.value)
 
     def test_real_cache_cleanup_raises_on_sqlite_error(self):
         """
@@ -407,9 +407,7 @@ class TestCacheErrorHandling:
                 with pytest.raises(CacheWriteError) as exc_info:
                     cache.cleanup_failed_upload("hash123")
 
-                assert "Failed to cleanup cache for hash hash123..." in str(
-                    exc_info.value
-                )
+                assert "Cache cleanup operation failed" in str(exc_info.value)
 
     def test_real_cache_atomic_raises_on_sqlite_error(self):
         """
@@ -430,6 +428,4 @@ class TestCacheErrorHandling:
                 with pytest.raises(CacheTransactionError) as exc_info:
                     cache.atomic_cache_or_get("hash123")
 
-                assert "Atomic cache operation failed for hash hash123..." in str(
-                    exc_info.value
-                )
+                assert "Atomic cache or get operation failed" in str(exc_info.value)
