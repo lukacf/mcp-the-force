@@ -88,7 +88,7 @@ e2e-setup:
 	docker build -f tests/e2e_dind/Dockerfile.server -t the-force-e2e-server .; \
 	echo "Testing Claude MCP configuration in parallel..."; \
 	( \
-		for scenario in smoke history attachments cross_model failures stable_list; do \
+		for scenario in smoke attachments stable_list priority_context session_management environment; do \
 			( \
 				echo "Starting setup test: $$scenario"; \
 				docker run --rm \
