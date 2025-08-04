@@ -9,6 +9,12 @@ from typing import Dict, List, Sequence, Optional, Any, Tuple, cast
 from pathlib import Path
 
 from openai import AsyncOpenAI
+from openai import (
+    RateLimitError,
+    AuthenticationError,
+    PermissionDeniedError,
+    BadRequestError,
+)
 
 from ...adapters.openai.client import OpenAIClientFactory
 from ..protocol import VectorStore, VSFile, SearchResult
@@ -454,11 +460,14 @@ class OpenAIVectorStore:
 
         This method commits the cache entries for uploaded files only after
         we know the association with the vector store was successful.
+        If cache finalization fails, the orphaned file is deleted to prevent billing waste.
 
         Args:
             newly_uploaded_files: List of (content_hash, file_id) tuples
             cache: The deduplication cache instance
         """
+        orphaned_files = []  # Track files that fail cache finalization
+
         for content_hash, file_id in newly_uploaded_files:
             try:
                 cache.finalize_file_id(content_hash, file_id)
@@ -466,12 +475,26 @@ class OpenAIVectorStore:
                     f"DEDUP: Finalized cache entry {file_id} for content hash {content_hash[:12]}..."
                 )
             except CacheWriteError as e:
-                # Log the error but don't crash the entire operation.
-                # The file is already uploaded and associated; the only side effect
-                # is that this file might be uploaded again in the future.
+                # Cache finalization failed - file becomes orphaned
                 logger.warning(f"Failed to finalize cache for file {file_id}: {e}")
+                orphaned_files.append((content_hash, file_id))
             except Exception as e:
                 logger.warning(f"Failed to finalize cached file {file_id}: {e}")
+                orphaned_files.append((content_hash, file_id))
+
+        # Clean up orphaned files to prevent billing waste
+        if orphaned_files:
+            logger.warning(
+                f"Cleaning up {len(orphaned_files)} orphaned files due to cache finalization failures"
+            )
+            for content_hash, file_id in orphaned_files:
+                try:
+                    await self._client.files.delete(file_id)
+                    logger.debug(f"ORPHAN CLEANUP: Deleted orphaned file {file_id}")
+                except Exception as delete_e:
+                    logger.warning(
+                        f"Failed to delete orphaned file {file_id}: {delete_e}"
+                    )
 
     async def _rollback_failed_uploads(
         self, newly_uploaded_files: List[Tuple[str, str]], cache
@@ -730,19 +753,16 @@ class OpenAIVectorStore:
 
             return results
 
-        except Exception as e:
-            error_msg = str(e)
-            if "rate limit" in error_msg.lower():
-                retry_after = None
-                if hasattr(e, "response") and hasattr(e.response, "headers"):
-                    retry_after = e.response.headers.get("Retry-After")
-                    if retry_after:
-                        retry_after = float(retry_after)
-                raise TransientError(
-                    f"Rate limited: {error_msg}", retry_after=retry_after
-                )
-            else:
-                raise
+        except RateLimitError as e:
+            # Handle rate limiting with structured error types
+            retry_after = None
+            if hasattr(e, "response") and hasattr(e.response, "headers"):
+                retry_after = e.response.headers.get("Retry-After")
+                if retry_after:
+                    retry_after = float(retry_after)
+            raise TransientError(f"Rate limited: {str(e)}", retry_after=retry_after)
+        except Exception:
+            raise
 
 
 class OpenAIClient:
@@ -772,21 +792,43 @@ class OpenAIClient:
 
             return OpenAIVectorStore(client=client, store_id=response.id, name=name)
 
-        except Exception as e:
-            # Map errors
+        except AuthenticationError as e:
+            # Handle authentication errors with structured error types
+            raise AuthError(f"Invalid API key: {str(e)}")
+        except PermissionDeniedError as e:
+            # Handle permission errors (often quota-related)
+            raise QuotaExceededError(f"Permission denied (quota exceeded): {str(e)}")
+        except BadRequestError as e:
+            # Handle bad request errors (may include quota/limit information)
             error_msg = str(e)
-            if (
-                "limit reached" in error_msg.lower()
-                or "quota" in error_msg.lower()
-                or "storage limit" in error_msg.lower()
-            ):
+            if hasattr(e, "code") and e.code in [
+                "quota_exceeded",
+                "storage_limit_exceeded",
+            ]:
                 raise QuotaExceededError(f"Store limit reached: {error_msg}")
-            elif (
-                "authentication" in error_msg.lower() or "api key" in error_msg.lower()
-            ):
-                raise AuthError(f"Invalid API key: {error_msg}")
+            elif "limit" in error_msg.lower() or "quota" in error_msg.lower():
+                # Fallback for quota errors not captured by specific codes
+                raise QuotaExceededError(f"Store limit reached: {error_msg}")
             else:
                 raise
+        except RateLimitError as e:
+            # Handle rate limiting
+            retry_after = None
+            if hasattr(e, "response") and hasattr(e.response, "headers"):
+                retry_after = e.response.headers.get("Retry-After")
+                if retry_after:
+                    retry_after = float(retry_after)
+            raise TransientError(f"Rate limited: {str(e)}", retry_after=retry_after)
+        except Exception as e:
+            # Fallback: Check for quota/limit keywords in any exception type
+            error_msg = str(e).lower()
+            if any(
+                keyword in error_msg
+                for keyword in ["quota", "limit", "storage limit", "billing"]
+            ):
+                raise QuotaExceededError(f"Store limit reached: {str(e)}")
+            # Re-raise unknown errors
+            raise
 
     async def get(self, store_id: str) -> VectorStore:
         """Get an existing vector store."""

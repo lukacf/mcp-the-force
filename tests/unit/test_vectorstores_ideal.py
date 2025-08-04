@@ -439,6 +439,8 @@ class TestVectorStoreManager:
             # Mock the get_or_create_placeholder to return None (no existing store)
             mock_cache_instance.get_or_create_placeholder.return_value = (None, False)
             mock_cache_instance.register_store = AsyncMock()
+            # Mock get_store to return None (no existing store for optimization check)
+            mock_cache_instance.get_store.return_value = None
 
             # Vector store cache works with all providers
             manager = VectorStoreManager(provider="openai")

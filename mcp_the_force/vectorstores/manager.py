@@ -317,12 +317,10 @@ class VectorStoreManager:
         )
 
         # Add files if provided
-        if files:
+        if files_with_content:
             vs_files = []
-            for file_path in files:
-                content = self._read_file_content(file_path)
-                if content:  # Only add if we could read the file
-                    vs_files.append(VSFile(path=file_path, content=content))
+            for normalized_path, content in files_with_content:
+                vs_files.append(VSFile(path=normalized_path, content=content))
 
             if vs_files:
                 await store.add_files(vs_files)
@@ -408,7 +406,7 @@ class VectorStoreManager:
     async def _create_new_store(
         self,
         client: VectorStoreClient,
-        files: List[str],
+        files_with_content: List[Tuple[str, str]],
         session_id: Optional[str],
         name: Optional[str],
         ttl_seconds: Optional[int],
@@ -417,7 +415,7 @@ class VectorStoreManager:
 
         Args:
             client: The vector store client to use
-            files: List of file paths to add
+            files_with_content: List of (normalized_path, content) tuples
             session_id: Optional session ID for temporary stores
             name: Optional name for permanent stores
             ttl_seconds: Optional TTL for the vector store
@@ -441,13 +439,11 @@ class VectorStoreManager:
             ttl_seconds=ttl_seconds if not name else None,  # Named stores don't expire
         )
 
-        # Convert file paths to VSFile objects and add them
-        if files:
+        # Convert content tuples to VSFile objects and add them
+        if files_with_content:
             vs_files = []
-            for file_path in files:
-                content = self._read_file_content(file_path)
-                if content:  # Only add if we could read the file
-                    vs_files.append(VSFile(path=file_path, content=content))
+            for normalized_path, content in files_with_content:
+                vs_files.append(VSFile(path=normalized_path, content=content))
 
             if vs_files:
                 await store.add_files(vs_files)
@@ -539,6 +535,29 @@ class VectorStoreManager:
         # Step 1: Validate and normalize parameters (let validation errors propagate)
         protected = self._validate_create_params(session_id, name, protected)
 
+        # Step 1.5: Empty fileset optimization - avoid unnecessary API calls
+        if not files and session_id:
+            # For empty filesets with session_id, check if store already exists
+            # If it does, this is likely a no-op call and we can return early
+            existing_store_info = await self.vector_store_cache.get_store(
+                session_id=session_id
+            )
+            if existing_store_info:
+                logger.info(
+                    f"Empty fileset for existing session '{session_id}'. "
+                    f"Reusing store {existing_store_info['vector_store_id']} without API call."
+                )
+                return self._format_result(
+                    existing_store_info["vector_store_id"],
+                    existing_store_info["provider"],
+                    session_id,
+                    None,
+                )
+            # If no store exists, proceed with creation - this is a legitimate new session
+            logger.debug(
+                f"Creating new empty store for session '{session_id}' (new session)"
+            )
+
         try:
             # Step 2: Process files for consistent handling
             files_with_content = self._read_and_process_files(files)
@@ -589,7 +608,7 @@ class VectorStoreManager:
             )
 
             store = await self._create_new_store(
-                client, files, session_id, name, ttl_seconds
+                client, files_with_content, session_id, name, ttl_seconds
             )
             logger.info(f"Created vector store: {store.id}")
 
