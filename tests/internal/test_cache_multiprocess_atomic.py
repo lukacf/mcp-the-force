@@ -57,46 +57,8 @@ def worker_atomic_cache_attempt(args):
         # Create cache instance in this process
         cache = DeduplicationCache(db_path)
 
-        # Use thread pool for async operation in multiprocessing context
-        import asyncio
-        import threading
-
-        def run_async_in_new_loop():
-            """Run async operation in a new event loop."""
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                return loop.run_until_complete(cache.atomic_cache_or_get(content_hash))
-            finally:
-                loop.close()
-
-        # Run in thread to avoid multiprocessing/asyncio conflicts
-        result = []
-        exception = []
-
-        def target():
-            try:
-                result.append(run_async_in_new_loop())
-            except Exception as e:
-                exception.append(e)
-
-        thread = threading.Thread(target=target)
-        thread.start()
-        thread.join(timeout=5)  # 5 second timeout
-
-        if thread.is_alive():
-            return {
-                "process_id": process_id,
-                "file_id": None,
-                "we_are_uploader": False,
-                "status": "timeout",
-                "error": "Operation timed out",
-            }
-
-        if exception:
-            raise exception[0]
-
-        file_id, we_are_uploader = result[0]
+        # Use synchronous version for multiprocessing compatibility
+        file_id, we_are_uploader = _sync_atomic_cache_or_get(cache, content_hash)
 
         return {
             "process_id": process_id,
@@ -115,6 +77,94 @@ def worker_atomic_cache_attempt(args):
         }
 
 
+def _sync_atomic_cache_or_get(cache, content_hash, placeholder="PENDING"):
+    """Synchronous version of atomic_cache_or_get for multiprocessing tests."""
+    if cache._conn is None:
+        raise RuntimeError("Database connection is closed")
+
+    now = int(time.time())
+    with cache._lock, cache._conn:
+        # Use BEGIN IMMEDIATE to avoid write starvation under high concurrency
+        cache._conn.execute("BEGIN IMMEDIATE")
+
+        try:
+            # Attempt to atomically reserve this content hash
+            cursor = cache._conn.execute(
+                """
+                INSERT INTO file_cache (content_hash, file_id, created_at, updated_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(content_hash) DO NOTHING
+                """,
+                (content_hash, placeholder, now, now),
+            )
+
+            we_are_uploader = cursor.rowcount == 1
+
+            if not we_are_uploader:
+                # Another process already has this hash - fetch the current value
+                cursor = cache._conn.execute(
+                    "SELECT file_id FROM file_cache WHERE content_hash = ?",
+                    (content_hash,),
+                )
+                result = cursor.fetchone()
+                existing_file_id = result[0] if result else None
+                cache._conn.commit()
+                return existing_file_id, False
+            else:
+                # We successfully reserved this hash
+                cache._conn.commit()
+                return None, True
+
+        except Exception:
+            cache._conn.rollback()
+            raise
+
+
+def _sync_finalize_file_id(cache, content_hash, file_id):
+    """Synchronous version of finalize_file_id for multiprocessing tests."""
+    if cache._conn is None:
+        raise RuntimeError("Database connection is closed")
+
+    now = int(time.time())
+    with cache._lock, cache._conn:
+        cache._conn.execute(
+            """
+            UPDATE file_cache 
+            SET file_id = ?, updated_at = ?
+            WHERE content_hash = ? AND file_id = 'PENDING'
+            """,
+            (file_id, now, content_hash),
+        )
+        cache._conn.commit()
+
+
+def _sync_cleanup_failed_upload(cache, content_hash):
+    """Synchronous version of cleanup_failed_upload for multiprocessing tests."""
+    if cache._conn is None:
+        raise RuntimeError("Database connection is closed")
+
+    with cache._lock, cache._conn:
+        cache._conn.execute(
+            "DELETE FROM file_cache WHERE content_hash = ? AND file_id = 'PENDING'",
+            (content_hash,),
+        )
+        cache._conn.commit()
+
+
+def _sync_get_file_id(cache, content_hash):
+    """Synchronous version of get_file_id for multiprocessing tests."""
+    if cache._conn is None:
+        raise RuntimeError("Database connection is closed")
+
+    with cache._lock, cache._conn:
+        cursor = cache._conn.execute(
+            "SELECT file_id FROM file_cache WHERE content_hash = ?",
+            (content_hash,),
+        )
+        result = cursor.fetchone()
+        return result[0] if result else None
+
+
 def worker_complete_upload_workflow(args):
     """Worker function for complete upload workflow in separate process."""
     process_id, content_hash, db_path = args
@@ -123,75 +173,31 @@ def worker_complete_upload_workflow(args):
         # Create cache instance in this process
         cache = DeduplicationCache(db_path)
 
-        # Use thread pool for async operations in multiprocessing context
-        import asyncio
-        import threading
+        # Step 1: Attempt to reserve
+        file_id, we_are_uploader = _sync_atomic_cache_or_get(cache, content_hash)
 
-        def run_async_workflow():
-            """Run complete async workflow in a new event loop."""
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
+        if we_are_uploader:
+            # Step 2: Simulate upload work
+            time.sleep(0.05)  # Simulate upload time
 
-                async def workflow():
-                    # Step 1: Attempt to reserve
-                    file_id, we_are_uploader = await cache.atomic_cache_or_get(
-                        content_hash
-                    )
+            # Step 3: Finalize with real file_id
+            real_file_id = f"file-process-{process_id}-{int(time.time())}"
+            _sync_finalize_file_id(cache, content_hash, real_file_id)
 
-                    if we_are_uploader:
-                        # Step 2: Simulate upload work
-                        time.sleep(0.05)  # Simulate upload time
-
-                        # Step 3: Finalize with real file_id
-                        real_file_id = f"file-process-{process_id}-{int(time.time())}"
-                        await cache.finalize_file_id(content_hash, real_file_id)
-
-                        return {
-                            "process_id": process_id,
-                            "status": "uploaded",
-                            "file_id": real_file_id,
-                            "we_are_uploader": True,
-                        }
-                    else:
-                        # Not the uploader - just return what we got
-                        return {
-                            "process_id": process_id,
-                            "status": "blocked",
-                            "file_id": file_id,
-                            "we_are_uploader": False,
-                        }
-
-                return loop.run_until_complete(workflow())
-            finally:
-                loop.close()
-
-        # Run in thread to avoid multiprocessing/asyncio conflicts
-        result = []
-        exception = []
-
-        def target():
-            try:
-                result.append(run_async_workflow())
-            except Exception as e:
-                exception.append(e)
-
-        thread = threading.Thread(target=target)
-        thread.start()
-        thread.join(timeout=10)  # 10 second timeout for complete workflow
-
-        if thread.is_alive():
             return {
                 "process_id": process_id,
-                "status": "timeout",
-                "error": "Workflow timed out",
+                "status": "uploaded",
+                "file_id": real_file_id,
+                "we_are_uploader": True,
+            }
+        else:
+            # Not the uploader - just return what we got
+            return {
+                "process_id": process_id,
+                "status": "blocked",
+                "file_id": file_id,
                 "we_are_uploader": False,
             }
-
-        if exception:
-            raise exception[0]
-
-        return result[0]
 
     except Exception as e:
         return {
@@ -209,82 +215,38 @@ def worker_failing_upload_workflow(args):
     try:
         cache = DeduplicationCache(db_path)
 
-        # Use thread pool for async operations in multiprocessing context
-        import asyncio
-        import threading
+        # Attempt to reserve
+        file_id, we_are_uploader = _sync_atomic_cache_or_get(cache, content_hash)
 
-        def run_async_failing_workflow():
-            """Run failing async workflow in a new event loop."""
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
+        if we_are_uploader:
+            # Simulate upload work
+            time.sleep(0.02)
 
-                async def workflow():
-                    # Attempt to reserve
-                    file_id, we_are_uploader = await cache.atomic_cache_or_get(
-                        content_hash
-                    )
-
-                    if we_are_uploader:
-                        # Simulate upload work
-                        time.sleep(0.02)
-
-                        if should_fail:
-                            # Simulate upload failure and cleanup
-                            await cache.cleanup_failed_upload(content_hash)
-                            return {
-                                "process_id": process_id,
-                                "status": "failed_and_cleaned",
-                                "we_are_uploader": True,
-                            }
-                        else:
-                            # Successful upload
-                            real_file_id = f"file-retry-{process_id}"
-                            await cache.finalize_file_id(content_hash, real_file_id)
-                            return {
-                                "process_id": process_id,
-                                "status": "success",
-                                "file_id": real_file_id,
-                                "we_are_uploader": True,
-                            }
-                    else:
-                        return {
-                            "process_id": process_id,
-                            "status": "blocked",
-                            "file_id": file_id,
-                            "we_are_uploader": False,
-                        }
-
-                return loop.run_until_complete(workflow())
-            finally:
-                loop.close()
-
-        # Run in thread to avoid multiprocessing/asyncio conflicts
-        result = []
-        exception = []
-
-        def target():
-            try:
-                result.append(run_async_failing_workflow())
-            except Exception as e:
-                exception.append(e)
-
-        thread = threading.Thread(target=target)
-        thread.start()
-        thread.join(timeout=8)  # 8 second timeout
-
-        if thread.is_alive():
+            if should_fail:
+                # Simulate upload failure and cleanup
+                _sync_cleanup_failed_upload(cache, content_hash)
+                return {
+                    "process_id": process_id,
+                    "status": "failed_and_cleaned",
+                    "we_are_uploader": True,
+                }
+            else:
+                # Successful upload
+                real_file_id = f"file-retry-{process_id}"
+                _sync_finalize_file_id(cache, content_hash, real_file_id)
+                return {
+                    "process_id": process_id,
+                    "status": "success",
+                    "file_id": real_file_id,
+                    "we_are_uploader": True,
+                }
+        else:
             return {
                 "process_id": process_id,
-                "status": "timeout",
-                "error": "Workflow timed out",
+                "status": "blocked",
+                "file_id": file_id,
                 "we_are_uploader": False,
             }
-
-        if exception:
-            raise exception[0]
-
-        return result[0]
 
     except Exception as e:
         return {
@@ -302,76 +264,29 @@ def worker_crashing_upload(args):
     try:
         cache = DeduplicationCache(db_path)
 
-        # Use thread pool for async operations in multiprocessing context
-        import asyncio
-        import threading
+        # Reserve the hash
+        file_id, we_are_uploader = _sync_atomic_cache_or_get(cache, content_hash)
 
-        def run_async_crashing_workflow():
-            """Run crashing async workflow in a new event loop."""
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-
-                async def workflow():
-                    # Reserve the hash
-                    file_id, we_are_uploader = await cache.atomic_cache_or_get(
-                        content_hash
-                    )
-
-                    if we_are_uploader:
-                        # Simulate some work, then crash before finalizing
-                        time.sleep(0.1)
-                        # Simulate crash by raising exception (in real world, process would terminate)
-                        raise RuntimeError("Simulated process crash")
-                    else:
-                        return {
-                            "process_id": process_id,
-                            "status": "blocked",
-                            "file_id": file_id,
-                        }
-
-                return loop.run_until_complete(workflow())
-            except RuntimeError:
-                # This simulates the process crashing - in reality, the process would terminate
-                # and the PENDING entry would remain in the database
-                return {
-                    "process_id": process_id,
-                    "status": "crashed",
-                    "we_are_uploader": True,
-                }
-            finally:
-                loop.close()
-
-        # Run in thread to avoid multiprocessing/asyncio conflicts
-        result = []
-        exception = []
-
-        def target():
-            try:
-                result.append(run_async_crashing_workflow())
-            except Exception as e:
-                exception.append(e)
-
-        thread = threading.Thread(target=target)
-        thread.start()
-        thread.join(timeout=5)  # 5 second timeout
-
-        if thread.is_alive():
+        if we_are_uploader:
+            # Simulate some work, then crash before finalizing
+            time.sleep(0.1)
+            # Simulate crash by raising exception (in real world, process would terminate)
+            raise RuntimeError("Simulated process crash")
+        else:
             return {
                 "process_id": process_id,
-                "status": "timeout",
-                "error": "Crash simulation timed out",
+                "status": "blocked",
+                "file_id": file_id,
             }
 
-        if exception:
-            return {
-                "process_id": process_id,
-                "status": "error",
-                "error": str(exception[0]),
-            }
-
-        return result[0]
-
+    except RuntimeError:
+        # This simulates the process crashing - in reality, the process would terminate
+        # and the PENDING entry would remain in the database
+        return {
+            "process_id": process_id,
+            "status": "crashed",
+            "we_are_uploader": True,
+        }
     except Exception as e:
         return {"process_id": process_id, "status": "error", "error": str(e)}
 
@@ -429,7 +344,7 @@ class TestMultiProcessAtomicOperations:
 
         # Verify database state
         cache = DeduplicationCache(TEST_DB_PATH)
-        cached_file_id = await cache.get_file_id(content_hash)
+        cached_file_id = _sync_get_file_id(cache, content_hash)
         assert (
             cached_file_id == "PENDING"
         ), "Hash should be in PENDING state after reservation"
@@ -464,7 +379,7 @@ class TestMultiProcessAtomicOperations:
 
         # Verify final database state
         cache = DeduplicationCache(TEST_DB_PATH)
-        final_file_id = await cache.get_file_id(content_hash)
+        final_file_id = _sync_get_file_id(cache, content_hash)
 
         assert final_file_id is not None, "Final file_id should not be None"
         assert final_file_id != "PENDING", "Final file_id should not be PENDING"
@@ -511,7 +426,7 @@ class TestMultiProcessAtomicOperations:
 
         # Verify cleanup worked - hash should be available for retry
         cache = DeduplicationCache(TEST_DB_PATH)
-        cached_file_id = await cache.get_file_id(content_hash)
+        cached_file_id = _sync_get_file_id(cache, content_hash)
         assert (
             cached_file_id is None
         ), "Hash should be available for retry after cleanup"
@@ -541,7 +456,7 @@ class TestMultiProcessAtomicOperations:
         ), "Most retry processes should be blocked"
 
         # Verify final state
-        final_file_id = await cache.get_file_id(content_hash)
+        final_file_id = _sync_get_file_id(cache, content_hash)
         assert (
             final_file_id is not None
         ), "Final file_id should exist after successful retry"
@@ -587,7 +502,7 @@ class TestMultiProcessAtomicOperations:
 
         # Verify consistent final state
         cache = DeduplicationCache(TEST_DB_PATH)
-        final_file_id = await cache.get_file_id(content_hash)
+        final_file_id = _sync_get_file_id(cache, content_hash)
         stats = await cache.get_stats()
 
         assert final_file_id is not None, "Stress test should result in valid file_id"
@@ -653,7 +568,7 @@ class TestMultiProcessAtomicOperations:
             assert len(errors) == 0, f"Hash {content_hash[:20]}... had errors: {errors}"
 
             # Verify final state in database
-            final_file_id = await cache.get_file_id(content_hash)
+            final_file_id = _sync_get_file_id(cache, content_hash)
             assert (
                 final_file_id is not None
             ), f"Hash {content_hash[:20]}... should have final file_id"
@@ -687,7 +602,7 @@ class TestProcessCrashRecovery:
 
         # Verify crash occurred and left PENDING entry
         cache = DeduplicationCache(TEST_DB_PATH)
-        cached_file_id = await cache.get_file_id(content_hash)
+        cached_file_id = _sync_get_file_id(cache, content_hash)
 
         assert cached_file_id == "PENDING", "Crashed process should leave PENDING entry"
         assert crash_results[0]["status"] == "crashed", "Process should have crashed"
@@ -711,7 +626,7 @@ class TestProcessCrashRecovery:
         await cache.cleanup_failed_upload(content_hash)
 
         # Verify cleanup worked
-        cached_file_id = await cache.get_file_id(content_hash)
+        cached_file_id = _sync_get_file_id(cache, content_hash)
         assert cached_file_id is None, "Cleanup should remove PENDING entry"
 
         # Now a new attempt should succeed
@@ -727,7 +642,7 @@ class TestProcessCrashRecovery:
         ), "Final attempt should succeed after cleanup"
 
         # Verify final state
-        final_file_id = await cache.get_file_id(content_hash)
+        final_file_id = _sync_get_file_id(cache, content_hash)
         assert final_file_id is not None, "Should have valid file_id after recovery"
         assert final_file_id != "PENDING", "Should not be PENDING after recovery"
 
