@@ -28,14 +28,16 @@ This document consolidates findings from multi-AI critical reviews (Gemini Pro, 
 
 ## 🔥 HIGH - Major Reliability Issues
 
-### - [ ] 3. Cross-Platform Hashing Non-Determinism
+### - [x] 3. Cross-Platform Hashing Non-Determinism
 **Severity:** High | **Source:** Grok4 | **Agent:** hash-whisperer  
-**File:** `mcp_the_force/dedup/hashing.py` - `compute_content_hash()`
+**File:** `mcp_the_force/tools/search_dedup_sqlite.py` - `compute_content_hash()`
 
-**Issue:** Hash function may not normalize line endings, causing Windows (`\r\n`) vs Unix (`\n`) to generate different hashes for identical logical content.
+**Issue:** ~~Hash function may not normalize line endings, causing Windows (`\r\n`) vs Unix (`\n`) to generate different hashes for identical logical content.~~
 
-**Impact:** Cache misses across platforms, reduced cost savings  
-**Fix:** Normalize line endings before hashing: `content.replace('\r\n', '\n').replace('\r', '\n')`
+**Impact:** ~~Cache misses across platforms, reduced cost savings~~  
+**Fix:** ~~Normalize line endings before hashing: `content.replace('\r\n', '\n').replace('\r', '\n')`~~
+
+**✅ RESOLVED:** Fixed duplicate implementation in `SQLiteSearchDeduplicator` that lacked line ending normalization. The main hashing function in `mcp_the_force/dedup/hashing.py` was already correctly implemented. Updated search deduplication to use the centralized, normalized hashing function. Added comprehensive cross-platform tests to prevent regression.
 
 ### - [ ] 4. Race Condition in File Caching
 **Severity:** High | **Source:** o3 Pro | **Agent:** async-samurai  
@@ -204,9 +206,9 @@ The following issues were identified as over-engineering for a development tool 
 
 ## 🤖 Agent Assignment Summary
 
-### 🥇 **hash-whisperer** (3 issues)
+### 🥇 **hash-whisperer** (2 remaining issues)
 **Critical:** #1 Hash collision bug  
-**High:** #3 Cross-platform hashing  
+**High:** ~~#3 Cross-platform hashing~~ ✅ **COMPLETED**  
 **Medium:** #19 Duplicate hashing utilities
 
 ### 🥈 **async-samurai** (5 issues)  
@@ -240,9 +242,10 @@ Each agent inherits a progressively more solid foundation, allowing focused work
 
 ## Summary
 
-**Total Issues to Address:** 19  
-**Critical:** 2 | **High:** 5 | **Medium:** 11 | **Low:** 2
+**Total Issues to Address:** 18  
+**Critical:** 2 | **High:** 4 | **Medium:** 11 | **Low:** 2  
+**Completed:** 1
 
-**Priority:** Fix Critical and High severity issues (7 total) before production deployment. The hash collision bug and performance regression are blocking issues that must be resolved first.
+**Priority:** Fix Critical and High severity issues (6 remaining) before production deployment. The hash collision bug and performance regression are blocking issues that must be resolved first.
 
 **Architecture Validation:** The multi-AI review confirmed our deduplication architecture is well-designed and extensible, as evidenced by the straightforward path to add HNSW deduplication support.
