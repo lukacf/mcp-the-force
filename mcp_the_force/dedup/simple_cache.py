@@ -426,17 +426,51 @@ class SimpleVectorStoreCache:
                 "cache_type": "SimpleVectorStoreCache",
             }
 
+    @retry_sqlite_operation(
+        config=DEFAULT_RETRY_CONFIG,
+        wrap_exception=CacheWriteError,
+        operation_description="Store references cleanup",
+    )
+    def remove_store_references(self, store_id: str) -> int:
+        """Remove all deduplication cache entries referencing a deleted store.
 
-# Global cache instance
-_cache: Optional[SimpleVectorStoreCache] = None
+        This method provides proper encapsulation for cleaning up stale
+        store references from the deduplication cache when a vector store
+        is deleted.
+
+        Args:
+            store_id: Vector store ID to remove references for
+
+        Returns:
+            Number of cache entries removed
+        """
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                "DELETE FROM store_cache WHERE store_id = ?", (store_id,)
+            )
+            return cursor.rowcount
 
 
-def get_cache() -> SimpleVectorStoreCache:
-    """Get the project-specific cache instance."""
-    global _cache
-    if _cache is None:
+# Path-keyed cache instances for proper isolation
+_cache_instances: Dict[str, SimpleVectorStoreCache] = {}
+
+
+def get_cache(cache_path: Optional[str] = None) -> SimpleVectorStoreCache:
+    """Get the project-specific cache instance.
+
+    Args:
+        cache_path: Optional explicit cache path. If None, uses project default.
+
+    Returns:
+        Cache instance for the specified path
+    """
+    if cache_path is None:
         # Use project-local path instead of global user path to prevent data leakage
         cache_dir = Path(".mcp-the-force")
-        cache_path = cache_dir / "vdb_cache.db"
-        _cache = SimpleVectorStoreCache(str(cache_path))
-    return _cache
+        cache_path = str(cache_dir / "vdb_cache.db")
+
+    # Use path-keyed dictionary for proper isolation
+    if cache_path not in _cache_instances:
+        _cache_instances[cache_path] = SimpleVectorStoreCache(cache_path)
+
+    return _cache_instances[cache_path]

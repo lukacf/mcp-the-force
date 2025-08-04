@@ -895,16 +895,13 @@ class VectorStoreManager:
                         # DEDUPLICATION FIX: Also remove from dedup cache to prevent stale references
                         try:
                             dedup_cache = get_cache()
-                            # Remove any store cache entries that reference this deleted store
-                            with dedup_cache._get_connection() as conn:
-                                cursor = conn.execute(
-                                    "DELETE FROM store_cache WHERE store_id = ?",
-                                    (vector_store_id,),
+                            removed_count = dedup_cache.remove_store_references(
+                                vector_store_id
+                            )
+                            if removed_count > 0:
+                                logger.debug(
+                                    f"DEDUP: Removed {removed_count} stale dedup entries for deleted store {vector_store_id}"
                                 )
-                                if cursor.rowcount > 0:
-                                    logger.debug(
-                                        f"DEDUP: Removed {cursor.rowcount} stale dedup entries for deleted store {vector_store_id}"
-                                    )
                         except Exception as e:
                             logger.warning(
                                 f"Failed to clean up dedup cache for deleted store {vector_store_id}: {e}"
