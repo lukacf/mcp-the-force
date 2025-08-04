@@ -98,7 +98,7 @@ class TestRetryLogicFunctions:
 class TestCacheFileRetry:
     """Test retry logic for cache_file method."""
 
-    def test_cache_file_retries_on_database_busy(self):
+    async def test_cache_file_retries_on_database_busy(self):
         """Test that cache_file retries on database busy errors."""
         with tempfile.NamedTemporaryFile() as tmp:
             cache = DeduplicationCache(tmp.name)
@@ -121,12 +121,12 @@ class TestCacheFileRetry:
                 mock_connection.execute = mock_execute
 
                 # Should succeed after retries
-                cache.cache_file("hash123", "file-123")
+                await cache.cache_file("hash123", "file-123")
 
                 # Should have been called 3 times (2 failures + 1 success)
                 assert call_count == 3
 
-    def test_cache_file_fails_on_non_retryable_error(self):
+    async def test_cache_file_fails_on_non_retryable_error(self):
         """Test that cache_file fails immediately on non-retryable errors."""
         with tempfile.NamedTemporaryFile() as tmp:
             cache = DeduplicationCache(tmp.name)
@@ -139,7 +139,7 @@ class TestCacheFileRetry:
 
                 # Should fail immediately without retries
                 with pytest.raises(CacheWriteError) as exc_info:
-                    cache.cache_file("hash123", "file-123")
+                    await cache.cache_file("hash123", "file-123")
 
                 assert "Cache file operation failed: constraint failed" in str(
                     exc_info.value
@@ -151,7 +151,7 @@ class TestCacheFileRetry:
 class TestCacheStoreRetry:
     """Test retry logic for cache_store method."""
 
-    def test_cache_store_retries_on_database_locked(self):
+    async def test_cache_store_retries_on_database_locked(self):
         """Test that cache_store retries on database locked errors."""
         with tempfile.NamedTemporaryFile() as tmp:
             cache = DeduplicationCache(tmp.name)
@@ -173,7 +173,7 @@ class TestCacheStoreRetry:
                 mock_connection.execute = mock_execute
 
                 # Should succeed after retry
-                cache.cache_store("fileset123", "store-456", "openai")
+                await cache.cache_store("fileset123", "store-456", "openai")
 
                 # Should have been called 2 times (1 failure + 1 success)
                 assert call_count == 2
@@ -182,7 +182,7 @@ class TestCacheStoreRetry:
 class TestCleanupOldEntriesRetry:
     """Test retry logic for cleanup_old_entries method."""
 
-    def test_cleanup_old_entries_retries_on_disk_io_error(self):
+    async def test_cleanup_old_entries_retries_on_disk_io_error(self):
         """Test that cleanup_old_entries retries on disk I/O errors."""
         with tempfile.NamedTemporaryFile() as tmp:
             cache = DeduplicationCache(tmp.name)
@@ -206,7 +206,7 @@ class TestCleanupOldEntriesRetry:
                 mock_connection.execute = mock_execute
 
                 # Should succeed after retries
-                cache.cleanup_old_entries(max_age_days=30)
+                await cache.cleanup_old_entries(max_age_days=30)
 
                 # Should have been called 4 times (2 failed attempts + 1 successful attempt with 2 queries)
                 assert call_count == 4  # 2 failed attempts + 2 successful queries
@@ -215,7 +215,7 @@ class TestCleanupOldEntriesRetry:
 class TestGetStoreIdRetry:
     """Test retry logic for get_store_id method."""
 
-    def test_get_store_id_retries_on_database_busy(self):
+    async def test_get_store_id_retries_on_database_busy(self):
         """Test that get_store_id retries on database busy errors."""
         with tempfile.NamedTemporaryFile() as tmp:
             cache = DeduplicationCache(tmp.name)
@@ -239,7 +239,7 @@ class TestGetStoreIdRetry:
                 mock_connection.execute = mock_execute
 
                 # Should succeed after retry
-                result = cache.get_store_id("fileset123")
+                result = await cache.get_store_id("fileset123")
 
                 assert result == {"store_id": "store-123", "provider": "openai"}
                 assert call_count == 2
@@ -248,7 +248,7 @@ class TestGetStoreIdRetry:
 class TestGetStatsRetry:
     """Test retry logic for get_stats method."""
 
-    def test_get_stats_retries_on_database_locked(self):
+    async def test_get_stats_retries_on_database_locked(self):
         """Test that get_stats retries on database locked errors."""
         with tempfile.NamedTemporaryFile() as tmp:
             cache = DeduplicationCache(tmp.name)
@@ -275,7 +275,7 @@ class TestGetStatsRetry:
                 mock_connection.execute = mock_execute
 
                 # Should succeed after retries
-                stats = cache.get_stats()
+                stats = await cache.get_stats()
 
                 assert stats["file_count"] == 10
                 assert stats["store_count"] == 10
@@ -289,7 +289,7 @@ class TestGetStatsRetry:
 class TestRetryIntegration:
     """Integration tests for retry behavior across multiple operations."""
 
-    def test_mixed_retryable_and_non_retryable_errors(self):
+    async def test_mixed_retryable_and_non_retryable_errors(self):
         """Test handling of mixed error types in sequence."""
         with tempfile.NamedTemporaryFile() as tmp:
             cache = DeduplicationCache(tmp.name)
@@ -311,7 +311,7 @@ class TestRetryIntegration:
                 mock_connection.execute = mock_execute_retryable
 
                 # Should succeed after retry
-                cache.cache_file("hash1", "file-1")
+                await cache.cache_file("hash1", "file-1")
                 assert call_count == 2
 
             # Second operation: non-retryable error that fails immediately
@@ -325,12 +325,12 @@ class TestRetryIntegration:
 
                 # Should fail immediately
                 with pytest.raises(CacheWriteError):
-                    cache.cache_file("hash2", "file-2")
+                    await cache.cache_file("hash2", "file-2")
 
                 # Should only be called once (no retries)
                 assert mock_connection2.execute.call_count == 1
 
-    def test_retry_timing_behavior(self):
+    async def test_retry_timing_behavior(self):
         """Test that retry delays are actually applied."""
         with tempfile.NamedTemporaryFile() as tmp:
             cache = DeduplicationCache(tmp.name)
@@ -349,7 +349,7 @@ class TestRetryIntegration:
                 mock_connection.__enter__.return_value = mock_connection
                 mock_connection.execute = mock_execute
 
-                cache.cache_file("hash123", "file-123")
+                await cache.cache_file("hash123", "file-123")
 
                 # Should have 3 calls total
                 assert len(call_times) == 3

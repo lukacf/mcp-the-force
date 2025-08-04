@@ -15,7 +15,7 @@ import threading
 import time
 import sqlite3
 import tempfile
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import asyncio
 from pathlib import Path
 
 from mcp_the_force.dedup.simple_cache import DeduplicationCache
@@ -54,7 +54,7 @@ def content_hashes():
 class TestAtomicCacheOperations:
     """Test atomic cache operations under various concurrency scenarios."""
 
-    def test_atomic_cache_or_get_basic_functionality(
+    async def test_atomic_cache_or_get_basic_functionality(
         self, temp_cache_db, content_hashes
     ):
         """Test basic atomic_cache_or_get functionality without concurrency."""
@@ -62,84 +62,84 @@ class TestAtomicCacheOperations:
         content_hash = content_hashes[0]
 
         # First call should win and return (None, True)
-        file_id, we_are_uploader = cache.atomic_cache_or_get(content_hash)
+        file_id, we_are_uploader = await cache.atomic_cache_or_get(content_hash)
         assert file_id is None
         assert we_are_uploader is True
 
         # Verify PENDING entry was created
-        cached_file_id = cache.get_file_id(content_hash)
+        cached_file_id = await cache.get_file_id(content_hash)
         assert cached_file_id == "PENDING"
 
         # Second call should lose and return ("PENDING", False)
-        file_id2, we_are_uploader2 = cache.atomic_cache_or_get(content_hash)
+        file_id2, we_are_uploader2 = await cache.atomic_cache_or_get(content_hash)
         assert file_id2 == "PENDING"
         assert we_are_uploader2 is False
 
         # Finalize the upload
         real_file_id = "file-123456"
-        cache.finalize_file_id(content_hash, real_file_id)
+        await cache.finalize_file_id(content_hash, real_file_id)
 
         # Third call should return the real file_id
-        file_id3, we_are_uploader3 = cache.atomic_cache_or_get(content_hash)
+        file_id3, we_are_uploader3 = await cache.atomic_cache_or_get(content_hash)
         assert file_id3 == real_file_id
         assert we_are_uploader3 is False
 
-    def test_finalize_file_id_idempotency(self, temp_cache_db, content_hashes):
+    async def test_finalize_file_id_idempotency(self, temp_cache_db, content_hashes):
         """Test that finalize_file_id is idempotent and safe for concurrent calls."""
         cache = temp_cache_db
         content_hash = content_hashes[0]
 
         # Reserve the hash
-        file_id, we_are_uploader = cache.atomic_cache_or_get(content_hash)
+        file_id, we_are_uploader = await cache.atomic_cache_or_get(content_hash)
         assert we_are_uploader is True
 
         # Finalize multiple times with same ID
         real_file_id = "file-123456"
-        cache.finalize_file_id(content_hash, real_file_id)
-        cache.finalize_file_id(content_hash, real_file_id)  # Should be safe
-        cache.finalize_file_id(content_hash, real_file_id)  # Should be safe
+        await cache.finalize_file_id(content_hash, real_file_id)
+        await cache.finalize_file_id(content_hash, real_file_id)  # Should be safe
+        await cache.finalize_file_id(content_hash, real_file_id)  # Should be safe
 
         # Verify final state
-        cached_file_id = cache.get_file_id(content_hash)
+        cached_file_id = await cache.get_file_id(content_hash)
         assert cached_file_id == real_file_id
 
         # Try to finalize with different ID (should be ignored)
-        cache.finalize_file_id(content_hash, "file-different")
-        cached_file_id = cache.get_file_id(content_hash)
+        await cache.finalize_file_id(content_hash, "file-different")
+        cached_file_id = await cache.get_file_id(content_hash)
         assert cached_file_id == real_file_id  # Should remain unchanged
 
-    def test_cleanup_failed_upload_safety(self, temp_cache_db, content_hashes):
+    async def test_cleanup_failed_upload_safety(self, temp_cache_db, content_hashes):
         """Test that cleanup_failed_upload is safe and only removes PENDING entries."""
         cache = temp_cache_db
         content_hash = content_hashes[0]
 
         # Reserve the hash
-        file_id, we_are_uploader = cache.atomic_cache_or_get(content_hash)
+        file_id, we_are_uploader = await cache.atomic_cache_or_get(content_hash)
         assert we_are_uploader is True
 
         # Cleanup should remove PENDING entry
-        cache.cleanup_failed_upload(content_hash)
-        cached_file_id = cache.get_file_id(content_hash)
+        await cache.cleanup_failed_upload(content_hash)
+        cached_file_id = await cache.get_file_id(content_hash)
         assert cached_file_id is None
 
         # Next attempt should succeed again
-        file_id2, we_are_uploader2 = cache.atomic_cache_or_get(content_hash)
+        file_id2, we_are_uploader2 = await cache.atomic_cache_or_get(content_hash)
         assert we_are_uploader2 is True
 
         # Finalize the upload
         real_file_id = "file-123456"
-        cache.finalize_file_id(content_hash, real_file_id)
+        await cache.finalize_file_id(content_hash, real_file_id)
 
         # Cleanup should NOT remove finalized entries
-        cache.cleanup_failed_upload(content_hash)
-        cached_file_id = cache.get_file_id(content_hash)
+        await cache.cleanup_failed_upload(content_hash)
+        cached_file_id = await cache.get_file_id(content_hash)
         assert cached_file_id == real_file_id  # Should remain
 
 
 class TestConcurrentUploadPrevention:
     """Test that concurrent uploads are prevented through atomic operations."""
 
-    def test_concurrent_atomic_cache_or_get_thread_safety(
+    async def test_concurrent_atomic_cache_or_get_thread_safety(
         self, temp_cache_db, content_hashes
     ):
         """Test that only one thread wins the atomic_cache_or_get race."""
@@ -149,10 +149,10 @@ class TestConcurrentUploadPrevention:
         results = []
         exception_count = 0
 
-        def attempt_upload(thread_id):
+        async def attempt_upload(thread_id):
             """Simulate a thread attempting to upload."""
             try:
-                file_id, we_are_uploader = cache.atomic_cache_or_get(content_hash)
+                file_id, we_are_uploader = await cache.atomic_cache_or_get(content_hash)
                 results.append((thread_id, file_id, we_are_uploader))
                 return (thread_id, file_id, we_are_uploader)
             except Exception as e:
@@ -161,11 +161,10 @@ class TestConcurrentUploadPrevention:
                 results.append((thread_id, f"ERROR: {e}", False))
                 return (thread_id, f"ERROR: {e}", False)
 
-        # Run 20 concurrent threads
+        # Run 20 concurrent tasks
         num_threads = 20
-        with ThreadPoolExecutor(max_workers=num_threads) as executor:
-            futures = [executor.submit(attempt_upload, i) for i in range(num_threads)]
-            [future.result() for future in as_completed(futures)]
+        tasks = [attempt_upload(i) for i in range(num_threads)]
+        await asyncio.gather(*tasks)
 
         # Analyze results
         winners = [r for r in results if r[2] is True]  # we_are_uploader = True
@@ -188,7 +187,7 @@ class TestConcurrentUploadPrevention:
         for loser in losers:
             assert loser[1] == "PENDING", f"Loser should see PENDING, got: {loser[1]}"
 
-    def test_concurrent_workflow_completion(self, temp_cache_db, content_hashes):
+    async def test_concurrent_workflow_completion(self, temp_cache_db, content_hashes):
         """Test complete concurrent workflow: reserve -> upload -> finalize."""
         cache = temp_cache_db
         content_hash = content_hashes[0]
@@ -196,11 +195,11 @@ class TestConcurrentUploadPrevention:
         upload_attempts = []
         finalization_attempts = []
 
-        def complete_upload_workflow(thread_id):
+        async def complete_upload_workflow(thread_id):
             """Simulate complete upload workflow."""
             try:
                 # Step 1: Attempt to reserve
-                file_id, we_are_uploader = cache.atomic_cache_or_get(content_hash)
+                file_id, we_are_uploader = await cache.atomic_cache_or_get(content_hash)
 
                 if we_are_uploader:
                     upload_attempts.append(thread_id)
@@ -210,7 +209,7 @@ class TestConcurrentUploadPrevention:
 
                     # Step 2: Finalize with real file_id
                     real_file_id = f"file-{thread_id}-{int(time.time())}"
-                    cache.finalize_file_id(content_hash, real_file_id)
+                    await cache.finalize_file_id(content_hash, real_file_id)
                     finalization_attempts.append((thread_id, real_file_id))
 
                     return ("winner", thread_id, real_file_id)
@@ -223,11 +222,8 @@ class TestConcurrentUploadPrevention:
 
         # Run concurrent workflows
         num_threads = 15
-        with ThreadPoolExecutor(max_workers=num_threads) as executor:
-            futures = [
-                executor.submit(complete_upload_workflow, i) for i in range(num_threads)
-            ]
-            results = [future.result() for future in as_completed(futures)]
+        tasks = [complete_upload_workflow(i) for i in range(num_threads)]
+        results = await asyncio.gather(*tasks)
 
         # Analyze results
         winners = [r for r in results if r[0] == "winner"]
@@ -245,12 +241,12 @@ class TestConcurrentUploadPrevention:
         assert len(errors) == 0, f"Unexpected errors: {errors}"
 
         # Verify final state
-        final_file_id = cache.get_file_id(content_hash)
+        final_file_id = await cache.get_file_id(content_hash)
         assert final_file_id is not None
         assert final_file_id != "PENDING"
         assert final_file_id.startswith("file-")
 
-    def test_concurrent_failure_recovery(self, temp_cache_db, content_hashes):
+    async def test_concurrent_failure_recovery(self, temp_cache_db, content_hashes):
         """Test that failed uploads are properly cleaned up and retryable."""
         cache = temp_cache_db
         content_hash = content_hashes[0]
@@ -258,21 +254,21 @@ class TestConcurrentUploadPrevention:
         first_attempt_results = []
         retry_attempt_results = []
 
-        def failing_upload_workflow(thread_id, should_fail=True):
+        async def failing_upload_workflow(thread_id, should_fail=True):
             """Simulate upload workflow that fails."""
             try:
-                file_id, we_are_uploader = cache.atomic_cache_or_get(content_hash)
+                file_id, we_are_uploader = await cache.atomic_cache_or_get(content_hash)
 
                 if we_are_uploader:
                     if should_fail:
                         # Simulate upload failure
-                        cache.cleanup_failed_upload(content_hash)
+                        await cache.cleanup_failed_upload(content_hash)
                         first_attempt_results.append(("failed", thread_id))
                         return ("failed", thread_id)
                     else:
                         # Successful upload
                         real_file_id = f"file-retry-{thread_id}"
-                        cache.finalize_file_id(content_hash, real_file_id)
+                        await cache.finalize_file_id(content_hash, real_file_id)
                         retry_attempt_results.append(
                             ("success", thread_id, real_file_id)
                         )
@@ -285,12 +281,10 @@ class TestConcurrentUploadPrevention:
 
         # First round: All attempts fail
         num_threads = 10
-        with ThreadPoolExecutor(max_workers=num_threads) as executor:
-            futures = [
-                executor.submit(failing_upload_workflow, i, should_fail=True)
-                for i in range(num_threads)
-            ]
-            first_results = [future.result() for future in as_completed(futures)]
+        tasks = [
+            failing_upload_workflow(i, should_fail=True) for i in range(num_threads)
+        ]
+        first_results = await asyncio.gather(*tasks)
 
         # Verify at least one failure occurred (others were blocked)
         # Note: Due to race conditions, multiple threads might succeed in atomic_cache_or_get
@@ -306,16 +300,15 @@ class TestConcurrentUploadPrevention:
         ), f"Expected at most {num_threads} failed attempts, got {len(failed_attempts)}"
 
         # Verify hash is available for retry (last cleanup should have cleared it)
-        cached_file_id = cache.get_file_id(content_hash)
+        cached_file_id = await cache.get_file_id(content_hash)
         assert cached_file_id is None
 
         # Second round: One should succeed
-        with ThreadPoolExecutor(max_workers=num_threads) as executor:
-            futures = [
-                executor.submit(failing_upload_workflow, i + 100, should_fail=False)
-                for i in range(num_threads)
-            ]
-            retry_results = [future.result() for future in as_completed(futures)]
+        tasks = [
+            failing_upload_workflow(i + 100, should_fail=False)
+            for i in range(num_threads)
+        ]
+        retry_results = await asyncio.gather(*tasks)
 
         # Verify exactly one retry succeeded
         successful_retries = [r for r in retry_results if r[0] == "success"]
@@ -327,7 +320,7 @@ class TestConcurrentUploadPrevention:
         assert len(blocked_retries) >= num_threads - 1
 
         # Verify final state
-        final_file_id = cache.get_file_id(content_hash)
+        final_file_id = await cache.get_file_id(content_hash)
         assert final_file_id is not None
         assert final_file_id.startswith("file-retry-")
 
@@ -335,22 +328,24 @@ class TestConcurrentUploadPrevention:
 class TestHighConcurrencyScenarios:
     """Test behavior under extreme concurrency scenarios."""
 
-    def test_high_concurrency_multiple_hashes(self, temp_cache_db, content_hashes):
+    async def test_high_concurrency_multiple_hashes(
+        self, temp_cache_db, content_hashes
+    ):
         """Test concurrent operations on multiple different hashes."""
         cache = temp_cache_db
 
         results_by_hash = {hash_val: [] for hash_val in content_hashes}
 
-        def process_hash_concurrently(thread_id, content_hash):
+        async def process_hash_concurrently(thread_id, content_hash):
             """Process a specific hash."""
             try:
-                file_id, we_are_uploader = cache.atomic_cache_or_get(content_hash)
+                file_id, we_are_uploader = await cache.atomic_cache_or_get(content_hash)
 
                 if we_are_uploader:
                     # Simulate some work
                     time.sleep(0.001)
                     real_file_id = f"file-{content_hash[:8]}-{thread_id}"
-                    cache.finalize_file_id(content_hash, real_file_id)
+                    await cache.finalize_file_id(content_hash, real_file_id)
                     return ("winner", thread_id, content_hash, real_file_id)
                 else:
                     return ("loser", thread_id, content_hash, file_id)
@@ -367,12 +362,11 @@ class TestHighConcurrencyScenarios:
                 tasks.append((thread_id, content_hash))
 
         # Execute all tasks concurrently
-        with ThreadPoolExecutor(max_workers=len(tasks)) as executor:
-            futures = [
-                executor.submit(process_hash_concurrently, thread_id, content_hash)
-                for thread_id, content_hash in tasks
-            ]
-            results = [future.result() for future in as_completed(futures)]
+        async_tasks = [
+            process_hash_concurrently(thread_id, content_hash)
+            for thread_id, content_hash in tasks
+        ]
+        results = await asyncio.gather(*async_tasks)
 
         # Group results by hash
         for result in results:
@@ -397,11 +391,11 @@ class TestHighConcurrencyScenarios:
             ), f"Hash {content_hash[:8]} had unexpected errors: {errors}"
 
             # Verify final state for this hash
-            final_file_id = cache.get_file_id(content_hash)
+            final_file_id = await cache.get_file_id(content_hash)
             assert final_file_id is not None
             assert final_file_id != "PENDING"
 
-    def test_database_lock_timeout_behavior(self, temp_cache_db, content_hashes):
+    async def test_database_lock_timeout_behavior(self, temp_cache_db, content_hashes):
         """Test behavior when database lock timeout is approached."""
         cache = temp_cache_db
         content_hash = content_hashes[0]
@@ -436,11 +430,11 @@ class TestHighConcurrencyScenarios:
         # Now try concurrent operations while lock is held
         results = []
 
-        def attempt_during_lock(thread_id):
+        async def attempt_during_lock(thread_id):
             """Attempt operation while lock is held."""
             try:
                 start_time = time.time()
-                file_id, we_are_uploader = cache.atomic_cache_or_get(content_hash)
+                file_id, we_are_uploader = await cache.atomic_cache_or_get(content_hash)
                 end_time = time.time()
                 return ("success", thread_id, end_time - start_time, we_are_uploader)
             except sqlite3.OperationalError as e:
@@ -452,14 +446,13 @@ class TestHighConcurrencyScenarios:
                 return ("error", thread_id, str(e))
 
         # Launch concurrent attempts
-        with ThreadPoolExecutor(max_workers=5) as executor:
-            futures = [executor.submit(attempt_during_lock, i) for i in range(5)]
+        async_tasks = [attempt_during_lock(i) for i in range(5)]
 
-            # Wait for lock holder to finish
-            lock_holder_thread.join()
+        # Wait for lock holder to finish
+        lock_holder_thread.join()
 
-            # Collect results
-            results = [future.result() for future in as_completed(futures)]
+        # Collect results
+        results = await asyncio.gather(*async_tasks)
 
         # Analyze results - some should succeed (after lock is released)
         successes = [r for r in results if r[0] == "success"]
@@ -473,26 +466,26 @@ class TestHighConcurrencyScenarios:
         uploaders = [r for r in successes if r[3] is True]
         assert len(uploaders) == 1, f"Expected exactly 1 uploader, got {len(uploaders)}"
 
-    def test_stress_test_atomic_operations(self, temp_cache_db):
+    async def test_stress_test_atomic_operations(self, temp_cache_db):
         """Stress test with many concurrent operations on same hash."""
         cache = temp_cache_db
         content_hash = "stress_test_hash_" + "x" * 48  # 64 char total
 
         operation_results = []
 
-        def stress_operation(operation_id):
+        async def stress_operation(operation_id):
             """Perform stress operation."""
             try:
                 # Random delay to increase race conditions
                 time.sleep(0.001 * (operation_id % 5))
 
-                file_id, we_are_uploader = cache.atomic_cache_or_get(content_hash)
+                file_id, we_are_uploader = await cache.atomic_cache_or_get(content_hash)
 
                 if we_are_uploader:
                     # Winner - complete the upload
                     time.sleep(0.01)  # Simulate upload time
                     real_file_id = f"stress-file-{operation_id}"
-                    cache.finalize_file_id(content_hash, real_file_id)
+                    await cache.finalize_file_id(content_hash, real_file_id)
                     return ("uploaded", operation_id, real_file_id)
                 else:
                     # Loser - check what we got
@@ -503,11 +496,8 @@ class TestHighConcurrencyScenarios:
 
         # Launch stress test with many concurrent operations
         num_operations = 50
-        with ThreadPoolExecutor(max_workers=num_operations) as executor:
-            futures = [
-                executor.submit(stress_operation, i) for i in range(num_operations)
-            ]
-            operation_results = [future.result() for future in as_completed(futures)]
+        async_tasks = [stress_operation(i) for i in range(num_operations)]
+        operation_results = await asyncio.gather(*async_tasks)
 
         # Analyze stress test results
         uploaded = [r for r in operation_results if r[0] == "uploaded"]
@@ -524,13 +514,13 @@ class TestHighConcurrencyScenarios:
         assert len(errors) == 0, f"Stress test had unexpected errors: {errors}"
 
         # Verify final consistent state
-        final_file_id = cache.get_file_id(content_hash)
+        final_file_id = await cache.get_file_id(content_hash)
         assert final_file_id is not None
         assert final_file_id != "PENDING"
         assert final_file_id.startswith("stress-file-")
 
         # Verify cache stats are consistent
-        stats = cache.get_stats()
+        stats = await cache.get_stats()
         assert (
             stats["pending_uploads"] == 0
         ), "Should have no pending uploads after stress test"
@@ -539,46 +529,40 @@ class TestHighConcurrencyScenarios:
 class TestEdgeCasesAndErrorHandling:
     """Test edge cases and error handling in atomic operations."""
 
-    def test_concurrent_cleanup_and_finalize(self, temp_cache_db, content_hashes):
+    async def test_concurrent_cleanup_and_finalize(self, temp_cache_db, content_hashes):
         """Test race between cleanup_failed_upload and finalize_file_id."""
         cache = temp_cache_db
         content_hash = content_hashes[0]
 
         # Reserve the hash
-        file_id, we_are_uploader = cache.atomic_cache_or_get(content_hash)
+        file_id, we_are_uploader = await cache.atomic_cache_or_get(content_hash)
         assert we_are_uploader is True
 
         results = []
 
-        def attempt_finalize():
+        async def attempt_finalize():
             """Attempt to finalize."""
             try:
-                cache.finalize_file_id(content_hash, "file-finalized")
+                await cache.finalize_file_id(content_hash, "file-finalized")
                 results.append("finalized")
             except Exception as e:
                 results.append(f"finalize_error: {e}")
 
-        def attempt_cleanup():
+        async def attempt_cleanup():
             """Attempt to cleanup."""
             try:
                 # Small delay to increase race window
                 time.sleep(0.01)
-                cache.cleanup_failed_upload(content_hash)
+                await cache.cleanup_failed_upload(content_hash)
                 results.append("cleaned_up")
             except Exception as e:
                 results.append(f"cleanup_error: {e}")
 
         # Run both operations concurrently
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            futures = [
-                executor.submit(attempt_finalize),
-                executor.submit(attempt_cleanup),
-            ]
-            for future in as_completed(futures):
-                future.result()  # Wait for completion
+        await asyncio.gather(attempt_finalize(), attempt_cleanup())
 
         # Check final state - finalize should win if it runs first
-        final_file_id = cache.get_file_id(content_hash)
+        final_file_id = await cache.get_file_id(content_hash)
 
         if "finalized" in results:
             # Finalize won the race
@@ -591,7 +575,7 @@ class TestEdgeCasesAndErrorHandling:
         error_results = [r for r in results if "error" in r]
         assert len(error_results) == 0, f"Unexpected errors: {error_results}"
 
-    def test_database_corruption_resilience(self, temp_cache_db, content_hashes):
+    async def test_database_corruption_resilience(self, temp_cache_db, content_hashes):
         """Test that database access issues raise proper exceptions instead of silent failures."""
         from mcp_the_force.dedup.errors import (
             CacheTransactionError,
@@ -615,21 +599,21 @@ class TestEdgeCasesAndErrorHandling:
         try:
             # These should now raise proper exceptions instead of returning safe defaults
             with pytest.raises(CacheTransactionError) as exc_info:
-                cache.atomic_cache_or_get(content_hash)
+                await cache.atomic_cache_or_get(content_hash)
             assert "Database is locked" in str(exc_info.value.__cause__)
 
             # Read operations should raise CacheReadError
             with pytest.raises(CacheReadError) as exc_info:
-                cache.get_file_id(content_hash)
+                await cache.get_file_id(content_hash)
             assert "Database is locked" in str(exc_info.value.__cause__)
 
             # Write operations should raise CacheWriteError
             with pytest.raises(CacheWriteError) as exc_info:
-                cache.finalize_file_id(content_hash, "test-file")
+                await cache.finalize_file_id(content_hash, "test-file")
             assert "Database is locked" in str(exc_info.value.__cause__)
 
             with pytest.raises(CacheWriteError) as exc_info:
-                cache.cleanup_failed_upload(content_hash)
+                await cache.cleanup_failed_upload(content_hash)
             assert "Database is locked" in str(exc_info.value.__cause__)
 
         finally:
@@ -637,11 +621,11 @@ class TestEdgeCasesAndErrorHandling:
             cache._get_connection = original_get_connection
 
         # Verify normal operation restored
-        file_id, we_are_uploader = cache.atomic_cache_or_get(content_hash)
+        file_id, we_are_uploader = await cache.atomic_cache_or_get(content_hash)
         assert file_id is None
         assert we_are_uploader is True
 
-    def test_pending_entry_stale_detection(self, temp_cache_db, content_hashes):
+    async def test_pending_entry_stale_detection(self, temp_cache_db, content_hashes):
         """Test detection and handling of stale PENDING entries."""
         cache = temp_cache_db
         content_hash = content_hashes[0]
@@ -656,19 +640,19 @@ class TestEdgeCasesAndErrorHandling:
             )
 
         # Verify the stale entry exists
-        cached_file_id = cache.get_file_id(content_hash)
+        cached_file_id = await cache.get_file_id(content_hash)
         assert cached_file_id == "PENDING"
 
         # Attempt atomic_cache_or_get - should detect existing entry
-        file_id, we_are_uploader = cache.atomic_cache_or_get(content_hash)
+        file_id, we_are_uploader = await cache.atomic_cache_or_get(content_hash)
         assert file_id == "PENDING"
         assert we_are_uploader is False
 
         # Manual cleanup of stale entry
-        cache.cleanup_failed_upload(content_hash)
+        await cache.cleanup_failed_upload(content_hash)
 
         # Now should be able to proceed
-        file_id, we_are_uploader = cache.atomic_cache_or_get(content_hash)
+        file_id, we_are_uploader = await cache.atomic_cache_or_get(content_hash)
         assert file_id is None
         assert we_are_uploader is True
 

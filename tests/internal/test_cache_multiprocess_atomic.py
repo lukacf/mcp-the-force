@@ -51,148 +51,176 @@ def cleanup_test_database():
 
 def worker_atomic_cache_attempt(args):
     """Worker function for process-based atomic cache attempts."""
-    process_id, content_hash, db_path = args
+    import asyncio
 
-    try:
-        # Create cache instance in this process
-        cache = DeduplicationCache(db_path)
+    async def _async_worker():
+        process_id, content_hash, db_path = args
 
-        # Attempt atomic operation
-        file_id, we_are_uploader = cache.atomic_cache_or_get(content_hash)
+        try:
+            # Create cache instance in this process
+            cache = DeduplicationCache(db_path)
 
-        return {
-            "process_id": process_id,
-            "file_id": file_id,
-            "we_are_uploader": we_are_uploader,
-            "status": "success",
-        }
+            # Attempt atomic operation
+            file_id, we_are_uploader = await cache.atomic_cache_or_get(content_hash)
 
-    except Exception as e:
-        return {
-            "process_id": process_id,
-            "file_id": None,
-            "we_are_uploader": False,
-            "status": "error",
-            "error": str(e),
-        }
+            return {
+                "process_id": process_id,
+                "file_id": file_id,
+                "we_are_uploader": we_are_uploader,
+                "status": "success",
+            }
+
+        except Exception as e:
+            return {
+                "process_id": process_id,
+                "file_id": None,
+                "we_are_uploader": False,
+                "status": "error",
+                "error": str(e),
+            }
+
+    return asyncio.run(_async_worker())
 
 
 def worker_complete_upload_workflow(args):
     """Worker function for complete upload workflow in separate process."""
-    process_id, content_hash, db_path = args
+    import asyncio
 
-    try:
-        # Create cache instance in this process
-        cache = DeduplicationCache(db_path)
+    async def _async_worker():
+        process_id, content_hash, db_path = args
 
-        # Step 1: Attempt to reserve
-        file_id, we_are_uploader = cache.atomic_cache_or_get(content_hash)
+        try:
+            # Create cache instance in this process
+            cache = DeduplicationCache(db_path)
 
-        if we_are_uploader:
-            # Step 2: Simulate upload work
-            time.sleep(0.05)  # Simulate upload time
+            # Step 1: Attempt to reserve
+            file_id, we_are_uploader = await cache.atomic_cache_or_get(content_hash)
 
-            # Step 3: Finalize with real file_id
-            real_file_id = f"file-process-{process_id}-{int(time.time())}"
-            cache.finalize_file_id(content_hash, real_file_id)
+            if we_are_uploader:
+                # Step 2: Simulate upload work
+                time.sleep(0.05)  # Simulate upload time
 
+                # Step 3: Finalize with real file_id
+                real_file_id = f"file-process-{process_id}-{int(time.time())}"
+                await cache.finalize_file_id(content_hash, real_file_id)
+
+                return {
+                    "process_id": process_id,
+                    "status": "uploaded",
+                    "file_id": real_file_id,
+                    "we_are_uploader": True,
+                }
+            else:
+                # Not the uploader - just return what we got
+                return {
+                    "process_id": process_id,
+                    "status": "blocked",
+                    "file_id": file_id,
+                    "we_are_uploader": False,
+                }
+
+        except Exception as e:
             return {
                 "process_id": process_id,
-                "status": "uploaded",
-                "file_id": real_file_id,
-                "we_are_uploader": True,
-            }
-        else:
-            # Not the uploader - just return what we got
-            return {
-                "process_id": process_id,
-                "status": "blocked",
-                "file_id": file_id,
+                "status": "error",
+                "error": str(e),
                 "we_are_uploader": False,
             }
 
-    except Exception as e:
-        return {
-            "process_id": process_id,
-            "status": "error",
-            "error": str(e),
-            "we_are_uploader": False,
-        }
+    return asyncio.run(_async_worker())
 
 
 def worker_failing_upload_workflow(args):
     """Worker function that simulates failing upload workflow."""
-    process_id, content_hash, db_path, should_fail = args
+    import asyncio
 
-    try:
-        cache = DeduplicationCache(db_path)
+    async def _async_worker():
+        process_id, content_hash, db_path, should_fail = args
 
-        # Attempt to reserve
-        file_id, we_are_uploader = cache.atomic_cache_or_get(content_hash)
+        try:
+            cache = DeduplicationCache(db_path)
 
-        if we_are_uploader:
-            # Simulate upload work
-            time.sleep(0.02)
+            # Attempt to reserve
+            file_id, we_are_uploader = await cache.atomic_cache_or_get(content_hash)
 
-            if should_fail:
-                # Simulate upload failure and cleanup
-                cache.cleanup_failed_upload(content_hash)
-                return {
-                    "process_id": process_id,
-                    "status": "failed_and_cleaned",
-                    "we_are_uploader": True,
-                }
+            if we_are_uploader:
+                # Simulate upload work
+                time.sleep(0.02)
+
+                if should_fail:
+                    # Simulate upload failure and cleanup
+                    await cache.cleanup_failed_upload(content_hash)
+                    return {
+                        "process_id": process_id,
+                        "status": "failed_and_cleaned",
+                        "we_are_uploader": True,
+                    }
+                else:
+                    # Successful upload
+                    real_file_id = f"file-retry-{process_id}"
+                    await cache.finalize_file_id(content_hash, real_file_id)
+                    return {
+                        "process_id": process_id,
+                        "status": "success",
+                        "file_id": real_file_id,
+                        "we_are_uploader": True,
+                    }
             else:
-                # Successful upload
-                real_file_id = f"file-retry-{process_id}"
-                cache.finalize_file_id(content_hash, real_file_id)
                 return {
                     "process_id": process_id,
-                    "status": "success",
-                    "file_id": real_file_id,
-                    "we_are_uploader": True,
+                    "status": "blocked",
+                    "file_id": file_id,
+                    "we_are_uploader": False,
                 }
-        else:
+
+        except Exception as e:
             return {
                 "process_id": process_id,
-                "status": "blocked",
-                "file_id": file_id,
+                "status": "error",
+                "error": str(e),
                 "we_are_uploader": False,
             }
 
-    except Exception as e:
-        return {
-            "process_id": process_id,
-            "status": "error",
-            "error": str(e),
-            "we_are_uploader": False,
-        }
+    return asyncio.run(_async_worker())
 
 
 def worker_crashing_upload(args):
     """Worker that crashes after reserving hash."""
-    process_id, content_hash, db_path = args
+    import asyncio
 
-    try:
-        cache = DeduplicationCache(db_path)
+    async def _async_worker():
+        process_id, content_hash, db_path = args
 
-        # Reserve the hash
-        file_id, we_are_uploader = cache.atomic_cache_or_get(content_hash)
+        try:
+            cache = DeduplicationCache(db_path)
 
-        if we_are_uploader:
-            # Simulate some work, then crash before finalizing
-            time.sleep(0.1)
-            # Simulate crash by raising exception (in real world, process would terminate)
-            raise RuntimeError("Simulated process crash")
-        else:
-            return {"process_id": process_id, "status": "blocked", "file_id": file_id}
+            # Reserve the hash
+            file_id, we_are_uploader = await cache.atomic_cache_or_get(content_hash)
 
-    except RuntimeError:
-        # This simulates the process crashing - in reality, the process would terminate
-        # and the PENDING entry would remain in the database
-        return {"process_id": process_id, "status": "crashed", "we_are_uploader": True}
-    except Exception as e:
-        return {"process_id": process_id, "status": "error", "error": str(e)}
+            if we_are_uploader:
+                # Simulate some work, then crash before finalizing
+                time.sleep(0.1)
+                # Simulate crash by raising exception (in real world, process would terminate)
+                raise RuntimeError("Simulated process crash")
+            else:
+                return {
+                    "process_id": process_id,
+                    "status": "blocked",
+                    "file_id": file_id,
+                }
+
+        except RuntimeError:
+            # This simulates the process crashing - in reality, the process would terminate
+            # and the PENDING entry would remain in the database
+            return {
+                "process_id": process_id,
+                "status": "crashed",
+                "we_are_uploader": True,
+            }
+        except Exception as e:
+            return {"process_id": process_id, "status": "error", "error": str(e)}
+
+    return asyncio.run(_async_worker())
 
 
 class TestMultiProcessAtomicOperations:
@@ -205,7 +233,7 @@ class TestMultiProcessAtomicOperations:
         yield
         cleanup_test_database()
 
-    def test_multiprocess_atomic_cache_or_get(self):
+    async def test_multiprocess_atomic_cache_or_get(self):
         """Test that only one process wins atomic_cache_or_get across processes."""
         content_hash = "multiprocess_test_hash_" + "a" * 40
 
@@ -248,12 +276,12 @@ class TestMultiProcessAtomicOperations:
 
         # Verify database state
         cache = DeduplicationCache(TEST_DB_PATH)
-        cached_file_id = cache.get_file_id(content_hash)
+        cached_file_id = await cache.get_file_id(content_hash)
         assert (
             cached_file_id == "PENDING"
         ), "Hash should be in PENDING state after reservation"
 
-    def test_multiprocess_complete_workflow(self):
+    async def test_multiprocess_complete_workflow(self):
         """Test complete upload workflow across multiple processes."""
         content_hash = "workflow_test_hash_" + "b" * 43
 
@@ -283,7 +311,7 @@ class TestMultiProcessAtomicOperations:
 
         # Verify final database state
         cache = DeduplicationCache(TEST_DB_PATH)
-        final_file_id = cache.get_file_id(content_hash)
+        final_file_id = await cache.get_file_id(content_hash)
 
         assert final_file_id is not None, "Final file_id should not be None"
         assert final_file_id != "PENDING", "Final file_id should not be PENDING"
@@ -297,7 +325,7 @@ class TestMultiProcessAtomicOperations:
             final_file_id == uploader_file_id
         ), "Database file_id should match uploader's file_id"
 
-    def test_multiprocess_failure_and_recovery(self):
+    async def test_multiprocess_failure_and_recovery(self):
         """Test failure recovery workflow across multiple processes."""
         content_hash = "failure_test_hash_" + "c" * 42
 
@@ -330,7 +358,7 @@ class TestMultiProcessAtomicOperations:
 
         # Verify cleanup worked - hash should be available for retry
         cache = DeduplicationCache(TEST_DB_PATH)
-        cached_file_id = cache.get_file_id(content_hash)
+        cached_file_id = await cache.get_file_id(content_hash)
         assert (
             cached_file_id is None
         ), "Hash should be available for retry after cleanup"
@@ -360,7 +388,7 @@ class TestMultiProcessAtomicOperations:
         ), "Most retry processes should be blocked"
 
         # Verify final state
-        final_file_id = cache.get_file_id(content_hash)
+        final_file_id = await cache.get_file_id(content_hash)
         assert (
             final_file_id is not None
         ), "Final file_id should exist after successful retry"
@@ -368,7 +396,7 @@ class TestMultiProcessAtomicOperations:
             "file-retry-"
         ), f"Unexpected retry file_id format: {final_file_id}"
 
-    def test_multiprocess_high_concurrency_stress(self):
+    async def test_multiprocess_high_concurrency_stress(self):
         """Stress test with many processes competing for same hash."""
         content_hash = "stress_test_hash_" + "d" * 43
 
@@ -406,8 +434,8 @@ class TestMultiProcessAtomicOperations:
 
         # Verify consistent final state
         cache = DeduplicationCache(TEST_DB_PATH)
-        final_file_id = cache.get_file_id(content_hash)
-        stats = cache.get_stats()
+        final_file_id = await cache.get_file_id(content_hash)
+        stats = await cache.get_stats()
 
         assert final_file_id is not None, "Stress test should result in valid file_id"
         assert (
@@ -417,7 +445,7 @@ class TestMultiProcessAtomicOperations:
             stats["pending_uploads"] == 0
         ), "Stress test should not leave pending uploads"
 
-    def test_multiprocess_mixed_hash_operations(self):
+    async def test_multiprocess_mixed_hash_operations(self):
         """Test concurrent operations on multiple different hashes across processes."""
         # Use multiple different hashes
         content_hashes = [
@@ -472,7 +500,7 @@ class TestMultiProcessAtomicOperations:
             assert len(errors) == 0, f"Hash {content_hash[:20]}... had errors: {errors}"
 
             # Verify final state in database
-            final_file_id = cache.get_file_id(content_hash)
+            final_file_id = await cache.get_file_id(content_hash)
             assert (
                 final_file_id is not None
             ), f"Hash {content_hash[:20]}... should have final file_id"
@@ -494,7 +522,7 @@ class TestProcessCrashRecovery:
     @pytest.mark.skipif(
         os.name == "nt", reason="Signal handling not reliable on Windows"
     )
-    def test_process_crash_during_upload(self):
+    async def test_process_crash_during_upload(self):
         """Test recovery when a process crashes after reserving but before finalizing."""
         content_hash = "crash_test_hash_" + "e" * 45
 
@@ -506,7 +534,7 @@ class TestProcessCrashRecovery:
 
         # Verify crash occurred and left PENDING entry
         cache = DeduplicationCache(TEST_DB_PATH)
-        cached_file_id = cache.get_file_id(content_hash)
+        cached_file_id = await cache.get_file_id(content_hash)
 
         assert cached_file_id == "PENDING", "Crashed process should leave PENDING entry"
         assert crash_results[0]["status"] == "crashed", "Process should have crashed"
@@ -527,10 +555,10 @@ class TestProcessCrashRecovery:
             assert result["file_id"] == "PENDING", "Retries should see PENDING"
 
         # Manual cleanup of stale PENDING entry (simulates cleanup task)
-        cache.cleanup_failed_upload(content_hash)
+        await cache.cleanup_failed_upload(content_hash)
 
         # Verify cleanup worked
-        cached_file_id = cache.get_file_id(content_hash)
+        cached_file_id = await cache.get_file_id(content_hash)
         assert cached_file_id is None, "Cleanup should remove PENDING entry"
 
         # Now a new attempt should succeed
@@ -546,7 +574,7 @@ class TestProcessCrashRecovery:
         ), "Final attempt should succeed after cleanup"
 
         # Verify final state
-        final_file_id = cache.get_file_id(content_hash)
+        final_file_id = await cache.get_file_id(content_hash)
         assert final_file_id is not None, "Should have valid file_id after recovery"
         assert final_file_id != "PENDING", "Should not be PENDING after recovery"
 

@@ -14,8 +14,8 @@ import pytest
 import time
 import threading
 import tempfile
+import asyncio
 from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from mcp_the_force.dedup.simple_cache import DeduplicationCache
 
@@ -40,7 +40,7 @@ def performance_cache():
 class TestPerformanceBaseline:
     """Test baseline performance characteristics."""
 
-    def test_single_threaded_performance(self, performance_cache):
+    async def test_single_threaded_performance(self, performance_cache):
         """Test performance of atomic operations in single-threaded scenario."""
         cache = performance_cache
 
@@ -51,11 +51,11 @@ class TestPerformanceBaseline:
         start_time = time.time()
 
         for content_hash in content_hashes:
-            file_id, we_are_uploader = cache.atomic_cache_or_get(content_hash)
+            file_id, we_are_uploader = await cache.atomic_cache_or_get(content_hash)
             assert we_are_uploader is True
 
             # Simulate finalization
-            cache.finalize_file_id(content_hash, f"file-{content_hash[:8]}")
+            await cache.finalize_file_id(content_hash, f"file-{content_hash[:8]}")
 
         end_time = time.time()
         total_time = end_time - start_time
@@ -73,11 +73,11 @@ class TestPerformanceBaseline:
 
         # Verify all operations completed correctly
         for content_hash in content_hashes:
-            cached_file_id = cache.get_file_id(content_hash)
+            cached_file_id = await cache.get_file_id(content_hash)
             assert cached_file_id is not None
             assert cached_file_id != "PENDING"
 
-    def test_read_operation_performance(self, performance_cache):
+    async def test_read_operation_performance(self, performance_cache):
         """Test performance of read operations (get_file_id, get_store_id)."""
         cache = performance_cache
 
@@ -85,21 +85,21 @@ class TestPerformanceBaseline:
         num_entries = 1000
         for i in range(num_entries):
             content_hash = f"read_test_hash_{i}_" + "x" * 45
-            cache.cache_file(content_hash, f"file-{i}")
+            await cache.cache_file(content_hash, f"file-{i}")
 
             fileset_hash = f"read_test_fileset_{i}_" + "x" * 40
-            cache.cache_store(fileset_hash, f"store-{i}", "openai")
+            await cache.cache_store(fileset_hash, f"store-{i}", "openai")
 
         # Test read performance
         start_time = time.time()
 
         for i in range(num_entries):
             content_hash = f"read_test_hash_{i}_" + "x" * 45
-            file_id = cache.get_file_id(content_hash)
+            file_id = await cache.get_file_id(content_hash)
             assert file_id == f"file-{i}"
 
             fileset_hash = f"read_test_fileset_{i}_" + "x" * 40
-            store_info = cache.get_store_id(fileset_hash)
+            store_info = await cache.get_store_id(fileset_hash)
             assert store_info["store_id"] == f"store-{i}"
 
         end_time = time.time()
@@ -118,25 +118,25 @@ class TestPerformanceBaseline:
 class TestConcurrencyPerformance:
     """Test performance characteristics under concurrency."""
 
-    def test_concurrent_different_hashes_performance(self, performance_cache):
+    async def test_concurrent_different_hashes_performance(self, performance_cache):
         """Test performance when many threads work on different hashes simultaneously."""
         cache = performance_cache
 
-        def process_unique_hash(thread_id):
+        async def process_unique_hash(thread_id):
             """Process a unique hash for this thread."""
             content_hash = f"concurrent_hash_{thread_id}_" + "x" * 45
 
             start_time = time.time()
 
             # Atomic operation
-            file_id, we_are_uploader = cache.atomic_cache_or_get(content_hash)
+            file_id, we_are_uploader = await cache.atomic_cache_or_get(content_hash)
             assert we_are_uploader is True
 
             # Simulate some work
             time.sleep(0.001)
 
             # Finalize
-            cache.finalize_file_id(content_hash, f"file-{thread_id}")
+            await cache.finalize_file_id(content_hash, f"file-{thread_id}")
 
             end_time = time.time()
             return end_time - start_time
@@ -145,11 +145,8 @@ class TestConcurrencyPerformance:
         num_threads = 20
         start_time = time.time()
 
-        with ThreadPoolExecutor(max_workers=num_threads) as executor:
-            futures = [
-                executor.submit(process_unique_hash, i) for i in range(num_threads)
-            ]
-            individual_times = [future.result() for future in as_completed(futures)]
+        tasks = [process_unique_hash(i) for i in range(num_threads)]
+        individual_times = await asyncio.gather(*tasks)
 
         total_time = time.time() - start_time
 
@@ -172,23 +169,23 @@ class TestConcurrencyPerformance:
             avg_individual_time < 0.1
         ), f"Individual operations too slow under concurrency: {avg_individual_time:.3f}s"
 
-    def test_contention_performance_same_hash(self, performance_cache):
+    async def test_contention_performance_same_hash(self, performance_cache):
         """Test performance when many threads compete for the same hash."""
         cache = performance_cache
         content_hash = "contention_test_hash_" + "x" * 44
 
         results = []
 
-        def compete_for_hash(thread_id):
+        async def compete_for_hash(thread_id):
             """Compete for the same hash."""
             start_time = time.time()
 
-            file_id, we_are_uploader = cache.atomic_cache_or_get(content_hash)
+            file_id, we_are_uploader = await cache.atomic_cache_or_get(content_hash)
 
             if we_are_uploader:
                 # Winner - do the work
                 time.sleep(0.01)  # Simulate upload
-                cache.finalize_file_id(content_hash, f"file-winner-{thread_id}")
+                await cache.finalize_file_id(content_hash, f"file-winner-{thread_id}")
                 status = "winner"
             else:
                 # Loser - should be fast
@@ -201,9 +198,8 @@ class TestConcurrencyPerformance:
         num_threads = 15
         start_time = time.time()
 
-        with ThreadPoolExecutor(max_workers=num_threads) as executor:
-            futures = [executor.submit(compete_for_hash, i) for i in range(num_threads)]
-            results = [future.result() for future in as_completed(futures)]
+        tasks = [compete_for_hash(i) for i in range(num_threads)]
+        results = await asyncio.gather(*tasks)
 
         total_time = time.time() - start_time
 
@@ -231,7 +227,7 @@ class TestConcurrencyPerformance:
             total_time < 1.0
         ), f"Overall contention resolution took too long: {total_time:.3f}s"
 
-    def test_database_lock_timeout_performance(self, performance_cache):
+    async def test_database_lock_timeout_performance(self, performance_cache):
         """Test performance characteristics during database lock scenarios."""
         cache = performance_cache
 
@@ -263,11 +259,11 @@ class TestConcurrencyPerformance:
             finally:
                 conn.close()
 
-        def attempt_during_lock(thread_id):
+        async def attempt_during_lock(thread_id):
             """Attempt operation while lock is held."""
             try:
                 start_time = time.time()
-                file_id, we_are_uploader = cache.atomic_cache_or_get(
+                file_id, we_are_uploader = await cache.atomic_cache_or_get(
                     f"test_hash_{thread_id}"
                 )
                 end_time = time.time()
@@ -285,13 +281,10 @@ class TestConcurrencyPerformance:
         # Give lock holder time to acquire lock
         time.sleep(0.1)
 
-        # Start competing threads
+        # Start competing tasks
         num_competing = 5
-        with ThreadPoolExecutor(max_workers=num_competing) as executor:
-            futures = [
-                executor.submit(attempt_during_lock, i) for i in range(num_competing)
-            ]
-            competing_results = [future.result() for future in as_completed(futures)]
+        tasks = [attempt_during_lock(i) for i in range(num_competing)]
+        competing_results = await asyncio.gather(*tasks)
 
         # Wait for lock holder to finish
         lock_thread.join()
@@ -325,7 +318,7 @@ class TestConcurrencyPerformance:
 class TestMemoryPerformance:
     """Test memory usage characteristics during concurrent operations."""
 
-    def test_stats_performance_with_large_cache(self, performance_cache):
+    async def test_stats_performance_with_large_cache(self, performance_cache):
         """Test performance of cache statistics with large number of entries."""
         cache = performance_cache
 
@@ -334,9 +327,9 @@ class TestMemoryPerformance:
 
         populate_start = time.time()
         for i in range(num_entries):
-            cache.cache_file(f"large_cache_file_{i}_" + "x" * 40, f"file-{i}")
+            await cache.cache_file(f"large_cache_file_{i}_" + "x" * 40, f"file-{i}")
             if i % 2 == 0:  # Add some store entries too
-                cache.cache_store(
+                await cache.cache_store(
                     f"large_cache_store_{i}_" + "x" * 40, f"store-{i}", "openai"
                 )
         populate_time = time.time() - populate_start
@@ -347,7 +340,7 @@ class TestMemoryPerformance:
         stats_times = []
         for _ in range(10):
             start_time = time.time()
-            stats = cache.get_stats()
+            stats = await cache.get_stats()
             end_time = time.time()
             stats_times.append(end_time - start_time)
 

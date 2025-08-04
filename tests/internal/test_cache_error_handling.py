@@ -311,7 +311,7 @@ class TestCacheErrorHandling:
                 assert "disk I/O error" in str(exc_info.value.__cause__)
                 assert "Cache file operation failed after" in str(exc_info.value)
 
-    def test_cache_transaction_error_contains_original_exception(self):
+    async def test_cache_transaction_error_contains_original_exception(self):
         """
         Verify: CacheTransactionError properly chains the underlying sqlite3.Error.
         """
@@ -329,7 +329,7 @@ class TestCacheErrorHandling:
 
                 # WHEN: An atomic cache operation is performed
                 with pytest.raises(CacheTransactionError) as exc_info:
-                    cache.atomic_cache_or_get("hash123")
+                    await cache.atomic_cache_or_get("hash123")
 
                 # THEN: The raised exception contains the original cause
                 assert isinstance(exc_info.value.__cause__, sqlite3.Error)
@@ -338,7 +338,7 @@ class TestCacheErrorHandling:
                     exc_info.value
                 )
 
-    def test_cache_read_error_contains_original_exception(self):
+    async def test_cache_read_error_contains_original_exception(self):
         """
         Verify: CacheReadError properly chains the underlying sqlite3.Error.
         """
@@ -356,7 +356,7 @@ class TestCacheErrorHandling:
 
                 # WHEN: A cache read operation is performed
                 with pytest.raises(CacheReadError) as exc_info:
-                    cache.get_file_id("hash123")
+                    await cache.get_file_id("hash123")
 
                 # THEN: The raised exception contains the original cause
                 assert isinstance(exc_info.value.__cause__, sqlite3.Error)
@@ -367,7 +367,7 @@ class TestCacheErrorHandling:
     # ==========================================
     # Goal: Verify the actual cache methods raise the expected exceptions
 
-    def test_real_cache_finalize_raises_on_sqlite_error(self):
+    async def test_real_cache_finalize_raises_on_sqlite_error(self):
         """
         Test that the actual cache implementation raises CacheWriteError when SQLite fails.
         """
@@ -384,11 +384,11 @@ class TestCacheErrorHandling:
                 # WHEN: finalize_file_id is called
                 # THEN: It should raise CacheWriteError (not return silently)
                 with pytest.raises(CacheWriteError) as exc_info:
-                    cache.finalize_file_id("hash123", "file-123")
+                    await cache.finalize_file_id("hash123", "file-123")
 
                 assert "Cache finalization operation failed" in str(exc_info.value)
 
-    def test_real_cache_cleanup_raises_on_sqlite_error(self):
+    async def test_real_cache_cleanup_raises_on_sqlite_error(self):
         """
         Test that the actual cache implementation raises CacheWriteError when cleanup fails.
         """
@@ -405,11 +405,11 @@ class TestCacheErrorHandling:
                 # WHEN: cleanup_failed_upload is called
                 # THEN: It should raise CacheWriteError (not return silently)
                 with pytest.raises(CacheWriteError) as exc_info:
-                    cache.cleanup_failed_upload("hash123")
+                    await cache.cleanup_failed_upload("hash123")
 
                 assert "Cache cleanup operation failed" in str(exc_info.value)
 
-    def test_real_cache_atomic_raises_on_sqlite_error(self):
+    async def test_real_cache_atomic_raises_on_sqlite_error(self):
         """
         Test that the actual cache implementation raises CacheTransactionError when atomic operation fails.
         """
@@ -426,6 +426,6 @@ class TestCacheErrorHandling:
                 # WHEN: atomic_cache_or_get is called
                 # THEN: It should raise CacheTransactionError (not return (None, False))
                 with pytest.raises(CacheTransactionError) as exc_info:
-                    cache.atomic_cache_or_get("hash123")
+                    await cache.atomic_cache_or_get("hash123")
 
                 assert "Atomic cache or get operation failed" in str(exc_info.value)
