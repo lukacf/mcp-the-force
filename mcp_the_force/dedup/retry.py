@@ -205,7 +205,7 @@ def retry_sqlite_operation(
     return decorator
 
 
-async def retry_sqlite_operation_async(
+def retry_sqlite_operation_async(
     config: Optional[RetryConfig] = None,
     wrap_exception: Type[Exception] = CacheTransactionError,
     operation_description: str = "SQLite operation",

@@ -1,4 +1,4 @@
-"""Performance validation tests for SimpleVectorStoreCache atomic operations.
+"""Performance validation tests for DeduplicationCache atomic operations.
 
 These tests ensure that the atomic operations maintain good performance
 characteristics while providing race condition prevention.
@@ -17,7 +17,7 @@ import tempfile
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from mcp_the_force.dedup.simple_cache import SimpleVectorStoreCache
+from mcp_the_force.dedup.simple_cache import DeduplicationCache
 
 
 @pytest.fixture
@@ -26,7 +26,7 @@ def performance_cache():
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
         db_path = tmp.name
 
-    cache = SimpleVectorStoreCache(db_path)
+    cache = DeduplicationCache(db_path)
 
     yield cache
 

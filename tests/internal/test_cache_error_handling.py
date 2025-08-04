@@ -11,7 +11,7 @@ import sqlite3
 import tempfile
 from unittest.mock import patch, MagicMock, AsyncMock
 
-from mcp_the_force.dedup.simple_cache import SimpleVectorStoreCache
+from mcp_the_force.dedup.simple_cache import DeduplicationCache
 from mcp_the_force.dedup.errors import (
     CacheTransactionError,
     CacheWriteError,
@@ -47,7 +47,7 @@ def store_with_mock_cache(mock_client):
     with patch(
         "mcp_the_force.vectorstores.openai.openai_vectorstore.get_cache"
     ) as mock_get_cache:
-        mock_cache = MagicMock(spec=SimpleVectorStoreCache)
+        mock_cache = MagicMock(spec=DeduplicationCache)
         mock_get_cache.return_value = mock_cache
 
         store = OpenAIVectorStore(
@@ -293,7 +293,7 @@ class TestCacheErrorHandling:
         Verify: CacheWriteError properly chains the underlying sqlite3.Error.
         """
         with tempfile.NamedTemporaryFile() as tmp:
-            cache = SimpleVectorStoreCache(tmp.name)
+            cache = DeduplicationCache(tmp.name)
 
             # GIVEN: The database connection will raise a specific sqlite3.Error
             with patch.object(cache, "_get_connection") as mock_conn:
@@ -316,7 +316,7 @@ class TestCacheErrorHandling:
         Verify: CacheTransactionError properly chains the underlying sqlite3.Error.
         """
         with tempfile.NamedTemporaryFile() as tmp:
-            cache = SimpleVectorStoreCache(tmp.name)
+            cache = DeduplicationCache(tmp.name)
 
             # GIVEN: The database connection will raise a specific sqlite3.Error during atomic operation
             with patch.object(cache, "_get_connection") as mock_conn:
@@ -343,7 +343,7 @@ class TestCacheErrorHandling:
         Verify: CacheReadError properly chains the underlying sqlite3.Error.
         """
         with tempfile.NamedTemporaryFile() as tmp:
-            cache = SimpleVectorStoreCache(tmp.name)
+            cache = DeduplicationCache(tmp.name)
 
             # GIVEN: The database connection will raise a specific sqlite3.Error during read
             with patch.object(cache, "_get_connection") as mock_conn:
@@ -372,7 +372,7 @@ class TestCacheErrorHandling:
         Test that the actual cache implementation raises CacheWriteError when SQLite fails.
         """
         with tempfile.NamedTemporaryFile() as tmp:
-            cache = SimpleVectorStoreCache(tmp.name)
+            cache = DeduplicationCache(tmp.name)
 
             # GIVEN: A corrupted database connection
             with patch.object(cache, "_get_connection") as mock_conn:
@@ -393,7 +393,7 @@ class TestCacheErrorHandling:
         Test that the actual cache implementation raises CacheWriteError when cleanup fails.
         """
         with tempfile.NamedTemporaryFile() as tmp:
-            cache = SimpleVectorStoreCache(tmp.name)
+            cache = DeduplicationCache(tmp.name)
 
             # GIVEN: A failing database connection
             with patch.object(cache, "_get_connection") as mock_conn:
@@ -414,7 +414,7 @@ class TestCacheErrorHandling:
         Test that the actual cache implementation raises CacheTransactionError when atomic operation fails.
         """
         with tempfile.NamedTemporaryFile() as tmp:
-            cache = SimpleVectorStoreCache(tmp.name)
+            cache = DeduplicationCache(tmp.name)
 
             # GIVEN: A failing database connection
             with patch.object(cache, "_get_connection") as mock_conn:

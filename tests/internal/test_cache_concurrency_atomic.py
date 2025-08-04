@@ -1,4 +1,4 @@
-"""Comprehensive concurrency tests for SimpleVectorStoreCache atomic operations.
+"""Comprehensive concurrency tests for DeduplicationCache atomic operations.
 
 These tests validate that the atomic cache operations prevent race conditions
 under high concurrency scenarios, ensuring no duplicate uploads occur.
@@ -18,7 +18,7 @@ import tempfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-from mcp_the_force.dedup.simple_cache import SimpleVectorStoreCache
+from mcp_the_force.dedup.simple_cache import DeduplicationCache
 
 
 @pytest.fixture
@@ -28,7 +28,7 @@ def temp_cache_db():
         db_path = tmp.name
 
     # Create cache instance
-    cache = SimpleVectorStoreCache(db_path)
+    cache = DeduplicationCache(db_path)
 
     yield cache
 

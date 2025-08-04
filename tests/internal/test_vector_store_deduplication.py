@@ -34,8 +34,7 @@ def reset_cache_singleton():
 def initialized_cache(isolate_test_databases, reset_cache_singleton):
     """Get a properly initialized cache for testing."""
     cache = get_cache()
-    # Ensure database is properly initialized
-    cache._init_database()
+    # Database is automatically initialized by BaseSQLiteCache
     return cache
 
 
@@ -243,7 +242,7 @@ class TestFileLevelDeduplication:
 class TestCacheIntegration:
     """Test cache integration and lifecycle management."""
 
-    def test_project_specific_cache_path(self, initialized_cache):
+    async def test_project_specific_cache_path(self, initialized_cache):
         """Test that cache uses project-specific path, not global path."""
         cache = initialized_cache
 
@@ -252,8 +251,8 @@ class TestCacheIntegration:
         assert not cache.db_path.startswith(str(Path.home()))  # Not global
 
         # Should be able to get stats
-        stats = cache.get_stats()
-        assert stats["cache_type"] == "SimpleVectorStoreCache"
+        stats = await cache.get_stats()
+        assert stats["cache_type"] == "DeduplicationCache"
 
     @pytest.mark.asyncio
     async def test_stale_cache_cleanup_integration(
@@ -272,10 +271,10 @@ class TestCacheIntegration:
 
         # Add entry to dedup cache
         dedup_cache = initialized_cache
-        dedup_cache.cache_store("test_fileset_hash", "test_store_123", "openai")
+        await dedup_cache.cache_store("test_fileset_hash", "test_store_123", "openai")
 
         # Verify it's in the cache
-        cached_store = dedup_cache.get_store_id("test_fileset_hash")
+        cached_store = await dedup_cache.get_store_id("test_fileset_hash")
         assert cached_store is not None
         assert cached_store["store_id"] == "test_store_123"
 
@@ -288,29 +287,29 @@ class TestCacheIntegration:
         # Note: In real test, we'd verify the store was removed from dedup cache,
         # but since we're using mocked vector store deletion, we just verify the integration
 
-    def test_cache_stats_and_cleanup(self, initialized_cache):
+    async def test_cache_stats_and_cleanup(self, initialized_cache):
         """Test cache statistics and cleanup functionality."""
         cache = initialized_cache
 
         # Initially empty
-        stats = cache.get_stats()
+        stats = await cache.get_stats()
         assert stats["file_count"] == 0
         assert stats["store_count"] == 0
 
         # Add some entries
-        cache.cache_file("hash1", "file1")
-        cache.cache_file("hash2", "file2")
-        cache.cache_store("fileset1", "store1", "openai")
+        await cache.cache_file("hash1", "file1")
+        await cache.cache_file("hash2", "file2")
+        await cache.cache_store("fileset1", "store1", "openai")
 
         # Check stats
-        stats = cache.get_stats()
+        stats = await cache.get_stats()
         assert stats["file_count"] == 2
         assert stats["store_count"] == 1
 
         # Test cleanup (should not remove recent entries)
-        cache.cleanup_old_entries(max_age_days=30)
+        await cache.cleanup_old_entries(max_age_days=30)
 
-        stats = cache.get_stats()
+        stats = await cache.get_stats()
         assert stats["file_count"] == 2  # Still there
         assert stats["store_count"] == 1  # Still there
 
@@ -326,12 +325,12 @@ class TestConcurrencySafety:
         async def cache_operation(i):
             """Simulate concurrent cache operations."""
             # Mix of file and store operations
-            cache.cache_file(f"hash_{i}", f"file_{i}")
-            cache.cache_store(f"fileset_{i}", f"store_{i}", "openai")
+            await cache.cache_file(f"hash_{i}", f"file_{i}")
+            await cache.cache_store(f"fileset_{i}", f"store_{i}", "openai")
 
             # Read operations
-            result = cache.get_file_id(f"hash_{i}")
-            store_result = cache.get_store_id(f"fileset_{i}")
+            result = await cache.get_file_id(f"hash_{i}")
+            store_result = await cache.get_store_id(f"fileset_{i}")
 
             return result == f"file_{i}" and store_result is not None
 
@@ -343,7 +342,7 @@ class TestConcurrencySafety:
         assert all(isinstance(r, bool) and r for r in results)
 
         # Verify final state
-        stats = cache.get_stats()
+        stats = await cache.get_stats()
         assert stats["file_count"] == 10
         assert stats["store_count"] == 10
 
@@ -374,15 +373,15 @@ class TestErrorHandling:
         assert result is not None
         assert "store_id" in result
 
-    def test_cache_database_error_handling(self, initialized_cache):
+    async def test_cache_database_error_handling(self, initialized_cache):
         """Test that database errors are handled gracefully."""
         cache = initialized_cache
 
         # Test with invalid database operations
-        result = cache.get_file_id("nonexistent_hash")
+        result = await cache.get_file_id("nonexistent_hash")
         assert result is None  # Should return None, not crash
 
-        result = cache.get_store_id("nonexistent_fileset")
+        result = await cache.get_store_id("nonexistent_fileset")
         assert result is None  # Should return None, not crash
 
 

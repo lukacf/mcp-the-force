@@ -220,9 +220,11 @@ To enforce code quality and prevent regressions, the repository uses pre-commit 
 
 `mcp_the_force/vectorstores/` manages embeddings and similarity search:
 
-- `manager.py`: The `VectorStoreManager` handles all vector store operations across providers
+- `manager.py`: The `VectorStoreManager` handles all vector store operations across providers with intelligent deduplication
 - `protocol.py`: The `VectorStore` protocol defines the interface for vector store providers  
-- `openai/`: An example implementation of the protocol for OpenAI
+- `openai/`: OpenAI vector store implementation with file-level deduplication via content hashing
+- `hnsw/`: Local HNSW vector store for offline embedding search
+- **Deduplication**: `mcp_the_force/dedup/` provides content-addressable caching to avoid duplicate uploads and reduce API costs
 </details>
 
 <details>

@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, Mock
 
 from mcp_the_force.vectorstores.openai.openai_vectorstore import OpenAIVectorStore
 from mcp_the_force.vectorstores.protocol import VSFile
-from mcp_the_force.dedup.simple_cache import SimpleVectorStoreCache
+from mcp_the_force.dedup.simple_cache import DeduplicationCache
 from mcp_the_force.dedup.hashing import compute_content_hash
 
 
@@ -17,7 +17,7 @@ def temp_cache():
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
         db_path = tmp.name
 
-    cache = SimpleVectorStoreCache(db_path)
+    cache = DeduplicationCache(db_path)
     yield cache
 
     try:
@@ -58,12 +58,12 @@ class TestTransactionalComponents:
         content_hash = compute_content_hash(test_file.content)
 
         # Reserve cache entry as if we won the race
-        file_id, we_are_uploader = temp_cache.atomic_cache_or_get(content_hash)
+        file_id, we_are_uploader = await temp_cache.atomic_cache_or_get(content_hash)
         assert we_are_uploader is True
         assert file_id is None
 
         # Verify PENDING state
-        cached_file_id = temp_cache.get_file_id(content_hash)
+        cached_file_id = await temp_cache.get_file_id(content_hash)
         assert cached_file_id == "PENDING"
 
         # Test transactional upload (should not finalize cache)
@@ -77,7 +77,7 @@ class TestTransactionalComponents:
         assert newly_uploaded[0][1] == "file-abc123"
 
         # Cache should still be PENDING (not finalized yet)
-        cached_file_id = temp_cache.get_file_id(content_hash)
+        cached_file_id = await temp_cache.get_file_id(content_hash)
         assert cached_file_id == "PENDING"
 
     async def test_finalize_cache_entries(self, temp_cache, test_file, mock_client):
@@ -86,8 +86,8 @@ class TestTransactionalComponents:
         content_hash = compute_content_hash(test_file.content)
 
         # Simulate a PENDING entry
-        temp_cache.atomic_cache_or_get(content_hash)
-        assert temp_cache.get_file_id(content_hash) == "PENDING"
+        await temp_cache.atomic_cache_or_get(content_hash)
+        assert await temp_cache.get_file_id(content_hash) == "PENDING"
 
         # Simulate successful upload data
         newly_uploaded = [(content_hash, "file-xyz789")]
@@ -96,7 +96,7 @@ class TestTransactionalComponents:
         await vector_store._finalize_cache_entries(newly_uploaded, temp_cache)
 
         # Cache should now be finalized
-        cached_file_id = temp_cache.get_file_id(content_hash)
+        cached_file_id = await temp_cache.get_file_id(content_hash)
         assert cached_file_id == "file-xyz789"
 
     async def test_rollback_failed_uploads(self, temp_cache, test_file, mock_client):
@@ -105,8 +105,8 @@ class TestTransactionalComponents:
         content_hash = compute_content_hash(test_file.content)
 
         # Simulate a PENDING entry
-        temp_cache.atomic_cache_or_get(content_hash)
-        assert temp_cache.get_file_id(content_hash) == "PENDING"
+        await temp_cache.atomic_cache_or_get(content_hash)
+        assert await temp_cache.get_file_id(content_hash) == "PENDING"
 
         # Simulate upload data that needs rollback
         newly_uploaded = [(content_hash, "file-rollback123")]
@@ -115,7 +115,7 @@ class TestTransactionalComponents:
         await vector_store._rollback_failed_uploads(newly_uploaded, temp_cache)
 
         # Cache should be cleaned up
-        cached_file_id = temp_cache.get_file_id(content_hash)
+        cached_file_id = await temp_cache.get_file_id(content_hash)
         assert cached_file_id is None
 
         # File deletion should have been called
@@ -138,8 +138,8 @@ class TestCachePollutionScenarios:
         content_hash = compute_content_hash(test_file.content)
 
         # Reserve cache entry
-        temp_cache.atomic_cache_or_get(content_hash)
-        assert temp_cache.get_file_id(content_hash) == "PENDING"
+        await temp_cache.atomic_cache_or_get(content_hash)
+        assert await temp_cache.get_file_id(content_hash) == "PENDING"
 
         # Simulate the transactional flow that would happen in add_files
         newly_uploaded = await vector_store._upload_files_transactional(
@@ -148,7 +148,7 @@ class TestCachePollutionScenarios:
         assert len(newly_uploaded) == 1
 
         # Cache should still be PENDING after upload
-        assert temp_cache.get_file_id(content_hash) == "PENDING"
+        assert await temp_cache.get_file_id(content_hash) == "PENDING"
 
         # Simulate association failure triggering rollback
         with pytest.raises(Exception, match="Association failed"):
@@ -160,7 +160,7 @@ class TestCachePollutionScenarios:
         await vector_store._rollback_failed_uploads(newly_uploaded, temp_cache)
 
         # Verify cache is cleaned up
-        cached_file_id = temp_cache.get_file_id(content_hash)
+        cached_file_id = await temp_cache.get_file_id(content_hash)
         assert cached_file_id is None
 
         # Verify orphaned file was deleted
@@ -174,7 +174,7 @@ class TestCachePollutionScenarios:
         content_hash = compute_content_hash(test_file.content)
 
         # Reserve cache entry
-        temp_cache.atomic_cache_or_get(content_hash)
+        await temp_cache.atomic_cache_or_get(content_hash)
 
         # Simulate successful transactional flow
         newly_uploaded = await vector_store._upload_files_transactional(
@@ -190,7 +190,7 @@ class TestCachePollutionScenarios:
         await vector_store._finalize_cache_entries(newly_uploaded, temp_cache)
 
         # Verify cache is properly finalized
-        cached_file_id = temp_cache.get_file_id(content_hash)
+        cached_file_id = await temp_cache.get_file_id(content_hash)
         assert cached_file_id == "file-abc123"
 
         # No file deletion should occur
@@ -202,17 +202,17 @@ class TestCachePollutionScenarios:
         content_hash = compute_content_hash(test_file.content)
 
         # First attempt: Reserve and fail
-        temp_cache.atomic_cache_or_get(content_hash)
+        await temp_cache.atomic_cache_or_get(content_hash)
         newly_uploaded = await vector_store._upload_files_transactional(
             [test_file], temp_cache
         )
         await vector_store._rollback_failed_uploads(newly_uploaded, temp_cache)
 
         # Verify cleanup
-        assert temp_cache.get_file_id(content_hash) is None
+        assert await temp_cache.get_file_id(content_hash) is None
 
         # Second attempt: Should be able to reserve again
-        file_id, we_are_uploader = temp_cache.atomic_cache_or_get(content_hash)
+        file_id, we_are_uploader = await temp_cache.atomic_cache_or_get(content_hash)
         assert we_are_uploader is True
         assert file_id is None
 
@@ -223,7 +223,7 @@ class TestCachePollutionScenarios:
         await vector_store._finalize_cache_entries(newly_uploaded_2, temp_cache)
 
         # Cache should be properly finalized
-        cached_file_id = temp_cache.get_file_id(content_hash)
+        cached_file_id = await temp_cache.get_file_id(content_hash)
         assert cached_file_id == "file-abc123"
 
 

@@ -1,4 +1,4 @@
-"""Multi-process concurrency tests for SimpleVectorStoreCache atomic operations.
+"""Multi-process concurrency tests for DeduplicationCache atomic operations.
 
 These tests validate that atomic cache operations prevent race conditions
 even across separate Python processes, which is the most realistic scenario
@@ -18,7 +18,7 @@ import tempfile
 import os
 from pathlib import Path
 
-from mcp_the_force.dedup.simple_cache import SimpleVectorStoreCache
+from mcp_the_force.dedup.simple_cache import DeduplicationCache
 
 
 # Global test database path for sharing between processes
@@ -34,7 +34,7 @@ def setup_test_database():
         tmp_file.close()
 
     # Initialize the cache to create tables
-    SimpleVectorStoreCache(TEST_DB_PATH)
+    DeduplicationCache(TEST_DB_PATH)
     return TEST_DB_PATH
 
 
@@ -55,7 +55,7 @@ def worker_atomic_cache_attempt(args):
 
     try:
         # Create cache instance in this process
-        cache = SimpleVectorStoreCache(db_path)
+        cache = DeduplicationCache(db_path)
 
         # Attempt atomic operation
         file_id, we_are_uploader = cache.atomic_cache_or_get(content_hash)
@@ -83,7 +83,7 @@ def worker_complete_upload_workflow(args):
 
     try:
         # Create cache instance in this process
-        cache = SimpleVectorStoreCache(db_path)
+        cache = DeduplicationCache(db_path)
 
         # Step 1: Attempt to reserve
         file_id, we_are_uploader = cache.atomic_cache_or_get(content_hash)
@@ -125,7 +125,7 @@ def worker_failing_upload_workflow(args):
     process_id, content_hash, db_path, should_fail = args
 
     try:
-        cache = SimpleVectorStoreCache(db_path)
+        cache = DeduplicationCache(db_path)
 
         # Attempt to reserve
         file_id, we_are_uploader = cache.atomic_cache_or_get(content_hash)
@@ -174,7 +174,7 @@ def worker_crashing_upload(args):
     process_id, content_hash, db_path = args
 
     try:
-        cache = SimpleVectorStoreCache(db_path)
+        cache = DeduplicationCache(db_path)
 
         # Reserve the hash
         file_id, we_are_uploader = cache.atomic_cache_or_get(content_hash)
@@ -247,7 +247,7 @@ class TestMultiProcessAtomicOperations:
             ), f"Non-uploader should see PENDING, got: {result['file_id']}"
 
         # Verify database state
-        cache = SimpleVectorStoreCache(TEST_DB_PATH)
+        cache = DeduplicationCache(TEST_DB_PATH)
         cached_file_id = cache.get_file_id(content_hash)
         assert (
             cached_file_id == "PENDING"
@@ -282,7 +282,7 @@ class TestMultiProcessAtomicOperations:
         ), f"Expected at least {num_processes - 1} blocked processes"
 
         # Verify final database state
-        cache = SimpleVectorStoreCache(TEST_DB_PATH)
+        cache = DeduplicationCache(TEST_DB_PATH)
         final_file_id = cache.get_file_id(content_hash)
 
         assert final_file_id is not None, "Final file_id should not be None"
@@ -329,7 +329,7 @@ class TestMultiProcessAtomicOperations:
         ), "Most processes should be blocked"
 
         # Verify cleanup worked - hash should be available for retry
-        cache = SimpleVectorStoreCache(TEST_DB_PATH)
+        cache = DeduplicationCache(TEST_DB_PATH)
         cached_file_id = cache.get_file_id(content_hash)
         assert (
             cached_file_id is None
@@ -405,7 +405,7 @@ class TestMultiProcessAtomicOperations:
         ), "Most processes should be blocked in stress test"
 
         # Verify consistent final state
-        cache = SimpleVectorStoreCache(TEST_DB_PATH)
+        cache = DeduplicationCache(TEST_DB_PATH)
         final_file_id = cache.get_file_id(content_hash)
         stats = cache.get_stats()
 
@@ -456,7 +456,7 @@ class TestMultiProcessAtomicOperations:
             results_by_hash[content_hash].append(result)
 
         # Verify each hash has exactly one uploader
-        cache = SimpleVectorStoreCache(TEST_DB_PATH)
+        cache = DeduplicationCache(TEST_DB_PATH)
 
         for content_hash, hash_results in results_by_hash.items():
             uploaded = [r for r in hash_results if r["status"] == "uploaded"]
@@ -505,7 +505,7 @@ class TestProcessCrashRecovery:
             crash_results = pool.map(worker_crashing_upload, crash_args)
 
         # Verify crash occurred and left PENDING entry
-        cache = SimpleVectorStoreCache(TEST_DB_PATH)
+        cache = DeduplicationCache(TEST_DB_PATH)
         cached_file_id = cache.get_file_id(content_hash)
 
         assert cached_file_id == "PENDING", "Crashed process should leave PENDING entry"

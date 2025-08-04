@@ -12,7 +12,7 @@ import tempfile
 import time
 from unittest.mock import patch, MagicMock
 
-from mcp_the_force.dedup.simple_cache import SimpleVectorStoreCache
+from mcp_the_force.dedup.simple_cache import DeduplicationCache
 from mcp_the_force.dedup.errors import (
     CacheWriteError,
 )
@@ -101,7 +101,7 @@ class TestCacheFileRetry:
     def test_cache_file_retries_on_database_busy(self):
         """Test that cache_file retries on database busy errors."""
         with tempfile.NamedTemporaryFile() as tmp:
-            cache = SimpleVectorStoreCache(tmp.name)
+            cache = DeduplicationCache(tmp.name)
 
             # Mock connection to simulate database busy error, then success
             call_count = 0
@@ -129,7 +129,7 @@ class TestCacheFileRetry:
     def test_cache_file_fails_on_non_retryable_error(self):
         """Test that cache_file fails immediately on non-retryable errors."""
         with tempfile.NamedTemporaryFile() as tmp:
-            cache = SimpleVectorStoreCache(tmp.name)
+            cache = DeduplicationCache(tmp.name)
 
             with patch.object(cache, "_get_connection") as mock_conn:
                 mock_connection = MagicMock()
@@ -154,7 +154,7 @@ class TestCacheStoreRetry:
     def test_cache_store_retries_on_database_locked(self):
         """Test that cache_store retries on database locked errors."""
         with tempfile.NamedTemporaryFile() as tmp:
-            cache = SimpleVectorStoreCache(tmp.name)
+            cache = DeduplicationCache(tmp.name)
 
             call_count = 0
 
@@ -185,7 +185,7 @@ class TestCleanupOldEntriesRetry:
     def test_cleanup_old_entries_retries_on_disk_io_error(self):
         """Test that cleanup_old_entries retries on disk I/O errors."""
         with tempfile.NamedTemporaryFile() as tmp:
-            cache = SimpleVectorStoreCache(tmp.name)
+            cache = DeduplicationCache(tmp.name)
 
             call_count = 0
 
@@ -218,7 +218,7 @@ class TestGetStoreIdRetry:
     def test_get_store_id_retries_on_database_busy(self):
         """Test that get_store_id retries on database busy errors."""
         with tempfile.NamedTemporaryFile() as tmp:
-            cache = SimpleVectorStoreCache(tmp.name)
+            cache = DeduplicationCache(tmp.name)
 
             call_count = 0
 
@@ -251,7 +251,7 @@ class TestGetStatsRetry:
     def test_get_stats_retries_on_database_locked(self):
         """Test that get_stats retries on database locked errors."""
         with tempfile.NamedTemporaryFile() as tmp:
-            cache = SimpleVectorStoreCache(tmp.name)
+            cache = DeduplicationCache(tmp.name)
 
             attempt_count = 0
             execute_count = 0
@@ -280,7 +280,7 @@ class TestGetStatsRetry:
                 assert stats["file_count"] == 10
                 assert stats["store_count"] == 10
                 assert stats["pending_uploads"] == 10
-                assert stats["cache_type"] == "SimpleVectorStoreCache"
+                assert stats["cache_type"] == "DeduplicationCache"
 
                 # Should have been called 4 times total (1 failed + 3 successful)
                 assert execute_count == 4
@@ -292,7 +292,7 @@ class TestRetryIntegration:
     def test_mixed_retryable_and_non_retryable_errors(self):
         """Test handling of mixed error types in sequence."""
         with tempfile.NamedTemporaryFile() as tmp:
-            cache = SimpleVectorStoreCache(tmp.name)
+            cache = DeduplicationCache(tmp.name)
 
             # First operation: retryable error that succeeds on retry
             call_count = 0
@@ -333,7 +333,7 @@ class TestRetryIntegration:
     def test_retry_timing_behavior(self):
         """Test that retry delays are actually applied."""
         with tempfile.NamedTemporaryFile() as tmp:
-            cache = SimpleVectorStoreCache(tmp.name)
+            cache = DeduplicationCache(tmp.name)
 
             call_times = []
 

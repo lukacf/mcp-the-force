@@ -185,7 +185,7 @@ class VectorStoreManager:
 
             # Check if we already have a store for this exact fileset
             try:
-                cached_store = cache.get_store_id(fileset_hash)
+                cached_store = await cache.get_store_id(fileset_hash)
             except CacheReadError as e:
                 logger.warning(f"Failed to read from deduplication cache: {e}")
                 cached_store = None
@@ -394,7 +394,7 @@ class VectorStoreManager:
             fileset_hash = compute_fileset_hash(files_with_content)
             cache = get_cache()
             try:
-                cache.cache_store(fileset_hash, store_id, provider)
+                await cache.cache_store(fileset_hash, store_id, provider)
                 logger.info(
                     f"DEDUP: Cached new vector store {store_id} for fileset hash {fileset_hash[:12]}..."
                 )
@@ -914,7 +914,7 @@ class VectorStoreManager:
                         # DEDUPLICATION FIX: Also remove from dedup cache to prevent stale references
                         try:
                             dedup_cache = get_cache()
-                            removed_count = dedup_cache.remove_store_references(
+                            removed_count = await dedup_cache.remove_store_references(
                                 vector_store_id
                             )
                             if removed_count > 0:
@@ -936,7 +936,7 @@ class VectorStoreManager:
         # DEDUPLICATION FIX: Also clean up old dedup cache entries
         try:
             dedup_cache = get_cache()
-            dedup_cache.cleanup_old_entries(max_age_days=30)
+            await dedup_cache.cleanup_old_entries(max_age_days=30)
             logger.debug("DEDUP: Cleaned up old deduplication cache entries")
         except Exception as e:
             logger.warning(f"Failed to clean up old dedup cache entries: {e}")

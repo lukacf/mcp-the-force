@@ -4,7 +4,6 @@ import logging
 import time
 import asyncio
 import gzip
-import sqlite3
 from typing import Dict, List, Sequence, Optional, Any, Tuple, cast
 from pathlib import Path
 
@@ -22,7 +21,6 @@ from ..errors import QuotaExceededError, AuthError, TransientError
 from ...dedup.hashing import compute_content_hash
 from ...dedup.simple_cache import get_cache
 from ...dedup.errors import CacheWriteError, CacheReadError, CacheTransactionError
-from ...dedup.retry import RetryConfig, calculate_delay, is_retryable_sqlite_error
 from ...config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -88,9 +86,8 @@ class OpenAIVectorStore:
     ) -> Tuple[Optional[str], bool]:
         """Atomic cache operation with async retry logic for SQLite lock contention.
 
-        This method implements application-level retry logic that uses asyncio.sleep
-        instead of blocking the worker thread. It handles transient SQLite errors
-        like database locks with exponential backoff.
+        Since the new DeduplicationCache already has built-in async retry logic,
+        this method is now a simple wrapper that delegates to the cache.
 
         Args:
             cache: The cache instance to operate on
@@ -103,55 +100,12 @@ class OpenAIVectorStore:
         Raises:
             CacheTransactionError: For non-retryable errors or after max retries
         """
-        retry_config = RetryConfig(max_attempts=3, base_delay=0.05, max_delay=1.0)
-        last_error: Optional[Exception] = None
-
-        for attempt in range(retry_config.max_attempts):
-            try:
-                result = cache.atomic_cache_or_get(content_hash)
-                return cast(Tuple[Optional[str], bool], result)
-
-            except CacheTransactionError as e:
-                last_error = e
-
-                # Check if the underlying SQLite error is retryable
-                if hasattr(e, "__cause__") and isinstance(e.__cause__, Exception):
-                    sqlite_error = e.__cause__
-                    if hasattr(sqlite_error, "__cause__") and isinstance(
-                        sqlite_error.__cause__, Exception
-                    ):
-                        # Handle wrapped SQLite errors
-                        actual_sqlite_error = sqlite_error.__cause__
-                        if isinstance(
-                            actual_sqlite_error, sqlite3.Error
-                        ) and is_retryable_sqlite_error(actual_sqlite_error):
-                            if attempt < retry_config.max_attempts - 1:
-                                delay = calculate_delay(attempt, retry_config)
-                                logger.warning(
-                                    f"Cache operation for {file_path} failed (attempt {attempt + 1}/{retry_config.max_attempts}): {e}. "
-                                    f"Retrying in {delay:.3f}s..."
-                                )
-                                await asyncio.sleep(delay)
-                                continue
-
-                # Non-retryable error or max retries exhausted
-                logger.debug(
-                    f"Cache operation failed for {file_path}, not retryable: {e}"
-                )
-                raise
-
-            except Exception as e:
-                # Non-cache exceptions are not retried
-                logger.debug(f"Non-cache error for {file_path}: {e}")
-                raise
-
-        # This should not be reached due to the logic above, but included for completeness
-        if last_error:
-            raise last_error
-        else:
-            raise CacheTransactionError(
-                f"Cache operation failed for {file_path} after {retry_config.max_attempts} attempts"
-            )
+        try:
+            result = await cache.atomic_cache_or_get(content_hash)
+            return cast(Tuple[Optional[str], bool], result)
+        except Exception as e:
+            logger.debug(f"Cache operation failed for {file_path}: {e}")
+            raise
 
     async def add_files(self, files: Sequence[VSFile]) -> Sequence[str]:
         """Add files to the vector store using transactional parallel batch uploads."""
@@ -263,7 +217,10 @@ class OpenAIVectorStore:
                         for file in supported_files:
                             try:
                                 content_hash = compute_content_hash(file.content)
-                                if cache.get_file_id(content_hash) == cached_file_id:
+                                if (
+                                    await cache.get_file_id(content_hash)
+                                    == cached_file_id
+                                ):
                                     failed_cached_files.append(file)
                                     break
                             except CacheReadError:
@@ -377,7 +334,7 @@ class OpenAIVectorStore:
                 # Clean up PENDING cache entry for failed upload
                 try:
                     content_hash = compute_content_hash(file.content)
-                    cache.cleanup_failed_upload(content_hash)
+                    await cache.cleanup_failed_upload(content_hash)
                 except CacheWriteError as cleanup_e:
                     logger.warning(f"Cache cleanup failed for {file.path}: {cleanup_e}")
                 except Exception as cleanup_e:
@@ -470,7 +427,7 @@ class OpenAIVectorStore:
 
         for content_hash, file_id in newly_uploaded_files:
             try:
-                cache.finalize_file_id(content_hash, file_id)
+                await cache.finalize_file_id(content_hash, file_id)
                 logger.debug(
                     f"DEDUP: Finalized cache entry {file_id} for content hash {content_hash[:12]}..."
                 )
@@ -514,7 +471,7 @@ class OpenAIVectorStore:
         for content_hash, file_id in newly_uploaded_files:
             # Clean up cache entry
             try:
-                cache.cleanup_failed_upload(content_hash)
+                await cache.cleanup_failed_upload(content_hash)
                 logger.debug(
                     f"ROLLBACK: Cleaned up cache entry for hash {content_hash[:12]}..."
                 )
@@ -562,7 +519,7 @@ class OpenAIVectorStore:
                 # Immediate cache finalization (non-transactional)
                 try:
                     content_hash = compute_content_hash(file.content)
-                    cache.finalize_file_id(content_hash, file_id)
+                    await cache.finalize_file_id(content_hash, file_id)
                     logger.debug(
                         f"DEDUP: Finalized cache entry {file_id} for content hash {content_hash[:12]}..."
                     )
@@ -578,7 +535,7 @@ class OpenAIVectorStore:
             # Clean up the PENDING placeholder if upload failed
             try:
                 content_hash = compute_content_hash(file.content)
-                cache.cleanup_failed_upload(content_hash)
+                await cache.cleanup_failed_upload(content_hash)
             except CacheWriteError as cleanup_e:
                 logger.warning(
                     f"Failed to cleanup failed upload for {file.path}: {cleanup_e}"
