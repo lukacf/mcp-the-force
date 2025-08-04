@@ -6,6 +6,8 @@ import logging
 from pathlib import Path
 from typing import Optional, Dict, Any
 
+from .errors import CacheReadError, CacheWriteError, CacheTransactionError
+
 logger = logging.getLogger(__name__)
 
 
@@ -90,6 +92,9 @@ class SimpleVectorStoreCache:
 
         Returns:
             OpenAI file_id if cached, None otherwise
+
+        Raises:
+            CacheReadError: If database operation fails
         """
         try:
             with self._get_connection() as conn:
@@ -102,7 +107,9 @@ class SimpleVectorStoreCache:
 
         except sqlite3.Error as e:
             logger.error(f"Error retrieving file_id for hash {content_hash}: {e}")
-            return None
+            raise CacheReadError(
+                f"Failed to read file_id from cache for hash {content_hash[:12]}...: {e}"
+            ) from e
 
     def cache_file(self, content_hash: str, file_id: str) -> None:
         """Cache content_hash -> file_id mapping.
@@ -110,6 +117,9 @@ class SimpleVectorStoreCache:
         Args:
             content_hash: SHA-256 hash of file content
             file_id: OpenAI file identifier
+
+        Raises:
+            CacheWriteError: If database operation fails
         """
         try:
             with self._get_connection() as conn:
@@ -119,6 +129,9 @@ class SimpleVectorStoreCache:
                 )
         except sqlite3.Error as e:
             logger.error(f"Error caching file {content_hash}: {e}")
+            raise CacheWriteError(
+                f"Failed to cache file_id {file_id} for hash {content_hash[:12]}...: {e}"
+            ) from e
 
     def get_store_id(self, fileset_hash: str) -> Optional[Dict[str, Any]]:
         """Get cached store for fileset hash.
@@ -128,6 +141,9 @@ class SimpleVectorStoreCache:
 
         Returns:
             Dictionary with store_id and provider, or None if not found
+
+        Raises:
+            CacheReadError: If database operation fails
         """
         try:
             with self._get_connection() as conn:
@@ -142,7 +158,9 @@ class SimpleVectorStoreCache:
 
         except sqlite3.Error as e:
             logger.error(f"Error retrieving store for hash {fileset_hash}: {e}")
-            return None
+            raise CacheReadError(
+                f"Failed to read store_id from cache for hash {fileset_hash[:12]}...: {e}"
+            ) from e
 
     def cache_store(self, fileset_hash: str, store_id: str, provider: str) -> None:
         """Cache fileset_hash -> store_id mapping.
@@ -151,6 +169,9 @@ class SimpleVectorStoreCache:
             fileset_hash: Hash of complete file set
             store_id: Vector store identifier
             provider: Vector store provider (e.g., 'openai')
+
+        Raises:
+            CacheWriteError: If database operation fails
         """
         try:
             with self._get_connection() as conn:
@@ -160,12 +181,18 @@ class SimpleVectorStoreCache:
                 )
         except sqlite3.Error as e:
             logger.error(f"Error caching store {fileset_hash}: {e}")
+            raise CacheWriteError(
+                f"Failed to cache store_id {store_id} for hash {fileset_hash[:12]}...: {e}"
+            ) from e
 
     def cleanup_old_entries(self, max_age_days: int = 30) -> None:
         """Clean up old cache entries.
 
         Args:
             max_age_days: Maximum age in days before cleanup
+
+        Raises:
+            CacheWriteError: If database operation fails
         """
         cutoff_time = int(time.time()) - (max_age_days * 24 * 3600)
 
@@ -184,6 +211,7 @@ class SimpleVectorStoreCache:
 
         except sqlite3.Error as e:
             logger.error(f"Error during cleanup: {e}")
+            raise CacheWriteError(f"Failed to cleanup old cache entries: {e}") from e
 
     def atomic_cache_or_get(
         self, content_hash: str, placeholder: str = "PENDING"
@@ -245,8 +273,9 @@ class SimpleVectorStoreCache:
 
         except sqlite3.Error as e:
             logger.error(f"Error in atomic_cache_or_get for hash {content_hash}: {e}")
-            # Return safe defaults that prevent duplicate uploads
-            return (None, False)
+            raise CacheTransactionError(
+                f"Atomic cache operation failed for hash {content_hash[:12]}...: {e}"
+            ) from e
 
     def finalize_file_id(self, content_hash: str, file_id: str) -> None:
         """
@@ -284,6 +313,9 @@ class SimpleVectorStoreCache:
 
         except sqlite3.Error as e:
             logger.error(f"Error finalizing file_id for hash {content_hash}: {e}")
+            raise CacheWriteError(
+                f"Failed to finalize cache for hash {content_hash[:12]}...: {e}"
+            ) from e
 
     def cleanup_failed_upload(self, content_hash: str) -> None:
         """
@@ -310,6 +342,9 @@ class SimpleVectorStoreCache:
             logger.error(
                 f"Error cleaning up failed upload for hash {content_hash}: {e}"
             )
+            raise CacheWriteError(
+                f"Failed to cleanup cache for hash {content_hash[:12]}...: {e}"
+            ) from e
 
     def get_stats(self) -> Dict[str, Any]:
         """Get cache statistics."""

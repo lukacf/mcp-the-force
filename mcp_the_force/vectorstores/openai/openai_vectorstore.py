@@ -4,7 +4,7 @@ import logging
 import time
 import asyncio
 import gzip
-from typing import Dict, List, Sequence, Optional, Any
+from typing import Dict, List, Sequence, Optional, Any, Tuple
 from pathlib import Path
 
 from openai import AsyncOpenAI
@@ -14,6 +14,7 @@ from ..protocol import VectorStore, VSFile, SearchResult
 from ..errors import QuotaExceededError, AuthError, TransientError
 from ...dedup.hashing import compute_content_hash
 from ...dedup.simple_cache import get_cache
+from ...dedup.errors import CacheWriteError, CacheReadError, CacheTransactionError
 from ...config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -75,7 +76,7 @@ class OpenAIVectorStore:
         return ext in OPENAI_SUPPORTED_EXTENSIONS
 
     async def add_files(self, files: Sequence[VSFile]) -> Sequence[str]:
-        """Add files to the vector store using parallel batch uploads."""
+        """Add files to the vector store using transactional parallel batch uploads."""
         # Filter supported files
         supported_files = []
 
@@ -120,6 +121,12 @@ class OpenAIVectorStore:
                     )
                     files_to_upload.append(file)
 
+            except (CacheReadError, CacheTransactionError) as e:
+                logger.warning(
+                    f"Cache operation failed for {file.path}, proceeding with upload: {e}"
+                )
+                # Fallback: treat as a cache miss and upload the file to be safe.
+                files_to_upload.append(file)
             except Exception as e:
                 logger.warning(f"Deduplication check failed for {file.path}: {e}")
                 files_to_upload.append(file)
@@ -179,6 +186,9 @@ class OpenAIVectorStore:
                                 if cache.get_file_id(content_hash) == cached_file_id:
                                     failed_cached_files.append(file)
                                     break
+                            except CacheReadError:
+                                # Can't read cache, skip this file mapping
+                                pass
                             except Exception:
                                 pass
 
@@ -198,50 +208,43 @@ class OpenAIVectorStore:
 
         upload_start_time = time.time()
         logger.debug(
-            f"Starting parallel upload of {len(files_to_upload)} new files to vector store {self.id}"
+            f"Starting transactional upload of {len(files_to_upload)} new files to vector store {self.id}"
         )
 
-        # PARALLEL UPLOAD OPTIMIZATION: Upload files in parallel while maintaining reliable file ID caching
-        uploaded_file_ids = []
+        # TRANSACTIONAL UPLOAD: Upload files but don't finalize cache until association succeeds
+        uploaded_file_ids = []  # Initialize outside the block to fix scoping
 
         try:
             if files_to_upload:
-                # Phase 1: Parallel upload of new files to get reliable file IDs
-                upload_tasks = []
-                for file in files_to_upload:
-                    task = self._upload_and_cache_file(file, cache)
-                    upload_tasks.append(task)
-
-                # Execute all uploads concurrently - this is the key performance improvement
-                logger.debug(f"Starting parallel upload of {len(upload_tasks)} files")
-                upload_results = await asyncio.gather(
-                    *upload_tasks, return_exceptions=True
+                # Phase 1: Upload files without finalizing cache (transactional approach)
+                newly_uploaded_files = await self._upload_files_transactional(
+                    files_to_upload, cache
                 )
 
-                # Process results and handle any exceptions
-                for i, result in enumerate(upload_results):
-                    if isinstance(result, Exception):
-                        logger.error(
-                            f"Failed to upload file {files_to_upload[i].path}: {result}"
-                        )
-                    elif isinstance(result, str):
-                        # Only add string file_ids, skip None results
-                        uploaded_file_ids.append(result)
-
-                logger.debug(
-                    f"Parallel upload completed: {len(uploaded_file_ids)}/{len(files_to_upload)} files successful"
-                )
-
-                # Phase 2: Batch associate newly uploaded files with vector store
-                if uploaded_file_ids:
+                if newly_uploaded_files:
+                    # Phase 2: Associate uploaded files with vector store
+                    uploaded_file_ids = [file_id for _, file_id in newly_uploaded_files]
                     batch_assoc_start = time.time()
-                    await self._batch_associate_files(
-                        uploaded_file_ids, "newly uploaded"
-                    )
-                    batch_assoc_time = time.time() - batch_assoc_start
-                    logger.debug(
-                        f"Batch association of {len(uploaded_file_ids)} new files took {batch_assoc_time:.2f}s"
-                    )
+
+                    try:
+                        await self._batch_associate_files(
+                            uploaded_file_ids, "newly uploaded"
+                        )
+                        batch_assoc_time = time.time() - batch_assoc_start
+                        logger.debug(
+                            f"Batch association of {len(uploaded_file_ids)} new files took {batch_assoc_time:.2f}s"
+                        )
+
+                        # Phase 3: Finalize cache entries only after successful association
+                        await self._finalize_cache_entries(newly_uploaded_files, cache)
+
+                    except Exception as association_error:
+                        logger.error(
+                            f"Association failed, performing rollback: {association_error}"
+                        )
+                        # Phase 3 (Rollback): Clean up on association failure
+                        await self._rollback_failed_uploads(newly_uploaded_files, cache)
+                        raise  # Re-raise to notify caller
 
             upload_time = time.time() - upload_start_time if upload_start_time else 0
             total_time = time.time() - total_start_time
@@ -256,20 +259,74 @@ class OpenAIVectorStore:
             return cached_file_ids + uploaded_file_ids
 
         except Exception as e:
-            logger.error(f"Error uploading files: {e}")
+            logger.error(f"Error in transactional upload: {e}")
             return cached_file_ids  # Return at least the cached files
 
-    async def _upload_and_cache_file(self, file: VSFile, cache) -> Optional[str]:
-        """Upload a single file using in-memory bytes, cache its ID, and return the file ID.
+    async def _upload_files_transactional(
+        self, files: List[VSFile], cache
+    ) -> List[Tuple[str, str]]:
+        """Upload files without finalizing cache entries (transactional approach).
 
-        This method handles the complete lifecycle of a single file upload:
-        1. Convert file content to bytes in memory (no temp files)
-        2. Upload to OpenAI using (filename, bytes) tuple format
-        3. Cache the content_hash -> file_id mapping
+        This method uploads files to OpenAI but does NOT finalize the cache entries.
+        Cache finalization is deferred until after successful association.
+
+        Args:
+            files: List of VSFile objects to upload
+            cache: The deduplication cache instance
+
+        Returns:
+            List of (content_hash, file_id) tuples for successfully uploaded files
+        """
+        upload_tasks = []
+        for file in files:
+            task = self._upload_file_only(file)
+            upload_tasks.append((file, task))
+
+        # Execute all uploads concurrently
+        logger.debug(f"Starting parallel upload of {len(upload_tasks)} files")
+        upload_results = await asyncio.gather(
+            *[task for _, task in upload_tasks], return_exceptions=True
+        )
+
+        # Process results and handle any exceptions
+        newly_uploaded_files = []
+        for i, (file, _) in enumerate(upload_tasks):
+            result = upload_results[i]
+            if isinstance(result, Exception):
+                logger.error(f"Failed to upload file {file.path}: {result}")
+                # Clean up PENDING cache entry for failed upload
+                try:
+                    content_hash = compute_content_hash(file.content)
+                    cache.cleanup_failed_upload(content_hash)
+                except CacheWriteError as cleanup_e:
+                    logger.warning(f"Cache cleanup failed for {file.path}: {cleanup_e}")
+                except Exception as cleanup_e:
+                    logger.warning(
+                        f"Failed to cleanup failed upload for {file.path}: {cleanup_e}"
+                    )
+            elif isinstance(result, str):
+                # Successful upload - collect for later cache finalization
+                try:
+                    content_hash = compute_content_hash(file.content)
+                    newly_uploaded_files.append((content_hash, result))
+                except Exception as hash_e:
+                    logger.warning(
+                        f"Failed to compute hash for uploaded file {file.path}: {hash_e}"
+                    )
+
+        logger.debug(
+            f"Parallel upload completed: {len(newly_uploaded_files)}/{len(files)} files successful"
+        )
+        return newly_uploaded_files
+
+    async def _upload_file_only(self, file: VSFile) -> Optional[str]:
+        """Upload a single file to OpenAI without cache finalization.
+
+        This is the core upload operation extracted from the original method,
+        but without cache finalization to support transactional uploads.
 
         Args:
             file: The VSFile to upload
-            cache: The deduplication cache instance
 
         Returns:
             The OpenAI file_id if successful, None if failed
@@ -309,16 +366,113 @@ class OpenAIVectorStore:
             )
             file_id: str = upload_response.id
 
-            # Finalize the cache mapping with the real file_id
+            logger.debug(f"UPLOAD: Successfully uploaded {file_name} -> {file_id}")
+            return file_id
+
+        except Exception as e:
+            logger.error(f"Failed to upload file {file.path}: {e}")
+            return None
+
+    async def _finalize_cache_entries(
+        self, newly_uploaded_files: List[Tuple[str, str]], cache
+    ) -> None:
+        """Finalize cache entries after successful association.
+
+        This method commits the cache entries for uploaded files only after
+        we know the association with the vector store was successful.
+
+        Args:
+            newly_uploaded_files: List of (content_hash, file_id) tuples
+            cache: The deduplication cache instance
+        """
+        for content_hash, file_id in newly_uploaded_files:
             try:
-                content_hash = compute_content_hash(file.content)
                 cache.finalize_file_id(content_hash, file_id)
                 logger.debug(
                     f"DEDUP: Finalized cache entry {file_id} for content hash {content_hash[:12]}..."
                 )
+            except CacheWriteError as e:
+                # Log the error but don't crash the entire operation.
+                # The file is already uploaded and associated; the only side effect
+                # is that this file might be uploaded again in the future.
+                logger.warning(f"Failed to finalize cache for file {file_id}: {e}")
             except Exception as e:
                 logger.warning(f"Failed to finalize cached file {file_id}: {e}")
 
+    async def _rollback_failed_uploads(
+        self, newly_uploaded_files: List[Tuple[str, str]], cache
+    ) -> None:
+        """Rollback failed uploads by cleaning up cache and deleting orphaned files.
+
+        This method ensures cache consistency and prevents billing waste by:
+        1. Cleaning up PENDING cache entries
+        2. Deleting orphaned files from OpenAI
+
+        Args:
+            newly_uploaded_files: List of (content_hash, file_id) tuples to rollback
+            cache: The deduplication cache instance
+        """
+        logger.info(f"Rolling back {len(newly_uploaded_files)} failed uploads")
+
+        for content_hash, file_id in newly_uploaded_files:
+            # Clean up cache entry
+            try:
+                cache.cleanup_failed_upload(content_hash)
+                logger.debug(
+                    f"ROLLBACK: Cleaned up cache entry for hash {content_hash[:12]}..."
+                )
+            except CacheWriteError as cleanup_e:
+                # Log the error. The consequence is a stale PENDING
+                # entry that will eventually be ignored or cleaned up.
+                logger.warning(
+                    f"Failed to clean up cache for hash {content_hash[:12]}...: {cleanup_e}"
+                )
+            except Exception as cleanup_e:
+                logger.warning(
+                    f"Failed to cleanup cache for hash {content_hash[:12]}: {cleanup_e}"
+                )
+
+            # Delete orphaned file from OpenAI to prevent billing waste
+            try:
+                await self._client.files.delete(file_id)
+                logger.debug(f"ROLLBACK: Deleted orphaned file {file_id}")
+            except Exception as delete_e:
+                logger.warning(f"Failed to delete orphaned file {file_id}: {delete_e}")
+
+        logger.info(f"Rollback completed for {len(newly_uploaded_files)} uploads")
+
+    async def _upload_and_cache_file(self, file: VSFile, cache) -> Optional[str]:
+        """Legacy upload method - DEPRECATED.
+
+        This method is kept for backward compatibility but should not be used
+        for new uploads as it doesn't support transactional semantics.
+        Use _upload_files_transactional instead.
+
+        Args:
+            file: The VSFile to upload
+            cache: The deduplication cache instance
+
+        Returns:
+            The OpenAI file_id if successful, None if failed
+        """
+        logger.warning(
+            "Using deprecated _upload_and_cache_file method - consider using transactional approach"
+        )
+
+        try:
+            file_id = await self._upload_file_only(file)
+            if file_id:
+                # Immediate cache finalization (non-transactional)
+                try:
+                    content_hash = compute_content_hash(file.content)
+                    cache.finalize_file_id(content_hash, file_id)
+                    logger.debug(
+                        f"DEDUP: Finalized cache entry {file_id} for content hash {content_hash[:12]}..."
+                    )
+                except CacheWriteError as e:
+                    logger.warning(f"Failed to finalize cached file {file_id}: {e}")
+                except Exception as e:
+                    logger.warning(f"Failed to finalize cached file {file_id}: {e}")
             return file_id
 
         except Exception as e:
@@ -328,6 +482,10 @@ class OpenAIVectorStore:
             try:
                 content_hash = compute_content_hash(file.content)
                 cache.cleanup_failed_upload(content_hash)
+            except CacheWriteError as cleanup_e:
+                logger.warning(
+                    f"Failed to cleanup failed upload for {file.path}: {cleanup_e}"
+                )
             except Exception as cleanup_e:
                 logger.warning(
                     f"Failed to cleanup failed upload for {file.path}: {cleanup_e}"

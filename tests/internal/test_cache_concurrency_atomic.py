@@ -592,7 +592,13 @@ class TestEdgeCasesAndErrorHandling:
         assert len(error_results) == 0, f"Unexpected errors: {error_results}"
 
     def test_database_corruption_resilience(self, temp_cache_db, content_hashes):
-        """Test resilience to database access issues."""
+        """Test that database access issues raise proper exceptions instead of silent failures."""
+        from mcp_the_force.dedup.errors import (
+            CacheTransactionError,
+            CacheWriteError,
+            CacheReadError,
+        )
+
         cache = temp_cache_db
         content_hash = content_hashes[0]
 
@@ -607,18 +613,24 @@ class TestEdgeCasesAndErrorHandling:
         cache._get_connection = failing_connection
 
         try:
-            # These should not crash, but return safe defaults
-            file_id, we_are_uploader = cache.atomic_cache_or_get(content_hash)
-            assert file_id is None
-            assert we_are_uploader is False  # Safe default prevents duplicate uploads
+            # These should now raise proper exceptions instead of returning safe defaults
+            with pytest.raises(CacheTransactionError) as exc_info:
+                cache.atomic_cache_or_get(content_hash)
+            assert "Database is locked" in str(exc_info.value.__cause__)
 
-            # Other operations should also fail gracefully
-            result = cache.get_file_id(content_hash)
-            assert result is None
+            # Read operations should raise CacheReadError
+            with pytest.raises(CacheReadError) as exc_info:
+                cache.get_file_id(content_hash)
+            assert "Database is locked" in str(exc_info.value.__cause__)
 
-            # These should not crash
-            cache.finalize_file_id(content_hash, "test-file")
-            cache.cleanup_failed_upload(content_hash)
+            # Write operations should raise CacheWriteError
+            with pytest.raises(CacheWriteError) as exc_info:
+                cache.finalize_file_id(content_hash, "test-file")
+            assert "Database is locked" in str(exc_info.value.__cause__)
+
+            with pytest.raises(CacheWriteError) as exc_info:
+                cache.cleanup_failed_upload(content_hash)
+            assert "Database is locked" in str(exc_info.value.__cause__)
 
         finally:
             # Restore normal operation

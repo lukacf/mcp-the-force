@@ -12,6 +12,7 @@ from ..vector_store_cache import VectorStoreCache
 from ..utils.stable_list_cache import StableListCache
 from ..dedup.hashing import compute_fileset_hash
 from ..dedup.simple_cache import get_cache
+from ..dedup.errors import CacheWriteError, CacheReadError
 
 logger = logging.getLogger(__name__)
 
@@ -186,7 +187,12 @@ class VectorStoreManager:
                     cache = get_cache()
 
                     # Check if we already have a store for this exact fileset
-                    cached_store = cache.get_store_id(fileset_hash)
+                    try:
+                        cached_store = cache.get_store_id(fileset_hash)
+                    except CacheReadError as e:
+                        logger.warning(f"Failed to read from deduplication cache: {e}")
+                        cached_store = None
+
                     if cached_store:
                         logger.info(
                             f"DEDUP: Reusing cached vector store {cached_store['store_id']} for fileset hash {fileset_hash[:12]}..."
@@ -320,12 +326,17 @@ class VectorStoreManager:
                     if files_with_content:
                         fileset_hash = compute_fileset_hash(files_with_content)
                         cache = get_cache()
-                        cache.cache_store(
-                            fileset_hash, mock_store_id, original_provider
-                        )
-                        logger.info(
-                            f"DEDUP: Cached new mock vector store {mock_store_id} for fileset hash {fileset_hash[:12]}..."
-                        )
+                        try:
+                            cache.cache_store(
+                                fileset_hash, mock_store_id, original_provider
+                            )
+                            logger.info(
+                                f"DEDUP: Cached new mock vector store {mock_store_id} for fileset hash {fileset_hash[:12]}..."
+                            )
+                        except CacheWriteError as e:
+                            logger.warning(
+                                f"Failed to cache new mock store for deduplication: {e}"
+                            )
 
                 except Exception as e:
                     logger.warning(
@@ -463,10 +474,15 @@ class VectorStoreManager:
                     if files_with_content:
                         fileset_hash = compute_fileset_hash(files_with_content)
                         cache = get_cache()
-                        cache.cache_store(fileset_hash, store.id, provider_to_use)
-                        logger.info(
-                            f"DEDUP: Cached new vector store {store.id} for fileset hash {fileset_hash[:12]}..."
-                        )
+                        try:
+                            cache.cache_store(fileset_hash, store.id, provider_to_use)
+                            logger.info(
+                                f"DEDUP: Cached new vector store {store.id} for fileset hash {fileset_hash[:12]}..."
+                            )
+                        except CacheWriteError as e:
+                            logger.warning(
+                                f"Failed to cache new store for deduplication: {e}"
+                            )
 
                 except Exception as e:
                     logger.warning(f"Failed to cache new store for deduplication: {e}")
