@@ -10,6 +10,8 @@ from .protocol import VectorStore, VectorStoreClient, VSFile, SearchResult
 from . import registry
 from ..vector_store_cache import VectorStoreCache
 from ..utils.stable_list_cache import StableListCache
+from ..dedup.hashing import compute_fileset_hash
+from ..dedup.simple_cache import get_cache
 
 logger = logging.getLogger(__name__)
 
@@ -149,6 +151,70 @@ class VectorStoreManager:
         # Allow empty files for session creation
         # if not files:
         #     return None
+
+        # DEDUPLICATION: Check if we have an identical fileset cached
+        if files and provider != "inmemory":  # Skip deduplication for inmemory provider
+            try:
+                # Read file contents and compute fileset hash
+                file_contents = []
+                for file_path in files:
+                    content = self._read_file_content(file_path)
+                    if content:
+                        file_contents.append(content)
+
+                if file_contents:
+                    fileset_hash = compute_fileset_hash(file_contents)
+                    cache = get_cache()
+
+                    # Check if we already have a store for this exact fileset
+                    cached_store = cache.get_store_id(fileset_hash)
+                    if cached_store:
+                        logger.info(
+                            f"DEDUP: Reusing cached vector store {cached_store['store_id']} for fileset hash {fileset_hash[:12]}..."
+                        )
+
+                        # TTL RESET FIX: Register the reused store with new session to renew TTL
+                        store_id = cached_store["store_id"]
+                        provider_to_use = cached_store["provider"]
+
+                        if session_id:
+                            try:
+                                # Register the reused store under the new session to reset TTL
+                                await self.vector_store_cache.register_store(
+                                    vector_store_id=store_id,
+                                    provider=provider_to_use,
+                                    session_id=session_id,
+                                    name=None,
+                                    protected=protected,
+                                    ttl_seconds=ttl_seconds,
+                                    provider_metadata=provider_metadata,
+                                    rollover_from=None,
+                                )
+                                logger.debug(
+                                    f"DEDUP: Renewed TTL for reused store {store_id} with session {session_id}"
+                                )
+                            except Exception as e:
+                                logger.warning(
+                                    f"Failed to renew TTL for reused store {store_id}: {e}"
+                                )
+
+                        result = {
+                            "store_id": store_id,
+                            "provider": provider_to_use,
+                        }
+
+                        # Include either session_id or name in the result
+                        if session_id:
+                            result["session_id"] = session_id
+                        elif name:
+                            result["name"] = name
+
+                        return result
+
+            except Exception as e:
+                logger.warning(
+                    f"Deduplication check failed, proceeding with normal creation: {e}"
+                )
 
         # Check if we're in mock mode
         from ..config import get_settings
@@ -306,6 +372,28 @@ class VectorStoreManager:
                 )
 
             logger.info(f"Created vector store: {store.id}")
+
+            # DEDUPLICATION: Cache the new store for future reuse
+            if files and provider_to_use != "inmemory":
+                try:
+                    # Re-read file contents to compute fileset hash (we may have read them earlier)
+                    file_contents = []
+                    for file_path in files:
+                        content = self._read_file_content(file_path)
+                        if content:
+                            file_contents.append(content)
+
+                    if file_contents:
+                        fileset_hash = compute_fileset_hash(file_contents)
+                        cache = get_cache()
+                        cache.cache_store(fileset_hash, store.id, provider_to_use)
+                        logger.info(
+                            f"DEDUP: Cached new vector store {store.id} for fileset hash {fileset_hash[:12]}..."
+                        )
+
+                except Exception as e:
+                    logger.warning(f"Failed to cache new store for deduplication: {e}")
+
             result = {
                 "store_id": store.id,
                 "provider": provider_to_use,
@@ -597,12 +685,38 @@ class VectorStoreManager:
                     if await self.vector_store_cache.remove_store(vector_store_id):
                         cleaned_count += 1
 
+                        # DEDUPLICATION FIX: Also remove from dedup cache to prevent stale references
+                        try:
+                            dedup_cache = get_cache()
+                            # Remove any store cache entries that reference this deleted store
+                            with dedup_cache._get_connection() as conn:
+                                cursor = conn.execute(
+                                    "DELETE FROM store_cache WHERE store_id = ?",
+                                    (vector_store_id,),
+                                )
+                                if cursor.rowcount > 0:
+                                    logger.debug(
+                                        f"DEDUP: Removed {cursor.rowcount} stale dedup entries for deleted store {vector_store_id}"
+                                    )
+                        except Exception as e:
+                            logger.warning(
+                                f"Failed to clean up dedup cache for deleted store {vector_store_id}: {e}"
+                            )
+
         logger.info(f"Cleaned up {cleaned_count} expired vector stores")
 
         # Also clean up orphaned entries (older than 30 days)
         orphaned_count = await self.vector_store_cache.cleanup_orphaned()
         if orphaned_count > 0:
             logger.info(f"Cleaned up {orphaned_count} orphaned cache entries")
+
+        # DEDUPLICATION FIX: Also clean up old dedup cache entries
+        try:
+            dedup_cache = get_cache()
+            dedup_cache.cleanup_old_entries(max_age_days=30)
+            logger.debug("DEDUP: Cleaned up old deduplication cache entries")
+        except Exception as e:
+            logger.warning(f"Failed to clean up old dedup cache entries: {e}")
 
         return cleaned_count
 

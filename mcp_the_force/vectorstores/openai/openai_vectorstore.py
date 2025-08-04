@@ -13,6 +13,8 @@ from openai import AsyncOpenAI
 from ...adapters.openai.client import OpenAIClientFactory
 from ..protocol import VectorStore, VSFile, SearchResult
 from ..errors import QuotaExceededError, AuthError, TransientError
+from ...dedup.hashing import compute_content_hash
+from ...dedup.simple_cache import get_cache
 
 logger = logging.getLogger(__name__)
 
@@ -81,129 +83,105 @@ class OpenAIVectorStore:
         if not supported_files:
             return []
 
-        start_time = time.time()
-        logger.debug(
-            f"Starting upload of {len(supported_files)} files to vector store {self.id}"
+        # DEDUPLICATION: Check for cached files and separate new ones
+        files_to_upload = []
+        cached_file_ids = []
+        cache = get_cache()
+
+        for file in supported_files:
+            try:
+                content_hash = compute_content_hash(file.content)
+                cached_file_id = cache.get_file_id(content_hash)
+
+                if cached_file_id:
+                    logger.debug(
+                        f"DEDUP: Reusing cached file {cached_file_id} for {file.path}"
+                    )
+                    cached_file_ids.append(cached_file_id)
+
+                    # Associate cached file with this vector store
+                    try:
+                        await self._client.vector_stores.files.create(
+                            vector_store_id=self.id, file_id=cached_file_id
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            f"Failed to associate cached file {cached_file_id}: {e}"
+                        )
+                        # If association fails, upload the file instead
+                        files_to_upload.append(file)
+                else:
+                    files_to_upload.append(file)
+
+            except Exception as e:
+                logger.warning(f"Deduplication check failed for {file.path}: {e}")
+                files_to_upload.append(file)
+
+        logger.info(
+            f"DEDUP: Reusing {len(cached_file_ids)} cached files, uploading {len(files_to_upload)} new files"
         )
 
-        # Create temporary files for upload
-        file_streams = []
-        temp_files = []
+        if not files_to_upload:
+            # All files were cached, return the cached file IDs
+            return cached_file_ids
+
+        start_time = time.time()
+        logger.debug(
+            f"Starting upload of {len(files_to_upload)} new files to vector store {self.id}"
+        )
+
+        # FILE CACHING FIX: Upload files individually to get reliable file IDs for caching
+        uploaded_file_ids = []
 
         try:
-            # Prepare file streams
-            for file in supported_files:
+            for file in files_to_upload:
                 # Create temp file
                 suffix = Path(file.path).suffix
                 tf = tempfile.NamedTemporaryFile(mode="w", suffix=suffix, delete=False)
                 tf.write(file.content)
                 tf.close()
-                temp_files.append(tf.name)
 
-                # Open for reading
-                file_stream = open(tf.name, "rb")
-                file_streams.append(file_stream)
+                try:
+                    # Upload individual file to get reliable file_id
+                    with open(tf.name, "rb") as file_stream:
+                        upload_response = await self._client.files.create(
+                            file=file_stream, purpose="assistants"
+                        )
+                        file_id = upload_response.id
+                        uploaded_file_ids.append(file_id)
 
-            # Decide whether to use parallel or single batch based on file count
-            file_batch: Any = None
-            if len(file_streams) <= 20:
-                # For small uploads, use single batch
-                logger.debug("Using single batch upload")
-                file_batch = (
-                    await self._client.vector_stores.file_batches.upload_and_poll(
-                        vector_store_id=self.id, files=file_streams
-                    )
-                )
-            else:
-                # For larger uploads, use parallel batches
-                logger.debug(
-                    f"Using parallel batch upload ({PARALLEL_BATCHES} batches)"
-                )
-
-                # Split files into batches
-                batch_size = max(1, len(file_streams) // PARALLEL_BATCHES)
-                batches = []
-                for i in range(0, len(file_streams), batch_size):
-                    batches.append(file_streams[i : i + batch_size])
-
-                # Ensure we don't have more than PARALLEL_BATCHES
-                while len(batches) > PARALLEL_BATCHES:
-                    batches[-2].extend(batches[-1])
-                    batches.pop()
-
-                logger.debug(
-                    f"Created {len(batches)} batches with sizes: {[len(b) for b in batches]}"
-                )
-
-                # Upload all batches in parallel
-                tasks = [
-                    self._upload_batch_with_retry(batch, i + 1)
-                    for i, batch in enumerate(batches)
-                ]
-                results = await asyncio.gather(*tasks, return_exceptions=True)
-
-                # Calculate totals and get last successful batch for return
-                total_completed = 0
-                total_failed = 0
-                total_files = 0
-
-                for r in results:
-                    if isinstance(r, dict) and "completed" in r:
-                        total_completed += r["completed"]
-                        total_failed += r["failed"]
-                        total_files += r["total"]
-                        if "batch" in r and r["batch"]:
-                            file_batch = r["batch"]
-                    elif isinstance(r, Exception):
-                        logger.error(f"Batch failed with exception: {r}")
-                        total_failed += 1
-
-                if not file_batch:
-                    # All batches failed - create a synthetic batch result
-                    class FileCounts:
-                        def __init__(self):
-                            self.completed = total_completed
-                            self.failed = total_failed
-                            self.total = total_files
-                            self.in_progress = 0
-                            self.cancelled = 0
-
-                    class SyntheticBatch:
-                        def __init__(self):
-                            self.status = (
-                                "failed" if total_completed == 0 else "completed"
+                        # Cache the file mapping immediately with reliable file_id
+                        try:
+                            content_hash = compute_content_hash(file.content)
+                            cache.cache_file(content_hash, file_id)
+                            logger.debug(
+                                f"DEDUP: Cached uploaded file {file_id} for content hash {content_hash[:12]}..."
                             )
-                            self.file_counts = FileCounts()
+                        except Exception as e:
+                            logger.warning(
+                                f"Failed to cache uploaded file {file_id}: {e}"
+                            )
 
-                    file_batch = SyntheticBatch()
+                        # Associate file with vector store
+                        await self._client.vector_stores.files.create(
+                            vector_store_id=self.id, file_id=file_id
+                        )
 
-            # Log results
+                finally:
+                    # Clean up temp file
+                    if os.path.exists(tf.name):
+                        os.unlink(tf.name)
+
             logger.info(
-                f"Batch upload completed in {time.time() - start_time:.2f}s - "
-                f"Status: {file_batch.status}, File counts: {file_batch.file_counts}"
+                f"Successfully uploaded and cached {len(uploaded_file_ids)} files in {time.time() - start_time:.2f}s"
             )
 
-            # Return file IDs - for now, we'll return empty strings for each file
-            # as the batch API doesn't give us individual file IDs
-            return ["" for _ in supported_files]
+            # Return combined file IDs (cached + newly uploaded)
+            return cached_file_ids + uploaded_file_ids
 
-        except asyncio.CancelledError:
-            logger.warning("Vector store upload cancelled")
-            raise
-        finally:
-            # Always close file streams and clean up temp files
-            for stream in file_streams:
-                try:
-                    stream.close()
-                except Exception:
-                    pass
-
-            for temp_path in temp_files:
-                try:
-                    if os.path.exists(temp_path):
-                        os.unlink(temp_path)
-                except Exception:
-                    pass
+        except Exception as e:
+            logger.error(f"Error uploading files: {e}")
+            return cached_file_ids  # Return at least the cached files
 
     async def _upload_single_batch(
         self,

@@ -28,6 +28,8 @@ PRODUCTION_DBS = {
     "sessions.sqlite3",
     "stable_list_cache.sqlite3",
     "logs.sqlite3",
+    # Deduplication cache
+    "vdb_cache.db",
 }
 
 # Note: Adapter mocking is controlled by MCP_ADAPTER_MOCK environment variable
