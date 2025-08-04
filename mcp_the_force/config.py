@@ -72,6 +72,12 @@ class ProviderConfig(BaseModel):
         default=8,
         description="Maximum parallel tool executions for OpenAI",
     )
+    enable_upload_compression: bool = Field(
+        False, description="Enable gzip compression for large file uploads"
+    )
+    compression_threshold_bytes: int = Field(
+        1024, description="Minimum file size in bytes to enable compression", ge=512
+    )
 
 
 class MCPConfig(BaseModel):

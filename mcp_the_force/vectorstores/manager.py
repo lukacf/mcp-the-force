@@ -153,7 +153,7 @@ class VectorStoreManager:
         #     return None
 
         # DEDUPLICATION: Check if we have an identical fileset cached
-        if files and provider != "inmemory":  # Skip deduplication for inmemory provider
+        if files:  # Enable deduplication for all providers
             try:
                 # Read file contents and compute fileset hash with paths for collision avoidance
                 files_with_content = []
@@ -292,6 +292,45 @@ class VectorStoreManager:
                     provider_metadata=provider_metadata,
                     rollover_from=rollover_from,
                 )
+
+            # DEDUPLICATION: Cache the fileset hash for this store (same as normal path)
+            if files:  # Cache for all providers
+                try:
+                    # Re-compute fileset hash for caching (same logic as the deduplication check above)
+                    files_with_content = []
+                    project_root = Path.cwd()
+
+                    for file_path in files:
+                        content = self._read_file_content(file_path)
+                        if content:
+                            # Normalize path for cross-platform determinism
+                            path_obj = Path(file_path)
+                            try:
+                                relative_path = path_obj.relative_to(project_root)
+                                normalized_path = str(relative_path.as_posix())
+                            except ValueError:
+                                parent_name = (
+                                    path_obj.parent.name
+                                    if path_obj.parent.name != "/"
+                                    else "root"
+                                )
+                                normalized_path = f"{parent_name}/{path_obj.name}"
+                            files_with_content.append((normalized_path, content))
+
+                    if files_with_content:
+                        fileset_hash = compute_fileset_hash(files_with_content)
+                        cache = get_cache()
+                        cache.cache_store(
+                            fileset_hash, mock_store_id, original_provider
+                        )
+                        logger.info(
+                            f"DEDUP: Cached new mock vector store {mock_store_id} for fileset hash {fileset_hash[:12]}..."
+                        )
+
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to cache new mock store for deduplication: {e}"
+                    )
 
             result = {
                 "store_id": mock_store_id,

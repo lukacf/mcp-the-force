@@ -514,12 +514,14 @@ class TestOpenAIAdapter:
                 mock_response = MagicMock()
                 mock_response.id = f"file_{i}"
                 mock_upload_responses.append(mock_response)
-            
+
             mock_client.files.create.side_effect = mock_upload_responses
-            
+
             # Mock batch file association
             mock_client.vector_stores.file_batches.create_and_poll = AsyncMock()
-            mock_client.vector_stores.files.create = AsyncMock()  # For single file fallback
+            mock_client.vector_stores.files.create = (
+                AsyncMock()
+            )  # For single file fallback
 
             file_ids = await store.add_files(files)
 

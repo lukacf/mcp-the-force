@@ -1,12 +1,11 @@
 """OpenAI vector store implementation."""
 
-import os
 import logging
 import time
 import asyncio
+import gzip
 from typing import Dict, List, Sequence, Optional, Any, BinaryIO
 from pathlib import Path
-import tempfile
 
 from openai import AsyncOpenAI
 
@@ -15,11 +14,15 @@ from ..protocol import VectorStore, VSFile, SearchResult
 from ..errors import QuotaExceededError, AuthError, TransientError
 from ...dedup.hashing import compute_content_hash
 from ...dedup.simple_cache import get_cache
+from ...config import get_settings
 
 logger = logging.getLogger(__name__)
 
 # Number of parallel batches for upload
 PARALLEL_BATCHES = 10
+
+# OpenAI batch size limit for file associations
+ASSOCIATION_BATCH_SIZE = 100
 
 # OpenAI supported file extensions
 OPENAI_SUPPORTED_EXTENSIONS = {
@@ -110,16 +113,26 @@ class OpenAIVectorStore:
             f"DEDUP: Found {len(cached_file_ids)} cached files, need to upload {len(files_to_upload)} new files"
         )
 
+        # Performance tracking
+        total_start_time = time.time()
+        upload_start_time = None
+        association_start_time = None
+
         # OPTIMIZATION: Batch associate cached files if we have any
         if cached_file_ids:
+            association_start_time = time.time()
+            logger.debug(
+                f"Starting batch association of {len(cached_file_ids)} cached files"
+            )
             try:
                 if len(cached_file_ids) > 1:
                     # Use batch association for multiple cached files
                     await self._client.vector_stores.file_batches.create_and_poll(
                         vector_store_id=self.id, file_ids=cached_file_ids
                     )
+                    association_time = time.time() - association_start_time
                     logger.debug(
-                        f"Batch associated {len(cached_file_ids)} cached files with vector store"
+                        f"Batch associated {len(cached_file_ids)} cached files with vector store in {association_time:.2f}s"
                     )
                 else:
                     # Single cached file - use individual association
@@ -168,9 +181,9 @@ class OpenAIVectorStore:
             # All files were cached and successfully associated
             return cached_file_ids
 
-        start_time = time.time()
+        upload_start_time = time.time()
         logger.debug(
-            f"Starting upload of {len(files_to_upload)} new files to vector store {self.id}"
+            f"Starting parallel upload of {len(files_to_upload)} new files to vector store {self.id}"
         )
 
         # PARALLEL UPLOAD OPTIMIZATION: Upload files in parallel while maintaining reliable file ID caching
@@ -206,12 +219,22 @@ class OpenAIVectorStore:
 
                 # Phase 2: Batch associate newly uploaded files with vector store
                 if uploaded_file_ids:
+                    batch_assoc_start = time.time()
                     await self._batch_associate_files(
                         uploaded_file_ids, "newly uploaded"
                     )
+                    batch_assoc_time = time.time() - batch_assoc_start
+                    logger.debug(
+                        f"Batch association of {len(uploaded_file_ids)} new files took {batch_assoc_time:.2f}s"
+                    )
+
+            upload_time = time.time() - upload_start_time if upload_start_time else 0
+            total_time = time.time() - total_start_time
 
             logger.info(
-                f"Successfully uploaded and cached {len(uploaded_file_ids)} files in {time.time() - start_time:.2f}s"
+                f"Successfully processed {len(cached_file_ids + uploaded_file_ids)} files "
+                f"({len(cached_file_ids)} cached, {len(uploaded_file_ids)} uploaded) "
+                f"in {total_time:.2f}s (upload: {upload_time:.2f}s)"
             )
 
             # Return combined file IDs (cached + newly uploaded)
@@ -222,13 +245,12 @@ class OpenAIVectorStore:
             return cached_file_ids  # Return at least the cached files
 
     async def _upload_and_cache_file(self, file: VSFile, cache) -> Optional[str]:
-        """Upload a single file, cache its ID, and return the file ID.
+        """Upload a single file using in-memory bytes, cache its ID, and return the file ID.
 
         This method handles the complete lifecycle of a single file upload:
-        1. Create temporary file with proper extension
-        2. Upload to OpenAI to get reliable file_id
+        1. Convert file content to bytes in memory (no temp files)
+        2. Upload to OpenAI using (filename, bytes) tuple format
         3. Cache the content_hash -> file_id mapping
-        4. Clean up temporary file
 
         Args:
             file: The VSFile to upload
@@ -237,51 +259,64 @@ class OpenAIVectorStore:
         Returns:
             The OpenAI file_id if successful, None if failed
         """
-        tf_path = None
         try:
-            # Create temp file with proper extension
-            suffix = Path(file.path).suffix
-            tf = tempfile.NamedTemporaryFile(mode="w", suffix=suffix, delete=False)
-            tf.write(file.content)
-            tf.close()
-            tf_path = tf.name
+            # Convert file content to bytes in memory - no temp files needed
+            file_content_bytes = file.content.encode("utf-8")
+            file_name = Path(file.path).name
+
+            # Check if compression should be enabled
+            settings = get_settings()
+            should_compress = (
+                settings.openai.enable_upload_compression
+                and len(file_content_bytes)
+                >= settings.openai.compression_threshold_bytes
+            )
+
+            if should_compress:
+                # Compress the content with gzip
+                compressed_content = gzip.compress(file_content_bytes)
+                compression_ratio = len(compressed_content) / len(file_content_bytes)
+
+                logger.debug(
+                    f"Compressing {file_name}: {len(file_content_bytes)} -> {len(compressed_content)} bytes "
+                    f"({compression_ratio:.2%} of original size)"
+                )
+
+                # Use .gz extension to indicate compression
+                file_tuple = (f"{file_name}.gz", compressed_content)
+            else:
+                # No compression - use original content
+                file_tuple = (file_name, file_content_bytes)
 
             # Upload file to get reliable file_id
-            with open(tf_path, "rb") as file_stream:
-                upload_response = await self._client.files.create(
-                    file=file_stream, purpose="assistants"
+            upload_response = await self._client.files.create(
+                file=file_tuple, purpose="assistants"
+            )
+            file_id: str = upload_response.id
+
+            # Cache the file mapping immediately with reliable file_id
+            try:
+                content_hash = compute_content_hash(file.content)
+                cache.cache_file(content_hash, file_id)
+                logger.debug(
+                    f"DEDUP: Cached uploaded file {file_id} for content hash {content_hash[:12]}..."
                 )
-                file_id: str = upload_response.id
+            except Exception as e:
+                logger.warning(f"Failed to cache uploaded file {file_id}: {e}")
 
-                # Cache the file mapping immediately with reliable file_id
-                try:
-                    content_hash = compute_content_hash(file.content)
-                    cache.cache_file(content_hash, file_id)
-                    logger.debug(
-                        f"DEDUP: Cached uploaded file {file_id} for content hash {content_hash[:12]}..."
-                    )
-                except Exception as e:
-                    logger.warning(f"Failed to cache uploaded file {file_id}: {e}")
-
-                return file_id
+            return file_id
 
         except Exception as e:
             logger.error(f"Failed to upload file {file.path}: {e}")
             return None
-        finally:
-            # Always clean up temp file
-            if tf_path and os.path.exists(tf_path):
-                try:
-                    os.unlink(tf_path)
-                except Exception as cleanup_e:
-                    logger.warning(
-                        f"Failed to cleanup temp file {tf_path}: {cleanup_e}"
-                    )
 
     async def _batch_associate_files(
         self, file_ids: List[str], description: str
     ) -> None:
-        """Associate multiple files with the vector store using batch operations when possible.
+        """Associate multiple files with the vector store using concurrent, chunked batches.
+
+        Handles the 100-file batch limit by splitting large file lists into smaller chunks
+        and processing them concurrently with retry logic and rate limit protection.
 
         Args:
             file_ids: List of OpenAI file IDs to associate
@@ -290,44 +325,82 @@ class OpenAIVectorStore:
         if not file_ids:
             return
 
-        try:
-            if len(file_ids) > 1:
-                # Use batch association for multiple files
-                await self._client.vector_stores.file_batches.create_and_poll(
-                    vector_store_id=self.id, file_ids=file_ids
-                )
-                logger.debug(
-                    f"Batch associated {len(file_ids)} {description} files with vector store"
-                )
-            else:
-                # Single file - use individual association
+        # Handle single file case efficiently
+        if len(file_ids) == 1:
+            try:
                 await self._client.vector_stores.files.create(
                     vector_store_id=self.id, file_id=file_ids[0]
                 )
                 logger.debug(
                     f"Associated single {description} file {file_ids[0]} with vector store"
                 )
-        except Exception as e:
-            logger.warning(
-                f"Batch association failed for {description} files, falling back to individual: {e}"
-            )
-            # Fallback to individual association if batch fails
-            successful_count = 0
-            for file_id in file_ids:
-                try:
-                    await self._client.vector_stores.files.create(
-                        vector_store_id=self.id, file_id=file_id
-                    )
-                    successful_count += 1
-                except Exception as individual_e:
-                    logger.error(
-                        f"Failed to associate {description} file {file_id}: {individual_e}"
-                    )
-
-            if successful_count > 0:
-                logger.info(
-                    f"Individual fallback: {successful_count}/{len(file_ids)} {description} files associated"
+                return
+            except Exception as e:
+                logger.error(
+                    f"Failed to associate single {description} file {file_ids[0]}: {e}"
                 )
+                return
+
+        # Split file_ids into chunks respecting the 100-file batch limit
+        batches = [
+            file_ids[i : i + ASSOCIATION_BATCH_SIZE]
+            for i in range(0, len(file_ids), ASSOCIATION_BATCH_SIZE)
+        ]
+
+        logger.debug(
+            f"Associating {len(file_ids)} {description} files in {len(batches)} concurrent batches"
+        )
+
+        # Use semaphore to limit concurrent requests and avoid rate limits
+        concurrency_limit = 5  # Conservative limit to avoid rate limiting
+        semaphore = asyncio.Semaphore(concurrency_limit)
+
+        async def _associate_batch_with_retry(batch: List[str], batch_num: int) -> bool:
+            """Associate a single batch with exponential backoff retry logic."""
+            async with semaphore:
+                for attempt in range(1, 4):  # Up to 3 attempts
+                    try:
+                        await self._client.vector_stores.file_batches.create_and_poll(
+                            vector_store_id=self.id, file_ids=batch
+                        )
+                        logger.debug(
+                            f"Successfully associated batch {batch_num} ({len(batch)} files)"
+                        )
+                        return True
+                    except Exception as e:
+                        if attempt < 3:
+                            backoff_time = attempt * 2  # 2s, 4s exponential backoff
+                            logger.warning(
+                                f"Batch {batch_num} association failed (attempt {attempt}/3): {e}. "
+                                f"Retrying in {backoff_time}s..."
+                            )
+                            await asyncio.sleep(backoff_time)
+                        else:
+                            logger.error(
+                                f"Batch {batch_num} association failed after 3 attempts: {e}"
+                            )
+                            return False
+                return False
+
+        # Execute all batch associations concurrently
+        tasks = [
+            _associate_batch_with_retry(batch, i + 1) for i, batch in enumerate(batches)
+        ]
+        results = await asyncio.gather(*tasks)
+
+        # Report results
+        successful_batches = sum(1 for result in results if result)
+        failed_batches = len(batches) - successful_batches
+
+        if failed_batches == 0:
+            logger.info(
+                f"Successfully associated all {len(file_ids)} {description} files"
+            )
+        else:
+            logger.warning(
+                f"Batch association partially failed: {successful_batches}/{len(batches)} batches succeeded. "
+                f"Some {description} files may not be associated with the vector store."
+            )
 
     async def _upload_single_batch(
         self,
