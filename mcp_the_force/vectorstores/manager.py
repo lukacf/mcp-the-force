@@ -88,6 +88,406 @@ class VectorStoreManager:
         """Compute hash for file content."""
         return hashlib.sha256(content.encode()).hexdigest()
 
+    def _validate_create_params(
+        self, session_id: Optional[str], name: Optional[str], protected: bool
+    ) -> bool:
+        """Validate and normalize create parameters.
+
+        Args:
+            session_id: Optional session ID for temporary stores
+            name: Optional name for permanent stores
+            protected: Whether the store should be protected
+
+        Returns:
+            normalized protected flag (True for named stores)
+
+        Raises:
+            ValueError: If parameters are invalid
+        """
+        # Validate that either session_id OR name is provided, not both
+        if session_id and name:
+            raise ValueError(
+                "Cannot provide both session_id and name. Use session_id for temporary stores or name for permanent memory stores."
+            )
+        if not session_id and not name:
+            raise ValueError(
+                "Must provide either session_id (for temporary stores) or name (for permanent memory stores)."
+            )
+
+        # Named stores are always protected
+        return True if name else protected
+
+    def _read_and_process_files(self, files: List[str]) -> List[Tuple[str, str]]:
+        """Read and process files with normalized paths for consistent hashing.
+
+        Args:
+            files: List of file paths to read
+
+        Returns:
+            List of (normalized_path, content) tuples for files that could be read
+        """
+        if not files:
+            return []
+
+        files_with_content = []
+        project_root = Path.cwd()
+
+        for file_path in files:
+            content = self._read_file_content(file_path)
+            if content:
+                # Normalize path for cross-platform determinism and collision prevention
+                path_obj = Path(file_path)
+                try:
+                    # Use relative path when possible for real project files
+                    relative_path = path_obj.relative_to(project_root)
+                    normalized_path = str(
+                        relative_path.as_posix()
+                    )  # Use forward slashes for consistency
+                except ValueError:
+                    # For files outside project root (e.g., tests), create a deterministic path
+                    # by using parent directory name + filename to prevent collisions
+                    parent_name = (
+                        path_obj.parent.name if path_obj.parent.name != "/" else "root"
+                    )
+                    normalized_path = f"{parent_name}/{path_obj.name}"
+                files_with_content.append((normalized_path, content))
+
+        return files_with_content
+
+    async def _check_deduplication_cache(
+        self,
+        files_with_content: List[Tuple[str, str]],
+        session_id: Optional[str],
+        name: Optional[str],
+        protected: bool,
+        ttl_seconds: Optional[int],
+        provider_metadata: Optional[Dict[str, Any]],
+    ) -> Optional[Dict[str, Any]]:
+        """Check deduplication cache for existing store with identical fileset.
+
+        Args:
+            files_with_content: List of (normalized_path, content) tuples
+            session_id: Optional session ID for temporary stores
+            name: Optional name for permanent stores
+            protected: Whether the store should be protected
+            ttl_seconds: Optional TTL for the vector store
+            provider_metadata: Optional metadata specific to the vector store provider
+
+        Returns:
+            Store info dict if found in cache, None otherwise
+        """
+        if not files_with_content:
+            return None
+
+        try:
+            fileset_hash = compute_fileset_hash(files_with_content)
+            cache = get_cache()
+
+            # Check if we already have a store for this exact fileset
+            try:
+                cached_store = cache.get_store_id(fileset_hash)
+            except CacheReadError as e:
+                logger.warning(f"Failed to read from deduplication cache: {e}")
+                cached_store = None
+
+            if cached_store:
+                logger.info(
+                    f"DEDUP: Reusing cached vector store {cached_store['store_id']} for fileset hash {fileset_hash[:12]}..."
+                )
+
+                # TTL RESET FIX: Register the reused store with new session to renew TTL
+                store_id = cached_store["store_id"]
+                provider_to_use = cached_store["provider"]
+
+                if session_id:
+                    try:
+                        # Register the reused store under the new session to reset TTL
+                        await self.vector_store_cache.register_store(
+                            vector_store_id=store_id,
+                            provider=provider_to_use,
+                            session_id=session_id,
+                            name=None,
+                            protected=protected,
+                            ttl_seconds=ttl_seconds,
+                            provider_metadata=provider_metadata,
+                            rollover_from=None,
+                        )
+                        logger.debug(
+                            f"DEDUP: Renewed TTL for reused store {store_id} with session {session_id}"
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            f"Failed to renew TTL for reused store {store_id}: {e}"
+                        )
+
+                return self._format_result(store_id, provider_to_use, session_id, name)
+
+        except Exception as e:
+            logger.warning(
+                f"Deduplication check failed, proceeding with normal creation: {e}"
+            )
+
+        return None
+
+    def _format_result(
+        self,
+        store_id: str,
+        provider: str,
+        session_id: Optional[str],
+        name: Optional[str],
+    ) -> Dict[str, Any]:
+        """Format the create result consistently.
+
+        Args:
+            store_id: The vector store ID
+            provider: The provider name
+            session_id: Optional session ID
+            name: Optional store name
+
+        Returns:
+            Formatted result dictionary
+        """
+        result = {
+            "store_id": store_id,
+            "provider": provider,
+        }
+
+        # Include either session_id or name in the result
+        if session_id:
+            result["session_id"] = session_id
+        elif name:
+            result["name"] = name
+
+        return result
+
+    async def _handle_mock_mode_creation(
+        self,
+        files: List[str],
+        files_with_content: List[Tuple[str, str]],
+        session_id: Optional[str],
+        name: Optional[str],
+        protected: bool,
+        ttl_seconds: Optional[int],
+        provider_metadata: Optional[Dict[str, Any]],
+        rollover_from: Optional[str],
+        provider: Optional[str],
+    ) -> Dict[str, Any]:
+        """Handle vector store creation in mock mode.
+
+        Args:
+            files: List of file paths
+            files_with_content: Processed files with content
+            session_id: Optional session ID for temporary stores
+            name: Optional name for permanent stores
+            protected: Whether the store should be protected
+            ttl_seconds: Optional TTL for the vector store
+            provider_metadata: Optional metadata specific to the vector store provider
+            rollover_from: Optional ID of a previous store to roll over from
+            provider: Optional provider override
+
+        Returns:
+            Store info dictionary
+        """
+        # Use provided provider or fall back to default
+        original_provider = provider or self.provider
+        mock_client = self._get_client("inmemory")
+
+        # Create a real in-memory store that can be retrieved
+        if name:
+            store_name = name  # Use the actual name for named stores
+        elif session_id:
+            store_name = f"mock_{session_id}"
+        else:
+            store_name = "mock_ephemeral"
+        store = await mock_client.create(store_name, ttl_seconds=ttl_seconds)
+
+        # Create a mock ID with the correct provider prefix
+        # Special case: inmemory provider should keep inmem_ prefix
+        if original_provider == "inmemory":
+            mock_store_id = store.id  # Keep the original inmem_ ID
+        else:
+            mock_store_id = store.id.replace("inmem_", f"{original_provider}_")
+
+        # Store the mapping from mock ID to real inmemory ID (only if different)
+        if mock_store_id != store.id:
+            self._mock_id_mapping[mock_store_id] = store.id
+
+        logger.info(
+            f"[MOCK] Created in-memory vector store: {mock_store_id} (actual: {store.id}) for provider {original_provider} with {len(files)} files"
+        )
+
+        # Add files if provided
+        if files:
+            vs_files = []
+            for file_path in files:
+                content = self._read_file_content(file_path)
+                if content:  # Only add if we could read the file
+                    vs_files.append(VSFile(path=file_path, content=content))
+
+            if vs_files:
+                await store.add_files(vs_files)
+
+        # Register with cache for lifecycle management
+        await self._register_store_with_cache(
+            mock_store_id,
+            original_provider,
+            session_id,
+            name,
+            protected,
+            ttl_seconds,
+            provider_metadata,
+            rollover_from,
+        )
+
+        # Cache for deduplication if files were provided
+        if files_with_content:
+            await self._cache_store_for_deduplication(
+                files_with_content, mock_store_id, original_provider
+            )
+
+        return self._format_result(mock_store_id, original_provider, session_id, name)
+
+    async def _register_store_with_cache(
+        self,
+        store_id: str,
+        provider: str,
+        session_id: Optional[str],
+        name: Optional[str],
+        protected: bool,
+        ttl_seconds: Optional[int],
+        provider_metadata: Optional[Dict[str, Any]],
+        rollover_from: Optional[str],
+    ) -> None:
+        """Register store with lifecycle cache.
+
+        Args:
+            store_id: The vector store ID
+            provider: The provider name
+            session_id: Optional session ID
+            name: Optional store name
+            protected: Whether the store should be protected
+            ttl_seconds: Optional TTL for the vector store
+            provider_metadata: Optional metadata specific to the vector store provider
+            rollover_from: Optional ID of a previous store to roll over from
+        """
+        if session_id or name:
+            await self.vector_store_cache.register_store(
+                vector_store_id=store_id,
+                provider=provider,
+                session_id=session_id,
+                name=name,
+                protected=protected,
+                ttl_seconds=ttl_seconds,
+                provider_metadata=provider_metadata,
+                rollover_from=rollover_from,
+            )
+
+    async def _cache_store_for_deduplication(
+        self, files_with_content: List[Tuple[str, str]], store_id: str, provider: str
+    ) -> None:
+        """Cache store for future deduplication.
+
+        Args:
+            files_with_content: List of (normalized_path, content) tuples
+            store_id: The vector store ID
+            provider: The provider name
+        """
+        try:
+            fileset_hash = compute_fileset_hash(files_with_content)
+            cache = get_cache()
+            try:
+                cache.cache_store(fileset_hash, store_id, provider)
+                logger.info(
+                    f"DEDUP: Cached new vector store {store_id} for fileset hash {fileset_hash[:12]}..."
+                )
+            except CacheWriteError as e:
+                logger.warning(f"Failed to cache new store for deduplication: {e}")
+        except Exception as e:
+            logger.warning(f"Failed to cache new store for deduplication: {e}")
+
+    async def _create_new_store(
+        self,
+        client: VectorStoreClient,
+        files: List[str],
+        session_id: Optional[str],
+        name: Optional[str],
+        ttl_seconds: Optional[int],
+    ) -> VectorStore:
+        """Create a new vector store with the given client.
+
+        Args:
+            client: The vector store client to use
+            files: List of file paths to add
+            session_id: Optional session ID for temporary stores
+            name: Optional name for permanent stores
+            ttl_seconds: Optional TTL for the vector store
+
+        Returns:
+            The created vector store
+        """
+        # Create store with appropriate name
+        if name:
+            # Named store (permanent memory)
+            store_name = name
+        elif session_id:
+            # Session store (temporary)
+            store_name = f"session_{session_id}"
+        else:
+            # Ephemeral store
+            store_name = "mcp-the-force-vs"
+
+        store = await client.create(
+            name=store_name,
+            ttl_seconds=ttl_seconds if not name else None,  # Named stores don't expire
+        )
+
+        # Convert file paths to VSFile objects and add them
+        if files:
+            vs_files = []
+            for file_path in files:
+                content = self._read_file_content(file_path)
+                if content:  # Only add if we could read the file
+                    vs_files.append(VSFile(path=file_path, content=content))
+
+            if vs_files:
+                await store.add_files(vs_files)
+                logger.info(
+                    f"Added {len(vs_files)} files to new vector store {store.id}"
+                )
+
+        return store
+
+    async def _check_existing_session_store(
+        self, session_id: Optional[str], provider: str, protected: bool
+    ) -> Optional[Dict[str, Any]]:
+        """Check for existing session-based store in cache.
+
+        Args:
+            session_id: Optional session ID for temporary stores
+            provider: The provider name
+            protected: Whether the store should be protected
+
+        Returns:
+            Store info dict if found, None otherwise
+        """
+        if not session_id:
+            return None
+
+        (
+            existing_store_id,
+            was_reused,
+        ) = await self.vector_store_cache.get_or_create_placeholder(
+            session_id, provider, protected
+        )
+
+        if existing_store_id:
+            logger.info(
+                f"Reusing existing vector store {existing_store_id} for session {session_id}"
+            )
+            return self._format_result(existing_store_id, provider, session_id, None)
+
+        return None
+
     async def create(
         self,
         files: List[str],
@@ -136,369 +536,83 @@ class VectorStoreManager:
             ...     protected=True
             ... )
         """
-        # Validate that either session_id OR name is provided, not both
-        if session_id and name:
-            raise ValueError(
-                "Cannot provide both session_id and name. Use session_id for temporary stores or name for permanent memory stores."
-            )
-        if not session_id and not name:
-            raise ValueError(
-                "Must provide either session_id (for temporary stores) or name (for permanent memory stores)."
-            )
+        # Step 1: Validate and normalize parameters (let validation errors propagate)
+        protected = self._validate_create_params(session_id, name, protected)
 
-        # Named stores are always protected
-        if name:
-            protected = True
-        # Allow empty files for session creation
-        # if not files:
-        #     return None
+        try:
+            # Step 2: Process files for consistent handling
+            files_with_content = self._read_and_process_files(files)
 
-        # DEDUPLICATION: Check if we have an identical fileset cached
-        if files:  # Enable deduplication for all providers
-            try:
-                # Read file contents and compute fileset hash with paths for collision avoidance
-                files_with_content = []
-                project_root = Path.cwd()
+            # Step 3: Check deduplication cache for existing identical fileset
+            if files_with_content:
+                cached_result = await self._check_deduplication_cache(
+                    files_with_content,
+                    session_id,
+                    name,
+                    protected,
+                    ttl_seconds,
+                    provider_metadata,
+                )
+                if cached_result:
+                    return cached_result
 
-                for file_path in files:
-                    content = self._read_file_content(file_path)
-                    if content:
-                        # Normalize path for cross-platform determinism and collision prevention
-                        path_obj = Path(file_path)
-                        try:
-                            # Use relative path when possible for real project files
-                            relative_path = path_obj.relative_to(project_root)
-                            normalized_path = str(
-                                relative_path.as_posix()
-                            )  # Use forward slashes for consistency
-                        except ValueError:
-                            # For files outside project root (e.g., tests), create a deterministic path
-                            # by using parent directory name + filename to prevent collisions
-                            parent_name = (
-                                path_obj.parent.name
-                                if path_obj.parent.name != "/"
-                                else "root"
-                            )
-                            normalized_path = f"{parent_name}/{path_obj.name}"
-                        files_with_content.append((normalized_path, content))
+            # Step 4: Handle mock mode if enabled
+            from ..config import get_settings
 
-                if files_with_content:
-                    fileset_hash = compute_fileset_hash(files_with_content)
-                    cache = get_cache()
-
-                    # Check if we already have a store for this exact fileset
-                    try:
-                        cached_store = cache.get_store_id(fileset_hash)
-                    except CacheReadError as e:
-                        logger.warning(f"Failed to read from deduplication cache: {e}")
-                        cached_store = None
-
-                    if cached_store:
-                        logger.info(
-                            f"DEDUP: Reusing cached vector store {cached_store['store_id']} for fileset hash {fileset_hash[:12]}..."
-                        )
-
-                        # TTL RESET FIX: Register the reused store with new session to renew TTL
-                        store_id = cached_store["store_id"]
-                        provider_to_use = cached_store["provider"]
-
-                        if session_id:
-                            try:
-                                # Register the reused store under the new session to reset TTL
-                                await self.vector_store_cache.register_store(
-                                    vector_store_id=store_id,
-                                    provider=provider_to_use,
-                                    session_id=session_id,
-                                    name=None,
-                                    protected=protected,
-                                    ttl_seconds=ttl_seconds,
-                                    provider_metadata=provider_metadata,
-                                    rollover_from=None,
-                                )
-                                logger.debug(
-                                    f"DEDUP: Renewed TTL for reused store {store_id} with session {session_id}"
-                                )
-                            except Exception as e:
-                                logger.warning(
-                                    f"Failed to renew TTL for reused store {store_id}: {e}"
-                                )
-
-                        result = {
-                            "store_id": store_id,
-                            "provider": provider_to_use,
-                        }
-
-                        # Include either session_id or name in the result
-                        if session_id:
-                            result["session_id"] = session_id
-                        elif name:
-                            result["name"] = name
-
-                        return result
-
-            except Exception as e:
-                logger.warning(
-                    f"Deduplication check failed, proceeding with normal creation: {e}"
+            if get_settings().adapter_mock:
+                return await self._handle_mock_mode_creation(
+                    files,
+                    files_with_content,
+                    session_id,
+                    name,
+                    protected,
+                    ttl_seconds,
+                    provider_metadata,
+                    rollover_from,
+                    provider,
                 )
 
-        # Check if we're in mock mode
-        from ..config import get_settings
-
-        if get_settings().adapter_mock:
-            # In mock mode, use in-memory provider for implementation
-            # but preserve the original provider name for compatibility
-            # Use provided provider or fall back to default
-            original_provider = provider or self.provider
-            mock_client = self._get_client("inmemory")
-
-            # Create a real in-memory store that can be retrieved
-            if name:
-                store_name = name  # Use the actual name for named stores
-            elif session_id:
-                store_name = f"mock_{session_id}"
-            else:
-                store_name = "mock_ephemeral"
-            store = await mock_client.create(store_name, ttl_seconds=ttl_seconds)
-
-            # Create a mock ID with the correct provider prefix
-            # Special case: inmemory provider should keep inmem_ prefix
-            if original_provider == "inmemory":
-                mock_store_id = store.id  # Keep the original inmem_ ID
-            else:
-                mock_store_id = store.id.replace("inmem_", f"{original_provider}_")
-
-            # Store the mapping from mock ID to real inmemory ID (only if different)
-            if mock_store_id != store.id:
-                self._mock_id_mapping[mock_store_id] = store.id
-
-            logger.info(
-                f"[MOCK] Created in-memory vector store: {mock_store_id} (actual: {store.id}) for provider {original_provider} with {len(files)} files"
-            )
-
-            # Add files if provided
-            if files:
-                vs_files = []
-                for file_path in files:
-                    content = self._read_file_content(file_path)
-                    if content:  # Only add if we could read the file
-                        vs_files.append(VSFile(path=file_path, content=content))
-
-                if vs_files:
-                    await store.add_files(vs_files)
-
-            # Register with cache for lifecycle management (same as non-mock path)
-            if session_id or name:
-                await self.vector_store_cache.register_store(
-                    vector_store_id=mock_store_id,
-                    provider=original_provider,  # Use original provider for cache
-                    session_id=session_id,
-                    name=name,
-                    protected=protected,
-                    ttl_seconds=ttl_seconds,
-                    provider_metadata=provider_metadata,
-                    rollover_from=rollover_from,
-                )
-
-            # DEDUPLICATION: Cache the fileset hash for this store (same as normal path)
-            if files:  # Cache for all providers
-                try:
-                    # Re-compute fileset hash for caching (same logic as the deduplication check above)
-                    files_with_content = []
-                    project_root = Path.cwd()
-
-                    for file_path in files:
-                        content = self._read_file_content(file_path)
-                        if content:
-                            # Normalize path for cross-platform determinism
-                            path_obj = Path(file_path)
-                            try:
-                                relative_path = path_obj.relative_to(project_root)
-                                normalized_path = str(relative_path.as_posix())
-                            except ValueError:
-                                parent_name = (
-                                    path_obj.parent.name
-                                    if path_obj.parent.name != "/"
-                                    else "root"
-                                )
-                                normalized_path = f"{parent_name}/{path_obj.name}"
-                            files_with_content.append((normalized_path, content))
-
-                    if files_with_content:
-                        fileset_hash = compute_fileset_hash(files_with_content)
-                        cache = get_cache()
-                        try:
-                            cache.cache_store(
-                                fileset_hash, mock_store_id, original_provider
-                            )
-                            logger.info(
-                                f"DEDUP: Cached new mock vector store {mock_store_id} for fileset hash {fileset_hash[:12]}..."
-                            )
-                        except CacheWriteError as e:
-                            logger.warning(
-                                f"Failed to cache new mock store for deduplication: {e}"
-                            )
-
-                except Exception as e:
-                    logger.warning(
-                        f"Failed to cache new mock store for deduplication: {e}"
-                    )
-
-            result = {
-                "store_id": mock_store_id,
-                "provider": original_provider,  # Return the originally requested provider
-            }
-
-            # Include either session_id or name in the result
-            if session_id:
-                result["session_id"] = session_id
-            elif name:
-                result["name"] = name
-
-            return result
-
-        # Use provided provider or fall back to default
-        provider_to_use = provider or self.provider
-        client = self._get_client(provider_to_use)
-
-        # Check for existing vector store in cache
-        existing_store_id = None
-        was_reused = False
-
-        # For session stores, check cache for reuse
-        if session_id:
-            (
-                existing_store_id,
-                was_reused,
-            ) = await self.vector_store_cache.get_or_create_placeholder(
+            # Step 5: Check for existing session-based store in cache
+            provider_to_use = provider or self.provider
+            existing_store = await self._check_existing_session_store(
                 session_id, provider_to_use, protected
             )
+            if existing_store:
+                return existing_store
 
-            if existing_store_id:
-                logger.info(
-                    f"Reusing existing vector store {existing_store_id} for session {session_id}"
-                )
-                # Return consistent format - always a dict
-                return {
-                    "store_id": existing_store_id,
-                    "provider": provider_to_use,
-                    "session_id": session_id,
-                }
-
-        # For named stores, we don't check for existing - they're managed differently
-        # The vector store provider will handle deduplication based on name
-
-        # Create new vector store
-        store_identifier = name or session_id or "ephemeral"
-        logger.info(f"Creating new vector store for {store_identifier}")
-        try:
+            # Step 6: Create new vector store
+            client = self._get_client(provider_to_use)
+            store_identifier = name or session_id or "ephemeral"
+            logger.info(f"Creating new vector store for {store_identifier}")
             logger.info(
                 f"VectorStoreManager.create: About to create vector store with {len(files)} files"
             )
 
-            # Create store with appropriate name
-            if name:
-                # Named store (permanent memory)
-                store_name = name
-            elif session_id:
-                # Session store (temporary)
-                store_name = f"session_{session_id}"
-            else:
-                # Ephemeral store
-                store_name = "mcp-the-force-vs"
-
-            store = await client.create(
-                name=store_name,
-                ttl_seconds=ttl_seconds
-                if not name
-                else None,  # Named stores don't expire
+            store = await self._create_new_store(
+                client, files, session_id, name, ttl_seconds
             )
-
-            # Convert file paths to VSFile objects
-            vs_files = []
-            for file_path in files:
-                content = self._read_file_content(file_path)
-                if content:  # Only add if we could read the file
-                    vs_files.append(VSFile(path=file_path, content=content))
-
-            if vs_files:
-                await store.add_files(vs_files)
-                logger.info(
-                    f"Added {len(vs_files)} files to new vector store {store.id}"
-                )
-
-            # Register with cache for lifecycle management
-            if session_id or name:
-                # Serialize provider_metadata to JSON if provided
-                await self.vector_store_cache.register_store(
-                    vector_store_id=store.id,
-                    provider=provider_to_use,
-                    session_id=session_id,
-                    name=name,
-                    protected=protected,
-                    ttl_seconds=ttl_seconds,
-                    provider_metadata=provider_metadata,
-                    rollover_from=rollover_from,
-                )
-
             logger.info(f"Created vector store: {store.id}")
 
-            # DEDUPLICATION: Cache the new store for future reuse
-            if files and provider_to_use != "inmemory":
-                try:
-                    # Re-read file contents to compute fileset hash (we may have read them earlier)
-                    files_with_content = []
-                    project_root = Path.cwd()
+            # Step 7: Register store with lifecycle cache
+            await self._register_store_with_cache(
+                store.id,
+                provider_to_use,
+                session_id,
+                name,
+                protected,
+                ttl_seconds,
+                provider_metadata,
+                rollover_from,
+            )
 
-                    for file_path in files:
-                        content = self._read_file_content(file_path)
-                        if content:
-                            # Normalize path for cross-platform determinism and collision prevention
-                            path_obj = Path(file_path)
-                            try:
-                                # Use relative path when possible for real project files
-                                relative_path = path_obj.relative_to(project_root)
-                                normalized_path = str(
-                                    relative_path.as_posix()
-                                )  # Use forward slashes for consistency
-                            except ValueError:
-                                # For files outside project root (e.g., tests), create a deterministic path
-                                # by using parent directory name + filename to prevent collisions
-                                parent_name = (
-                                    path_obj.parent.name
-                                    if path_obj.parent.name != "/"
-                                    else "root"
-                                )
-                                normalized_path = f"{parent_name}/{path_obj.name}"
-                            files_with_content.append((normalized_path, content))
+            # Step 8: Cache for deduplication if files were provided and not inmemory
+            if files_with_content and provider_to_use != "inmemory":
+                await self._cache_store_for_deduplication(
+                    files_with_content, store.id, provider_to_use
+                )
 
-                    if files_with_content:
-                        fileset_hash = compute_fileset_hash(files_with_content)
-                        cache = get_cache()
-                        try:
-                            cache.cache_store(fileset_hash, store.id, provider_to_use)
-                            logger.info(
-                                f"DEDUP: Cached new vector store {store.id} for fileset hash {fileset_hash[:12]}..."
-                            )
-                        except CacheWriteError as e:
-                            logger.warning(
-                                f"Failed to cache new store for deduplication: {e}"
-                            )
-
-                except Exception as e:
-                    logger.warning(f"Failed to cache new store for deduplication: {e}")
-
-            result = {
-                "store_id": store.id,
-                "provider": provider_to_use,
-            }
-
-            # Include either session_id or name in the result
-            if session_id:
-                result["session_id"] = session_id
-            elif name:
-                result["name"] = name
-
-            return result
+            # Step 9: Format and return result
+            return self._format_result(store.id, provider_to_use, session_id, name)
 
         except Exception as e:
             logger.error(f"Error creating vector store: {e}", exc_info=True)
