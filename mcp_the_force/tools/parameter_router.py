@@ -46,6 +46,9 @@ class ParameterRouter:
 
             param_info = metadata.parameters[name]
             route = param_info.route
+            logger.debug(
+                f"[ROUTER] Routing parameter '{name}' with value type {type(value).__name__} to route '{route}'"
+            )
 
             if route == RouteType.PROMPT:
                 if param_info.position is not None:
@@ -91,4 +94,7 @@ class ParameterRouter:
         for _, name, value in prompt_params:
             prompt_dict[name] = value
 
+        logger.info(
+            f"[ROUTER] Final routed params - prompt keys: {list(routed['prompt'].keys() if isinstance(routed['prompt'], dict) else [])}"
+        )
         return routed

@@ -7,3 +7,5 @@ coverage.xml
 uv.lock
 victoria-logs-data/
 .mcp_vector_stores.db
+.venv-py313/
+.buildx-cache/

@@ -6,6 +6,7 @@ from typing import List, Set
 import logging
 import time
 from .thread_pool import run_in_thread_pool
+from ..config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -123,10 +124,8 @@ SKIP_DIRS = {
     "DerivedData",
 }
 
-# Maximum file size (500KB) - files larger than this flow to vector store
-MAX_FILE_SIZE = 500 * 1024
-# Maximum total size to gather (50MB)
-MAX_TOTAL_SIZE = 50 * 1024 * 1024
+# File size limits are now configured in settings
+# Get them when needed via get_settings().mcp.max_file_size
 
 
 def _parse_gitignore(gitignore_path: Path) -> List[str]:
@@ -239,12 +238,6 @@ def _should_skip_dir(dir_path: Path) -> bool:
 
 def _is_text_file(file_path: Path) -> bool:
     """Determine if file is likely a text file."""
-    # Check file size first (quick exit)
-    try:
-        if file_path.stat().st_size > MAX_FILE_SIZE:
-            return False
-    except OSError:
-        return False
 
     # Check extension first (fastest)
     ext = file_path.suffix.lower()
@@ -305,10 +298,21 @@ def gather_file_paths(items: List[str], skip_safety_check: bool = False) -> List
         which may not be what you expect. Use absolute paths for reliable results.
     """
     if not items:
+        logger.warning("gather_file_paths called with empty items list")
         return []
 
+    # Get configured limits
+    settings = get_settings()
+    max_file_size = settings.mcp.max_file_size
+    max_total_size = settings.mcp.max_total_size
+
     start_time = time.time()
-    logger.debug(f"gather_file_paths called with {len(items)} items: {items}")
+    logger.info(
+        f"[FS] gather_file_paths called with {len(items)} items: {items}, skip_safety_check={skip_safety_check}"
+    )
+    logger.debug(
+        f"[FS] File size limits: max_file_size={max_file_size/1024/1024:.1f}MB, max_total_size={max_total_size/1024/1024:.1f}MB"
+    )
 
     project_root = Path.cwd()
     logger.debug(
@@ -320,7 +324,10 @@ def gather_file_paths(items: List[str], skip_safety_check: bool = False) -> List
     total_size = 0
 
     for item in items:
-        if total_size >= MAX_TOTAL_SIZE:
+        if total_size >= max_total_size:
+            logger.warning(
+                f"[FS] Reached total size limit ({max_total_size/1024/1024:.1f}MB), stopping"
+            )
             break
 
         # Check for common relative path patterns and warn
@@ -330,15 +337,11 @@ def gather_file_paths(items: List[str], skip_safety_check: bool = False) -> List
             pass
 
         raw_path = Path(item).expanduser()
-        logger.debug(
-            f"DEBUG gather_file_paths: Processing item '{item}' -> raw_path='{raw_path}'"
-        )
+        logger.info(f"[FS] Processing item '{item}' -> raw_path='{raw_path}'")
 
         if skip_safety_check:
             is_safe = True
-            logger.debug(
-                f"DEBUG gather_file_paths: Skipping safety check for attachment: {raw_path}"
-            )
+            logger.info(f"[FS] Skipping safety check for attachment: {raw_path}")
         else:
             is_safe = _is_safe_path(project_root, raw_path)
             logger.debug(
@@ -372,22 +375,33 @@ def gather_file_paths(items: List[str], skip_safety_check: bool = False) -> List
 
         if path.is_file():
             # Single file
+            logger.info(f"[FS] Processing file: {path}")
             try:
-                if _is_text_file(path):
+                # Check file size first
+                try:
+                    file_size = path.stat().st_size
+                    if file_size > max_file_size:
+                        logger.warning(
+                            f"[FS] Skipping file {path} - too large ({file_size/1024/1024:.1f}MB > {max_file_size/1024/1024:.1f}MB limit)"
+                        )
+                        continue
+                except OSError as e:
+                    logger.warning(f"[FS] Could not stat file {path}: {e}")
+                    continue
+
+                is_text = _is_text_file(path)
+                logger.info(
+                    f"[FS] Is text file: {is_text}, size: {file_size/1024:.1f}KB"
+                )
+                if is_text:
                     path_str = str(path)
                     if path_str not in seen:
                         seen.add(path_str)
                         out.append(path_str)
-                        logger.debug(
-                            f"DEBUG gather_file_paths: Added file {path_str} to output"
-                        )
-                        try:
-                            total_size += path.stat().st_size
-                        except OSError as e:
-                            logger.warning(
-                                f"DEBUG gather_file_paths: Could not stat {path_str}: {e}"
-                            )
-                            pass
+                        logger.info(f"[FS] Added file {path_str} to output")
+                        total_size += file_size
+                else:
+                    logger.info(f"[FS] Skipped non-text file: {path}")
             except (OSError, PermissionError) as e:
                 logger.warning(f"Skipping {path} due to permission error: {e}")
                 continue
@@ -408,7 +422,7 @@ def gather_file_paths(items: List[str], skip_safety_check: bool = False) -> List
             # Walk directory tree
             try:
                 for root, dirs, files in os.walk(path):
-                    if total_size >= MAX_TOTAL_SIZE:
+                    if total_size >= max_total_size:
                         break
 
                     root_path = Path(root)
@@ -418,7 +432,7 @@ def gather_file_paths(items: List[str], skip_safety_check: bool = False) -> List
 
                     # Process files
                     for file_name in files:
-                        if total_size >= MAX_TOTAL_SIZE:
+                        if total_size >= max_total_size:
                             break
 
                         file_path = root_path / file_name
@@ -431,15 +445,23 @@ def gather_file_paths(items: List[str], skip_safety_check: bool = False) -> List
 
                         # Check if it's a text file we want
                         try:
+                            # Check file size first
+                            try:
+                                file_size = file_path.stat().st_size
+                                if file_size > max_file_size:
+                                    logger.debug(
+                                        f"[FS] Skipping file {file_path} - too large ({file_size/1024/1024:.1f}MB)"
+                                    )
+                                    continue
+                            except OSError:
+                                continue
+
                             if _is_text_file(file_path):
                                 file_path_str = str(file_path)
                                 if file_path_str not in seen:
                                     seen.add(file_path_str)
                                     out.append(file_path_str)
-                                    try:
-                                        total_size += file_path.stat().st_size
-                                    except OSError:
-                                        pass
+                                    total_size += file_size
                         except (OSError, PermissionError) as e:
                             logger.warning(
                                 f"Skipping {file_path} due to permission error: {e}"

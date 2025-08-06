@@ -139,7 +139,10 @@ class TokenBudgetOptimizer:
         # STEP 1: Gather all files from context paths
         from ..utils.fs import gather_file_paths_async
 
-        all_file_paths = await gather_file_paths_async(self.context_paths)
+        # For context paths, we should allow files outside the project root
+        all_file_paths = await gather_file_paths_async(
+            self.context_paths, skip_safety_check=True
+        )
         logger.info(f"[OPTIMIZER] Found {len(all_file_paths)} total files")
 
         # STEP 2: Get history information (no decisions)
@@ -345,7 +348,7 @@ class TokenBudgetOptimizer:
         final_inline_paths = [file_data[0] for file_data in final_inline_files]
         await cache.save_stable_list(self.session_id, final_inline_paths)
 
-        # Update sent file info for files we're sending
+        # Determine which files we're sending
         files_to_send = []
         if is_first_call:
             # First call: send all inline files
@@ -358,7 +361,7 @@ class TokenBudgetOptimizer:
                 if file_data[0] in changed_files
             ]
 
-        # Update cache with sent file info
+        # Prepare sent file info for deferred cache update (after successful API call)
         files_to_update = []
         for file_path, _, _ in files_to_send:
             try:
@@ -371,8 +374,8 @@ class TokenBudgetOptimizer:
             except OSError as e:
                 logger.warning(f"Could not stat file {file_path} for cache update: {e}")
 
-        if files_to_update:
-            await cache.batch_update_sent_files(self.session_id, files_to_update)
+        # NOTE: We do NOT update the cache here anymore!
+        # The cache will be updated in executor.py after successful API call
 
         # STEP 7: Build the optimized prompt
         prompt = self.prompt_builder.build_prompt(
@@ -568,6 +571,7 @@ class TokenBudgetOptimizer:
             overflow_paths=[
                 info.path for info in overflow_file_infos
             ],  # Add overflow paths for vector store
+            sent_files_info=files_to_update,  # Deferred cache update info
         )
 
     def _demote_files_to_fit_budget(
