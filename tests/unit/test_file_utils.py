@@ -5,7 +5,6 @@ Unit tests for file utilities including .gitignore handling and file filtering.
 import os
 from pathlib import Path
 import pytest
-from mcp_the_force.utils import fs
 from mcp_the_force.utils.fs import (
     gather_file_paths,
     _is_text_file,
@@ -71,11 +70,21 @@ class TestFileDetection:
         binary_file.write_bytes(b"\x00\x01\x02\x03")
         assert not _is_text_file(binary_file)
 
-    def test_large_file_rejection(self, tmp_path):
-        """Test that files over MAX_FILE_SIZE are rejected."""
+    def test_large_file_rejection(self, tmp_path, monkeypatch):
+        """Test that files over max_file_size are rejected."""
+        from unittest.mock import patch, MagicMock
+
+        # Mock settings with a specific max file size
+        mock_settings = MagicMock()
+        mock_settings.mcp.max_file_size = 1 * 1024 * 1024  # 1MB for testing
+
         large_file = tmp_path / "large.txt"
-        large_file.write_text("x" * (fs.MAX_FILE_SIZE + 1))
-        assert not _is_text_file(large_file)
+        large_file.write_text("x" * (1024 * 1024 + 1))  # 1MB + 1 byte
+
+        with patch("mcp_the_force.utils.fs.get_settings", return_value=mock_settings):
+            # Note: _is_text_file no longer checks size, so this should return True
+            # The size check is now in gather_file_paths
+            assert _is_text_file(large_file)
 
     def test_empty_file(self, tmp_path):
         """Test empty file handling."""
@@ -159,13 +168,22 @@ class TestGatherFiles:
 
     def test_total_size_limit(self, tmp_path, monkeypatch):
         """Test that total size limit is enforced."""
+        from unittest.mock import patch, MagicMock
+
         monkeypatch.chdir(tmp_path)
-        # Create many large files
+
+        # Mock settings with a specific total size limit
+        mock_settings = MagicMock()
+        mock_settings.mcp.max_file_size = 50 * 1024 * 1024  # 50MB per file
+        mock_settings.mcp.max_total_size = 10 * 1024 * 1024  # 10MB total for testing
+
+        # Create many 300KB files (would be 60MB total if all gathered)
         for i in range(200):
             f = tmp_path / f"file{i}.txt"
             f.write_text("x" * 300_000)  # 300KB each
 
-        files = gather_file_paths([str(tmp_path)])
+        with patch("mcp_the_force.utils.fs.get_settings", return_value=mock_settings):
+            files = gather_file_paths([str(tmp_path)])
 
         # Should stop before gathering all files
         assert len(files) < 200
@@ -173,7 +191,7 @@ class TestGatherFiles:
         # Calculate total size
         total_size = sum(Path(f).stat().st_size for f in files)
         # Allow exceeding by one file (300KB) since check happens before adding
-        assert total_size <= fs.MAX_TOTAL_SIZE + 300_000
+        assert total_size <= mock_settings.mcp.max_total_size + 300_000
 
     def test_nonexistent_path(self, tmp_path, monkeypatch):
         """Test handling of non-existent paths."""
@@ -265,3 +283,166 @@ class TestPathTraversal:
         files = gather_file_paths([str(inside)])
 
         assert [str(inside)] == files
+
+
+class TestFileSizeLimits:
+    """Regression tests for file size limit handling."""
+
+    def test_large_text_file_accepted(self, tmp_path, monkeypatch):
+        """Test that text files up to max_file_size are accepted (regression test for 628KB file bug)."""
+        from unittest.mock import patch, MagicMock
+
+        monkeypatch.chdir(tmp_path)
+
+        # Create a mock settings with 50MB file size limit
+        mock_settings = MagicMock()
+        mock_settings.mcp.max_file_size = 50 * 1024 * 1024  # 50MB
+        mock_settings.mcp.max_total_size = 200 * 1024 * 1024  # 200MB
+
+        # Create a 628KB text file (the size that was failing)
+        large_file = tmp_path / "large_log.txt"
+        large_file.write_text("x" * (628 * 1024))  # 628KB
+
+        with patch("mcp_the_force.utils.fs.get_settings", return_value=mock_settings):
+            files = gather_file_paths([str(large_file)])
+
+        # File should be included
+        assert len(files) == 1
+        assert str(large_file) in files
+
+    def test_file_exceeding_max_size_rejected(self, tmp_path, monkeypatch):
+        """Test that files exceeding max_file_size are rejected."""
+        from unittest.mock import patch, MagicMock
+
+        monkeypatch.chdir(tmp_path)
+
+        # Create a mock settings with 1MB file size limit
+        mock_settings = MagicMock()
+        mock_settings.mcp.max_file_size = 1 * 1024 * 1024  # 1MB
+        mock_settings.mcp.max_total_size = 200 * 1024 * 1024  # 200MB
+
+        # Create a 2MB text file
+        huge_file = tmp_path / "huge.txt"
+        huge_file.write_text("x" * (2 * 1024 * 1024))  # 2MB
+
+        with patch("mcp_the_force.utils.fs.get_settings", return_value=mock_settings):
+            files = gather_file_paths([str(huge_file)])
+
+        # File should be rejected
+        assert len(files) == 0
+
+    def test_total_size_limit_with_large_files(self, tmp_path, monkeypatch):
+        """Test that total size limit works with configurable limits."""
+        from unittest.mock import patch, MagicMock
+
+        monkeypatch.chdir(tmp_path)
+
+        # Create a mock settings with 5MB total size limit
+        mock_settings = MagicMock()
+        mock_settings.mcp.max_file_size = 2 * 1024 * 1024  # 2MB per file
+        mock_settings.mcp.max_total_size = 5 * 1024 * 1024  # 5MB total
+
+        # Create three 2MB files (6MB total)
+        for i in range(3):
+            f = tmp_path / f"file{i}.txt"
+            f.write_text("x" * (2 * 1024 * 1024))  # 2MB each
+
+        with patch("mcp_the_force.utils.fs.get_settings", return_value=mock_settings):
+            files = gather_file_paths([str(tmp_path)])
+
+        # Should include 2 or 3 files (check happens before adding, so might include one extra)
+        assert len(files) in [2, 3]
+
+        # Total size should not exceed limit by more than one file
+        total_size = sum(Path(f).stat().st_size for f in files)
+        assert total_size <= mock_settings.mcp.max_total_size + (2 * 1024 * 1024)
+
+    def test_context_paths_with_skip_safety_check(self, tmp_path, monkeypatch):
+        """Test that context paths can use skip_safety_check for files outside project."""
+        from unittest.mock import patch, MagicMock
+
+        # Use a different directory as "project root"
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        monkeypatch.chdir(project_dir)
+
+        # Create a file outside the project
+        external_file = tmp_path / "external" / "data.txt"
+        external_file.parent.mkdir()
+        external_file.write_text("external data")
+
+        mock_settings = MagicMock()
+        mock_settings.mcp.max_file_size = 50 * 1024 * 1024
+        mock_settings.mcp.max_total_size = 200 * 1024 * 1024
+        mock_settings.security.path_blacklist = ["/etc", "/usr", "/bin"]
+
+        with patch("mcp_the_force.utils.fs.get_settings", return_value=mock_settings):
+            # Without skip_safety_check, should be rejected (if safety check was enforced)
+            # But with skip_safety_check=True, should be accepted
+            files = gather_file_paths([str(external_file)], skip_safety_check=True)
+
+        assert len(files) == 1
+        assert str(external_file) in files
+
+    def test_optimizer_integration(self, tmp_path, monkeypatch):
+        """Test that large files work correctly with TokenBudgetOptimizer."""
+        import asyncio
+        from mcp_the_force.optimization.token_budget_optimizer import (
+            TokenBudgetOptimizer,
+        )
+        from unittest.mock import patch, MagicMock, AsyncMock
+
+        monkeypatch.chdir(tmp_path)
+
+        # Create a 628KB text file
+        large_file = tmp_path / "large_log.txt"
+        large_file.write_text("x" * (628 * 1024))
+
+        # Mock settings
+        mock_settings = MagicMock()
+        mock_settings.mcp.max_file_size = 50 * 1024 * 1024
+        mock_settings.mcp.max_total_size = 200 * 1024 * 1024
+        mock_settings.security.path_blacklist = []
+
+        # Create optimizer with the file
+        optimizer = TokenBudgetOptimizer(
+            model_limit=200000,  # 200k context
+            fixed_reserve=30000,
+            session_id="test-session",
+            context_paths=[str(large_file)],
+            priority_paths=[],
+            developer_prompt="Test prompt",
+            instructions="Test instructions",
+            output_format="Test output",
+            project_name="test-project",
+            tool_name="test-tool",
+        )
+
+        with patch("mcp_the_force.utils.fs.get_settings", return_value=mock_settings):
+            # Mock the async parts
+            mock_cache = AsyncMock()
+            mock_cache.get_previous_inline_list.return_value = []
+            mock_cache.is_first_call.return_value = True
+            mock_cache.file_changed_since_last_send.return_value = True
+            mock_cache.save_stable_list.return_value = None
+            mock_cache.get_file_change_status.return_value = ([str(large_file)], [])
+
+            with patch(
+                "mcp_the_force.optimization.token_budget_optimizer.StableListCache",
+                return_value=mock_cache,
+            ):
+                with patch(
+                    "mcp_the_force.unified_session_cache.UnifiedSessionCache"
+                ) as mock_session:
+                    mock_session.return_value.get.return_value = None
+
+                    # Run optimization
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    try:
+                        plan = loop.run_until_complete(optimizer.optimize())
+                    finally:
+                        loop.close()
+
+                    # The file should be included in the plan
+                    assert len(plan.inline_files) > 0 or len(plan.overflow_files) > 0

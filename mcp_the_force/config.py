@@ -97,6 +97,18 @@ class MCPConfig(BaseModel):
     default_vector_store_provider: str = Field(
         "openai", description="Default provider for vector stores"
     )
+    max_file_size: int = Field(
+        50 * 1024 * 1024,  # 50MB
+        description="Maximum file size to process (bytes). Larger files are skipped.",
+        ge=1024 * 1024,  # Min 1MB
+        le=500 * 1024 * 1024,  # Max 500MB
+    )
+    max_total_size: int = Field(
+        200 * 1024 * 1024,  # 200MB
+        description="Maximum total size of all files to process (bytes)",
+        ge=10 * 1024 * 1024,  # Min 10MB
+        le=1024 * 1024 * 1024,  # Max 1GB
+    )
 
 
 class SessionConfig(BaseModel):

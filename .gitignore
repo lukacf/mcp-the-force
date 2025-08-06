@@ -99,3 +99,6 @@ debug_session*.py
 # UV package manager files
 .venv*/
 venv*/
+
+# Claude hooks (local development)
+claude_hooks/

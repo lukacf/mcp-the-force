@@ -167,6 +167,10 @@ class ToolExecutor:
             # Extract context paths
             context_paths = prompt_params.get("context", [])
             priority_context_paths = prompt_params.get("priority_context", [])
+            logger.info(f"[EXECUTOR] Extracted context_paths: {context_paths}")
+            logger.info(
+                f"[EXECUTOR] Extracted priority_context_paths: {priority_context_paths}"
+            )
             instructions = prompt_params.get("instructions", "")
             output_format = prompt_params.get("output_format", "")
 
@@ -687,6 +691,29 @@ class ToolExecutor:
 
             # 8. Handle response
             logger.debug("[STEP 17] Handling response")
+
+            # CRITICAL: Update sent file cache ONLY after successful API call
+            if (
+                session_id
+                and "plan" in locals()
+                and hasattr(plan, "sent_files_info")
+                and plan.sent_files_info
+            ):
+                try:
+                    from ..utils.stable_list_cache import StableListCache
+
+                    cache = StableListCache()
+                    await cache.batch_update_sent_files(
+                        session_id, plan.sent_files_info
+                    )
+                    logger.debug(
+                        f"[EXECUTOR] Updated sent file cache for {len(plan.sent_files_info)} files after successful API call"
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"[EXECUTOR] Failed to update sent file cache after success: {e}"
+                    )
+
             if isinstance(result, dict):
                 logger.debug("[STEP 17.1] Result is dict")
                 content = result.get("content", "")

@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "the-force": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--",
+        "mcp-the-force"
+      ],
+      "env": {
+        "LOGGING__DEVELOPER_MODE__ENABLED": "true"
+      }
+    }
+  }
+}

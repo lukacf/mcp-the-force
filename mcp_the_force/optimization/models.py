@@ -1,7 +1,7 @@
 """Data models for token budget optimization."""
 
-from dataclasses import dataclass
-from typing import List, Optional
+from dataclasses import dataclass, field
+from typing import List, Optional, Tuple
 
 
 @dataclass
@@ -27,6 +27,8 @@ class Plan:
     optimized_prompt: str  # The final optimized XML prompt
     messages: List[dict]  # Complete message list (dev + history + user)
     overflow_paths: Optional[List[str]] = None  # For backward compatibility
+    # Files that should be marked as sent once the call succeeds
+    sent_files_info: List[Tuple[str, int, int]] = field(default_factory=list)
 
     @property
     def inline_paths(self) -> List[str]:
