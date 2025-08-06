@@ -5,7 +5,7 @@ import pytest
 
 from mcp_the_force.adapters.anthropic.adapter import AnthropicAdapter
 from mcp_the_force.adapters.anthropic.capabilities import (
-    Claude4OpusCapabilities,
+    Claude41OpusCapabilities,
     Claude4SonnetCapabilities,
     Claude3OpusCapabilities,
 )
@@ -18,7 +18,7 @@ class TestAnthropicAdapter:
     def test_supported_models(self):
         """Test that all expected models are supported."""
         models = AnthropicAdapter.get_supported_models()
-        assert "claude-opus-4-20250514" in models
+        assert "claude-opus-4-1-20250805" in models
         assert "claude-sonnet-4-20250514" in models
         assert "claude-3-opus-20240229" in models
         assert len(models) == 3
@@ -27,7 +27,7 @@ class TestAnthropicAdapter:
         """Test model string formatting for LiteLLM."""
         adapter = AnthropicAdapter()
         assert adapter._get_model_prefix() == "anthropic"
-        assert adapter.model_name == "claude-opus-4-20250514"  # Default model
+        assert adapter.model_name == "claude-opus-4-1-20250805"  # Default model
 
     @patch("mcp_the_force.config.get_settings")
     def test_api_key_validation(self, mock_settings):
@@ -35,7 +35,7 @@ class TestAnthropicAdapter:
         # Test with valid API key
         mock_settings.return_value.anthropic.api_key = "sk-ant-test-key"
         adapter = AnthropicAdapter()  # Should not raise
-        assert adapter.model_name == "claude-opus-4-20250514"
+        assert adapter.model_name == "claude-opus-4-1-20250805"
 
         # Test without API key
         mock_settings.return_value.anthropic.api_key = None
@@ -63,10 +63,10 @@ class TestAnthropicAdapter:
         params.thinking_budget = 32768
         assert params.get_thinking_budget() == 32768
 
-    def test_claude4_opus_capabilities(self):
-        """Test Claude 4 Opus capabilities."""
-        caps = Claude4OpusCapabilities()
-        assert caps.model_name == "claude-opus-4-20250514"
+    def test_claude41_opus_capabilities(self):
+        """Test Claude 4.1 Opus capabilities."""
+        caps = Claude41OpusCapabilities()
+        assert caps.model_name == "claude-opus-4-1-20250805"
         assert caps.max_context_window == 200_000
         assert caps.max_output_tokens == 32_000
         assert caps.supports_reasoning_effort is True

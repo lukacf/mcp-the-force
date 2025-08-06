@@ -15,6 +15,7 @@ def _get_friendly_name(model_name: str) -> str:
     - 'claude-3-opus' -> 'chat_with_claude3_opus'
     - 'claude-opus-4-0' -> 'chat_with_claude4_opus'
     - 'claude-sonnet-4-0' -> 'chat_with_claude4_sonnet'
+    - 'claude-opus-4-1-20250805' -> 'chat_with_claude41_opus'
     """
     # Remove -0 suffix if present
     if model_name.endswith("-0"):
@@ -27,6 +28,14 @@ def _get_friendly_name(model_name: str) -> str:
         if parts[0] == "claude" and parts[1].isdigit():
             # Pattern: claude-3-opus -> claude3_opus
             result = f"{parts[0]}{parts[1]}_{parts[2]}"
+        elif (
+            parts[0] == "claude"
+            and parts[2] == "4"
+            and parts[3] == "1"
+            and len(parts) >= 5
+        ):
+            # Pattern: claude-opus-4-1-20250805 -> claude41_opus
+            result = f"{parts[0]}{parts[2]}{parts[3]}_{parts[1]}"
         elif parts[0] == "claude" and parts[2] == "4":
             # Pattern: claude-opus-4 -> claude4_opus
             result = f"{parts[0]}{parts[2]}_{parts[1]}"

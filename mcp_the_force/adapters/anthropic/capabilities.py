@@ -23,10 +23,10 @@ class AnthropicBaseCapabilities(AdapterCapabilities):
 
 
 @dataclass
-class Claude4OpusCapabilities(AnthropicBaseCapabilities):
-    """Capabilities for Claude 4 Opus."""
+class Claude41OpusCapabilities(AnthropicBaseCapabilities):
+    """Capabilities for Claude 4.1 Opus."""
 
-    model_name: str = "claude-opus-4-20250514"
+    model_name: str = "claude-opus-4-1-20250805"
     max_context_window: int = 200_000
     max_output_tokens: int = 32_000
     supports_reasoning_effort: bool = True
@@ -61,7 +61,7 @@ class Claude3OpusCapabilities(AnthropicBaseCapabilities):
 
 # Map of model names to their capability instances
 ANTHROPIC_MODEL_CAPABILITIES: Dict[str, AnthropicBaseCapabilities] = {
-    "claude-opus-4-20250514": Claude4OpusCapabilities(),
+    "claude-opus-4-1-20250805": Claude41OpusCapabilities(),
     "claude-sonnet-4-20250514": Claude4SonnetCapabilities(),
     "claude-3-opus-20240229": Claude3OpusCapabilities(),
 }

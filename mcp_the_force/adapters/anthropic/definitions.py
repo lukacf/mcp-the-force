@@ -9,7 +9,7 @@ from .capabilities import (
     ANTHROPIC_MODEL_CAPABILITIES,
     AnthropicBaseCapabilities,
     Claude3OpusCapabilities,
-    Claude4OpusCapabilities,
+    Claude41OpusCapabilities,
     Claude4SonnetCapabilities,
 )
 
@@ -20,7 +20,7 @@ __all__ = [
     "ANTHROPIC_MODEL_CAPABILITIES",
     "AnthropicBaseCapabilities",
     "Claude3OpusCapabilities",
-    "Claude4OpusCapabilities",
+    "Claude41OpusCapabilities",
     "Claude4SonnetCapabilities",
     "AnthropicToolParams",
 ]
