@@ -61,7 +61,7 @@ class AnthropicToolParams(BaseToolParams):  # type: ignore[misc]
         # Map reasoning effort to thinking budget (similar to Gemini)
         effort_to_budget = {
             "low": 4096,
-            "medium": 8192,
-            "high": 16384,
+            "medium": 16384,
+            "high": 32768,
         }
-        return effort_to_budget.get(self.reasoning_effort, 8192)
+        return effort_to_budget.get(self.reasoning_effort, 16384)

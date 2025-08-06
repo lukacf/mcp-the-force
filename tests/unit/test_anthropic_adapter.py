@@ -49,7 +49,7 @@ class TestAnthropicAdapter:
 
         # Test default
         assert params.reasoning_effort == "medium"
-        assert params.get_thinking_budget() == 8192
+        assert params.get_thinking_budget() == 16384
 
         # Test low effort
         params.reasoning_effort = "low"
@@ -57,7 +57,7 @@ class TestAnthropicAdapter:
 
         # Test high effort
         params.reasoning_effort = "high"
-        assert params.get_thinking_budget() == 16384
+        assert params.get_thinking_budget() == 32768
 
         # Explicit budget overrides effort
         params.thinking_budget = 32768
