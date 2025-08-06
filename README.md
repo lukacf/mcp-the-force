@@ -162,7 +162,7 @@ All tools share a common set of parameters like `instructions`, `context`, `sess
 - `chat_with_gemini25_flash`: High-speed summarization and analysis (1M context)
 
 ### Anthropic Models
-- `chat_with_claude4_opus`: Deep analysis and formal reasoning with extended thinking (200k context)
+- `chat_with_claude41_opus`: Deep analysis and formal reasoning with extended thinking (200k context)
 - `chat_with_claude4_sonnet`: Fast long-context processing with extended thinking (200k context)
 - `chat_with_claude3_opus`: Exceptional theory of mind and thoughtful discussions (200k context)
 

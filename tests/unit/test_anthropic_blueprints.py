@@ -21,13 +21,13 @@ class TestAnthropicBlueprints:
         blueprints = get_anthropic_blueprints()
         # Check model names
         model_names = [bp.model_name for bp in blueprints]
-        assert "claude-opus-4-20250514" in model_names
+        assert "claude-opus-4-1-20250805" in model_names
         assert "claude-sonnet-4-20250514" in model_names
         assert "claude-3-opus-20240229" in model_names
 
         # Check friendly tool names
         tool_names = [bp.tool_name for bp in blueprints]
-        assert "chat_with_claude4_opus" in tool_names
+        assert "chat_with_claude41_opus" in tool_names
         assert "chat_with_claude4_sonnet" in tool_names
         assert "chat_with_claude3_opus" in tool_names
 
@@ -36,7 +36,7 @@ class TestAnthropicBlueprints:
         blueprints = get_anthropic_blueprints()
         model_names = [bp.model_name for bp in blueprints]
 
-        assert "claude-opus-4-20250514" in model_names
+        assert "claude-opus-4-1-20250805" in model_names
         assert "claude-sonnet-4-20250514" in model_names
         assert "claude-3-opus-20240229" in model_names
 
@@ -61,7 +61,7 @@ class TestAnthropicBlueprints:
 
         # Check specific descriptions
         opus4_bp = next(
-            bp for bp in blueprints if bp.model_name == "claude-opus-4-20250514"
+            bp for bp in blueprints if bp.model_name == "claude-opus-4-1-20250805"
         )
         assert "extended thinking" in opus4_bp.description
         assert "32k output" in opus4_bp.description
@@ -85,7 +85,7 @@ class TestAnthropicBlueprints:
             ANTHROPIC_MODEL_CAPABILITIES,
         )
 
-        opus4_caps = ANTHROPIC_MODEL_CAPABILITIES["claude-opus-4-20250514"]
+        opus4_caps = ANTHROPIC_MODEL_CAPABILITIES["claude-opus-4-1-20250805"]
         assert opus4_caps.supports_reasoning_effort is True
         assert opus4_caps.max_context_window == 200_000
 
