@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.4] - 2025-08-06
+
+### Fixed
+- **Critical Context Loss Bug**: Files over 500KB were rejected causing complete context loss on API retries
+  - Removed hardcoded 500KB file size limit that was too restrictive for modern LLMs
+  - Made file size limits configurable via settings (50MB default for max_file_size, 200MB for max_total_size)
+  - Moved size checking from `_is_text_file()` to `gather_file_paths()` where it belongs
+- **Cache Pollution on API Failures**: Files were marked as "sent" before API calls completed
+  - Implemented deferred cache updates to only mark files as sent after successful API calls
+  - Prevents context loss when retrying failed API calls
+
+### Added
+- **Configurable File Size Limits**: New settings for controlling file processing limits
+  - `mcp.max_file_size`: Maximum size per file (default 50MB, was hardcoded 500KB)
+  - `mcp.max_total_size`: Maximum total size of all files (default 200MB)
+- **Regression Tests**: Comprehensive test coverage for file size handling scenarios
+- **Project Configuration**: Added `.mcp.json` for MCP server configuration
+
+### Changed
+- Updated `.gitignore` to exclude `claude_hooks/` directory for local development
+
 ## [1.0.3] - 2025-08-06
 
 ### Added
