@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] - 2025-08-06
+
+### Added
+- **Claude Opus 4.1 Support**: Upgraded from Claude Opus 4 to Claude Opus 4.1 (model ID: claude-opus-4-1-20250805)
+- **Vector Store Deduplication System**: Two-level caching system for OpenAI API cost reduction
+  - Store-level deduplication: Reuse entire vector stores for identical file sets
+  - File-level deduplication: Cache individual files to avoid re-uploads and re-embeddings
+  - Cross-platform deterministic hashing with line-ending normalization
+  - SQLite-based persistent cache with WAL mode for concurrency
+  - TTL auto-renewal for cached stores
+  - Expected 50-90% reduction in API costs for duplicate content
+- **Enhanced .gitignore**: Added `.claude/` directory to prevent tracking of Claude settings files
+
+### Changed
+- **Vector Store API Optimization**: Aligned with 2025 OpenAI best practices
+  - Parallel file uploads for improved performance on large codebases
+  - Optimized empty fileset handling to prevent unnecessary API calls
+  - Comprehensive retry logic with exponential backoff
+- Renamed `Claude4OpusCapabilities` class to `Claude41OpusCapabilities` for clarity
+- Updated tool name from `chat_with_claude4_opus` to `chat_with_claude41_opus`
+- Enhanced blueprint generation logic to handle Claude 4.1 naming pattern
+
+### Fixed
+- **Hash Collision Bug**: Resolved deduplication system hash collision issues
+- **Cross-Platform Hashing**: Fixed non-deterministic hashing across different operating systems
+- **Silent Cache Failures**: Implemented proper error propagation and graceful degradation
+- **Race Conditions**: Eliminated file caching system race conditions
+- **Code Complexity**: Refactored to reduce cyclomatic complexity
+- **Test Reliability**: Resolved multiprocess test failures with synchronous approach
+- **Integration Tests**: Fixed async pattern issues for reliable test execution
+- Fixed import errors in `definitions.py` for proper Claude 4.1 capability exports
+
+### Technical Improvements
+- Implemented SQLite retry logic with exponential backoff
+- Added comprehensive integration test coverage for deduplication scenarios
+- Improved error handling and logging throughout vector store operations
+- Enhanced E2E test configurations for real-world scenarios
+
 ## [1.0.2] - 2025-08-03
 
 ### Added
