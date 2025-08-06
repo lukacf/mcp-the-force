@@ -112,7 +112,11 @@ class AnthropicAdapter(LiteLLMBaseAdapter):
         ):
             request_params["response_format"] = {
                 "type": "json_schema",
-                "json_schema": params.structured_output_schema,
+                "json_schema": {
+                    "name": "response",
+                    "schema": params.structured_output_schema,
+                    "strict": True,
+                },
             }
 
         return request_params
