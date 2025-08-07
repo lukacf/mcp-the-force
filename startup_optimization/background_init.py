@@ -27,7 +27,7 @@ async def optimized_server_lifespan(server) -> AsyncIterator[None]:
         ollama_task.cancel()
 
         import contextlib
-        
+
         with contextlib.suppress(asyncio.CancelledError):
             await cleanup_task
             await ollama_task
