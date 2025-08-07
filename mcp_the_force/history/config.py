@@ -240,12 +240,12 @@ class HistoryStorageConfig:
             rows = self._db.execute(query, store_types).fetchall()
             results.extend([(row["store_type"], row["store_id"]) for row in rows])
 
-            # CRITICAL FIX: Also include Force conversation sessions from unified_sessions
-            if "conversation" in store_types:
+            # Include raw session data only when explicitly requested via "session" store type
+            if "session" in store_types:
                 try:
                     # Get all Force conversation sessions that have history content
                     unified_query = """
-                        SELECT DISTINCT 'conversation' as store_type, 
+                        SELECT DISTINCT 'session' as store_type, 
                                (project || '||' || tool || '||' || session_id) as store_id
                         FROM unified_sessions 
                         WHERE history IS NOT NULL 
@@ -262,7 +262,7 @@ class HistoryStorageConfig:
                         raise  # Re-raise if it's a different error
 
             logger.debug(
-                f"[HISTORY] Found {len(results)} total stores: {len([r for r in results if r[0] == 'conversation'])} conversation, {len([r for r in results if r[0] == 'commit'])} commit"
+                f"[HISTORY] Found {len(results)} total stores: {len([r for r in results if r[0] == 'conversation'])} conversation, {len([r for r in results if r[0] == 'commit'])} commit, {len([r for r in results if r[0] == 'session'])} session"
             )
             return results
 

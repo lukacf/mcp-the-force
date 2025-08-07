@@ -364,8 +364,8 @@ class HistorySearchService:
                 f"[SEARCH_HISTORY] Searching store {store_id} ({store_type}) for: '{query}'"
             )
 
-            # CRITICAL FIX: Handle unified session stores (virtual stores from unified_sessions)
-            if "||" in store_id and store_type == "conversation":
+            # Handle raw session stores (virtual stores from unified_sessions) only when explicitly requested
+            if store_type == "session":
                 return await self._search_unified_session_store(
                     store_id, query, max_results
                 )

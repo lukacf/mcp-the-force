@@ -1,9 +1,13 @@
 # Changelog
 
 ## 1.0.5
+Added GPT-5 model family support (gpt-5, gpt-5-mini, gpt-5-nano) with 400k context windows
+Fixed history system to restore proper conversation summarization flow 
+Added model-specific developer prompts with parallelized tool call instructions
 Fixed Force conversations not showing in project history search
 Added Ollama adapter with LiteLLM integration and model discovery  
 Fixed deep research models to use web_search_preview tool correctly
+Removed vestigial blueprint registration file to prevent conflicts
 
 ## 1.0.4
 Fixed critical context loss bug with files over 500KB causing API retry failures

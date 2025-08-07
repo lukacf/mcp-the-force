@@ -189,9 +189,32 @@ def create_tool_function(metadata: ToolMetadata):
             else:
                 annotations[sig_param.name] = Optional[str]
         elif is_list_str_type:
-            # Keep List[str] as-is - don't convert to Optional[str]
-            # MCP clients should pass lists correctly
-            annotations[sig_param.name] = sig_param.annotation
+            # Accept either a real array or a JSON string.
+            # Pydantic will validate Union[List[str], str, None], and our
+            # ParameterValidator will coerce strings like "[\"a\"]" to List[str].
+            from typing import (
+                Union as _Union,
+                Optional as _Optional,
+                List as _List,
+                Annotated as _Annotated,
+            )
+
+            # Detect Optional[List[str]] vs List[str]
+            is_optional_list = (
+                get_origin(actual_type) is Union and type(None) in get_args(actual_type)
+            )
+            base_union = _Union[_List[str], str]
+            accepts_type = _Optional[base_union] if is_optional_list else base_union
+
+            if get_origin(sig_param.annotation) is Annotated:
+                # Preserve Field(description=...)
+                args = get_args(sig_param.annotation)
+                if len(args) > 1 and hasattr(args[1], "description"):
+                    annotations[sig_param.name] = _Annotated[accepts_type, args[1]]
+                else:
+                    annotations[sig_param.name] = accepts_type
+            else:
+                annotations[sig_param.name] = accepts_type
         else:
             # For all other types, use the annotation (which may include description)
             annotations[sig_param.name] = sig_param.annotation
