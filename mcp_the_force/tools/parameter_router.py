@@ -94,6 +94,18 @@ class ParameterRouter:
         for _, name, value in prompt_params:
             prompt_dict[name] = value
 
+        # COMPATIBILITY FIX: Ensure structured_output_schema is always present
+        # Add it to adapter params if not already there
+        adapter_dict = routed["adapter"]
+        if (
+            isinstance(adapter_dict, dict)
+            and "structured_output_schema" not in adapter_dict
+        ):
+            adapter_dict["structured_output_schema"] = None
+            logger.debug(
+                "[ROUTER] Added structured_output_schema=None for compatibility"
+            )
+
         logger.info(
             f"[ROUTER] Final routed params - prompt keys: {list(routed['prompt'].keys() if isinstance(routed['prompt'], dict) else [])}"
         )

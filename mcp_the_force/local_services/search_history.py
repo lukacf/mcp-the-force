@@ -364,6 +364,12 @@ class HistorySearchService:
                 f"[SEARCH_HISTORY] Searching store {store_id} ({store_type}) for: '{query}'"
             )
 
+            # CRITICAL FIX: Handle unified session stores (virtual stores from unified_sessions)
+            if "||" in store_id and store_type == "conversation":
+                return await self._search_unified_session_store(
+                    store_id, query, max_results
+                )
+
             # Get the store using vector store manager
             if not self.vector_store_manager:
                 logger.error("Vector store manager not initialized")
@@ -413,3 +419,94 @@ class HistorySearchService:
         except Exception as e:
             logger.error(f"Failed to search store {store_id}: {e}")
             raise
+
+    async def _search_unified_session_store(
+        self, store_id: str, query: str, max_results: int
+    ) -> List[Dict[str, Any]]:
+        """Search within a unified session store (Force conversation)."""
+        try:
+            # Parse virtual store_id: "project||tool||session_id"
+            parts = store_id.split("||")
+            if len(parts) != 3:
+                logger.error(f"Invalid unified session store_id format: {store_id}")
+                return []
+
+            project, tool, session_id = parts
+            logger.debug(
+                f"[SEARCH_HISTORY] Searching unified session: project={project}, tool={tool}, session_id={session_id}"
+            )
+
+            # Get session history from unified_sessions table
+            async def _get_session_history():
+                loop = asyncio.get_running_loop()
+
+                def _fetch_history():
+                    if hasattr(self, "memory_config") and self.memory_config:
+                        db = self.memory_config._sync_config._db
+                        query_sql = "SELECT history FROM unified_sessions WHERE project=? AND tool=? AND session_id=?"
+                        row = db.execute(
+                            query_sql, (project, tool, session_id)
+                        ).fetchone()
+                        return row["history"] if row else None
+                    return None
+
+                return await loop.run_in_executor(None, _fetch_history)
+
+            history = await _get_session_history()
+            if not history:
+                logger.debug(f"No history found for session {session_id}")
+                return []
+
+            # Simple text search within the conversation history
+            import json
+
+            try:
+                history_data = json.loads(history)
+                results = []
+
+                # Search through conversation messages
+                for i, message in enumerate(history_data):
+                    if isinstance(message, dict):
+                        content = message.get("content", "")
+                        if isinstance(content, list):
+                            # Handle content arrays
+                            text_content = " ".join(
+                                item.get("text", "")
+                                for item in content
+                                if isinstance(item, dict) and item.get("type") == "text"
+                            )
+                        else:
+                            text_content = str(content)
+
+                        # Simple case-insensitive search
+                        if query.lower() in text_content.lower():
+                            result = {
+                                "content": text_content[:1000],  # Limit content length
+                                "store_id": store_id,
+                                "score": 0.8,  # Fixed score for text matches
+                                "metadata": {
+                                    "project": project,
+                                    "tool": tool,
+                                    "session_id": session_id,
+                                    "message_index": i,
+                                    "role": message.get("role", "unknown"),
+                                    "source": "unified_session",
+                                },
+                            }
+                            results.append(result)
+
+                            if len(results) >= max_results:
+                                break
+
+                logger.debug(
+                    f"[SEARCH_HISTORY] Unified session {session_id} returned {len(results)} results"
+                )
+                return results
+
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse session history JSON: {e}")
+                return []
+
+        except Exception as e:
+            logger.error(f"Failed to search unified session store {store_id}: {e}")
+            return []

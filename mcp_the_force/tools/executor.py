@@ -110,6 +110,19 @@ class ToolExecutor:
         if metadata is None:
             raise ValueError("Tool metadata is None - tool not found in registry")
 
+        # Debug logging for structured output issue
+        logger.debug(
+            f"[EXECUTOR_DEBUG] execute() called with metadata.id={metadata.id}"
+        )
+        logger.debug(f"[EXECUTOR_DEBUG] kwargs keys: {list(kwargs.keys())}")
+        logger.debug(
+            f"[EXECUTOR_DEBUG] structured_output_schema in kwargs: {'structured_output_schema' in kwargs}"
+        )
+        if "structured_output_schema" in kwargs:
+            logger.debug(
+                f"[EXECUTOR_DEBUG] structured_output_schema value: {kwargs['structured_output_schema']}"
+            )
+
         start_time = asyncio.get_event_loop().time()
         tool_id = metadata.id
         # Create unique operation ID early for consistent logging
@@ -455,26 +468,45 @@ class ToolExecutor:
             session_params = routed_params.get("session", {})
             param_data.update(session_params)
 
-            # Add structured output parameters
+            # Add structured output parameters (only if model supports them)
             structured_output_params = routed_params.get("structured_output", {})
-            param_data.update(structured_output_params)
 
-            # Handle structured output schema parsing
-            schema_str = None
-            if isinstance(structured_output_params, dict):
-                schema_str = structured_output_params.get("structured_output_schema")
-            if schema_str is not None:
-                try:
-                    import json
+            # Check if model supports structured output before adding these parameters
+            if metadata.capabilities and hasattr(
+                metadata.capabilities, "supports_structured_output"
+            ):
+                if metadata.capabilities.supports_structured_output:
+                    param_data.update(structured_output_params)
 
-                    schema = (
-                        json.loads(schema_str)
-                        if isinstance(schema_str, str)
-                        else schema_str
+                    # Handle structured output schema parsing
+                    schema_str = None
+                    if isinstance(structured_output_params, dict):
+                        schema_str = structured_output_params.get(
+                            "structured_output_schema"
+                        )
+                    if schema_str is not None:
+                        try:
+                            import json
+
+                            schema = (
+                                json.loads(schema_str)
+                                if isinstance(schema_str, str)
+                                else schema_str
+                            )
+                            param_data["structured_output_schema"] = schema
+                        except (json.JSONDecodeError, ValueError) as e:
+                            raise ValueError(
+                                f"Invalid JSON in structured_output_schema: {e}"
+                            )
+                else:
+                    logger.debug(
+                        f"Skipping structured output parameters for {metadata.id} - not supported by model"
                     )
-                    param_data["structured_output_schema"] = schema
-                except (json.JSONDecodeError, ValueError) as e:
-                    raise ValueError(f"Invalid JSON in structured_output_schema: {e}")
+            else:
+                # For local tools or models without capabilities, skip structured output
+                logger.debug(
+                    f"Skipping structured output parameters for {metadata.id} - no capabilities defined"
+                )
 
             # Add prompt parameters that adapters might need
             # Instructions and output_format are used to build the XML prompt
@@ -554,6 +586,19 @@ class ToolExecutor:
                 f"[PARAM_DEBUG] Final param_data keys: {list(param_data.keys())}"
             )
             logger.debug(f"[PARAM_DEBUG] param_data: {param_data}")
+
+            # ALWAYS ensure structured_output_schema exists for compatibility
+            # Set to None for models that don't support it
+            if "structured_output_schema" not in param_data:
+                param_data["structured_output_schema"] = None
+                logger.debug(
+                    "[PARAM_DEBUG] Added structured_output_schema=None for compatibility"
+                )
+
+            logger.debug(
+                f"[PARAM_DEBUG] Final structured_output_schema: {param_data.get('structured_output_schema')}"
+            )
+
             params_instance = SimpleNamespace(**param_data)
 
             # Create CallContext

@@ -1,0 +1,55 @@
+{
+  "blocking_initialization": {
+    "successful_runs": 3,
+    "failed_runs": 0,
+    "init_time": {
+      "mean": 0.05248719438289603,
+      "median": 0.0002222080947831273,
+      "stdev": 0.09058992173725698,
+      "min": 0.0001479580532759428,
+      "max": 0.157091417000629
+    },
+    "total_time": {
+      "mean": 0.2932069306649889,
+      "median": 0.00022825004998594522
+    },
+    "errors": []
+  },
+  "async_components": {
+    "error": "Analysis failed: OllamaAdapter.__init__() missing 1 required positional argument: 'model'"
+  },
+  "network_operations": {
+    "connectivity": {
+      "time": 0.006055625039152801,
+      "status": 200,
+      "success": true
+    },
+    "model_info": {
+      "time": 0.0057825829135254025,
+      "status": 404,
+      "success": true
+    }
+  },
+  "recommendations": [
+    "\ud83d\ude80 CRITICAL: Move Ollama initialization to background",
+    "   - Remove blocking asyncio.run(ollama_startup.initialize()) from server.py",
+    "   - Initialize Ollama adapter asynchronously after server starts",
+    "   - Use lazy loading pattern for Ollama tools",
+    "",
+    "\u26a1 HIGH: Implement timeout and fallback",
+    "   - Add aggressive timeout for Ollama discovery (2-3 seconds max)",
+    "   - Gracefully degrade if Ollama is not available",
+    "   - Cache discovered models between restarts",
+    "",
+    "\ud83d\udd27 MEDIUM: Optimize network operations",
+    "   - Use connection pooling for Ollama HTTP client",
+    "   - Parallelize model discovery requests",
+    "   - Skip model info requests for basic functionality",
+    "",
+    "\ud83d\udccb IMPLEMENTATION PLAN:",
+    "   1. Move ollama_startup.initialize() to lifespan context manager",
+    "   2. Register static Ollama tools first, dynamic ones when ready",
+    "   3. Show 'Ollama initializing...' status in tool descriptions",
+    "   4. Expected improvement: 15s \u2192 0.1s startup, +2s first use"
+  ]
+}

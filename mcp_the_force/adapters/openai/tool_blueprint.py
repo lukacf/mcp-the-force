@@ -3,12 +3,12 @@
 from mcp_the_force.tools.blueprint import ToolBlueprint
 from mcp_the_force.tools.blueprint_registry import register_blueprints
 from .definitions import OpenAIToolParams
-from .models import OPENAI_MODEL_CAPABILITIES
+from .definitions import get_openai_model_capabilities
 
 # Generate blueprints from model capabilities
 blueprints = []
 
-for model_name, capabilities in OPENAI_MODEL_CAPABILITIES.items():
+for model_name, capabilities in get_openai_model_capabilities().items():
     # Determine tool type based on model name
     if "deep-research" in model_name:
         tool_type = "research"

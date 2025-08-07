@@ -85,6 +85,26 @@ def _validate_blueprint(bp: ToolBlueprint) -> None:
                 )
 
 
+def unregister_blueprints(model_names: List[str]) -> None:
+    """Unregister blueprints by model names.
+
+    Args:
+        model_names: List of model names to unregister
+    """
+    global BLUEPRINTS, _REGISTERED_MODELS
+
+    for model_name in model_names:
+        if model_name in _REGISTERED_MODELS:
+            # Remove from blueprints list
+            BLUEPRINTS = [bp for bp in BLUEPRINTS if bp.model_name != model_name]
+            _REGISTERED_MODELS.discard(model_name)
+            logger.debug(f"Unregistered blueprint for {model_name}")
+        else:
+            logger.warning(
+                f"Model {model_name} not found in registry, cannot unregister"
+            )
+
+
 def clear_blueprints() -> None:
     """Clear all registered blueprints (useful for testing)."""
     BLUEPRINTS.clear()

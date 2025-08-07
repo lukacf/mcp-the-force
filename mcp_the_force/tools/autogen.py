@@ -26,8 +26,12 @@ for adapter_key in list_adapters():
 
     # Log the adapter config state for debugging
     if provider_config:
+        # Check if provider has api_key (not all providers do, e.g., Ollama is local)
+        has_api_key = hasattr(provider_config, "api_key") and bool(
+            provider_config.api_key
+        )
         logger.debug(
-            f"[AUTOGEN] {adapter_key}: enabled={provider_config.enabled}, api_key_present={bool(provider_config.api_key)}"
+            f"[AUTOGEN] {adapter_key}: enabled={provider_config.enabled}, api_key_present={has_api_key}"
         )
     else:
         logger.debug(f"[AUTOGEN] {adapter_key}: No provider config found")

@@ -231,11 +231,40 @@ class HistoryStorageConfig:
         with self._lock:
             if not store_types:
                 return []
+
+            results = []
+
+            # Get traditional stores from stores table
             placeholders = ",".join("?" for _ in store_types)
-            # FIX: Remove "AND is_active = 1" to search all historical stores
             query = f"SELECT store_type, store_id FROM stores WHERE store_type IN ({placeholders})"
             rows = self._db.execute(query, store_types).fetchall()
-            return [(row["store_type"], row["store_id"]) for row in rows]
+            results.extend([(row["store_type"], row["store_id"]) for row in rows])
+
+            # CRITICAL FIX: Also include Force conversation sessions from unified_sessions
+            if "conversation" in store_types:
+                try:
+                    # Get all Force conversation sessions that have history content
+                    unified_query = """
+                        SELECT DISTINCT 'conversation' as store_type, 
+                               (project || '||' || tool || '||' || session_id) as store_id
+                        FROM unified_sessions 
+                        WHERE history IS NOT NULL 
+                          AND LENGTH(TRIM(history)) > 0
+                          AND tool LIKE 'chat_with_%'
+                    """
+                    unified_rows = self._db.execute(unified_query).fetchall()
+                    results.extend(
+                        [(row["store_type"], row["store_id"]) for row in unified_rows]
+                    )
+                except sqlite3.OperationalError as e:
+                    # unified_sessions table doesn't exist yet - this is OK for older databases
+                    if "no such table: unified_sessions" not in str(e):
+                        raise  # Re-raise if it's a different error
+
+            logger.debug(
+                f"[HISTORY] Found {len(results)} total stores: {len([r for r in results if r[0] == 'conversation'])} conversation, {len([r for r in results if r[0] == 'commit'])} commit"
+            )
+            return results
 
     def close(self):
         """Close database connection."""

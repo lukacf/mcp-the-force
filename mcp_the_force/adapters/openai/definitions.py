@@ -182,9 +182,15 @@ class DeepResearchCapabilities(OSeriesCapabilities):
     model_family: str = "research"
     force_background: bool = True  # Always background
     supports_streaming: bool = False
-    supports_live_search: bool = True
-    web_search_tool: str = (
-        "web_search_preview"  # Deep research models require this tool
+    supports_tools: bool = (
+        False  # Deep research models don't support custom function calling tools
+    )
+    supports_web_search: bool = True  # Enable native web search tool (required)
+    supports_live_search: bool = False  # No custom live search tools
+    web_search_tool: str = "web_search_preview"  # Use native OpenAI web search tool
+    parallel_function_calls: int = 0  # No function calling at all
+    native_vector_store_provider: Optional[str] = (
+        None  # No vector store provider - OpenAI handles natively
     )
     description: str = "Ultra-deep research with autonomous web search (30-60+ min)"
 
@@ -213,14 +219,27 @@ class O4MiniDeepResearchCapabilities(DeepResearchCapabilities):
 # MODEL REGISTRY
 # ====================================================================
 
-OPENAI_MODEL_CAPABILITIES = {
-    "o3": O3Capabilities(),
-    "o3-pro": O3ProCapabilities(),
-    "codex-mini": CodexMiniCapabilities(),
-    "gpt-4.1": GPT41Capabilities(),
-    "o3-deep-research": O3DeepResearchCapabilities(),
-    "o4-mini-deep-research": O4MiniDeepResearchCapabilities(),
-}
+
+def get_openai_model_capabilities():
+    """Factory function to create fresh capability instances."""
+    return {
+        "o3": O3Capabilities(),
+        "o3-pro": O3ProCapabilities(),
+        "codex-mini": CodexMiniCapabilities(),
+        "gpt-4.1": GPT41Capabilities(),
+        "o3-deep-research": O3DeepResearchCapabilities(),
+        "o4-mini-deep-research": O4MiniDeepResearchCapabilities(),
+    }
+
+
+def get_model_capability(model_name: str):
+    """Get a fresh capability instance for a specific model."""
+    capabilities = get_openai_model_capabilities()
+    return capabilities.get(model_name)
+
+
+# Create the registry using the factory function
+OPENAI_MODEL_CAPABILITIES = get_openai_model_capabilities()
 
 
 # ====================================================================

@@ -35,6 +35,9 @@ from .tools.integration import (  # noqa: E402
     register_all_tools,
 )
 
+# Import Ollama startup for dynamic model discovery
+from .adapters.ollama import startup as ollama_startup  # noqa: E402
+
 logger = logging.getLogger(__name__)
 
 
@@ -45,9 +48,19 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[None]:
     cleanup_task = asyncio.create_task(_periodic_cleanup_task())
     logger.info("Background vector store cleanup task started")
 
+    # Ollama adapter already pre-initialized during server setup
+    # Just log that we're starting up
+    logger.info("Server lifespan started - Ollama tools should be available")
+
     try:
         yield  # Server is now running
     finally:
+        # Shutdown Ollama adapter
+        try:
+            ollama_startup.shutdown()
+        except Exception as e:
+            logger.error(f"Error during Ollama shutdown: {e}")
+
         # Cancel cleanup task on shutdown
         cleanup_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
@@ -55,10 +68,21 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[None]:
         logger.info("Background cleanup task stopped")
 
 
+# Initialize Ollama adapter BEFORE tool registration for dynamic model discovery
+logger.info("Initializing Ollama adapter for dynamic model discovery...")
+try:
+    import asyncio
+
+    asyncio.run(ollama_startup.initialize())
+    logger.info("Ollama adapter pre-initialized successfully")
+except Exception as e:
+    logger.warning(f"Ollama adapter pre-initialization failed: {e}")
+    # Continue - static tools will still work
+
 # Initialize FastMCP server with lifespan
 mcp = FastMCP("mcp-the-force", lifespan=server_lifespan)
 
-# Register all dataclass-based tools
+# Register all dataclass-based tools (including dynamic Ollama tools)
 logger.debug("Registering dataclass-based tools...")
 # Force an INFO level message to test if logging is working
 logger.info("TEST: MCP The-Force server starting up...")

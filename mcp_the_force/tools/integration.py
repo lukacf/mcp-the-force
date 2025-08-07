@@ -8,6 +8,7 @@ import logging
 from pydantic import Field
 from .registry import list_tools, ToolMetadata
 from .executor import executor
+from .naming import sanitize_tool_name
 from ..utils.scope_manager import scope_manager
 from ..logging.setup import get_instance_id
 
@@ -213,14 +214,22 @@ def register_all_tools(mcp: FastMCP) -> None:
             # Create function with proper signature
             tool_func = create_tool_function(metadata)
 
-            # Register with FastMCP under primary name
-            mcp.tool(name=tool_id)(tool_func)
-            logger.debug(f"Registered tool with FastMCP: {tool_id}")
+            # Sanitize tool name for MCP compliance
+            safe_tool_id = sanitize_tool_name(tool_id)
 
-            # Register aliases
+            # Register with FastMCP under sanitized primary name
+            mcp.tool(name=safe_tool_id)(tool_func)
+            logger.debug(
+                f"Registered tool with FastMCP: {safe_tool_id} (from {tool_id})"
+            )
+
+            # Register aliases with sanitization
             for alias in metadata.aliases:
-                mcp.tool(name=alias)(tool_func)
-                logger.debug(f"Registered alias: {alias} -> {tool_id}")
+                safe_alias = sanitize_tool_name(alias)
+                mcp.tool(name=safe_alias)(tool_func)
+                logger.debug(
+                    f"Registered alias: {safe_alias} -> {safe_tool_id} (from {alias} -> {tool_id})"
+                )
 
         except Exception as e:
             logger.error(f"Failed to register tool {tool_id}: {e}")
