@@ -54,11 +54,11 @@ class SearchProjectHistory(ToolSpec):
     store_types: List[str] = Route.prompt(  # type: ignore[assignment]
         description=(
             "(Optional) A list of history store types to search. Allows scoping the search to specific "
-            "types of historical data. Valid options are 'conversation' (past AI assistant interactions) "
-            "and 'commit' (git commit messages and changes). You can search one or both types. "
-            "Syntax: A JSON-formatted list of strings. "
+            "types of historical data. Valid options are 'conversation' (summarized AI assistant interactions), "
+            "'commit' (git commit messages and changes), and 'session' (raw conversation transcripts). You can search one or multiple types. "
+            "Syntax: An array of strings (not a JSON string). Do not wrap the array in quotes. "
             "Default: ['conversation', 'commit']. "
-            "Example: store_types=['conversation']"
+            'Example: store_types=["conversation"]'
         ),
         default_factory=lambda: ["conversation", "commit"],
     )

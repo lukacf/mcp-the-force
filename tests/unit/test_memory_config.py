@@ -264,3 +264,296 @@ class TestHistoryStorageConfig:
         conn.close()
 
         assert count == 2  # One active store per type
+
+
+class TestForceConversationIntegration:
+    """Test Force conversation discovery integration."""
+
+    def test_get_stores_with_types_basic_stores_only(self, temp_db):
+        """Test get_stores_with_types with only traditional stores."""
+        config = HistoryStorageConfig(db_path=temp_db)
+
+        # Manually insert traditional stores
+        conn = sqlite3.connect(temp_db)
+        conn.execute(
+            "INSERT INTO stores (store_id, store_type, doc_count, created_at, is_active) "
+            "VALUES (?, ?, ?, ?, ?)",
+            ("vs_conversation_123", "conversation", 10, "2024-01-01", 1),
+        )
+        conn.execute(
+            "INSERT INTO stores (store_id, store_type, doc_count, created_at, is_active) "
+            "VALUES (?, ?, ?, ?, ?)",
+            ("vs_commit_456", "commit", 5, "2024-01-01", 1),
+        )
+        conn.commit()
+        conn.close()
+
+        # Test getting conversation stores
+        stores = config.get_stores_with_types(["conversation"])
+        assert len(stores) == 1
+        assert stores[0] == ("conversation", "vs_conversation_123")
+
+        # Test getting commit stores
+        stores = config.get_stores_with_types(["commit"])
+        assert len(stores) == 1
+        assert stores[0] == ("commit", "vs_commit_456")
+
+        # Test getting both types
+        stores = config.get_stores_with_types(["conversation", "commit"])
+        assert len(stores) == 2
+        store_dict = dict(stores)
+        assert store_dict["conversation"] == "vs_conversation_123"
+        assert store_dict["commit"] == "vs_commit_456"
+
+    def test_get_stores_with_types_includes_force_conversations(self, temp_db):
+        """Test that get_stores_with_types includes Force conversation sessions."""
+        config = HistoryStorageConfig(db_path=temp_db)
+
+        # Add traditional conversation store
+        conn = sqlite3.connect(temp_db)
+        conn.execute(
+            "INSERT INTO stores (store_id, store_type, doc_count, created_at, is_active) "
+            "VALUES (?, ?, ?, ?, ?)",
+            ("vs_traditional_conv", "conversation", 10, "2024-01-01", 1),
+        )
+
+        # Add unified_sessions table (same schema as sessions.sqlite3)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS unified_sessions(
+                project TEXT NOT NULL,
+                tool TEXT NOT NULL, 
+                session_id TEXT NOT NULL,
+                history TEXT,
+                provider_metadata TEXT,
+                updated_at INTEGER NOT NULL,
+                PRIMARY KEY (project, tool, session_id)
+            )
+        """)
+
+        # Insert Force conversation sessions
+        import json
+
+        sample_history = json.dumps(
+            [
+                {
+                    "role": "user",
+                    "content": "ZEPHYR-NEXUS-QUANTUM-7734: Memory vault test",
+                },
+                {"role": "assistant", "content": "ECHO-PROTOCOL-OMEGA confirmed"},
+            ]
+        )
+
+        conn.execute(
+            "INSERT INTO unified_sessions (project, tool, session_id, history, updated_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (
+                "mcp-the-force",
+                "chat_with_gemini25_flash",
+                "memory-vault-diagnostic",
+                sample_history,
+                1234567890,
+            ),
+        )
+
+        conn.execute(
+            "INSERT INTO unified_sessions (project, tool, session_id, history, updated_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (
+                "mcp-the-force",
+                "chat_with_o3",
+                "debug-session",
+                sample_history,
+                1234567891,
+            ),
+        )
+
+        # Insert session with no history (should be excluded)
+        conn.execute(
+            "INSERT INTO unified_sessions (project, tool, session_id, history, updated_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            ("mcp-the-force", "chat_with_gpt41", "empty-session", None, 1234567892),
+        )
+
+        # Insert non-chat tool (should be excluded)
+        conn.execute(
+            "INSERT INTO unified_sessions (project, tool, session_id, history, updated_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (
+                "mcp-the-force",
+                "search_project_history",
+                "search-session",
+                sample_history,
+                1234567893,
+            ),
+        )
+
+        conn.commit()
+        conn.close()
+
+        # Test getting conversation stores - should include traditional + Force sessions
+        stores = config.get_stores_with_types(["conversation"])
+        assert len(stores) == 3, f"Expected 3 stores, got {len(stores)}: {stores}"
+
+        store_ids = [store[1] for store in stores]
+
+        # Check traditional store is included
+        assert "vs_traditional_conv" in store_ids
+
+        # Check Force conversation sessions are included with correct format
+        assert (
+            "mcp-the-force||chat_with_gemini25_flash||memory-vault-diagnostic"
+            in store_ids
+        )
+        assert "mcp-the-force||chat_with_o3||debug-session" in store_ids
+
+        # Verify all entries are marked as conversation type
+        for store_type, store_id in stores:
+            assert store_type == "conversation"
+
+    def test_get_stores_with_types_force_conversations_only_when_requested(
+        self, temp_db
+    ):
+        """Test that Force conversations only appear when conversation type is requested."""
+        config = HistoryStorageConfig(db_path=temp_db)
+
+        # Add commit store
+        conn = sqlite3.connect(temp_db)
+        conn.execute(
+            "INSERT INTO stores (store_id, store_type, doc_count, created_at, is_active) "
+            "VALUES (?, ?, ?, ?, ?)",
+            ("vs_commit_123", "commit", 5, "2024-01-01", 1),
+        )
+
+        # Add unified_sessions
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS unified_sessions(
+                project TEXT NOT NULL,
+                tool TEXT NOT NULL,
+                session_id TEXT NOT NULL, 
+                history TEXT,
+                provider_metadata TEXT,
+                updated_at INTEGER NOT NULL,
+                PRIMARY KEY (project, tool, session_id)
+            )
+        """)
+
+        conn.execute(
+            "INSERT INTO unified_sessions (project, tool, session_id, history, updated_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (
+                "mcp-the-force",
+                "chat_with_gemini25_pro",
+                "test-session",
+                "[]",
+                1234567890,
+            ),
+        )
+        conn.commit()
+        conn.close()
+
+        # Test getting only commit stores - should not include Force sessions
+        stores = config.get_stores_with_types(["commit"])
+        assert len(stores) == 1
+        assert stores[0] == ("commit", "vs_commit_123")
+
+        # Test getting conversation stores - should include Force sessions
+        stores = config.get_stores_with_types(["conversation"])
+        assert len(stores) == 1
+        assert stores[0][0] == "conversation"
+        assert "||chat_with_gemini25_pro||" in stores[0][1]
+
+    def test_get_stores_with_types_empty_request(self, temp_db):
+        """Test get_stores_with_types with empty store_types list."""
+        config = HistoryStorageConfig(db_path=temp_db)
+
+        # Should return empty list for empty request
+        stores = config.get_stores_with_types([])
+        assert stores == []
+
+    def test_force_conversation_filtering(self, temp_db):
+        """Test that Force conversation filtering works correctly."""
+        config = HistoryStorageConfig(db_path=temp_db)
+
+        conn = sqlite3.connect(temp_db)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS unified_sessions(
+                project TEXT NOT NULL,
+                tool TEXT NOT NULL,
+                session_id TEXT NOT NULL,
+                history TEXT,
+                provider_metadata TEXT, 
+                updated_at INTEGER NOT NULL,
+                PRIMARY KEY (project, tool, session_id)
+            )
+        """)
+
+        # Test cases for filtering
+        test_cases = [
+            # Should be included
+            (
+                "mcp-the-force",
+                "chat_with_gemini25_flash",
+                "session1",
+                '["valid"]',
+                True,
+            ),
+            ("mcp-the-force", "chat_with_o3", "session2", '{"messages": []}', True),
+            (
+                "mcp-the-force",
+                "chat_with_grok4",
+                "session3",
+                '[{"role": "user"}]',
+                True,
+            ),
+            # Should be excluded - empty/null history
+            ("mcp-the-force", "chat_with_claude3_opus", "empty1", None, False),
+            ("mcp-the-force", "chat_with_gemini25_pro", "empty2", "", False),
+            # Should be excluded - not chat tools
+            (
+                "mcp-the-force",
+                "search_project_history",
+                "search1",
+                '["content"]',
+                False,
+            ),
+            ("mcp-the-force", "count_project_tokens", "count1", '["content"]', False),
+            ("mcp-the-force", "list_sessions", "list1", '["content"]', False),
+        ]
+
+        for i, (project, tool, session_id, history, should_include) in enumerate(
+            test_cases
+        ):
+            conn.execute(
+                "INSERT INTO unified_sessions (project, tool, session_id, history, updated_at) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (project, tool, session_id, history, 1234567890 + i),
+            )
+
+        conn.commit()
+        conn.close()
+
+        # Get conversation stores
+        stores = config.get_stores_with_types(["conversation"])
+        store_ids = [store[1] for store in stores]
+
+        # Verify expected inclusions
+        expected_included = [
+            "mcp-the-force||chat_with_gemini25_flash||session1",
+            "mcp-the-force||chat_with_o3||session2",
+            "mcp-the-force||chat_with_grok4||session3",
+        ]
+
+        for expected in expected_included:
+            assert expected in store_ids, f"Expected {expected} to be included"
+
+        # Verify expected exclusions
+        expected_excluded = [
+            "mcp-the-force||chat_with_claude3_opus||empty1",
+            "mcp-the-force||chat_with_gemini25_pro||empty2",
+            "mcp-the-force||search_project_history||search1",
+            "mcp-the-force||count_project_tokens||count1",
+            "mcp-the-force||list_sessions||list1",
+        ]
+
+        for excluded in expected_excluded:
+            assert excluded not in store_ids, f"Expected {excluded} to be excluded"

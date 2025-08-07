@@ -8,6 +8,7 @@ _ADAPTER_REGISTRY: Dict[str, Tuple[str, str]] = {
     "google": ("mcp_the_force.adapters.google.adapter", "GeminiAdapter"),
     "xai": ("mcp_the_force.adapters.xai.adapter", "GrokAdapter"),
     "anthropic": ("mcp_the_force.adapters.anthropic.adapter", "AnthropicAdapter"),
+    "ollama": ("mcp_the_force.adapters.ollama.adapter", "OllamaAdapter"),
 }
 
 

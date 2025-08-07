@@ -12,7 +12,8 @@ from dataclasses import dataclass
 from uuid import uuid4
 
 from .client import OpenAIClientFactory
-from .models import OpenAIRequest, OPENAI_MODEL_CAPABILITIES
+from .models import OpenAIRequest
+from .definitions import get_model_capability
 from ..protocol import CallContext, ToolCall
 from ..errors import (
     AdapterException,
@@ -109,7 +110,7 @@ class BaseFlowStrategy(ABC):
 
     def _build_tools_list(self) -> List[Dict[str, Any]]:
         """Build the tools list for the API request using the tool_dispatcher."""
-        capability = OPENAI_MODEL_CAPABILITIES.get(self.context.request.model)
+        capability = get_model_capability(self.context.request.model)
         logger.debug(
             f"[FLOW_ORCHESTRATOR] Building tools for model: {self.context.request.model}"
         )
@@ -163,6 +164,27 @@ class BaseFlowStrategy(ABC):
             )
 
         logger.debug(f"[FLOW_ORCHESTRATOR] Final tools list length: {len(tools)}")
+
+        # DEBUG: Log exact tools being passed for deep research models
+        if "deep-research" in self.context.request.model:
+            logger.error(
+                f"[DEBUG] Deep research model {self.context.request.model} tools:"
+            )
+            for i, tool in enumerate(tools):
+                logger.error(f"[DEBUG] Tool {i}: {tool}")
+            logger.error("[DEBUG] Capability flags:")
+            logger.error(f"[DEBUG]   supports_tools: {capability.supports_tools}")
+            logger.error(
+                f"[DEBUG]   supports_web_search: {capability.supports_web_search}"
+            )
+            logger.error(
+                f"[DEBUG]   supports_live_search: {capability.supports_live_search}"
+            )
+            logger.error(f"[DEBUG]   web_search_tool: '{capability.web_search_tool}'")
+            logger.error(
+                f"[DEBUG]   native_vector_store_provider: {capability.native_vector_store_provider}"
+            )
+
         return cast(List[Dict[str, Any]], tools)
 
     def _extract_content_from_output(self, response: Any) -> str:
@@ -493,7 +515,7 @@ class FlowOrchestrator:
             raise
 
     def _should_use_background(self, request: OpenAIRequest) -> bool:
-        capability = OPENAI_MODEL_CAPABILITIES.get(request.model)
+        capability = get_model_capability(request.model)
         if capability:
             if capability.force_background:
                 return True
@@ -506,7 +528,7 @@ class FlowOrchestrator:
     def _preprocess_request(self, data: Dict[str, Any]):
         """Applies model-specific defaults before validation."""
         model = data.get("model", "")
-        capability = OPENAI_MODEL_CAPABILITIES.get(model)
+        capability = get_model_capability(model)
         if capability and capability.supports_reasoning_effort:
             if "reasoning_effort" not in data and capability.default_reasoning_effort:
                 data["reasoning_effort"] = capability.default_reasoning_effort

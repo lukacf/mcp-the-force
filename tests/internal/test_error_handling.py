@@ -107,7 +107,7 @@ class TestErrorHandlingIntegration:
         """Test type validation for parameters."""
         # Wrong type for context (should be list)
         with pytest.raises(
-            fastmcp.exceptions.ToolError, match="context.*expected list"
+            fastmcp.exceptions.ToolError, match="context.*expected.*list"
         ):
             tool_metadata = get_tool("chat_with_gemini25_flash")
             if not tool_metadata:

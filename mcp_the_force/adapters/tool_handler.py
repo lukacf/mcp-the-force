@@ -131,32 +131,38 @@ class ToolHandler:
         logger.info(f"  - vector_store_ids: {vector_store_ids}")
         logger.info(f"  - disable_history_search: {disable_history_search}")
 
-        # All adapters get the project history search tool unless disabled
-        logger.debug(
-            f"[TOOL_HANDLER] disable_history_search={disable_history_search}, not disable_history_search={not disable_history_search}"
-        )
-        if not disable_history_search:
-            logger.debug("[TOOL_HANDLER] Adding search_project_history tool")
-            declarations.append(self._get_history_declaration_openai())
-        else:
+        # Only add tools if the adapter supports custom function calling tools
+        if capabilities.supports_tools:
+            # All adapters get the project history search tool unless disabled
             logger.debug(
-                "[TOOL_HANDLER] Skipping search_project_history tool (history search disabled)"
+                f"[TOOL_HANDLER] disable_history_search={disable_history_search}, not disable_history_search={not disable_history_search}"
             )
+            if not disable_history_search:
+                logger.debug("[TOOL_HANDLER] Adding search_project_history tool")
+                declarations.append(self._get_history_declaration_openai())
+            else:
+                logger.debug(
+                    "[TOOL_HANDLER] Skipping search_project_history tool (history search disabled)"
+                )
 
-        # Add task files search tool when vector stores are provided
-        # Only for adapters without native file search (those with native_vector_store_provider use their own)
-        if vector_store_ids and not capabilities.native_vector_store_provider:
-            logger.info(
-                f"Adding task files search tool with {len(vector_store_ids)} vector stores"
-            )
-            declarations.append(self._get_task_files_declaration_openai())
+            # Add task files search tool when vector stores are provided
+            # Only for adapters without native file search (those with native_vector_store_provider use their own)
+            if vector_store_ids and not capabilities.native_vector_store_provider:
+                logger.info(
+                    f"Adding task files search tool with {len(vector_store_ids)} vector stores"
+                )
+                declarations.append(self._get_task_files_declaration_openai())
+            else:
+                logger.debug("[TOOL_HANDLER] Not adding search_task_files because:")
+                logger.debug(
+                    f"  - vector_store_ids is {'empty' if not vector_store_ids else 'present'}"
+                )
+                logger.debug(
+                    f"  - native_vector_store_provider is {capabilities.native_vector_store_provider}"
+                )
         else:
-            logger.debug("[TOOL_HANDLER] Not adding search_task_files because:")
             logger.debug(
-                f"  - vector_store_ids is {'empty' if not vector_store_ids else 'present'}"
-            )
-            logger.debug(
-                f"  - native_vector_store_provider is {capabilities.native_vector_store_provider}"
+                "[TOOL_HANDLER] Skipping all custom tools because adapter doesn't support them"
             )
 
         logger.debug(f"[TOOL_HANDLER] Returning {len(declarations)} tool declarations")

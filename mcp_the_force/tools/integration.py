@@ -8,6 +8,7 @@ import logging
 from pydantic import Field
 from .registry import list_tools, ToolMetadata
 from .executor import executor
+from .naming import sanitize_tool_name
 from ..utils.scope_manager import scope_manager
 from ..logging.setup import get_instance_id
 
@@ -188,9 +189,32 @@ def create_tool_function(metadata: ToolMetadata):
             else:
                 annotations[sig_param.name] = Optional[str]
         elif is_list_str_type:
-            # Keep List[str] as-is - don't convert to Optional[str]
-            # MCP clients should pass lists correctly
-            annotations[sig_param.name] = sig_param.annotation
+            # Accept either a real array or a JSON string.
+            # Pydantic will validate Union[List[str], str, None], and our
+            # ParameterValidator will coerce strings like "[\"a\"]" to List[str].
+            from typing import (
+                Union as _Union,
+                Optional as _Optional,
+                List as _List,
+                Annotated as _Annotated,
+            )
+
+            # Detect Optional[List[str]] vs List[str]
+            is_optional_list = (
+                get_origin(actual_type) is Union and type(None) in get_args(actual_type)
+            )
+            base_union = _Union[_List[str], str]
+            accepts_type = _Optional[base_union] if is_optional_list else base_union
+
+            if get_origin(sig_param.annotation) is Annotated:
+                # Preserve Field(description=...)
+                args = get_args(sig_param.annotation)
+                if len(args) > 1 and hasattr(args[1], "description"):
+                    annotations[sig_param.name] = _Annotated[accepts_type, args[1]]
+                else:
+                    annotations[sig_param.name] = accepts_type
+            else:
+                annotations[sig_param.name] = accepts_type
         else:
             # For all other types, use the annotation (which may include description)
             annotations[sig_param.name] = sig_param.annotation
@@ -213,14 +237,22 @@ def register_all_tools(mcp: FastMCP) -> None:
             # Create function with proper signature
             tool_func = create_tool_function(metadata)
 
-            # Register with FastMCP under primary name
-            mcp.tool(name=tool_id)(tool_func)
-            logger.debug(f"Registered tool with FastMCP: {tool_id}")
+            # Sanitize tool name for MCP compliance
+            safe_tool_id = sanitize_tool_name(tool_id)
 
-            # Register aliases
+            # Register with FastMCP under sanitized primary name
+            mcp.tool(name=safe_tool_id)(tool_func)
+            logger.debug(
+                f"Registered tool with FastMCP: {safe_tool_id} (from {tool_id})"
+            )
+
+            # Register aliases with sanitization
             for alias in metadata.aliases:
-                mcp.tool(name=alias)(tool_func)
-                logger.debug(f"Registered alias: {alias} -> {tool_id}")
+                safe_alias = sanitize_tool_name(alias)
+                mcp.tool(name=safe_alias)(tool_func)
+                logger.debug(
+                    f"Registered alias: {safe_alias} -> {safe_tool_id} (from {alias} -> {tool_id})"
+                )
 
         except Exception as e:
             logger.error(f"Failed to register tool {tool_id}: {e}")

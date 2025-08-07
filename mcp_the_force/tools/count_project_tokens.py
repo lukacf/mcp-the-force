@@ -34,8 +34,9 @@ class CountProjectTokens(ToolSpec):
             "(respecting .gitignore), and return an aggregated report. Uses the same file "
             "filtering logic as the context parameter - skips binaries, respects size limits "
             "(500KB/file, 50MB total), and supports 60+ text file types. "
-            "Syntax: A JSON-formatted list of strings, where each string is an absolute path. "
-            "Example: ['/path/to/project/main.py', '/path/to/project/utils/']"
+            "Syntax: An array of strings (not a JSON string). Do not wrap the array in quotes. "
+            "Each string must be an absolute path. "
+            'Example: ["/path/to/project/main.py", "/path/to/project/utils/"]'
         )
     )
 

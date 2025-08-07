@@ -6,7 +6,7 @@ import yaml
 import logging
 from pathlib import Path
 from functools import lru_cache
-from typing import Optional, Dict, Any, Tuple
+from typing import Optional, Dict, Any, Tuple, List
 from pydantic import BaseModel, Field, field_validator
 from pydantic.fields import FieldInfo
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -77,6 +77,63 @@ class ProviderConfig(BaseModel):
     )
     compression_threshold_bytes: int = Field(
         1024, description="Minimum file size in bytes to enable compression", ge=512
+    )
+
+
+class ModelOverride(BaseModel):
+    """Model-specific override configuration for Ollama."""
+
+    match: Optional[str] = Field(None, description="Exact or glob pattern match")
+    regex: Optional[str] = Field(None, description="Regex pattern match")
+    max_context_window: Optional[int] = Field(
+        None, description="Override context window size"
+    )
+    description: Optional[str] = Field(
+        None, description="Custom description for the model"
+    )
+
+    @field_validator("regex")
+    @classmethod
+    def validate_regex_pattern(cls, v: Optional[str]) -> Optional[str]:
+        if v:
+            try:
+                import re
+
+                re.compile(v)
+            except re.error as e:
+                raise ValueError(f"Invalid regex pattern: {e}")
+        return v
+
+
+class OllamaConfig(BaseModel):
+    """Ollama-specific configuration."""
+
+    enabled: bool = Field(True, description="Enable Ollama integration")
+    host: str = Field("http://localhost:11434", description="Ollama API endpoint")
+
+    # Discovery settings
+    discover_on_startup: bool = Field(True, description="Discover models on startup")
+    refresh_interval_sec: int = Field(
+        300, description="Model refresh interval in seconds (0 to disable)", ge=0
+    )
+
+    # Memory-aware defaults
+    memory_aware_context: bool = Field(
+        True, description="Auto-adjust context based on available RAM"
+    )
+    memory_safety_margin: float = Field(
+        0.8, description="Memory safety margin (0.0-1.0)", gt=0.0, le=1.0
+    )
+    # Default context window when discovery fails or no API info available
+    default_context_window: int = Field(
+        16384,
+        description="Default context window for models when not discoverable",
+        gt=0,
+    )
+
+    # Model-specific overrides
+    context_overrides: List[ModelOverride] = Field(
+        default_factory=list, description="Model-specific context window overrides"
     )
 
 
@@ -258,6 +315,7 @@ class Settings(BaseSettings):
     anthropic: ProviderConfig = Field(default_factory=ProviderConfig)
     xai: ProviderConfig = Field(default_factory=ProviderConfig)
     litellm: ProviderConfig = Field(default_factory=ProviderConfig)
+    ollama: OllamaConfig = Field(default_factory=OllamaConfig)
 
     # Feature configs
     session: SessionConfig = Field(default_factory=SessionConfig)

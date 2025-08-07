@@ -8,7 +8,7 @@ The inheritance pattern ensures that all tools have a consistent base
 set of parameters while allowing adapter-specific extensions.
 """
 
-from typing import List
+from typing import List, Optional
 
 # Import Route directly for base parameters
 from ..tools.descriptors import Route
@@ -51,26 +51,29 @@ class BaseToolParams(ParamModel):
             "Example: 'A bulleted list of key findings.'"
         ),
     )
-    context: List[str] = Route.prompt(  # type: ignore[assignment]
+    context: Optional[List[str]] = Route.prompt(  # type: ignore[assignment]
         pos=2,
         description=(
-            "(Required) A list of file or directory paths to be used as context for the AI model. "
+            "(Optional) A list of file or directory paths to be used as context for the AI model. "
             "The content of these files is made available to the model, either directly in the prompt "
             "(for smaller files) or via a searchable vector store (for larger files). The system "
             "automatically handles this split based on the model's context window size. "
-            "Syntax: A JSON-formatted list of strings, where each string is an absolute path. "
-            "Example: ['/path/to/project/main.py', '/path/to/project/utils/']"
+            "Syntax: An array of strings (not a JSON string). Do not wrap the array in quotes. "
+            "Each string must be an absolute path. "
+            'Example: ["/path/to/project/main.py", "/path/to/project/utils/"]'
         ),
+        default_factory=list,
     )
-    priority_context: List[str] = Route.prompt(  # type: ignore[assignment]
+    priority_context: Optional[List[str]] = Route.prompt(  # type: ignore[assignment]
         pos=3,
         description=(
             "(Optional) A list of file or directory paths that should be prioritized for inline inclusion "
             "in the prompt, even if they would normally overflow to the vector store. Ensures critical "
             "files are always directly in the model's context window, as long as they fit within the "
             "total token budget. Files in priority_context are processed before files in context. "
-            "Syntax: A JSON-formatted list of strings (absolute paths). "
-            "Example: ['/path/to/project/critical_config.yaml']"
+            "Syntax: An array of strings (not a JSON string). Do not wrap the array in quotes. "
+            "Each string must be an absolute path. "
+            'Example: ["/path/to/project/critical_config.yaml"]'
         ),
         default_factory=list,
     )
