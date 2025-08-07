@@ -198,13 +198,24 @@ class TestCalculateViableContext:
     """Tests for calculate_viable_context function."""
 
     @pytest.mark.asyncio
+    async def test_calculate_viable_context_no_psutil(self):
+        """Test context calculation when psutil is not available."""
+        # Mock PSUTIL_AVAILABLE as False to test fallback
+        with patch("mcp_the_force.adapters.ollama.discovery.PSUTIL_AVAILABLE", False):
+            context = await calculate_viable_context(8.0, 0.8)
+            assert context == 8192  # Conservative fallback
+
+    @pytest.mark.asyncio
     async def test_calculate_viable_context_standard_sizes(self):
         """Test context calculation returns standard sizes."""
         # Mock psutil for memory info
         mock_virtual = MagicMock()
         mock_virtual.available = 32 * 1024 * 1024 * 1024  # 32GB available
 
-        with patch("psutil.virtual_memory", return_value=mock_virtual):
+        with patch("mcp_the_force.adapters.ollama.discovery.PSUTIL_AVAILABLE", True), \
+             patch("mcp_the_force.adapters.ollama.discovery.psutil") as mock_psutil:
+            mock_psutil.virtual_memory.return_value = mock_virtual
+            
             # The function doesn't use model_memory_gb parameter in current implementation
             # It only looks at available system memory
             # 32GB available - 20GB reserved = 12GB
@@ -226,7 +237,10 @@ class TestCalculateViableContext:
         mock_virtual = MagicMock()
         mock_virtual.available = 8 * 1024 * 1024 * 1024  # Only 8GB available
 
-        with patch("psutil.virtual_memory", return_value=mock_virtual):
+        with patch("mcp_the_force.adapters.ollama.discovery.PSUTIL_AVAILABLE", True), \
+             patch("mcp_the_force.adapters.ollama.discovery.psutil") as mock_psutil:
+            mock_psutil.virtual_memory.return_value = mock_virtual
+            
             # 8GB available - 20GB reserved = negative, so minimum
             context = await calculate_viable_context(6.0, 0.8)
             assert context == 4096  # Minimum context
@@ -240,7 +254,10 @@ class TestCalculateViableContext:
         mock_virtual = MagicMock()
         mock_virtual.available = 16 * 1024 * 1024 * 1024  # 16GB available
 
-        with patch("psutil.virtual_memory", return_value=mock_virtual):
+        with patch("mcp_the_force.adapters.ollama.discovery.PSUTIL_AVAILABLE", True), \
+             patch("mcp_the_force.adapters.ollama.discovery.psutil") as mock_psutil:
+            mock_psutil.virtual_memory.return_value = mock_virtual
+            
             # 16GB available - 20GB reserved = negative, so minimum
             context = await calculate_viable_context(8.0, 0.5)
             assert context == 4096
@@ -253,7 +270,10 @@ class TestCalculateViableContext:
         """Test boundary conditions for context calculation."""
         mock_virtual = MagicMock()
 
-        with patch("psutil.virtual_memory", return_value=mock_virtual):
+        with patch("mcp_the_force.adapters.ollama.discovery.PSUTIL_AVAILABLE", True), \
+             patch("mcp_the_force.adapters.ollama.discovery.psutil") as mock_psutil:
+            mock_psutil.virtual_memory.return_value = mock_virtual
+            
             # Test with more memory available
             mock_virtual.available = 40 * 1024 * 1024 * 1024  # 40GB
             # 40GB - 20GB reserved = 20GB
