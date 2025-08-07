@@ -1,159 +1,35 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+## 1.0.5
+Fixed Force conversations not showing in project history search
+Added complete Ollama adapter with LiteLLM integration and model discovery  
+Fixed deep research models to use web_search_preview tool correctly
+Added comprehensive test coverage with 100% unit test pass rate
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## 1.0.4
+Fixed critical context loss bug with files over 500KB causing API retry failures
+Added configurable file size limits (50MB per file, 200MB total)
+Implemented deferred cache updates to prevent context loss on failed API calls
 
-## [1.0.4] - 2025-08-06
+## 1.0.3
+Upgraded Claude Opus to version 4.1
+Added vector store deduplication system with two-level caching for cost reduction
+Fixed hash collision bugs and cross-platform hashing inconsistencies
+Enhanced vector store API optimization with parallel file uploads
 
-### Fixed
-- **Critical Context Loss Bug**: Files over 500KB were rejected causing complete context loss on API retries
-  - Removed hardcoded 500KB file size limit that was too restrictive for modern LLMs
-  - Made file size limits configurable via settings (50MB default for max_file_size, 200MB for max_total_size)
-  - Moved size checking from `_is_text_file()` to `gather_file_paths()` where it belongs
-- **Cache Pollution on API Failures**: Files were marked as "sent" before API calls completed
-  - Implemented deferred cache updates to only mark files as sent after successful API calls
-  - Prevents context loss when retrying failed API calls
+## 1.0.2
+Added TokenBudgetOptimizer for intelligent context management with tiktoken-based optimization
+Fixed critical context window overflow issues
+Fixed history storage configuration bug (memory.sync → history.sync)
+Added E2E test reliability with retry mechanisms for OpenAI vector store consistency
 
-### Added
-- **Configurable File Size Limits**: New settings for controlling file processing limits
-  - `mcp.max_file_size`: Maximum size per file (default 50MB, was hardcoded 500KB)
-  - `mcp.max_total_size`: Maximum total size of all files (default 200MB)
-- **Regression Tests**: Comprehensive test coverage for file size handling scenarios
-- **Project Configuration**: Added `.mcp.json` for MCP server configuration
+## 1.0.1
+Added FusionTree algorithm for ultra-efficient file tree representation (60-90% token savings)
+Fixed deep research models to use web_search_preview tool
 
-### Changed
-- Updated `.gitignore` to exclude `claude_hooks/` directory for local development
-
-## [1.0.3] - 2025-08-06
-
-### Added
-- **Claude Opus 4.1 Support**: Upgraded from Claude Opus 4 to Claude Opus 4.1 (model ID: claude-opus-4-1-20250805)
-- **Vector Store Deduplication System**: Two-level caching system for OpenAI API cost reduction
-  - Store-level deduplication: Reuse entire vector stores for identical file sets
-  - File-level deduplication: Cache individual files to avoid re-uploads and re-embeddings
-  - Cross-platform deterministic hashing with line-ending normalization
-  - SQLite-based persistent cache with WAL mode for concurrency
-  - TTL auto-renewal for cached stores
-  - Expected 50-90% reduction in API costs for duplicate content
-- **Enhanced .gitignore**: Added `.claude/` directory to prevent tracking of Claude settings files
-
-### Changed
-- **Vector Store API Optimization**: Aligned with 2025 OpenAI best practices
-  - Parallel file uploads for improved performance on large codebases
-  - Optimized empty fileset handling to prevent unnecessary API calls
-  - Comprehensive retry logic with exponential backoff
-- Renamed `Claude4OpusCapabilities` class to `Claude41OpusCapabilities` for clarity
-- Updated tool name from `chat_with_claude4_opus` to `chat_with_claude41_opus`
-- Enhanced blueprint generation logic to handle Claude 4.1 naming pattern
-
-### Fixed
-- **Hash Collision Bug**: Resolved deduplication system hash collision issues
-- **Cross-Platform Hashing**: Fixed non-deterministic hashing across different operating systems
-- **Silent Cache Failures**: Implemented proper error propagation and graceful degradation
-- **Race Conditions**: Eliminated file caching system race conditions
-- **Code Complexity**: Refactored to reduce cyclomatic complexity
-- **Test Reliability**: Resolved multiprocess test failures with synchronous approach
-- **Integration Tests**: Fixed async pattern issues for reliable test execution
-- Fixed import errors in `definitions.py` for proper Claude 4.1 capability exports
-
-### Technical Improvements
-- Implemented SQLite retry logic with exponential backoff
-- Added comprehensive integration test coverage for deduplication scenarios
-- Improved error handling and logging throughout vector store operations
-- Enhanced E2E test configurations for real-world scenarios
-
-## [1.0.2] - 2025-08-03
-
-### Added
-- **TokenBudgetOptimizer**: New intelligent context management system with tiktoken-based optimization for precise context window utilization
-- **Optimization Module**: Complete `mcp_the_force.optimization` package with prompt building and token budget management
-- **E2E Test Reliability**: Comprehensive retry mechanisms for OpenAI vector store eventual consistency handling
-- **Victoria Logs Integration**: Restored full logging integration for E2E test environments
-
-### Fixed
-- **Critical Context Overflow Bug**: Resolved context window overflow issues with new TokenBudgetOptimizer implementation
-- **History Storage Bug**: Fixed `settings.memory.sync` → `settings.history.sync` configuration error preventing history storage
-- **Cross-Model History Search**: Implemented 5-attempt retry mechanism with adaptive delays for OpenAI vector store race conditions
-- **E2E Session Persistence**: Removed problematic SESSION_DB_PATH override to restore proper session continuity
-- **Environment Variables**: Added missing XAI_API_KEY and Docker image environment variables for E2E tests
-- **Integration Test Mocking**: Added proper mock object handling to prevent TypeError in test environments
-- **Tool Registration**: Fixed OpenAI tool registration failures in mock mode and CI environments
-
-### Changed
-- **Context Builder**: Major refactoring of context building logic with optimized token utilization
-- **Tool Executor**: Streamlined execution flow with improved error handling and resource management
-- **Test Infrastructure**: Enhanced E2E test reliability with deterministic retry patterns and proper environment setup
-
-### Technical Improvements
-- **File Tree Optimization**: Enhanced stable list caching for consistent multi-turn context behavior
-- **Token Counting**: More accurate tiktoken-based token counting across all operations
-- **Mock Adapter**: Improved mock adapter functionality for better testing coverage
-- **CI/CD Stability**: Resolved tool registration failures and improved test isolation
-
-## [1.0.1] - 2025-08-02
-
-### Added
-- FusionTree algorithm for ultra-efficient file tree representation (60-90% token savings) and fixed deep research models to use web_search_preview tool
-
-## [1.0.0] - 2025-01-01
-
-### Added
-- Initial public release of MCP The-Force Server
-- Multi-provider AI model support (OpenAI o3/o3-pro/o4-mini/gpt-4.1, Google Gemini 2.5 Pro/Flash, xAI Grok 3 Beta/Grok 4)
-- Intelligent context management with vector store integration for large codebases
-- Smart context overflow handling with automatic vector store creation
-- Multi-turn conversation support across all models via UnifiedSessionCache
-- Project history search across conversations and git commits
-- Comprehensive configuration system with YAML + environment variable support
-- Session management with configurable TTL and automatic cleanup
-- Robust test suite with unit, integration, and Docker-in-Docker E2E tests
-- Security features including secret redaction and path restrictions
-- CLI tools for configuration management (`mcp-config`)
-- FastMCP-based MCP protocol implementation
-- Sophisticated tool system with dynamic parameter routing using Python descriptors
-- Protocol-based adapter architecture for extensibility
-- Background task management with operation timeouts and cancellation
-- Comprehensive logging with VictoriaLogs integration
-- Docker support with multi-stage builds and non-root containers
-
-### Changed
-- Migrated from "memory" to "history" terminology throughout codebase for clarity
-- Upgraded to Production/Stable development status
-- Consolidated vector store cleanup from external loiterkiller service to integrated VectorStoreManager
-
-### Fixed
-- E2E test cleanup now uses built-in VectorStoreManager instead of deprecated loiterkiller service
-- Resolved import errors in history search functionality (`memory_search_declaration` → `history_search_declaration`)
-- Cross-model history search tests properly maintain history records between calls
-- Session management tests re-enabled and optimized with appropriate history disable parameters
-
-### Security
-- Comprehensive secret redaction in all logs and error messages
-- Filesystem access restrictions via configurable path blacklist
-- Secure configuration file permissions (600) for secrets.yaml
-- No hardcoded credentials or sensitive information in codebase
-- Docker containers run as non-root user with minimal privileges
-
-### Documentation
-- Comprehensive README with quick start guide and usage examples
-- Detailed configuration reference in docs/CONFIGURATION.md
-- Advanced integration guide in docs/ADVANCED.md
-- Architecture analysis with design decisions and lessons learned
-- Complete API documentation for all MCP tools
-- Contributor guide with setup instructions and development workflow
-
-### Technical Highlights
-- Python 3.13+ with modern async/await patterns
-- Type-safe design with Pydantic validation and Protocol-based interfaces
-- Descriptor-based parameter routing system for clean tool definitions
-- Stable-inline list context management for predictable multi-turn behavior
-- Sophisticated test isolation and Docker-in-Docker E2E validation
-- Extensible architecture supporting easy addition of new AI providers and tools
-
----
-
-## Future Releases
-
-This changelog will be updated with each release. See [GitHub Releases](https://github.com/lukacf/mcp-the-force/releases) for detailed release notes.
+## 1.0.0
+Initial public release with multi-provider AI model support
+Added intelligent context management with vector store integration
+Implemented multi-turn conversation support via UnifiedSessionCache
+Added project history search across conversations and git commits
+Comprehensive configuration system with YAML + environment variable support
