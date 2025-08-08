@@ -44,7 +44,7 @@ class TestToolExecutionIntegration:
         """Test OpenAI tool with session continuity."""
         # First call
         result1 = await run_tool(
-            "chat_with_o3",
+            "chat_with_o3_pro",
             instructions="I need help with Python async programming",
             output_format="explanation",
             context=[],
@@ -53,12 +53,12 @@ class TestToolExecutionIntegration:
 
         data1 = parse_adapter_response(result1)
         assert data1["mock"] is True
-        assert data1["model"] == "o3"
+        assert data1["model"] == "o3-pro"
         assert "Python async programming" in data1["prompt"]
 
         # Second call with same session
         result2 = await run_tool(
-            "chat_with_o3",
+            "chat_with_o3_pro",
             instructions="Show me an example",
             output_format="code",
             context=[],
@@ -67,7 +67,7 @@ class TestToolExecutionIntegration:
 
         data2 = parse_adapter_response(result2)
         assert data2["mock"] is True
-        assert data2["model"] == "o3"
+        assert data2["model"] == "o3-pro"
         assert "Show me an example" in data2["prompt"]
         # Note: Session continuity is handled by the adapter, we just verify the call went through
 
@@ -212,7 +212,7 @@ class TestToolExecutionIntegration:
         # Execute multiple tools concurrently
         tasks = [
             run_tool(
-                "chat_with_o3",
+                "chat_with_o3_pro",
                 instructions=f"Task {i}",
                 output_format="text",
                 context=[],
@@ -237,7 +237,7 @@ class TestToolExecutionIntegration:
 
         # Parse results and verify mix of models
         parsed_results = [parse_adapter_response(r) for r in results]
-        openai_results = [r for r in parsed_results if r["model"] == "o3"]
+        openai_results = [r for r in parsed_results if r["model"] == "o3-pro"]
         vertex_results = [r for r in parsed_results if r["model"] == "gemini-2.5-flash"]
 
         assert len(openai_results) == 3

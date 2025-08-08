@@ -12,6 +12,7 @@ from ..capabilities import AdapterCapabilities
 from ...tools.descriptors import Route
 from ...tools.blueprint import ToolBlueprint
 from ...tools.blueprint_registry import register_blueprints
+from ...utils.capability_formatter import format_capabilities
 
 
 # Max budget values from requirements
@@ -109,7 +110,7 @@ class Gemini25ProCapabilities(GeminiBaseCapabilities):
 
     model_name: str = "gemini-2.5-pro"
     max_context_window: int = 1_000_000
-    description: str = "Deep multimodal analysis and complex reasoning"
+    description: str = "Deep multimodal analyst; massive context and steady tools. Speed: medium. Tool use: strong. When to use: Mixed-media RAG (docs/images/spreadsheets), giant summarization jobs, bug triage with screenshots—your long-context workhorse."
     reasoning_effort_map: Dict[str, int] = field(
         default_factory=lambda: {
             "low": int(_MAX_BUDGET_PRO * 0.40),  # 13107
@@ -125,7 +126,7 @@ class Gemini25FlashCapabilities(GeminiBaseCapabilities):
 
     model_name: str = "gemini-2.5-flash"
     max_context_window: int = 1_000_000
-    description: str = "Fast summarization and quick analysis"
+    description: str = "High-throughput variant for rapid summaries and extraction. Speed: very high. Tool use: good. When to use: Meeting notes, table/JSON extraction, first-pass briefs—escalate to Pro for complex reasoning."
     reasoning_effort_map: Dict[str, int] = field(
         default_factory=lambda: {
             "low": int(_MAX_BUDGET_FLASH * 0.40),  # 9830
@@ -177,12 +178,18 @@ def _generate_and_register_blueprints():
     blueprints = []
 
     for model_name, capabilities in GEMINI_MODEL_CAPABILITIES.items():
+        # Format capabilities and append to description
+        capability_info = format_capabilities(capabilities)
+        full_description = capabilities.description
+        if capability_info:
+            full_description = f"{capabilities.description} [{capability_info}]"
+
         blueprint = ToolBlueprint(
             model_name=model_name,
             tool_name=_get_friendly_name(model_name),
             adapter_key="google",
             param_class=GeminiToolParams,
-            description=capabilities.description,
+            description=full_description,
             timeout=_calculate_timeout(model_name),
             context_window=capabilities.max_context_window,
             tool_type="chat",  # All Gemini models are chat tools

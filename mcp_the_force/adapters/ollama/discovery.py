@@ -12,6 +12,7 @@ try:
 
     PSUTIL_AVAILABLE = True
 except ImportError:
+    psutil = None  # Ensure psutil exists for testing
     PSUTIL_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
@@ -28,7 +29,8 @@ async def list_models(host: str) -> List[Dict[str, Any]]:
             response = await client.get(f"{host}/api/tags")
             response.raise_for_status()
             data = response.json()
-            return data.get("models", [])
+            models = data.get("models", [])
+            return models if isinstance(models, list) else []
     except Exception as e:
         logger.warning(f"Failed to list Ollama models from {host}: {e}")
         return []

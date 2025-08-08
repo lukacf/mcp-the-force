@@ -147,28 +147,43 @@ Use the-force search_project_history with {"query": "JWT implementation decision
 
 ## Available Tools
 
-All tools share a common set of parameters like `instructions`, `context`, `session_id`, etc.
+The Force provides access to cutting-edge AI models through `chat_with_*` tools, each with dynamically-generated descriptions showing their capabilities, context limits, and best use cases.
 
-### OpenAI Models
-- `chat_with_o3`: Advanced reasoning with web search (200k context)
-- `chat_with_o3_pro`: Deep formal analysis with web search (200k context)
-- `chat_with_gpt41`: High-speed, large-scale analysis (1M context)
-- `chat_with_codex_mini`: Fast, coding-specialized reasoning model (200k context)
-- `research_with_o3_deep_research`: In-depth, long-running research tasks (10-60 min)
+### Recommended Models for Most Tasks
+- **`chat_with_gpt5`**: The smartest model available. 400k context, excellent tool use, and strong reasoning. Your go-to for complex tasks.
+- **`chat_with_gemini25_pro`**: Powerful multimodal model with massive 1M context. Fast and reliable for code analysis and long documents.
+
+### Fast Large-Context Models
+- **`chat_with_gemini25_flash`**: Ultra-fast with 1M context. Perfect for quick summaries and initial analysis.
+- **`chat_with_gpt41`**: Fast processing with 1M context and dependable tool use.
+
+### Complete List of AI Models
+
+**OpenAI Models:**
+- `chat_with_o3_pro`: Deep analysis and formal reasoning with web search
+- `chat_with_codex_mini`: Fast coding-specialized reasoning model
+- `chat_with_gpt41`: Fast long-context processing with web search
+- `chat_with_gpt5`: World's smartest reasoning model
+- `chat_with_gpt5_mini`: Fast superior reasoning model
+- `chat_with_gpt5_nano`: Efficient superior reasoning model
+- `research_with_o3_deep_research`: Ultra-deep research with extensive web search (10-60 min)
 - `research_with_o4_mini_deep_research`: Fast research with web search (2-10 min)
 
-### Google Models
-- `chat_with_gemini25_pro`: Superior code analysis and complex reasoning (1M context)
-- `chat_with_gemini25_flash`: High-speed summarization and analysis (1M context)
+**Google Models:**
+- `chat_with_gemini25_pro`: Deep multimodal analysis and complex reasoning
+- `chat_with_gemini25_flash`: Fast summarization and quick analysis
 
-### Anthropic Models
-- `chat_with_claude41_opus`: Deep analysis and formal reasoning with extended thinking (200k context)
-- `chat_with_claude4_sonnet`: Fast long-context processing with extended thinking (200k context)
-- `chat_with_claude3_opus`: Exceptional theory of mind and thoughtful discussions (200k context)
+**Anthropic Models:**
+- `chat_with_claude41_opus`: Deep analysis with extended thinking
+- `chat_with_claude4_sonnet`: Fast long-context processing with extended thinking
+- `chat_with_claude3_opus`: Exceptional theory of mind and deep discussions
 
-### xAI Models
-- `chat_with_grok4`: Advanced reasoning with real-time web/X data (256k context)
-- `chat_with_grok3_beta`: Deep reasoning with real-time web/X data (131k context)
+**xAI Models:**
+- `chat_with_grok3_fast`: Fast inference with Grok 3
+- `chat_with_grok4`: Advanced assistant with multi-agent reasoning
+
+**Local Models (if Ollama is installed):**
+The Force automatically detects and provides access to any Ollama models you have installed locally.
 
 ### Utility Tools
 - `search_project_history`: Search past conversations and git commits

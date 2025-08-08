@@ -200,9 +200,9 @@ def create_tool_function(metadata: ToolMetadata):
             )
 
             # Detect Optional[List[str]] vs List[str]
-            is_optional_list = (
-                get_origin(actual_type) is Union and type(None) in get_args(actual_type)
-            )
+            is_optional_list = get_origin(actual_type) is Union and type(
+                None
+            ) in get_args(actual_type)
             base_union = _Union[_List[str], str]
             accepts_type = _Optional[base_union] if is_optional_list else base_union
 

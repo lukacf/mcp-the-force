@@ -390,14 +390,24 @@ class TestForceConversationIntegration:
         conn.commit()
         conn.close()
 
-        # Test getting conversation stores - should include traditional + Force sessions
+        # Test getting conversation stores - should only include traditional stores (not Force sessions)
         stores = config.get_stores_with_types(["conversation"])
-        assert len(stores) == 3, f"Expected 3 stores, got {len(stores)}: {stores}"
+        assert len(stores) == 1, f"Expected 1 store, got {len(stores)}: {stores}"
 
         store_ids = [store[1] for store in stores]
 
         # Check traditional store is included
         assert "vs_traditional_conv" in store_ids
+
+        # Verify all entries are marked as conversation type
+        for store_type, store_id in stores:
+            assert store_type == "conversation"
+
+        # Test getting session stores - should include Force conversation sessions
+        stores = config.get_stores_with_types(["session"])
+        assert len(stores) == 2, f"Expected 2 stores, got {len(stores)}: {stores}"
+
+        store_ids = [store[1] for store in stores]
 
         # Check Force conversation sessions are included with correct format
         assert (
@@ -406,9 +416,9 @@ class TestForceConversationIntegration:
         )
         assert "mcp-the-force||chat_with_o3||debug-session" in store_ids
 
-        # Verify all entries are marked as conversation type
+        # Verify all entries are marked as session type
         for store_type, store_id in stores:
-            assert store_type == "conversation"
+            assert store_type == "session"
 
     def test_get_stores_with_types_force_conversations_only_when_requested(
         self, temp_db
@@ -456,10 +466,14 @@ class TestForceConversationIntegration:
         assert len(stores) == 1
         assert stores[0] == ("commit", "vs_commit_123")
 
-        # Test getting conversation stores - should include Force sessions
+        # Test getting conversation stores - should NOT include Force sessions
         stores = config.get_stores_with_types(["conversation"])
+        assert len(stores) == 0
+
+        # Test getting session stores - should include Force sessions
+        stores = config.get_stores_with_types(["session"])
         assert len(stores) == 1
-        assert stores[0][0] == "conversation"
+        assert stores[0][0] == "session"
         assert "||chat_with_gemini25_pro||" in stores[0][1]
 
     def test_get_stores_with_types_empty_request(self, temp_db):
@@ -532,8 +546,13 @@ class TestForceConversationIntegration:
         conn.commit()
         conn.close()
 
-        # Get conversation stores
+        # Get conversation stores - should be empty (no Force sessions)
         stores = config.get_stores_with_types(["conversation"])
+        store_ids = [store[1] for store in stores]
+        assert len(store_ids) == 0, f"Expected no conversation stores, got: {store_ids}"
+
+        # Get session stores - should include Force conversation sessions
+        stores = config.get_stores_with_types(["session"])
         store_ids = [store[1] for store in stores]
 
         # Verify expected inclusions

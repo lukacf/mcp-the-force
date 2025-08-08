@@ -21,9 +21,9 @@ class TestToolRegistration:
         expected_tools = [
             "chat_with_gemini25_pro",
             "chat_with_gemini25_flash",
-            "chat_with_o3",
-            "chat_with_o3_pro",
+            "chat_with_o3_pro",  # o3 is filtered out, only o3-pro remains
             "chat_with_gpt41",
+            "chat_with_codex_mini",  # codex-mini tool name
         ]
 
         for tool_name in expected_tools:
