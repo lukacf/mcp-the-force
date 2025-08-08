@@ -12,6 +12,7 @@ from ..capabilities import AdapterCapabilities
 from ...tools.descriptors import Route
 from ...tools.blueprint import ToolBlueprint
 from ...tools.blueprint_registry import register_blueprints
+from ...utils.capability_formatter import format_capabilities
 
 
 # ====================================================================
@@ -107,7 +108,7 @@ class GptOss20bCapabilities(OllamaBaseCapabilities):
 
     model_name: str = "gpt-oss:20b"
     max_context_window: int = 32768  # Conservative default
-    description: str = "gpt-oss:20b (20.9B)"
+    description: str = "Open-weights, cost-efficient model for private/on-prem tasks. Speed: high. Tool use: wrapper-dependent. When to use: Cheap classification, templated replies, simple transforms in controlled environments; pair with strict prompts+RAG."
 
 
 @dataclass
@@ -116,7 +117,7 @@ class GptOss120bCapabilities(OllamaBaseCapabilities):
 
     model_name: str = "gpt-oss:120b"
     max_context_window: int = 32768  # Conservative default
-    description: str = "gpt-oss:120b (116.8B)"
+    description: str = "Large open-weights model with stronger private reasoning/writing. Speed: medium/low. Tool use: wrapper-dependent. When to use: Secure long-context summarization, moderate coding, and private RAG—tight constraints; verify critical claims."
 
 
 # ====================================================================
@@ -159,12 +160,18 @@ def _generate_and_register_blueprints():
     blueprints = []
 
     for model_name, capabilities in OLLAMA_MODEL_CAPABILITIES.items():
+        # Format capabilities and append to description
+        capability_info = format_capabilities(capabilities)
+        full_description = capabilities.description
+        if capability_info:
+            full_description = f"{capabilities.description} [{capability_info}]"
+
         blueprint = ToolBlueprint(
             model_name=model_name,
             tool_name=_get_friendly_name(model_name),
             adapter_key="ollama",
             param_class=OllamaToolParams,
-            description=capabilities.description,
+            description=full_description,
             timeout=_calculate_timeout(model_name),
             context_window=capabilities.max_context_window,
             tool_type="chat",  # All Ollama models are chat tools

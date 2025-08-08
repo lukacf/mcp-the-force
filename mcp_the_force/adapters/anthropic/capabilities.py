@@ -30,7 +30,7 @@ class Claude41OpusCapabilities(AnthropicBaseCapabilities):
     max_context_window: int = 200_000
     max_output_tokens: int = 32_000
     supports_reasoning_effort: bool = True
-    description: str = "Deep analysis and formal reasoning with extended thinking (200k context, 32k output)"
+    description: str = "Anthropic's careful long-form reasoner/writer. Speed: low. Tool use: strong. When to use: Policy/legal/medical summaries, careful synthesis, premium writing where caution and clarity matter."
 
 
 @dataclass
@@ -41,9 +41,7 @@ class Claude4SonnetCapabilities(AnthropicBaseCapabilities):
     max_context_window: int = 200_000
     max_output_tokens: int = 64_000
     supports_reasoning_effort: bool = True
-    description: str = (
-        "Fast long-context processing with extended thinking (200k context, 64k output)"
-    )
+    description: str = "Balanced Claude for fast, high-quality writing and summaries. Speed: high. Tool use: reliable. When to use: Crisp docs, grounded Q&A, customer-facing replies—choose over Opus when latency matters."
 
 
 @dataclass
@@ -56,7 +54,7 @@ class Claude3OpusCapabilities(AnthropicBaseCapabilities):
     supports_reasoning_effort: bool = (
         False  # Claude 3 doesn't support extended thinking
     )
-    description: str = "Exceptional theory of mind and deep, thoughtful discussions (200k context, 8k output)"
+    description: str = "Prior flagship known for thoughtful, low-hallucination writing. Speed: low/medium. Tool use: good. When to use: Well-structured reports and literature summaries—prefer newer Sonnet/Opus 4-series or GPT-5 for tool-heavy tasks."
 
 
 # Map of model names to their capability instances

@@ -12,6 +12,7 @@ from ..capabilities import AdapterCapabilities
 from ...tools.descriptors import Route
 from ...tools.blueprint import ToolBlueprint
 from ...tools.blueprint_registry import register_blueprints
+from ...utils.capability_formatter import format_capabilities
 
 
 # ====================================================================
@@ -156,7 +157,7 @@ class Grok3FastCapabilities(Grok3Capabilities):
     """Grok 3 Fast model."""
 
     model_name: str = "grok-3-fast"
-    description: str = "Fast inference with Grok 3"
+    description: str = "Speed-first Grok for triage and quick transformations. Speed: very high. Tool use: limited. When to use: High-QPS extraction, short code edits, routing—avoid for long-form reasoning."
 
 
 @dataclass
@@ -166,7 +167,7 @@ class Grok4Capabilities(GrokBaseCapabilities):
     model_name: str = "grok-4"
     max_context_window: int = 256_000
     supports_reasoning_effort: bool = False
-    description: str = "Advanced assistant using xAI Grok 4 model (256k context, multi-agent reasoning)"
+    description: str = "Advanced xAI model with multi-agent reasoning and long context. Speed: medium/low. Tool use: strong (parallel). When to use: Complex analysis, planning, cross-document synthesis—pick when you need xAI's deeper reasoning."
 
 
 @dataclass
@@ -221,18 +222,11 @@ GROK_MODEL_CAPABILITIES = {
 # BLUEPRINT GENERATION
 # ====================================================================
 
-# Only generate tools for specific Grok models that are exposed to users
-# We'll focus on the main models: grok-3-beta (reasoning) and grok-4 (advanced)
-USER_FACING_MODELS = {
-    "grok-3-beta": "Deep reasoning using xAI Grok 3 Beta model (131k context)",
-    "grok-4": "Advanced assistant using xAI Grok 4 model (256k context, multi-agent reasoning)",
-}
-
 
 def _calculate_timeout(model_name: str) -> int:
     """Calculate appropriate timeout for a model."""
-    if model_name == "grok-4":
-        return 600  # 10 minutes for grok-4
+    if model_name == "grok-4" or model_name == "grok-4-heavy":
+        return 600  # 10 minutes for grok-4 family
     elif model_name == "grok-3-beta":
         return 420  # 7 minutes for grok-3-beta
     else:
@@ -240,17 +234,27 @@ def _calculate_timeout(model_name: str) -> int:
 
 
 def _generate_and_register_blueprints():
-    """Generate and register blueprints for user-facing Grok models."""
+    """Generate and register blueprints for supported Grok models."""
     blueprints = []
 
-    for model_name, custom_description in USER_FACING_MODELS.items():
-        capabilities = GROK_MODEL_CAPABILITIES[model_name]
+    # Only register supported models
+    supported_models = ["grok-3-fast", "grok-4"]
+
+    for model_name, capabilities in GROK_MODEL_CAPABILITIES.items():
+        if model_name not in supported_models:
+            continue
+
+        # Format capabilities and append to description
+        capability_info = format_capabilities(capabilities)
+        full_description = capabilities.description
+        if capability_info:
+            full_description = f"{capabilities.description} [{capability_info}]"
 
         blueprint = ToolBlueprint(
             model_name=model_name,
             adapter_key="xai",
             param_class=GrokToolParams,
-            description=custom_description,  # Use custom description for clarity
+            description=full_description,
             timeout=_calculate_timeout(model_name),
             context_window=capabilities.max_context_window,
             tool_type="chat",  # All Grok models are chat tools

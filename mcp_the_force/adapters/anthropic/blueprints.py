@@ -6,6 +6,7 @@ from ...tools.blueprint import ToolBlueprint
 from ...tools.blueprint_registry import register_blueprints
 from .capabilities import ANTHROPIC_MODEL_CAPABILITIES
 from .params import AnthropicToolParams
+from ...utils.capability_formatter import format_capabilities
 
 
 def _get_friendly_name(model_name: str) -> str:
@@ -53,12 +54,18 @@ def get_anthropic_blueprints() -> List[ToolBlueprint]:
     blueprints = []
 
     for model_name, capabilities in ANTHROPIC_MODEL_CAPABILITIES.items():
+        # Format capabilities and append to description
+        capability_info = format_capabilities(capabilities)
+        full_description = capabilities.description
+        if capability_info:
+            full_description = f"{capabilities.description} [{capability_info}]"
+
         blueprint = ToolBlueprint(
             model_name=model_name,
             tool_name=_get_friendly_name(model_name),
             adapter_key="anthropic",
             param_class=AnthropicToolParams,
-            description=capabilities.description,
+            description=full_description,
             timeout=600,  # 10 minutes default timeout
             context_window=capabilities.max_context_window
             or 200_000,  # All Anthropic models have 200k context

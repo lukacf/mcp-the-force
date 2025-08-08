@@ -31,16 +31,15 @@ They are your task force, your work force, your close collaborators.
    - Remember that different perspectives from The Force are valuable inputs, not directives; you are responsible for synthesizing and implementing solutions
 
 5. **Understand and Utilize Each Force Member's Unique Strengths**:
-   - **chat_with_gemini25_pro**: Deep multimodal analysis and complex reasoning (Gemini 2.5 Pro, 1M tokens). Best for bug fixing, code analysis.
-   - **chat_with_gemini25_flash**: Fast summarization and quick analysis (Gemini 2.5 Flash, 1M tokens). Best for rapid insights, triage.
-   - **chat_with_o3**: Chain-of-thought reasoning with web search (OpenAI o3, 200k tokens). 
-   - **chat_with_o3_pro**: Deep analysis and formal reasoning with web search (OpenAI o3-pro, 200k tokens). Slower, more expensive.
-   - **chat_with_o4_mini**: Fast reasoning model (OpenAI o4-mini, 200k tokens).
-   - **chat_with_gpt41**: Fast long-context processing with web search (GPT-4.1, 1M tokens). Best for large-scale refactoring and RAG.
-   - **chat_with_grok3_beta**: Deep reasoning using xAI Grok 3 Beta model (131k tokens).
-   - **chat_with_grok4**: Advanced assistant using xAI Grok 4 model with multi-agent reasoning (256k tokens).
-   - **research_with_o3_deep_research**: Ultra-deep research with extensive web search (o3-deep-research, 200k tokens, 10-60 min).
-   - **research_with_o4_mini_deep_research**: Fast research with web search (o4-mini-deep-research, 200k tokens, 2-10 min).
+   - The Force provides access to 17 cutting-edge AI models through `chat_with_*` tools
+   - **For 90% of your work, use these two key models:**
+     - **`chat_with_gpt5`**: The smartest model available (400k context). Best at search and complex reasoning.
+     - **`chat_with_gemini25_pro`**: Smart, fast, and reliable (1M context). Excellent for code analysis and long documents.
+   - **Fast large-context alternatives:**
+     - **`chat_with_gemini25_flash`**: Ultra-fast with 1M context. Perfect for quick summaries.
+     - **`chat_with_gpt41`**: Fast processing with 1M context and dependable tool use.
+   - **For search tasks:** While GPT-5 is best at search, **`chat_with_grok4`** is a good and faster alternative
+   - Each model's tool description shows its capabilities, context window, and best use cases
    - Provide relevant context to each Force member at the start of a session; be transparent about your AI nature and collaboration goals
    - Avoid using Tasks for calling the assistants; use general prompts and conversation
 
@@ -110,25 +109,12 @@ MCP The-Force Server - A Model Context Protocol (MCP) server that provides acces
 
 ### Available Tools
 
-Tools are defined using a descriptor-based system with parameter routing:
+The Force provides access to 17 cutting-edge AI models through `chat_with_*` tools, each with dynamically-generated descriptions showing their capabilities, context limits, and best use cases.
 
-**AI Chat & Research Tools:**
-
-*Google Models:*
-- `chat_with_gemini25_pro`: Deep multimodal analysis and complex reasoning (Gemini 2.5 Pro, 1M tokens)
-- `chat_with_gemini25_flash`: Fast summarization and quick analysis (Gemini 2.5 Flash, 1M tokens)
-
-*OpenAI Models:*
-- `chat_with_o3`: Chain-of-thought reasoning with web search (OpenAI o3, 200k tokens)
-- `chat_with_o3_pro`: Deep analysis and formal reasoning with web search (OpenAI o3-pro, 200k tokens)
-- `chat_with_o4_mini`: Fast reasoning model (OpenAI o4-mini, 200k tokens)
-- `chat_with_gpt41`: Fast long-context processing with web search (GPT-4.1, 1M tokens)
-- `research_with_o3_deep_research`: Ultra-deep research with extensive web search (o3-deep-research, 200k tokens, 10-60 min)
-- `research_with_o4_mini_deep_research`: Fast research with web search (o4-mini-deep-research, 200k tokens, 2-10 min)
-
-*xAI Models:*
-- `chat_with_grok3_beta`: Deep reasoning using xAI Grok 3 Beta model (131k tokens)
-- `chat_with_grok4`: Advanced assistant using xAI Grok 4 model with multi-agent reasoning (256k tokens)
+**Key models for most tasks:**
+- For 90% of your work, use **`chat_with_gpt5`** (smartest, 400k context) or **`chat_with_gemini25_pro`** (smart, 1M context, fast)
+- For fast large-context work: **`chat_with_gemini25_flash`** or **`chat_with_gpt41`**
+- For search: **`chat_with_gpt5`** is best, but **`chat_with_grok4`** is good and faster
 
 **Utility tools:**
 - `list_sessions`: List existing AI conversation sessions for the current project
@@ -137,8 +123,7 @@ Tools are defined using a descriptor-based system with parameter routing:
 - `count_project_tokens`: Count tokens for specified files or directories
 - `search_mcp_debug_logs`: (Developer mode only) Run a raw LogsQL query against VictoriaLogs debug logs
 
-Use `search_project_history` whenever you need to recall prior AI decisions or
-code history. 
+Use `search_project_history` whenever you need to recall prior AI decisions or code history. 
 
 ### Conversation Support
 

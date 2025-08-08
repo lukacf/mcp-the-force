@@ -63,18 +63,24 @@ class TestAnthropicBlueprints:
         opus4_bp = next(
             bp for bp in blueprints if bp.model_name == "claude-opus-4-1-20250805"
         )
-        assert "extended thinking" in opus4_bp.description
-        assert "32k output" in opus4_bp.description
+        assert "careful long-form reasoner/writer" in opus4_bp.description
+        assert (
+            "max output: 32k tokens" in opus4_bp.description
+        )  # From capability formatter
 
         sonnet4_bp = next(
             bp for bp in blueprints if bp.model_name == "claude-sonnet-4-20250514"
         )
-        assert "64k output" in sonnet4_bp.description
+        assert (
+            "max output: 64k tokens" in sonnet4_bp.description
+        )  # From capability formatter
 
         opus3_bp = next(
             bp for bp in blueprints if bp.model_name == "claude-3-opus-20240229"
         )
-        assert "8k output" in opus3_bp.description
+        assert (
+            "max output: 8k tokens" in opus3_bp.description
+        )  # From capability formatter
 
     def test_blueprint_capabilities(self):
         """Test that blueprints have proper capabilities."""

@@ -12,6 +12,7 @@ from ..capabilities import AdapterCapabilities
 from ...tools.descriptors import Route
 from ...tools.blueprint import ToolBlueprint
 from ...tools.blueprint_registry import register_blueprints
+from ...utils.capability_formatter import format_capabilities
 
 
 # ====================================================================
@@ -130,7 +131,7 @@ class CodexMiniCapabilities(OSeriesCapabilities):
 
     model_name: str = "codex-mini-latest"
     max_context_window: int = 200_000
-    description: str = "Fast coding-specialized reasoning model (200k context)"
+    description: str = "Lightweight code generator/completer for quick edits. Speed: very high. Tool use: limited. When to use: Inline edits, small bugs, scaffolding, regex/tests—avoid for multi-file refactors or repo-wide reasoning."
     parallel_function_calls: int = -1  # Unlimited
     supports_web_search: bool = False  # Codex-mini doesn't support web search
     supports_live_search: bool = False  # Codex-mini doesn't support live search
@@ -146,9 +147,7 @@ class O3ProCapabilities(OSeriesCapabilities):
 
     model_name: str = "o3-pro"
     max_context_window: int = 200_000
-    description: str = (
-        "Deep analysis and formal reasoning with web search (200k context)"
-    )
+    description: str = "Heavyweight formal reasoner for deep, multi-step analysis. Speed: low. Tool use: very strong. When to use: Hard proofs/derivations, long-horizon planning, and safety-critical reviews where depth and rigor trump speed."
     force_background: bool = True  # Always use background mode
     supports_streaming: bool = False  # No streaming for o3-pro
     default_reasoning_effort: str = "high"
@@ -170,7 +169,7 @@ class GPT41Capabilities(GPT4Capabilities):
 
     model_name: str = "gpt-4.1"
     max_context_window: int = 1_000_000
-    description: str = "Fast long-context processing with web search (1M context)"
+    description: str = "Long-context generalist with dependable tool use and low hallucination. Speed: medium. Tool use: strong. When to use: Large-corpus summarization, RAG across many docs, compliance reviews—choose when breadth > peak reasoning depth."
     web_search_tool: str = "web_search"
     parallel_function_calls: int = -1  # Unlimited
 
@@ -201,9 +200,7 @@ class O3DeepResearchCapabilities(DeepResearchCapabilities):
 
     model_name: str = "o3-deep-research"
     max_context_window: int = 200_000
-    description: str = (
-        "Ultra-deep research with extensive web search (200k context, 10-60 min)"
-    )
+    description: str = "Autonomous browsing investigator for exhaustive, cited research. Runtime: 10-60 min. Speed: asynchronous. When to use: Due diligence, literature reviews, competitive analysis—when you need multi-source synthesis and auditability."
 
 
 @dataclass
@@ -212,7 +209,7 @@ class O4MiniDeepResearchCapabilities(DeepResearchCapabilities):
 
     model_name: str = "o4-mini-deep-research"
     max_context_window: int = 200_000
-    description: str = "Fast research with web search (200k context, 2-10 min)"
+    description: str = "Faster research agent for scoped, cited reconnaissance. Runtime: 2-10 min. Speed: asynchronous. When to use: Quick market scans, initial fact-finding, and follow-ups where time-to-first-brief matters more than depth."
 
 
 @dataclass
@@ -235,7 +232,7 @@ class GPT5Capabilities(GPT5SeriesCapabilities):
     """GPT-5 model capabilities - the world's smartest reasoning model."""
 
     model_name: str = "gpt-5"
-    description: str = "World's smartest reasoning model - superior to o3-pro for complex tasks (400k context)"
+    description: str = "Top-tier coding + agentic orchestration with strong parallel tool use. Speed: medium. Tool use: excellent (parallel). When to use: Complex refactors, end-to-end builds, long-context codebase Q&A, durable agents—your smartest default for hard work."
 
 
 @dataclass
@@ -243,7 +240,7 @@ class GPT5MiniCapabilities(GPT5SeriesCapabilities):
     """GPT-5-mini model capabilities - fast superior reasoning."""
 
     model_name: str = "gpt-5-mini"
-    description: str = "Fast superior reasoning model - smarter than o3 with larger context (400k context)"
+    description: str = "Faster, cheaper sibling of GPT-5 with strong reasoning and tools. Speed: high. Tool use: strong. When to use: Day-to-day coding, midsize refactors, responsive agents and RAG—use when you want ~85–90% of GPT-5 at lower latency."
     default_reasoning_effort: str = "medium"  # Slightly lower for mini
 
 
@@ -252,7 +249,7 @@ class GPT5NanoCapabilities(GPT5SeriesCapabilities):
     """GPT-5-nano model capabilities - efficient superior reasoning."""
 
     model_name: str = "gpt-5-nano"
-    description: str = "Efficient superior reasoning model - advanced reasoning with speed (400k context)"
+    description: str = "Efficiency-tuned variant for ultra-fast, small-hop tasks. Speed: very high. Tool use: solid. When to use: Autocomplete, quick unit tests, small feature tweaks, and fast agent steps—escalate to 5-mini/5 for deep synthesis."
     default_reasoning_effort: str = "medium"  # Efficient reasoning
 
 
@@ -371,7 +368,22 @@ def _generate_and_register_blueprints():
 
     blueprints = []
 
+    # Only register supported models (excluding o3)
+    supported_models = [
+        "o3-pro",
+        "codex-mini",
+        "gpt-4.1",
+        "o3-deep-research",
+        "o4-mini-deep-research",
+        "gpt-5",
+        "gpt-5-mini",
+        "gpt-5-nano",
+    ]
+
     for model_name, capabilities in OPENAI_MODEL_CAPABILITIES.items():
+        if model_name not in supported_models:
+            continue
+
         # Determine tool type based on model name
         if "deep-research" in model_name:
             tool_type = "research"
@@ -383,11 +395,17 @@ def _generate_and_register_blueprints():
         if model_name == "codex-mini":
             tool_name = "codex_mini"  # Keep the friendly name
 
+        # Format capabilities and append to description
+        capability_info = format_capabilities(capabilities)
+        full_description = capabilities.description
+        if capability_info:
+            full_description = f"{capabilities.description} [{capability_info}]"
+
         blueprint = ToolBlueprint(
             model_name=model_name,
             adapter_key="openai",
             param_class=OpenAIToolParams,
-            description=capabilities.description,
+            description=full_description,
             timeout=_calculate_timeout(model_name),
             context_window=capabilities.max_context_window,
             tool_type=tool_type,
