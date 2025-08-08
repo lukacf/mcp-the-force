@@ -156,7 +156,7 @@ class TestSessionManagement:
 
         data1 = parse_response(result1)
         assert data1["mock"] is True
-        assert data1["model"] == "o3"
+        assert data1["model"] == "o3-pro"
 
         # Continue with gpt4
         gpt4_metadata = get_tool("chat_with_gpt41")
@@ -289,7 +289,7 @@ class TestSessionManagement:
         # Parse all responses
         parsed = [parse_response(r) for r in results]
         assert all(p["mock"] is True for p in parsed)
-        assert all(p["model"] == "o3" for p in parsed)
+        assert all(p["model"] == "o3-pro" for p in parsed)
 
         # All should be using the same model and session is handled at executor level
         # Just verify all calls succeeded with the correct model

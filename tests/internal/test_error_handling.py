@@ -182,7 +182,7 @@ class TestErrorHandlingIntegration:
         # MockAdapter will return JSON showing it processed the request
         data = parse_adapter_response(result)
         assert data["mock"] is True
-        assert data["model"] == "o3"
+        assert data["model"] == "o3-pro"
         # Vector store creation is handled by the mock_openai_client fixture
         # The MockAdapter itself doesn't handle vector stores
         # Just verify the request went through successfully
@@ -283,7 +283,7 @@ class TestErrorHandlingIntegration:
             # First should succeed
             data = parse_adapter_response(results[0])
             assert data["mock"] is True
-            assert data["model"] == "o3"
+            assert data["model"] == "o3-pro"
 
             # Second should fail
             assert isinstance(results[1], Exception)
