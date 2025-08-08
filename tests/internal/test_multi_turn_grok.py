@@ -52,7 +52,7 @@ class TestGrokMultiTurn:
         self, clean_session_caches, session_id_generator
     ):
         """Test Grok 3 reasoning model multi-turn."""
-        metadata = get_tool("chat_with_grok3_beta")
+        metadata = get_tool("chat_with_grok3_fast")
         session_id = session_id_generator()
 
         # First turn: Present a problem

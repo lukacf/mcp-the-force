@@ -44,7 +44,7 @@ class TestToolExecutionIntegration:
         """Test OpenAI tool with session continuity."""
         # First call
         result1 = await run_tool(
-            "chat_with_o3",
+            "chat_with_o3_pro",
             instructions="I need help with Python async programming",
             output_format="explanation",
             context=[],
@@ -58,7 +58,7 @@ class TestToolExecutionIntegration:
 
         # Second call with same session
         result2 = await run_tool(
-            "chat_with_o3",
+            "chat_with_o3_pro",
             instructions="Show me an example",
             output_format="code",
             context=[],
@@ -212,7 +212,7 @@ class TestToolExecutionIntegration:
         # Execute multiple tools concurrently
         tasks = [
             run_tool(
-                "chat_with_o3",
+                "chat_with_o3_pro",
                 instructions=f"Task {i}",
                 output_format="text",
                 context=[],
