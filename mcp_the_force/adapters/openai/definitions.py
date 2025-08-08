@@ -238,7 +238,7 @@ class GPT5Capabilities(GPT5SeriesCapabilities):
     description: str = "World's smartest reasoning model - superior to o3-pro for complex tasks (400k context)"
 
 
-@dataclass  
+@dataclass
 class GPT5MiniCapabilities(GPT5SeriesCapabilities):
     """GPT-5-mini model capabilities - fast superior reasoning."""
 

@@ -144,14 +144,20 @@ class TestStoreDiscoveryIntegration:
         """Test that store discovery correctly includes Force conversations."""
         config = HistoryStorageConfig(db_path=populated_db)
 
-        # Get conversation stores
+        # Get conversation stores - should only include traditional stores
         stores = config.get_stores_with_types(["conversation"])
 
-        # Should include traditional store + 3 Force conversation sessions
-        assert len(stores) == 4
+        # Should include only traditional store (not Force conversation sessions)
+        assert len(stores) == 1
 
         store_ids = [store[1] for store in stores]
         assert "vs_traditional_store" in store_ids
+
+        # Get session stores - should include Force conversation sessions
+        stores = config.get_stores_with_types(["session"])
+        assert len(stores) == 3
+
+        store_ids = [store[1] for store in stores]
         assert (
             "mcp-the-force||chat_with_gemini25_flash||memory-vault-diagnostic"
             in store_ids
@@ -163,13 +169,11 @@ class TestStoreDiscoveryIntegration:
 class TestRegressionPrevention:
     """Tests to prevent regression of Force conversation discovery."""
 
-    def test_unified_sessions_always_discovered_for_conversation_searches(
-        self, populated_db
-    ):
-        """REGRESSION TEST: Ensure unified sessions are always discovered when searching conversations."""
+    def test_unified_sessions_only_discovered_for_session_searches(self, populated_db):
+        """REGRESSION TEST: Ensure unified sessions are only discovered when explicitly searching sessions."""
         config = HistoryStorageConfig(db_path=populated_db)
 
-        # This test ensures that any conversation search includes Force sessions
+        # Conversation searches should NOT include Force sessions
         conversation_stores = config.get_stores_with_types(["conversation"])
         unified_session_stores = [
             store
@@ -177,15 +181,29 @@ class TestRegressionPrevention:
             if "||" in store[1] and "chat_with_" in store[1]
         ]
 
+        # Should find zero Force conversation sessions in conversation search
+        assert len(unified_session_stores) == 0, (
+            f"Expected no Force conversation sessions in conversation search, got {len(unified_session_stores)}. "
+            f"Force sessions should only appear when explicitly requesting 'session' store type."
+        )
+
+        # Session searches should include Force sessions
+        session_stores = config.get_stores_with_types(["session"])
+        unified_session_stores = [
+            store
+            for store in session_stores
+            if "||" in store[1] and "chat_with_" in store[1]
+        ]
+
         # Must find at least the Force conversation sessions we inserted
         assert len(unified_session_stores) >= 3, (
-            f"Expected at least 3 Force conversation sessions, got {len(unified_session_stores)}. "
-            f"This indicates a regression in unified session discovery."
+            f"Expected at least 3 Force conversation sessions in session search, got {len(unified_session_stores)}. "
+            f"This indicates a regression in unified session discovery for session searches."
         )
 
         # Verify the store IDs have correct format
         for store_type, store_id in unified_session_stores:
-            assert store_type == "conversation"
+            assert store_type == "session"
             parts = store_id.split("||")
             assert len(parts) == 3, f"Invalid store ID format: {store_id}"
             assert parts[1].startswith("chat_with_"), f"Not a chat tool: {parts[1]}"
