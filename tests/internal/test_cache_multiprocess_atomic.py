@@ -219,8 +219,9 @@ def worker_failing_upload_workflow(args):
         file_id, we_are_uploader = _sync_atomic_cache_or_get(cache, content_hash)
 
         if we_are_uploader:
-            # Simulate upload work
-            time.sleep(0.02)
+            # Simulate upload work - increased sleep to reduce race condition flakiness
+            # This gives other processes time to attempt reservation before cleanup
+            time.sleep(0.2)  # Increased from 0.02 to 0.2 seconds
 
             if should_fail:
                 # Simulate upload failure and cleanup
