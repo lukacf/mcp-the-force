@@ -1,9 +1,15 @@
 # Changelog
 
 ## 1.0.7
+Fixed XML escaping in context builder that was corrupting code syntax (e.g. "->" became "-&gt;")
+Made file type filtering vector store-specific instead of global
+Added supported_extensions property to all vector stores (OpenAI has restrictions, HNSW/InMemory accept all)
+Fixed executor to use HNSW for non-OpenAI adapters when default is OpenAI to avoid unnecessary restrictions
+Enhanced priority_context to allow explicit files to bypass .gitignore (directories still respect it)
+Added diagnostic logging when vector stores drop files due to extension restrictions
 Enhanced context parameter descriptions to show preferred array format over JSON strings
 Added critical warnings to session_id parameter about conversation continuity
-Improved tool parameter documentation for better AI agent UX
+Added comprehensive unit tests for file filtering and XML escaping fixes
 
 ## 1.0.6
 Added dynamic capability injection to model descriptions showing context window, tools, and features
