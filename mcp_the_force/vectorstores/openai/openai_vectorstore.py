@@ -75,6 +75,11 @@ class OpenAIVectorStore:
         self.name = name
         self._client = client
 
+    @property
+    def supported_extensions(self) -> set[str]:
+        """Returns the set of file extensions supported by OpenAI."""
+        return OPENAI_SUPPORTED_EXTENSIONS
+
     def _is_supported_file(self, file: VSFile) -> bool:
         """Check if file extension is supported by OpenAI."""
         path = Path(file.path)

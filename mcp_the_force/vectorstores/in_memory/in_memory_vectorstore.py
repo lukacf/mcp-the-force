@@ -39,6 +39,11 @@ class InMemoryVectorStore:
             self._created_at + ttl_seconds if ttl_seconds else None
         )
 
+    @property
+    def supported_extensions(self) -> None:
+        """InMemory accepts all text files - returns None to indicate no restrictions."""
+        return None
+
     async def add_files(self, files: Sequence[VSFile]) -> Sequence[str]:
         """Add files to the store."""
         async with self._lock:
