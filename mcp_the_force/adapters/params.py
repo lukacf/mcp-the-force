@@ -36,7 +36,6 @@ class BaseToolParams(ParamModel):
         description=(
             "(Required) The primary directive for the AI model. This is the main input that drives "
             "the model's generation process. Should clearly and concisely state the task to be performed. "
-            "TIP: Use 'search_project_history' tool to find past decisions and conversations before starting new work. "
             "Syntax: A natural language string detailing the task. "
             "Example: 'Refactor the attached Python code to improve performance and add error handling.'"
         ),
