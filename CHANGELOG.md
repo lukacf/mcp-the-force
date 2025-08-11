@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.7
+Enhanced context parameter descriptions to show preferred array format over JSON strings
+Added critical warnings to session_id parameter about conversation continuity
+Improved tool parameter documentation for better AI agent UX
+
 ## 1.0.6
 Added dynamic capability injection to model descriptions showing context window, tools, and features
 Implemented model filtering to supported list of 17 AI models (excluding experimental/unavailable ones)
