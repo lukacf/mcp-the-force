@@ -36,6 +36,7 @@ class BaseToolParams(ParamModel):
         description=(
             "(Required) The primary directive for the AI model. This is the main input that drives "
             "the model's generation process. Should clearly and concisely state the task to be performed. "
+            "TIP: Use 'search_project_history' tool to find past decisions and conversations before starting new work. "
             "Syntax: A natural language string detailing the task. "
             "Example: 'Refactor the attached Python code to improve performance and add error handling.'"
         ),
@@ -87,6 +88,7 @@ class BaseToolParams(ParamModel):
             "previous interactions. Always reuse existing session_id unless you specifically want to start fresh. "
             "All models (OpenAI, Gemini, Grok) support session continuity. Sessions are permanently stored. "
             "Use descriptive IDs like 'project-analysis-2024' and reuse them for related conversations. "
+            "TIP: Use 'list_sessions' tool to see existing sessions and their IDs. "
             "WARNING: New session_id = AI forgets everything from previous calls. "
             "Example: 'debug-auth-issue-2024-07-16' (reuse this same ID for follow-ups)"
         )
