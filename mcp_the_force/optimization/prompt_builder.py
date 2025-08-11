@@ -1,8 +1,7 @@
 """XML prompt construction for optimized context."""
 
 import logging
-from typing import List, Tuple, Any
-from xml.etree import ElementTree as ET
+from typing import List, Tuple
 
 from ..utils.file_tree import build_file_tree_from_paths
 from ..utils.token_counter import count_tokens
@@ -36,44 +35,49 @@ class PromptBuilder:
         Returns:
             Complete XML prompt string
         """
-        # Build XML structure
-        task = ET.Element("Task")
-        ET.SubElement(task, "Instructions").text = instructions
-        ET.SubElement(task, "OutputFormat").text = output_format
+        # Build prompt manually to avoid XML escaping
+        prompt_parts = []
 
-        # Add file map with proper attachment markers
-        file_map = ET.SubElement(task, "file_map")
+        # Add Task opening tag
+        prompt_parts.append("<Task>")
+
+        # Add Instructions - no escaping needed, this is pseudo-XML for LLMs
+        prompt_parts.append(f"<Instructions>{instructions}</Instructions>")
+
+        # Add OutputFormat
+        prompt_parts.append(f"<OutputFormat>{output_format}</OutputFormat>")
+
+        # Add file map
         file_tree = build_file_tree_from_paths(
             all_paths=all_files,
             attachment_paths=overflow_files,
             root_path=None,
         )
-        file_map.text = (
+        file_map_content = (
             file_tree
-            + "\\n\\nLegend: Files marked 'attached' are available via search_task_files. Unmarked files are included below."
+            + "\n\nLegend: Files marked 'attached' are available via search_task_files. Unmarked files are included below."
         )
+        prompt_parts.append(f"<file_map>{file_map_content}</file_map>")
 
         # Add inline file contents
-        ctx = ET.SubElement(task, "CONTEXT")
+        prompt_parts.append("<CONTEXT>")
         for path, content, _ in inline_files:
-            ctx.append(self._create_file_element(path, content))
+            # Sanitize content to remove control characters except tabs, newlines, returns
+            safe_content = "".join(c for c in content if ord(c) >= 32 or c in "\t\n\r")
+            # Don't escape anything - preserve content exactly as-is
+            prompt_parts.append(f'<file path="{path}">{safe_content}</file>')
+        prompt_parts.append("</CONTEXT>")
 
-        # Convert to string
-        prompt = ET.tostring(task, encoding="unicode")
+        # Close Task
+        prompt_parts.append("</Task>")
+
+        prompt = "".join(prompt_parts)
 
         # Add vector store instructions if needed
         if overflow_files:
-            prompt += "\\n\\n<instructions_on_use>The files in the file tree but not included in <CONTEXT> you access via the search_task_files MCP function. They are stored in a vector database and the search function does semantic search.</instructions_on_use>"
+            prompt += "\n\n<instructions_on_use>The files in the file tree but not included in <CONTEXT> you access via the search_task_files MCP function. They are stored in a vector database and the search function does semantic search.</instructions_on_use>"
 
         return prompt
-
-    def _create_file_element(self, path: str, content: str) -> Any:
-        """Create XML file element with sanitized content."""
-        el = ET.Element("file", path=path)
-        # Sanitize content to remove control characters except tabs, newlines, returns
-        safe_content = "".join(c for c in content if ord(c) >= 32 or c in "\\t\\n\\r")
-        el.text = safe_content
-        return el
 
     def calculate_complete_prompt_tokens(
         self, developer_prompt: str, user_prompt: str
