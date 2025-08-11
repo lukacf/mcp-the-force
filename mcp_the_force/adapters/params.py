@@ -60,7 +60,8 @@ class BaseToolParams(ParamModel):
             "automatically handles this split based on the model's context window size. "
             "Syntax: An array of strings (not a JSON string). Do not wrap the array in quotes. "
             "Each string must be an absolute path. "
-            'Example: ["/path/to/project/main.py", "/path/to/project/utils/"]'
+            'PREFERRED FORMAT: ["/path/to/project/main.py", "/path/to/project/utils/"] '
+            'NOT: "["/path/to/project/main.py", "/path/to/project/utils/"]"'
         ),
         default_factory=list,
     )
@@ -73,18 +74,21 @@ class BaseToolParams(ParamModel):
             "total token budget. Files in priority_context are processed before files in context. "
             "Syntax: An array of strings (not a JSON string). Do not wrap the array in quotes. "
             "Each string must be an absolute path. "
-            'Example: ["/path/to/project/critical_config.yaml"]'
+            'PREFERRED FORMAT: ["/path/to/project/critical_config.yaml"] '
+            'NOT: "["/path/to/project/critical_config.yaml"]"'
         ),
         default_factory=list,
     )
     session_id: str = Route.session(  # type: ignore[assignment, misc]
         description=(
-            "(Required) A unique identifier for a multi-turn conversation. Enables conversational continuity. "
-            "When the same session_id is used across multiple tool calls, the model can access the history "
-            "of that conversation. All models (OpenAI, Gemini, Grok) support session continuity. "
-            "Sessions are permanently stored in SQLite database. It is recommended to use descriptive IDs. "
-            "Syntax: A string. "
-            "Example: 'debug-auth-issue-2024-07-16'"
+            "(Required) A unique identifier for a multi-turn conversation. CRITICAL: Reuse the same session_id "
+            "to continue an existing conversation - the AI model will remember previous exchanges and context. "
+            "Creating a NEW session_id starts a completely blank conversation where the AI has no memory of "
+            "previous interactions. Always reuse existing session_id unless you specifically want to start fresh. "
+            "All models (OpenAI, Gemini, Grok) support session continuity. Sessions are permanently stored. "
+            "Use descriptive IDs like 'project-analysis-2024' and reuse them for related conversations. "
+            "WARNING: New session_id = AI forgets everything from previous calls. "
+            "Example: 'debug-auth-issue-2024-07-16' (reuse this same ID for follow-ups)"
         )
     )
     disable_history_record: bool = Route.adapter(  # type: ignore[assignment]
