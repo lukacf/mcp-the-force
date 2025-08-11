@@ -74,6 +74,11 @@ class HnswVectorStore(VectorStore):
         """Provider name."""
         return self._provider
 
+    @property
+    def supported_extensions(self) -> None:
+        """HNSW accepts all text files - returns None to indicate no restrictions."""
+        return None
+
     async def add_files(self, files: Sequence[VSFile]) -> Sequence[str]:
         """Add files to the vector store."""
         if not files:

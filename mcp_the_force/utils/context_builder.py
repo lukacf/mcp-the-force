@@ -2,6 +2,7 @@
 
 import os
 import logging
+from pathlib import Path
 from typing import List, Tuple, Optional
 
 from ..utils.fs import gather_file_paths_async
@@ -135,9 +136,56 @@ async def build_context_with_stable_list(
 
     # Gather priority files first if provided
     priority_files = []
+    explicit_priority_files = []  # Files that bypass .gitignore
     if priority_context:
-        priority_files = await gather_file_paths_async(priority_context)
-        logger.info(f"Gathered {len(priority_files)} priority files")
+        # Separate explicit files from directories
+        priority_dirs = []
+        for p in priority_context:
+            try:
+                abs_p = os.path.abspath(os.path.expanduser(p))
+                if os.path.isfile(abs_p):
+                    # Explicit file - will bypass .gitignore
+                    explicit_priority_files.append(abs_p)
+                elif os.path.isdir(abs_p):
+                    priority_dirs.append(abs_p)
+                else:
+                    # Path doesn't exist - treat as potential file path for gather_file_paths
+                    # This maintains backward compatibility with tests
+                    priority_dirs.append(p)
+            except Exception as e:
+                logger.warning(f"Error processing priority path {p}: {e}")
+                # Fall back to treating it as a directory/pattern
+                priority_dirs.append(p)
+
+        # Gather files from priority directories (respecting .gitignore)
+        if priority_dirs:
+            priority_files = await gather_file_paths_async(priority_dirs)
+
+        # Validate explicit files (check they're text files and within size limits)
+        from .fs import _is_text_file
+        from ..config import get_settings
+
+        settings = get_settings()
+
+        valid_explicit = []
+        for fp in explicit_priority_files:
+            try:
+                size = os.path.getsize(fp)
+                if size > settings.mcp.max_file_size:
+                    logger.info(f"Skipping priority file (too large): {fp}")
+                    continue
+                if not _is_text_file(Path(fp)):
+                    logger.info(f"Skipping priority file (binary): {fp}")
+                    continue
+                valid_explicit.append(fp)
+            except OSError as e:
+                logger.warning(f"Cannot stat priority file {fp}: {e}")
+
+        # Combine directory files with valid explicit files
+        priority_files = sorted(set(priority_files + valid_explicit))
+        logger.info(
+            f"Gathered {len(priority_files)} priority files ({len(valid_explicit)} explicit)"
+        )
 
     # Gather all files from context paths
     all_files = await gather_file_paths_async(context_paths)

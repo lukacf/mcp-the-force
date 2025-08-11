@@ -446,9 +446,33 @@ class VectorStoreManager:
                 vs_files.append(VSFile(path=normalized_path, content=content))
 
             if vs_files:
-                await store.add_files(vs_files)
+                file_ids = await store.add_files(vs_files)
+
+                # Log diagnostics if some files were dropped
+                if hasattr(store, "supported_extensions") and len(file_ids) < len(
+                    vs_files
+                ):
+                    try:
+                        supported_exts = store.supported_extensions
+                        if supported_exts:  # None means no restrictions
+                            # Find which files were dropped
+                            added_paths = {file_id for file_id in file_ids}
+                            dropped_files = [
+                                vs_file.path
+                                for vs_file in vs_files
+                                if vs_file.path not in added_paths
+                            ]
+                            if dropped_files:
+                                logger.warning(
+                                    f"Vector store '{store.provider}' dropped {len(dropped_files)} files "
+                                    f"due to extension restrictions. Supported: {sorted(list(supported_exts))[:10]}..."
+                                )
+                                logger.debug(f"Dropped files: {dropped_files[:5]}...")
+                    except Exception as e:
+                        logger.debug(f"Error checking supported extensions: {e}")
+
                 logger.info(
-                    f"Added {len(vs_files)} files to new vector store {store.id}"
+                    f"Added {len(file_ids)} files to new vector store {store.id}"
                 )
 
         return store

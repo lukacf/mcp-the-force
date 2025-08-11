@@ -404,6 +404,20 @@ class ToolExecutor:
                         logger.info(
                             f"Using native vector store provider '{provider_override}' for {model_name}"
                         )
+                else:
+                    # If no native provider and default is openai, use hnsw for non-OpenAI adapters
+                    # to avoid file type restrictions
+                    adapter_class_name = adapter.__class__.__module__.split(".")[
+                        -2
+                    ]  # e.g., 'openai', 'google', 'xai'
+                    if (
+                        settings.mcp.default_vector_store_provider == "openai"
+                        and adapter_class_name != "openai"
+                    ):
+                        provider_override = "hnsw"
+                        logger.info(
+                            f"Using 'hnsw' for {model_name} to avoid OpenAI file type restrictions"
+                        )
 
                 # Clear attachment search cache for new attachments
                 from .search_task_files import SearchTaskFilesAdapter
