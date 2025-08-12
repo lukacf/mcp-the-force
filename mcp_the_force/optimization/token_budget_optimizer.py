@@ -485,9 +485,11 @@ class TokenBudgetOptimizer:
                 raise RuntimeError(error_msg)
 
         logger.info(
+            f"[PREDICTED_USAGE] Session {self.session_id}: {final_tokens:,} tokens predicted"
+        )
+        logger.info(
             f"[OPTIMIZER] Final plan: {len(files_to_send)} files to send, "
-            f"{len(final_inline_paths)} total inline, {len(overflow_files)} overflow, "
-            f"{final_tokens:,} tokens"
+            f"{len(final_inline_paths)} total inline, {len(overflow_files)} overflow"
         )
 
         # Don't concatenate developer prompt - it's sent separately in messages

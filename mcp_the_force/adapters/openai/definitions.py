@@ -120,8 +120,10 @@ class O3Capabilities(OSeriesCapabilities):
     """OpenAI o3 model capabilities."""
 
     model_name: str = "o3"
-    max_context_window: int = 200_000
-    description: str = "Chain-of-thought reasoning with web search (200k context)"
+    max_context_window: int = (
+        200_000  # Input limit: 200k + reasoning/output: 100k = 300k total
+    )
+    description: str = "Chain-of-thought reasoning with web search (200k input)"
     parallel_function_calls: int = -1  # Unlimited
 
 
@@ -130,7 +132,9 @@ class CodexMiniCapabilities(OSeriesCapabilities):
     """OpenAI codex-mini model capabilities (o4-mini optimized for coding)."""
 
     model_name: str = "codex-mini-latest"
-    max_context_window: int = 200_000
+    max_context_window: int = (
+        200_000  # Input limit: 200k + reasoning/output: 100k = 300k total
+    )
     description: str = "Lightweight code generator/completer for quick edits. Speed: very high. Tool use: limited. When to use: Inline edits, small bugs, scaffolding, regex/tests—avoid for multi-file refactors or repo-wide reasoning."
     parallel_function_calls: int = -1  # Unlimited
     supports_web_search: bool = False  # Codex-mini doesn't support web search
@@ -146,7 +150,9 @@ class O3ProCapabilities(OSeriesCapabilities):
     """OpenAI o3-pro model capabilities."""
 
     model_name: str = "o3-pro"
-    max_context_window: int = 200_000
+    max_context_window: int = (
+        200_000  # Input limit: 200k + reasoning/output: 100k = 300k total
+    )
     description: str = "Heavyweight formal reasoner for deep, multi-step analysis. Speed: low. Tool use: very strong. When to use: Hard proofs/derivations, long-horizon planning, and safety-critical reviews where depth and rigor trump speed."
     force_background: bool = True  # Always use background mode
     supports_streaming: bool = False  # No streaming for o3-pro
@@ -217,7 +223,9 @@ class GPT5SeriesCapabilities(OSeriesCapabilities):
     """GPT-5 series capabilities - superior reasoning models."""
 
     model_family: str = "gpt-5"
-    max_context_window: int = 400_000
+    max_context_window: int = (
+        272_000  # Input limit: 272k + reasoning/output: 128k = 400k total
+    )
     supports_reasoning_effort: bool = True
     supports_web_search: bool = True
     supports_live_search: bool = True
