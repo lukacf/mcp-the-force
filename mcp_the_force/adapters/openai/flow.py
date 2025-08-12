@@ -227,6 +227,21 @@ class BaseFlowStrategy(ABC):
                 ErrorCategory.PARSING, f"Structured output validation failed: {e}"
             )
 
+    def _extract_usage_info(self, response: Any) -> Dict[str, Any]:
+        """Extract usage information from OpenAI response."""
+        usage = {}
+        if hasattr(response, "usage") and response.usage:
+            u = response.usage
+            usage = {
+                "input_tokens": getattr(u, "input_tokens", None),
+                "output_tokens": getattr(u, "output_tokens", None),
+                "total_tokens": getattr(u, "total_tokens", None),
+            }
+            reasoning_tokens = getattr(u, "reasoning_tokens", None)
+            if reasoning_tokens is not None:
+                usage["reasoning_tokens"] = reasoning_tokens
+        return usage
+
     async def _handle_function_calls(
         self, function_calls: List[Any], response_id: str
     ) -> Dict[str, Any]:
@@ -368,6 +383,16 @@ class BackgroundFlowStrategy(BaseFlowStrategy):
         content = self._extract_content_from_output(job)
         content = self._validate_structured_output(content)
 
+        # Log actual usage for debug comparison with predictions
+        usage_info = self._extract_usage_info(job)
+        if usage_info.get("input_tokens") is not None:
+            logger.info(
+                f"[ACTUAL_USAGE] Session {self.context.session_id}: "
+                f"input_tokens={usage_info['input_tokens']:,}, "
+                f"output_tokens={usage_info.get('output_tokens', 0):,}, "
+                f"reasoning_tokens={usage_info.get('reasoning_tokens', 0):,}"
+            )
+
         result = {"content": content, "response_id": response_id}
         if self.context.request.return_debug:
             result["_debug_tools"] = self.context.tools
@@ -445,6 +470,17 @@ class StreamingFlowStrategy(BaseFlowStrategy):
 
         content = "".join(content_parts)
         content = self._validate_structured_output(content)
+
+        # Log actual usage for debug comparison with predictions (streaming)
+        if final_response_obj:
+            usage_info = self._extract_usage_info(final_response_obj)
+            if usage_info.get("input_tokens") is not None:
+                logger.info(
+                    f"[ACTUAL_USAGE] Session {self.context.session_id}: "
+                    f"input_tokens={usage_info['input_tokens']:,}, "
+                    f"output_tokens={usage_info.get('output_tokens', 0):,}, "
+                    f"reasoning_tokens={usage_info.get('reasoning_tokens', 0):,}"
+                )
 
         result = {"content": content, "response_id": response_id}
         if self.context.request.return_debug:
