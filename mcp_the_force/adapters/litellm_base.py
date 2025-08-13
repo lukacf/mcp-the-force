@@ -19,6 +19,38 @@ litellm.set_verbose = False
 litellm.drop_params = True  # Drop unknown parameters
 
 
+def _configure_claude_sonnet_1m_context() -> None:
+    """Configure LiteLLM to recognize Claude 4 Sonnet's 1M context window.
+
+    This updates LiteLLM's internal model cost table to prevent preflight
+    validation from rejecting large inputs before they reach the API.
+    """
+    try:
+        # Access LiteLLM's model cost table
+        model_cost = getattr(litellm, "model_cost", {})
+
+        # Keys that LiteLLM uses for Claude 4 Sonnet
+        sonnet_keys = ["claude-sonnet-4-20250514", "anthropic/claude-sonnet-4-20250514"]
+
+        for key in sonnet_keys:
+            if key in model_cost:
+                # Update max_input_tokens to 1M while preserving other fields
+                model_info = model_cost[key]
+                old_limit = model_info.get("max_input_tokens", "unknown")
+                model_info["max_input_tokens"] = 1_000_000
+                logger.debug(
+                    f"Updated {key} max_input_tokens: {old_limit} -> 1,000,000"
+                )
+
+        logger.debug("Configured Claude 4 Sonnet for 1M context window")
+
+    except Exception as e:
+        logger.warning(f"Failed to configure Claude 4 Sonnet context limits: {e}")
+        logger.warning(
+            "Large context requests may be blocked by LiteLLM's preflight validation"
+        )
+
+
 class LiteLLMBaseAdapter:
     """Base class for LiteLLM-based adapters.
 
@@ -39,6 +71,7 @@ class LiteLLMBaseAdapter:
         Subclasses should call super().__init__() after setting their
         model_name, display_name, capabilities, and param_class.
         """
+        _configure_claude_sonnet_1m_context()
         self._validate_environment()
 
     @abstractmethod
