@@ -38,10 +38,10 @@ class Claude4SonnetCapabilities(AnthropicBaseCapabilities):
     """Capabilities for Claude 4 Sonnet."""
 
     model_name: str = "claude-sonnet-4-20250514"
-    max_context_window: int = 200_000
+    max_context_window: int = 1_000_000
     max_output_tokens: int = 64_000
     supports_reasoning_effort: bool = True
-    description: str = "Balanced Claude for fast, high-quality writing and summaries. Speed: high. Tool use: reliable. When to use: Crisp docs, grounded Q&A, customer-facing replies—choose over Opus when latency matters."
+    description: str = "Balanced Claude for fast, high-quality writing and summaries with 1M context window. Speed: high. Tool use: reliable. When to use: Crisp docs, grounded Q&A, customer-facing replies, large document analysis—choose over Opus when latency matters."
 
 
 @dataclass
