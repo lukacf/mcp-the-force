@@ -311,11 +311,46 @@ The executor will route calls to the local service instead of an adapter.
 This project is not only a tool but also a product of its own methodology. The "The Force" MCP server was developed by an AI assistant (Claude) relying extensively on the very tools this server provides. This dogfooding approach—using the system to build itself—ensures that the architecture is practical, robust, and built from a user-centric perspective. Test-Driven Development (TDD) is a central practice in this project, ensuring reliability and maintainability.
 
 
+## Branch Strategy
+
+MCP The-Force uses a **stable main branch** approach:
+
+- **`main`** - Stable, release-ready code. Only merged from `dev` when ready for release.
+- **`dev`** - Active development branch. All feature branches should branch from and merge to `dev`.
+- **Feature branches** - Create from `dev`, merge back to `dev` via PR.
+
+### Workflow:
+```bash
+# Start new feature
+git checkout dev
+git pull origin dev
+git checkout -b feature/your-feature-name
+
+# Work on feature, commit changes
+git add .
+git commit -m "feat: add your feature"
+
+# Push and create PR to dev branch
+git push -u origin feature/your-feature-name
+# Create PR: feature/your-feature-name → dev
+```
+
+### Release Process:
+1. Merge `dev` → `main` when ready for release
+2. Tag main branch with version (e.g., `v1.0.9`)
+3. Create GitHub release from tag
+
+This ensures **main branch installations are always stable**:
+```bash
+# Always gets latest stable release
+uvx --from "git+https://github.com/lukacf/mcp-the-force" mcp-the-force
+```
+
 ## Contributing Guidelines
 
 Contributions to MCP The-Force are appreciated! Here's how to get started:
 
-1. Create a branch for your feature or bug fix.
+1. **Branch from `dev`** for your feature or bug fix.
 2. Write tests to cover new code (we use pytest).
 3. Follow conventions using pre-commit hooks for consistent style.
 4. Keep pull requests small and focused on a single change.
@@ -326,4 +361,4 @@ Before submitting a PR, make sure to:
 2. Update relevant documentation.
 3. Add a changelog entry for your change.
 
-Open a PR against the main branch for review by maintainers. Feel free to open an issue or reach out if you have any questions!
+**Open a PR against the `dev` branch** for review by maintainers. Feel free to open an issue or reach out if you have any questions!

@@ -37,7 +37,7 @@ claude mcp add the-force -- \
   mcp-the-force
 ```
 
-Note: `uvx` is included with `uv` and runs Python tools without installing them globally.
+**Note**: `uvx` is included with `uv` and runs Python tools without installing them globally. The installation uses our **stable main branch**, ensuring you always get the latest tested release.
 
 ### 2. Configure
 
