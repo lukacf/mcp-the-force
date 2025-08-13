@@ -105,6 +105,25 @@ class AnthropicAdapter(LiteLLMBaseAdapter):
                     f"Enabled extended thinking with budget: {thinking_budget} tokens"
                 )
 
+        # Enable 1M context for Claude 4 Sonnet
+        if self.model_name == "claude-sonnet-4-20250514":
+            if "extra_headers" not in request_params:
+                request_params["extra_headers"] = {}
+
+            # Handle multiple beta headers - combine with existing thinking beta if present
+            existing_beta = request_params["extra_headers"].get("anthropic-beta", "")
+            context_beta = "context-1m-2025-08-07"
+
+            if existing_beta:
+                # Combine beta headers with comma separator
+                request_params["extra_headers"]["anthropic-beta"] = (
+                    f"{existing_beta},{context_beta}"
+                )
+            else:
+                request_params["extra_headers"]["anthropic-beta"] = context_beta
+
+            logger.debug("Enabled 1M context window for Claude 4 Sonnet")
+
         # Handle structured output
         if (
             hasattr(params, "structured_output_schema")

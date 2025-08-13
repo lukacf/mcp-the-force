@@ -78,7 +78,7 @@ class TestAnthropicAdapter:
         """Test Claude 4 Sonnet capabilities."""
         caps = Claude4SonnetCapabilities()
         assert caps.model_name == "claude-sonnet-4-20250514"
-        assert caps.max_context_window == 200_000
+        assert caps.max_context_window == 1_000_000
         assert caps.max_output_tokens == 64_000
         assert caps.supports_reasoning_effort is True
 
@@ -89,3 +89,54 @@ class TestAnthropicAdapter:
         assert caps.max_context_window == 200_000
         assert caps.max_output_tokens == 8_000
         assert caps.supports_reasoning_effort is False  # No extended thinking
+
+    def test_sonnet_1m_context_header(self):
+        """Test that Sonnet 4 includes 1M context beta header."""
+        from unittest.mock import Mock
+
+        adapter = AnthropicAdapter("claude-sonnet-4-20250514")
+
+        # Mock params without thinking budget
+        params = Mock()
+        params.temperature = 0.7
+        params.max_tokens = 4096
+        params.structured_output_schema = None
+
+        request_params = adapter._build_request_params(
+            conversation_input=[{"role": "user", "content": "test"}],
+            params=params,
+            tools=[],
+        )
+
+        # Should include the 1M context beta header
+        assert "extra_headers" in request_params
+        assert "anthropic-beta" in request_params["extra_headers"]
+        assert (
+            "context-1m-2025-08-07" in request_params["extra_headers"]["anthropic-beta"]
+        )
+
+    def test_sonnet_1m_context_header_with_thinking(self):
+        """Test that Sonnet 4 combines 1M context and thinking beta headers."""
+        from unittest.mock import Mock
+
+        adapter = AnthropicAdapter("claude-sonnet-4-20250514")
+
+        # Mock params with thinking budget
+        params = Mock()
+        params.temperature = 0.7
+        params.max_tokens = 4096
+        params.structured_output_schema = None
+        params.get_thinking_budget = Mock(return_value=5000)
+
+        request_params = adapter._build_request_params(
+            conversation_input=[{"role": "user", "content": "test"}],
+            params=params,
+            tools=[],
+        )
+
+        # Should include both beta headers
+        assert "extra_headers" in request_params
+        assert "anthropic-beta" in request_params["extra_headers"]
+        beta_header = request_params["extra_headers"]["anthropic-beta"]
+        assert "interleaved-thinking-2025-05-14" in beta_header
+        assert "context-1m-2025-08-07" in beta_header
