@@ -22,39 +22,25 @@ litellm.drop_params = True  # Drop unknown parameters
 def _configure_claude_sonnet_1m_context() -> None:
     """Configure LiteLLM to recognize Claude 4 Sonnet's 1M context window.
 
-    This force-creates or updates LiteLLM's model cost table entries to prevent
-    preflight validation from rejecting large inputs before they reach the API.
+    This updates LiteLLM's internal model cost table to prevent preflight
+    validation from rejecting large inputs before they reach the API.
     """
     try:
         # Access LiteLLM's model cost table
         model_cost = getattr(litellm, "model_cost", {})
 
-        # Keys that LiteLLM might use for Claude 4 Sonnet
+        # Keys that LiteLLM uses for Claude 4 Sonnet
         sonnet_keys = ["claude-sonnet-4-20250514", "anthropic/claude-sonnet-4-20250514"]
 
-        # Template for Claude 4 Sonnet with 1M context
-        sonnet_config = {
-            "max_tokens": 1_064_000,  # Total aggregate cap
-            "max_input_tokens": 1_000_000,  # 1M input tokens
-            "max_output_tokens": 64_000,  # 64k output tokens
-            "input_cost_per_token": 0.000003,  # Approximate base rate
-            "output_cost_per_token": 0.000015,  # Approximate base rate
-            "litellm_provider": "anthropic",
-            "mode": "chat",
-        }
-
-        # Force-create or update entries for all keys
         for key in sonnet_keys:
             if key in model_cost:
-                # Update existing entry
+                # Update max_input_tokens to 1M while preserving other fields
                 model_info = model_cost[key]
                 old_limit = model_info.get("max_input_tokens", "unknown")
-                model_info.update(sonnet_config)
-                logger.debug(f"Updated existing {key}: {old_limit} -> 1,000,000")
-            else:
-                # Create new entry
-                model_cost[key] = {**sonnet_config, "key": key}
-                logger.debug(f"Created new entry for {key} with 1M context")
+                model_info["max_input_tokens"] = 1_000_000
+                logger.debug(
+                    f"Updated {key} max_input_tokens: {old_limit} -> 1,000,000"
+                )
 
         logger.debug("Configured Claude 4 Sonnet for 1M context window")
 
