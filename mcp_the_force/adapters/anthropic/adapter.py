@@ -111,9 +111,7 @@ class AnthropicAdapter(LiteLLMBaseAdapter):
                 request_params["extra_headers"] = {}
 
             # Handle multiple beta headers - combine with existing thinking beta if present
-            existing_beta = (
-                request_params["extra_headers"].get("anthropic-beta") or ""
-            ).strip()
+            existing_beta = request_params["extra_headers"].get("anthropic-beta", "")
             context_beta = "context-1m-2025-08-07"
 
             if existing_beta:

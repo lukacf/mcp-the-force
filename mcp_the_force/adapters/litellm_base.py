@@ -3,7 +3,6 @@
 import logging
 from typing import Any, Dict, List, Optional
 from abc import abstractmethod
-from contextvars import ContextVar
 
 import litellm
 from litellm import aresponses
@@ -18,77 +17,6 @@ logger = logging.getLogger(__name__)
 # Configure LiteLLM globally
 litellm.set_verbose = False
 litellm.drop_params = True  # Drop unknown parameters
-
-# --- BEGIN: LiteLLM header propagation patch ---
-# Context-scoped store for headers we want to guarantee reach acompletion
-_LITELLM_EXTRA_HEADERS_CTX: ContextVar[dict | None] = ContextVar(
-    "_LITELLM_EXTRA_HEADERS_CTX", default=None
-)
-
-
-def _ensure_litellm_header_patch() -> None:
-    """
-    Patch litellm.acompletion once so it always merges headers from our context.
-    This works around aresponses dropping extra_headers when delegating to acompletion.
-    """
-    if getattr(litellm, "_mcp_header_patch_installed", False):
-        return
-
-    _orig_acompletion = litellm.acompletion  # keep reference
-
-    async def _acompletion_with_ctx_headers(*args, **kwargs):
-        ctx_headers = _LITELLM_EXTRA_HEADERS_CTX.get()
-        req_headers = kwargs.get("extra_headers")
-
-        # Merge: request-level wins over context-level on key conflicts
-        if ctx_headers and req_headers:
-            merged = {**ctx_headers, **req_headers}
-            kwargs["extra_headers"] = merged
-        elif ctx_headers and not req_headers:
-            kwargs["extra_headers"] = ctx_headers
-        # else: keep req_headers as-is (could be None)
-
-        return await _orig_acompletion(*args, **kwargs)
-
-    litellm.acompletion = _acompletion_with_ctx_headers  # type: ignore
-    litellm._mcp_header_patch_installed = True
-
-
-def _update_litellm_model_limits() -> None:
-    """
-    Update LiteLLM's internal model cost table to reflect 1M context for Claude 4 Sonnet.
-    This prevents the preflight validation from rejecting large inputs before they're sent.
-    """
-    if getattr(litellm, "_mcp_model_limits_patched", False):
-        return
-
-    try:
-        # Access LiteLLM's model cost table
-        model_cost = getattr(litellm, "model_cost", {})
-
-        # Keys to update for Claude 4 Sonnet 1M context
-        sonnet_keys = ["claude-sonnet-4-20250514", "anthropic/claude-sonnet-4-20250514"]
-
-        for key in sonnet_keys:
-            if key in model_cost:
-                # Update max_input_tokens to 1M while preserving other fields
-                model_info = model_cost[key]
-                old_limit = model_info.get("max_input_tokens", "unknown")
-                model_info["max_input_tokens"] = 1_000_000
-                logger.debug(
-                    f"Updated {key} max_input_tokens: {old_limit} -> 1,000,000"
-                )
-
-        litellm._mcp_model_limits_patched = True
-
-    except Exception as e:
-        logger.warning(f"Failed to update LiteLLM model limits: {e}")
-        logger.warning(
-            "Large context requests may still be blocked by LiteLLM's preflight validation"
-        )
-
-
-# --- END: LiteLLM header propagation patch ---
 
 
 class LiteLLMBaseAdapter:
@@ -111,8 +39,6 @@ class LiteLLMBaseAdapter:
         Subclasses should call super().__init__() after setting their
         model_name, display_name, capabilities, and param_class.
         """
-        _ensure_litellm_header_patch()
-        _update_litellm_model_limits()
         self._validate_environment()
 
     @abstractmethod
@@ -431,7 +357,6 @@ class LiteLLMBaseAdapter:
         Returns:
             Dict with "content" and other response data
         """
-        token = None
         try:
             # Load session history if needed
             conversation_input = []
@@ -470,13 +395,10 @@ class LiteLLMBaseAdapter:
                 conversation_input, params, tools, **kwargs
             )
 
-            # Ensure headers propagate to acompletion even if aresponses drops them
-            token = _LITELLM_EXTRA_HEADERS_CTX.set(request_params.get("extra_headers"))
-
             # Make the API call
             response = await aresponses(**request_params)
 
-            # Handle tool calls if present (still under the same context headers)
+            # Handle tool calls if present
             final_response, updated_conversation = await self._handle_tool_calls(
                 response, tool_dispatcher, conversation_input, request_params, ctx
             )
@@ -499,10 +421,3 @@ class LiteLLMBaseAdapter:
         except Exception as e:
             logger.error(f"[{self.display_name}] Error: {e}")
             raise
-        finally:
-            # Clean up the context var to avoid leaking to other tasks
-            if token is not None:
-                try:
-                    _LITELLM_EXTRA_HEADERS_CTX.reset(token)
-                except Exception:
-                    pass
