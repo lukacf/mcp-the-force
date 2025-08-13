@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.8
+Added 1M context window support for Claude 4 Sonnet (claude-sonnet-4-20250514)
+Fixed GPT-5 context window documentation to reflect 272k input limit (400k total including reasoning/output)
+Added anthropic-beta header support for 1M context activation (context-1m-2025-08-07)
+Enhanced tool parameter descriptions with discovery hints and improved formatting
+Implemented smart beta header combination for multiple Anthropic features
+Added comprehensive test coverage for 1M context functionality and header logic
+
 ## 1.0.7
 Fixed XML escaping in context builder that was corrupting code syntax (e.g. "->" became "-&gt;")
 Made file type filtering vector store-specific instead of global
