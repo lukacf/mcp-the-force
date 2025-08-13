@@ -381,14 +381,26 @@ class HistorySearchService:
             )
 
             if not store_info:
-                logger.error(f"Store {store_id} not found in cache")
+                logger.warning(
+                    f"[HISTORY_SEARCH] Store {store_id} ({store_type}) not found in vector store cache. "
+                    f"This usually means the OpenAI vector store was deleted or expired. "
+                    f"History stores will be recreated automatically when new conversations are saved."
+                )
                 return []
 
             provider = store_info["provider"]
             client = self.vector_store_manager._get_client(provider)
 
             # Get the store instance
-            store = await client.get(store_id)
+            try:
+                store = await client.get(store_id)
+            except Exception as e:
+                logger.warning(
+                    f"[HISTORY_SEARCH] Failed to retrieve store {store_id} ({store_type}) from {provider}: {e}. "
+                    f"This usually means the vector store was deleted from {provider} but still cached locally. "
+                    f"Consider clearing history stores to recreate them."
+                )
+                return []
 
             # Search using the vector store protocol
             search_results = await store.search(query=query, k=max_results)
