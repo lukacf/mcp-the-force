@@ -110,6 +110,16 @@ class ToolExecutor:
         if metadata is None:
             raise ValueError("Tool metadata is None - tool not found in registry")
 
+        # CHATTER: Extract privileged overrides before parameter routing
+        # This enables orchestrator tools to pass vector store IDs to models that don't declare this parameter
+        vector_store_ids_override = kwargs.pop('vector_store_ids', None)
+        logger.debug(f"[EXECUTOR] Extracted vector_store_ids override: {vector_store_ids_override}")
+        
+        # CHATTER: Extract timeout override for CollaborationConfig enforcement
+        timeout_override = kwargs.pop('timeout', None)
+        if timeout_override is not None:
+            logger.debug(f"[EXECUTOR] Extracted timeout override: {timeout_override}s")
+
         # Debug logging for structured output issue
         logger.debug(
             f"[EXECUTOR_DEBUG] execute() called with metadata.id={metadata.id}"
@@ -623,6 +633,13 @@ class ToolExecutor:
             if explicit_vs_ids:
                 vector_store_ids = (vector_store_ids or []) + list(explicit_vs_ids)
 
+            # CHATTER: Merge privileged vector_store_ids override (after optimizer/attachments logic)
+            if vector_store_ids_override:
+                if not isinstance(vector_store_ids_override, list):
+                    vector_store_ids_override = [vector_store_ids_override]
+                vector_store_ids = (vector_store_ids or []) + list(vector_store_ids_override)
+                logger.debug(f"[EXECUTOR] Merged override vector_store_ids: {vector_store_ids}")
+
             call_context = CallContext(
                 session_id=session_id or "",
                 project=project_name,
@@ -637,7 +654,8 @@ class ToolExecutor:
 
             tool_dispatcher = ProtocolToolDispatcher(vector_store_ids=vector_store_ids)
 
-            timeout_seconds = metadata.model_config["timeout"]
+            # CHATTER: Use timeout override if provided, otherwise use model's default
+            timeout_seconds = timeout_override or metadata.model_config["timeout"]
             adapter_start_time = time.time()
             logger.debug(
                 f"[STEP 15] Calling adapter.generate with MCPAdapter protocol, prompt {len(final_prompt)} chars, timeout={timeout_seconds}s"
