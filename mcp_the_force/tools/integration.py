@@ -2,7 +2,7 @@
 
 from typing import Any, Dict, List, Optional, get_origin, get_args, Union, Annotated
 from inspect import Parameter, Signature
-from fastmcp import FastMCP
+from fastmcp import FastMCP, Context
 import fastmcp.exceptions
 import logging
 from pydantic import Field
@@ -75,8 +75,24 @@ def create_tool_function(metadata: ToolMetadata):
             )
         )
 
-    # Create signature
-    signature = Signature(sig_params, return_annotation=str)
+    # Add FastMCP Context as the LAST parameter AFTER all keyword-only params
+    # Separate positional/keyword params from keyword-only params  
+    positional_params = [p for p in sig_params if p.kind != Parameter.KEYWORD_ONLY]
+    keyword_only_params = [p for p in sig_params if p.kind == Parameter.KEYWORD_ONLY]
+    
+    # Add Context before keyword-only params
+    context_param = Parameter(
+        name="ctx",
+        kind=Parameter.POSITIONAL_OR_KEYWORD,
+        default=None,
+        annotation=Context,
+    )
+    
+    # Rebuild params in correct order: positional, ctx, then keyword-only
+    ordered_params = positional_params + [context_param] + keyword_only_params
+
+    # Create signature with correct parameter order
+    signature = Signature(ordered_params, return_annotation=str)
 
     # Create the actual function that can handle positional args
     async def tool_function(*args, **kwargs) -> str:
@@ -85,6 +101,13 @@ def create_tool_function(metadata: ToolMetadata):
         try:
             bound = signature.bind(*args, **kwargs)
             bound.apply_defaults()
+            
+            # Extract ctx and remove it from arguments so downstream validation doesn't see it
+            ctx = bound.arguments.pop("ctx", None)
+            if ctx is not None:
+                logger.warning("[CHATTER-DEBUG] ✅ Context extracted in integration layer")
+            else:
+                logger.warning("[CHATTER-DEBUG] ❌ No Context in integration layer")
 
             # Decide what we want to use as the scope id.
             # 1. Prefer an explicit session_id if the caller supplied one
@@ -105,7 +128,8 @@ def create_tool_function(metadata: ToolMetadata):
 
             # Make the whole execution run inside that scope
             async with scope_manager.scope(scope_id):
-                result = await executor.execute(metadata, **bound.arguments)
+                # IMPORTANT: pass ctx to executor.execute as a privileged kwarg
+                result = await executor.execute(metadata, ctx=ctx, **bound.arguments)
                 logger.info(
                     f"[INTEGRATION] Tool {metadata.id} completed, returning result"
                 )
@@ -123,6 +147,7 @@ def create_tool_function(metadata: ToolMetadata):
     # CRITICAL: Set annotations for FastMCP 2.x compatibility
     # FastMCP uses pydantic which expects __annotations__ to be set
     annotations: Dict[str, Any] = {"return": str}
+    annotations["ctx"] = Context  # so FastMCP recognizes it
 
     for sig_param in sig_params:
         # Get the actual type from the parameter's annotation

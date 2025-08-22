@@ -112,13 +112,22 @@ class ToolExecutor:
 
         # CHATTER: Extract privileged overrides before parameter routing
         # This enables orchestrator tools to pass vector store IDs to models that don't declare this parameter
-        vector_store_ids_override = kwargs.pop('vector_store_ids', None)
-        logger.debug(f"[EXECUTOR] Extracted vector_store_ids override: {vector_store_ids_override}")
-        
+        vector_store_ids_override = kwargs.pop("vector_store_ids", None)
+        logger.debug(
+            f"[EXECUTOR] Extracted vector_store_ids override: {vector_store_ids_override}"
+        )
+
         # CHATTER: Extract timeout override for CollaborationConfig enforcement
-        timeout_override = kwargs.pop('timeout', None)
+        timeout_override = kwargs.pop("timeout", None)
         if timeout_override is not None:
             logger.debug(f"[EXECUTOR] Extracted timeout override: {timeout_override}s")
+            
+        # CHATTER: Extract FastMCP Context for progress reporting
+        ctx = kwargs.pop("ctx", None)
+        if ctx is not None:
+            logger.warning("[CHATTER-DEBUG] ✅ Context extracted successfully in executor")
+        else:
+            logger.warning("[CHATTER-DEBUG] ❌ No Context found in executor kwargs")
 
         # Debug logging for structured output issue
         logger.debug(
@@ -354,7 +363,12 @@ class ToolExecutor:
                     }
                     adapter_params.update(prompt_params_for_service)
 
-                # Execute the service
+                # Execute the service (pass ctx for progress reporting if available)
+                if ctx is not None:
+                    logger.warning("[CHATTER-DEBUG] ✅ Passing Context to CollaborationService")
+                    adapter_params["ctx"] = ctx
+                else:
+                    logger.warning("[CHATTER-DEBUG] ❌ No Context to pass to CollaborationService")
                 result = await service.execute(**adapter_params)
                 # Convert dict/list results to JSON for MCP compatibility
                 if isinstance(result, (dict, list)):
@@ -637,8 +651,12 @@ class ToolExecutor:
             if vector_store_ids_override:
                 if not isinstance(vector_store_ids_override, list):
                     vector_store_ids_override = [vector_store_ids_override]
-                vector_store_ids = (vector_store_ids or []) + list(vector_store_ids_override)
-                logger.debug(f"[EXECUTOR] Merged override vector_store_ids: {vector_store_ids}")
+                vector_store_ids = (vector_store_ids or []) + list(
+                    vector_store_ids_override
+                )
+                logger.debug(
+                    f"[EXECUTOR] Merged override vector_store_ids: {vector_store_ids}"
+                )
 
             call_context = CallContext(
                 session_id=session_id or "",
