@@ -69,6 +69,8 @@ class CollaborationService:
         max_steps: int = 10,
         config: Optional[CollaborationConfig] = None,
         ctx: Optional["Context"] = None,
+        context: Optional[list[str]] = None,
+        priority_context: Optional[list[str]] = None,
         **kwargs,
     ) -> str:
         """Main orchestration logic for multi-model collaboration.
@@ -81,6 +83,9 @@ class CollaborationService:
             mode: Collaboration style ("round_robin" or "orchestrator")
             max_steps: Maximum number of collaboration turns
             config: Optional configuration override
+            ctx: FastMCP Context for progress reporting (optional)
+            context: List of file/directory paths for model context (optional)
+            priority_context: List of priority file/directory paths (optional)
             **kwargs: Additional parameters (e.g., structured_output_schema from MCP)
 
         Returns:
@@ -156,22 +161,26 @@ class CollaborationService:
             logger.info(
                 f"Starting collaboration loop: current_step={session.current_step}, max_steps={session.max_steps}"
             )
-            
+
             # Write initial progress file for status line
             self._write_progress_file(session, phase="starting", start_time=start_time)
-            
+
             # Report initial progress (MCP streaming - may not work on stdio)
             if ctx:
                 logger.info("[CHATTER] Context available - reporting initial progress")
                 await ctx.report_progress(
                     progress=session.current_step,
                     total=session.max_steps,
-                    message=f"Starting collaboration with {len(models)} models: {', '.join(models)}"
+                    message=f"Starting collaboration with {len(models)} models: {', '.join(models)}",
                 )
                 logger.info("[CHATTER] Initial progress reported successfully")
             else:
-                logger.warning("[CHATTER] No Context available - progress reporting disabled")
-            logger.info(f"Starting collaboration with {len(models)} models: {', '.join(models)}")
+                logger.warning(
+                    "[CHATTER] No Context available - progress reporting disabled"
+                )
+            logger.info(
+                f"Starting collaboration with {len(models)} models: {', '.join(models)}"
+            )
 
             while not session.is_completed():
                 # Safety: don't exceed configured max steps
@@ -183,32 +192,40 @@ class CollaborationService:
 
                 # Get next model for progress reporting
                 next_model = session.get_next_model()
-                
+
                 # Update progress file BEFORE turn
                 self._write_progress_file(
-                    session, 
-                    current_model=next_model, 
-                    phase=f"thinking ({next_model})", 
-                    start_time=start_time
+                    session,
+                    current_model=next_model,
+                    phase=f"thinking ({next_model})",
+                    start_time=start_time,
                 )
-                
+
                 # Report progress BEFORE turn (MCP streaming - may not work on stdio)
                 if ctx:
-                    logger.info(f"[CHATTER] Reporting progress before turn: {session.current_step}/{session.max_steps}")
+                    logger.info(
+                        f"[CHATTER] Reporting progress before turn: {session.current_step}/{session.max_steps}"
+                    )
                     await ctx.report_progress(
                         progress=session.current_step,
                         total=session.max_steps,
-                        message=f"Starting turn {session.current_step + 1}/{session.max_steps} with {next_model}"
+                        message=f"Starting turn {session.current_step + 1}/{session.max_steps} with {next_model}",
                     )
                     logger.info("[CHATTER] Progress reported successfully")
-                logger.info(f"Starting turn {session.current_step + 1}/{session.max_steps} with {next_model}")
+                logger.info(
+                    f"Starting turn {session.current_step + 1}/{session.max_steps} with {next_model}"
+                )
 
                 # Renew lease before each turn for long-thinking models
                 await self.whiteboard.vs_manager.renew_lease(f"collab_{session_id}")
 
                 # Enforce timeout per step via executor override in _execute_model_turn
                 response = await self._execute_model_turn(
-                    session, whiteboard_info, config.timeout_per_step
+                    session, 
+                    whiteboard_info, 
+                    config.timeout_per_step,
+                    context,
+                    priority_context
                 )
 
                 # Compose model message and append to whiteboard + session
@@ -220,15 +237,17 @@ class CollaborationService:
                 )
                 await self.whiteboard.append_message(session_id, model_message)
                 session.add_message(model_message)
-                
+
                 # Report progress AFTER turn
                 if ctx:
                     await ctx.report_progress(
                         progress=session.current_step + 1,
                         total=session.max_steps,
-                        message=f"Completed turn {session.current_step + 1}/{session.max_steps}: {next_model} responded"
+                        message=f"Completed turn {session.current_step + 1}/{session.max_steps}: {next_model} responded",
                     )
-                logger.info(f"Completed turn {session.current_step + 1}/{session.max_steps}: {next_model} responded")
+                logger.info(
+                    f"Completed turn {session.current_step + 1}/{session.max_steps}: {next_model} responded"
+                )
 
                 # Also append to human-readable transcript for describe_session summaries
                 await self.session_cache.append_responses_message(
@@ -252,13 +271,13 @@ class CollaborationService:
                 steps_ran += 1
                 last_model = next_model
                 last_response = response
-                
+
                 # Update progress file AFTER turn
                 self._write_progress_file(
-                    session, 
-                    current_model=next_model, 
-                    phase="completed turn", 
-                    start_time=start_time
+                    session,
+                    current_model=next_model,
+                    phase="completed turn",
+                    start_time=start_time,
                 )
 
                 logger.info(
@@ -280,18 +299,22 @@ class CollaborationService:
                 await ctx.report_progress(
                     progress=session.current_step,
                     total=session.max_steps,
-                    message=f"Collaboration complete! Executed {steps_ran} turns with {len(models)} models"
+                    message=f"Collaboration complete! Executed {steps_ran} turns with {len(models)} models",
                 )
-            logger.info(f"Collaboration complete! Executed {steps_ran} turns with {len(models)} models")
-            
+            logger.info(
+                f"Collaboration complete! Executed {steps_ran} turns with {len(models)} models"
+            )
+
             # Update progress file for completion
             self._write_progress_file(session, phase="completed", start_time=start_time)
-            
+
             # Clean up progress file after a short delay (so status line can show completion)
             import asyncio
+
             async def delayed_cleanup():
                 await asyncio.sleep(2)  # Show "completed" for 2 seconds
                 self._cleanup_progress_file()
+
             asyncio.create_task(delayed_cleanup())
 
             # Return a concise completion summary
@@ -332,7 +355,7 @@ class CollaborationService:
                     )
             except Exception:
                 pass  # Don't let cleanup errors mask the original error
-            
+
             # Clean up progress file on error
             self._cleanup_progress_file()
 
@@ -357,26 +380,32 @@ class CollaborationService:
         if existing_state:
             logger.debug(f"Loaded existing session {session_id} from metadata")
             session = CollaborationSession.from_dict(existing_state)
-            
+
             # Allow extending max_steps for continuation
             if config.max_steps > session.max_steps:
-                logger.info(f"Extending session {session_id} from {session.max_steps} to {config.max_steps} steps")
+                logger.info(
+                    f"Extending session {session_id} from {session.max_steps} to {config.max_steps} steps"
+                )
                 session.max_steps = config.max_steps
                 # Reset status if it was completed but we're extending
                 if session.status == "completed":
                     session.status = "active"
-                    logger.info(f"Reactivating completed session {session_id} for continuation")
-                
+                    logger.info(
+                        f"Reactivating completed session {session_id} for continuation"
+                    )
+
                 # Save the updated session immediately
                 await self.session_cache.set_metadata(
                     project,
                     "chatter_collaborate",
                     session_id,
                     "collab_state",
-                    session.to_dict()
+                    session.to_dict(),
                 )
-                logger.info(f"Saved extended session state: {session.current_step}/{session.max_steps}")
-            
+                logger.info(
+                    f"Saved extended session state: {session.current_step}/{session.max_steps}"
+                )
+
             return session
 
         # Create new session
@@ -408,16 +437,21 @@ class CollaborationService:
         session: CollaborationSession,
         whiteboard_info: dict,
         timeout: Optional[int] = None,
+        context: Optional[list[str]] = None,
+        priority_context: Optional[list[str]] = None,
     ) -> str:
-        """Execute single model turn with whiteboard context.
+        """Execute single model turn with whiteboard and file context.
 
         This method uses the critical executor vector_store_ids passthrough
-        to provide models with access to the shared whiteboard.
+        to provide models with access to the shared whiteboard, plus any
+        additional context files specified.
 
         Args:
             session: Current collaboration session
             whiteboard_info: Whiteboard store information
             timeout: Optional timeout in seconds for this turn
+            context: Optional list of file/directory paths for context
+            priority_context: Optional list of priority file/directory paths
         """
         # Get next model based on orchestration mode
         if session.mode == "round_robin":
@@ -448,6 +482,7 @@ class CollaborationService:
             # - disable_history_record=True: Prevents pollution of project history
             # - disable_history_search=True: Prevents accessing outdated project context
             # - vector_store_ids: Provides access to shared whiteboard (critical passthrough)
+            # - context/priority_context: File/directory paths for additional context
             # - unique sub-session ID: Isolates model's temporary session
             # - timeout: Enforced from CollaborationConfig via executor override
             response = await self.executor.execute(
@@ -460,6 +495,8 @@ class CollaborationService:
                 vector_store_ids=[
                     whiteboard_info["store_id"]
                 ],  # Critical: Whiteboard access via passthrough
+                context=context,  # File/directory context for collaboration
+                priority_context=priority_context,  # Priority context files
                 timeout=timeout,  # Pass timeout as kwarg for executor override
             )
 
@@ -512,27 +549,31 @@ The whiteboard contains the full conversation history. Use file_search to access
 
         return metadata
 
-    def _write_progress_file(self, session: CollaborationSession, 
-                           current_model: Optional[str] = None, 
-                           phase: str = "collaborating",
-                           start_time: Optional[float] = None) -> None:
+    def _write_progress_file(
+        self,
+        session: CollaborationSession,
+        current_model: Optional[str] = None,
+        phase: str = "collaborating",
+        start_time: Optional[float] = None,
+    ) -> None:
         """Write progress file for Claude Code status line display."""
         try:
             # Get project directory
             from ..config import get_settings
+
             settings = get_settings()
             project_path = Path(settings.logging.project_path or os.getcwd())
-            
+
             # Create .claude directory if it doesn't exist
             claude_dir = project_path / ".claude"
             claude_dir.mkdir(exist_ok=True)
-            
+
             # Calculate progress percentage
             if session.max_steps > 0:
                 percent = int((session.current_step / session.max_steps) * 100)
             else:
                 percent = 0
-                
+
             # Calculate ETA if start_time provided
             eta_s = None
             if start_time and session.current_step > 0:
@@ -540,7 +581,7 @@ The whiteboard contains the full conversation history. Use file_search to access
                 avg_time_per_step = elapsed / session.current_step
                 remaining_steps = session.max_steps - session.current_step
                 eta_s = int(avg_time_per_step * remaining_steps)
-            
+
             # Create progress data
             progress_data = {
                 "owner": "Chatter",
@@ -553,16 +594,16 @@ The whiteboard contains the full conversation history. Use file_search to access
                 "mode": session.mode,
                 "status": session.status,
                 "updated_at": datetime.now().isoformat(),
-                "eta_s": eta_s
+                "eta_s": eta_s,
             }
-            
+
             # Write to progress file
             progress_file = claude_dir / "chatter_progress.json"
             with open(progress_file, "w") as f:
                 json.dump(progress_data, f, indent=2)
-                
+
             logger.debug(f"Updated progress file: {progress_file}")
-            
+
         except Exception as e:
             # Don't let progress file errors crash the collaboration
             logger.warning(f"Failed to write progress file: {e}")
@@ -571,13 +612,14 @@ The whiteboard contains the full conversation history. Use file_search to access
         """Clean up progress file when collaboration completes."""
         try:
             from ..config import get_settings
+
             settings = get_settings()
             project_path = Path(settings.logging.project_path or os.getcwd())
             progress_file = project_path / ".claude" / "chatter_progress.json"
-            
+
             if progress_file.exists():
                 progress_file.unlink()
                 logger.debug(f"Cleaned up progress file: {progress_file}")
-                
+
         except Exception as e:
             logger.warning(f"Failed to cleanup progress file: {e}")

@@ -12,6 +12,7 @@ from . import count_project_tokens  # noqa: F401
 from . import list_sessions  # noqa: F401
 from . import describe_session  # noqa: F401
 from . import chatter_collaborate  # noqa: F401
+from . import install_chatter_progress  # noqa: F401
 # Note: search_attachments is not imported here to prevent MCP exposure
 # It remains available for internal model function calling
 # Note: logging_tools is imported conditionally in integration.py when developer mode is enabled

@@ -117,7 +117,7 @@ class TestWhiteboardManagerMessages:
 
         # Setup: Mock existing store info and sequence counter
         store_info = {"store_id": "vs_test_123", "provider": "openai"}
-        
+
         async def mock_get_metadata(project, tool, session_id, key):
             if key == "whiteboard":
                 return store_info
@@ -125,7 +125,7 @@ class TestWhiteboardManagerMessages:
                 return None  # No existing sequence
             else:
                 return None
-                
+
         whiteboard_manager.session_cache.get_metadata = AsyncMock(
             side_effect=mock_get_metadata
         )
@@ -133,10 +133,12 @@ class TestWhiteboardManagerMessages:
         # Mock VSFile addition with new API
         mock_store = AsyncMock()
         mock_store.add_files = AsyncMock()
-        
+
         mock_client = Mock()
         mock_client.get = AsyncMock(return_value=mock_store)
-        whiteboard_manager.vs_manager._get_client_for_store = Mock(return_value=mock_client)
+        whiteboard_manager.vs_manager._get_client_for_store = Mock(
+            return_value=mock_client
+        )
 
         message = CollaborationMessage(
             speaker="user",
@@ -163,8 +165,9 @@ class TestWhiteboardManagerMessages:
         """Test message index increments correctly."""
 
         store_info = {"store_id": "vs_test", "provider": "hnsw"}
-        
+
         call_count = [0]  # Counter for sequence
+
         async def mock_get_metadata(project, tool, session_id, key):
             if key == "whiteboard":
                 return store_info
@@ -172,11 +175,11 @@ class TestWhiteboardManagerMessages:
                 return call_count[0]  # Return current counter
             else:
                 return None
-                
+
         async def mock_set_metadata(project, tool, session_id, key, value):
             if key == "whiteboard_seq":
                 call_count[0] = value  # Update counter
-                
+
         whiteboard_manager.session_cache.get_metadata = AsyncMock(
             side_effect=mock_get_metadata
         )
@@ -187,10 +190,12 @@ class TestWhiteboardManagerMessages:
         # Mock VSFile addition with new API
         mock_store = AsyncMock()
         mock_store.add_files = AsyncMock()
-        
+
         mock_client = Mock()
         mock_client.get = AsyncMock(return_value=mock_store)
-        whiteboard_manager.vs_manager._get_client_for_store = Mock(return_value=mock_client)
+        whiteboard_manager.vs_manager._get_client_for_store = Mock(
+            return_value=mock_client
+        )
 
         # Add first message
         msg1 = CollaborationMessage("user", "First message", datetime.now())
@@ -216,7 +221,7 @@ class TestWhiteboardManagerMessages:
         """Test VSFile includes message metadata."""
 
         store_info = {"store_id": "vs_meta", "provider": "openai"}
-        
+
         async def mock_get_metadata(project, tool, session_id, key):
             if key == "whiteboard":
                 return store_info
@@ -224,7 +229,7 @@ class TestWhiteboardManagerMessages:
                 return None  # No existing sequence
             else:
                 return None
-                
+
         whiteboard_manager.session_cache.get_metadata = AsyncMock(
             side_effect=mock_get_metadata
         )
@@ -232,10 +237,12 @@ class TestWhiteboardManagerMessages:
         # Mock VSFile addition with new API
         mock_store = AsyncMock()
         mock_store.add_files = AsyncMock()
-        
+
         mock_client = Mock()
         mock_client.get = AsyncMock(return_value=mock_store)
-        whiteboard_manager.vs_manager._get_client_for_store = Mock(return_value=mock_client)
+        whiteboard_manager.vs_manager._get_client_for_store = Mock(
+            return_value=mock_client
+        )
 
         message = CollaborationMessage(
             speaker="chat_with_gemini25_pro",
@@ -275,7 +282,7 @@ class TestWhiteboardManagerStoreInfo:
             "mcp-the-force",  # project
             "chatter_collaborate",  # tool
             "stored-session",  # session_id
-            "whiteboard"  # key
+            "whiteboard",  # key
         )
 
         assert result == expected_info
@@ -336,9 +343,17 @@ class TestWhiteboardManagerSummarization:
         # Mock current store info and session state
         old_store_info = {"store_id": "vs_old_full", "provider": "hnsw"}
         session_state = {
-            "messages": [{"speaker": f"user_{i}", "content": f"msg {i}", "timestamp": datetime.now().isoformat(), "metadata": {}} for i in range(60)]  # Over threshold
+            "messages": [
+                {
+                    "speaker": f"user_{i}",
+                    "content": f"msg {i}",
+                    "timestamp": datetime.now().isoformat(),
+                    "metadata": {},
+                }
+                for i in range(60)
+            ]  # Over threshold
         }
-        
+
         async def mock_get_metadata(project, tool, session_id, key):
             if key == "whiteboard":
                 return old_store_info
@@ -346,7 +361,7 @@ class TestWhiteboardManagerSummarization:
                 return session_state
             else:
                 return None
-                
+
         whiteboard_manager.session_cache.get_metadata = AsyncMock(
             side_effect=mock_get_metadata
         )
@@ -368,10 +383,12 @@ class TestWhiteboardManagerSummarization:
             # Mock the new store's add_files method with new API
             mock_new_store = AsyncMock()
             mock_new_store.add_files = AsyncMock()
-            
+
             mock_client = Mock()
             mock_client.get = AsyncMock(return_value=mock_new_store)
-            whiteboard_manager.vs_manager._get_client_for_store = Mock(return_value=mock_client)
+            whiteboard_manager.vs_manager._get_client_for_store = Mock(
+                return_value=mock_client
+            )
 
             await whiteboard_manager.summarize_and_rollover(
                 "rollover-test", threshold=50
@@ -395,7 +412,9 @@ class TestWhiteboardManagerSummarization:
                 "whiteboard",  # key
                 new_store_info,  # value
             )
-            assert any(call[0] == expected_call for call in calls), f"Expected call {expected_call} not found in {[call[0] for call in calls]}"
+            assert any(
+                call[0] == expected_call for call in calls
+            ), f"Expected call {expected_call} not found in {[call[0] for call in calls]}"
 
     @pytest.mark.asyncio
     async def test_summarize_skipped_under_threshold(self, whiteboard_manager):
@@ -455,7 +474,7 @@ class TestWhiteboardManagerErrors:
 
         # Mock store exists and sequence counter
         store_info = {"store_id": "vs_lease_test", "provider": "openai"}
-        
+
         async def mock_get_metadata(project, tool, session_id, key):
             if key == "whiteboard":
                 return store_info
@@ -463,7 +482,7 @@ class TestWhiteboardManagerErrors:
                 return None  # No existing sequence
             else:
                 return None
-                
+
         whiteboard_manager.session_cache.get_metadata = AsyncMock(
             side_effect=mock_get_metadata
         )
@@ -471,10 +490,12 @@ class TestWhiteboardManagerErrors:
         # Mock VSFile addition with new API
         mock_store = AsyncMock()
         mock_store.add_files = AsyncMock()
-        
+
         mock_client = Mock()
         mock_client.get = AsyncMock(return_value=mock_store)
-        whiteboard_manager.vs_manager._get_client_for_store = Mock(return_value=mock_client)
+        whiteboard_manager.vs_manager._get_client_for_store = Mock(
+            return_value=mock_client
+        )
 
         message = CollaborationMessage("user", "test lease", datetime.now())
         await whiteboard_manager.append_message("lease-test", message)

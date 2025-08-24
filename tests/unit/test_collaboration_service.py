@@ -112,19 +112,19 @@ class TestCollaborationServiceExecution:
 
         # Verify new session was created and saved as metadata
         mock_session_cache.set_metadata.assert_called()
-        
+
         # Find the call that saved collab_state
         collab_state_call = None
         for call in mock_session_cache.set_metadata.call_args_list:
             if len(call[0]) >= 4 and call[0][3] == "collab_state":
                 collab_state_call = call
                 break
-        
+
         assert collab_state_call is not None
         # Args: (project, tool, session_id, key, value)
         assert collab_state_call[0][1] == "chatter_collaborate"  # tool
         assert collab_state_call[0][2] == "new-session-123"  # session_id
-        
+
         saved_state = collab_state_call[0][4]  # value (collab_state)
         assert saved_state["objective"] == "Solve a complex AI problem"
         assert saved_state["models"] == ["chat_with_gpt5", "chat_with_gemini25_pro"]
@@ -153,16 +153,18 @@ class TestCollaborationServiceExecution:
             "session_id": "existing-session",
             "objective": "Ongoing project",
             "models": ["chat_with_gpt5", "chat_with_claude41_opus"],
-            "messages": [{
-                "speaker": "user",
-                "content": "Previous message", 
-                "timestamp": datetime.now().isoformat(),
-                "metadata": {}
-            }],
+            "messages": [
+                {
+                    "speaker": "user",
+                    "content": "Previous message",
+                    "timestamp": datetime.now().isoformat(),
+                    "metadata": {},
+                }
+            ],
             "current_step": 1,
             "mode": "orchestrator",
             "max_steps": 10,
-            "status": "active"
+            "status": "active",
         }
         mock_session_cache.get_metadata.return_value = existing_state
 
@@ -225,7 +227,7 @@ class TestCollaborationServiceRoundRobin:
             # Note: The loop is running 10 steps instead of 6 - there may be a termination bug
             calls = [call.args[0] for call in mock_get_tool.call_args_list]
             print(f"Actual calls: {len(calls)} - {calls}")
-            
+
             # For now, just verify round-robin pattern is correct
             assert len(calls) > 0
             # Check that it follows round-robin pattern (a,b,c,a,b,c,...)
@@ -235,16 +237,18 @@ class TestCollaborationServiceRoundRobin:
 
         # Verify session was advanced - check set_metadata calls
         assert mock_session_cache.set_metadata.called
-        
+
         # Find the last collab_state call to verify session advancement
         last_collab_state = None
         for call in mock_session_cache.set_metadata.call_args_list:
             if len(call[0]) >= 4 and call[0][3] == "collab_state":
                 last_collab_state = call[0][4]
-        
+
         assert last_collab_state is not None
         # The loop might be running more steps than expected - let's verify it at least advanced
-        assert last_collab_state["current_step"] >= 6  # Should have completed at least 6 steps
+        assert (
+            last_collab_state["current_step"] >= 6
+        )  # Should have completed at least 6 steps
 
     @pytest.mark.asyncio
     async def test_round_robin_wraps_around(
@@ -273,15 +277,17 @@ class TestCollaborationServiceRoundRobin:
         # Should have called model_2 (index 1) in round-robin
         # Verify by checking the session was advanced properly
         assert mock_session_cache.set_metadata.called
-        
+
         # Find the last collab_state call to verify session advancement
         last_collab_state = None
         for call in mock_session_cache.set_metadata.call_args_list:
             if len(call[0]) >= 4 and call[0][3] == "collab_state":
                 last_collab_state = call[0][4]
-        
+
         assert last_collab_state is not None
-        assert last_collab_state["current_step"] >= 4  # Should have advanced from step 3
+        assert (
+            last_collab_state["current_step"] >= 4
+        )  # Should have advanced from step 3
 
 
 class TestCollaborationServiceModelExecution:
@@ -553,7 +559,7 @@ class TestCollaborationServiceSummarization:
         # Verify summarization was triggered at least once
         # (may be called multiple times as messages are added in the loop)
         assert mock_whiteboard_manager.summarize_and_rollover.called
-        
+
         # Verify it was called with correct arguments
         calls = mock_whiteboard_manager.summarize_and_rollover.call_args_list
         assert any(

@@ -1,7 +1,7 @@
 """WhiteboardManager - Vector store backend for multi-model collaborations."""
 
 import logging
-from typing import Dict, Optional
+from typing import Dict, Optional, cast
 from datetime import datetime
 from pathlib import Path
 import os
@@ -77,7 +77,9 @@ class WhiteboardManager:
             else:
                 # Fallback for unexpected result types
                 store_info = {"store_id": str(result), "provider": "openai"}
-                logger.info(f"Created openai whiteboard store {result} for session {session_id}")
+                logger.info(
+                    f"Created openai whiteboard store {result} for session {session_id}"
+                )
 
         except Exception as e:
             logger.warning(f"OpenAI whiteboard creation failed for {session_id}: {e}")
@@ -99,7 +101,9 @@ class WhiteboardManager:
                 else:
                     # Fallback for unexpected result types
                     store_info = {"store_id": str(result), "provider": "hnsw"}
-                    logger.info(f"Created hnsw whiteboard store {result} for session {session_id}")
+                    logger.info(
+                        f"Created hnsw whiteboard store {result} for session {session_id}"
+                    )
 
             except Exception as hnsw_error:
                 logger.error(
@@ -133,9 +137,15 @@ class WhiteboardManager:
         settings = get_settings()
         project = Path(settings.logging.project_path or os.getcwd()).name
 
-        return await self.session_cache.get_metadata(
+        result = await self.session_cache.get_metadata(
             project, "chatter_collaborate", session_id, "whiteboard"
         )
+        # Type cast since get_metadata returns Any but we know it's Dict[str, str] | None
+        if result is None:
+            return None
+        if isinstance(result, dict):
+            return result  # type: ignore[return-value] 
+        return None
 
     async def get_or_create_store(self, session_id: str) -> Dict[str, str]:
         """Get existing store info or create new whiteboard.
@@ -296,7 +306,10 @@ class WhiteboardManager:
                 files=[], session_id=collab_session_id, provider=old_provider
             )
             if isinstance(result, dict):
-                new_store_info = {"store_id": result["store_id"], "provider": old_provider}
+                new_store_info = {
+                    "store_id": result["store_id"],
+                    "provider": old_provider,
+                }
             else:
                 new_store_info = {"store_id": str(result), "provider": old_provider}
 

@@ -36,7 +36,9 @@ class TestChatterCollaborateToolDefinition:
 
     def test_tool_has_reasonable_timeout(self):
         """Test tool has appropriate timeout for collaboration tasks."""
-        assert ChatterCollaborate.timeout == 3600  # 1 hour for complete multi-turn collaboration
+        assert (
+            ChatterCollaborate.timeout == 3600
+        )  # 1 hour for complete multi-turn collaboration
 
     def test_tool_parameter_defaults(self):
         """Test optional parameters have sensible defaults."""

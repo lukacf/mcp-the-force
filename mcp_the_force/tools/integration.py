@@ -76,10 +76,10 @@ def create_tool_function(metadata: ToolMetadata):
         )
 
     # Add FastMCP Context as the LAST parameter AFTER all keyword-only params
-    # Separate positional/keyword params from keyword-only params  
+    # Separate positional/keyword params from keyword-only params
     positional_params = [p for p in sig_params if p.kind != Parameter.KEYWORD_ONLY]
     keyword_only_params = [p for p in sig_params if p.kind == Parameter.KEYWORD_ONLY]
-    
+
     # Add Context before keyword-only params
     context_param = Parameter(
         name="ctx",
@@ -87,7 +87,7 @@ def create_tool_function(metadata: ToolMetadata):
         default=None,
         annotation=Context,
     )
-    
+
     # Rebuild params in correct order: positional, ctx, then keyword-only
     ordered_params = positional_params + [context_param] + keyword_only_params
 
@@ -101,11 +101,13 @@ def create_tool_function(metadata: ToolMetadata):
         try:
             bound = signature.bind(*args, **kwargs)
             bound.apply_defaults()
-            
+
             # Extract ctx and remove it from arguments so downstream validation doesn't see it
             ctx = bound.arguments.pop("ctx", None)
             if ctx is not None:
-                logger.warning("[CHATTER-DEBUG] ✅ Context extracted in integration layer")
+                logger.warning(
+                    "[CHATTER-DEBUG] ✅ Context extracted in integration layer"
+                )
             else:
                 logger.warning("[CHATTER-DEBUG] ❌ No Context in integration layer")
 

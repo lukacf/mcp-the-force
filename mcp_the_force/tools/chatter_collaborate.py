@@ -108,3 +108,32 @@ class ChatterCollaborate(ToolSpec):
             "Example: {'timeout_per_step': 600, 'summarization_threshold': 100}"
         ),
     )
+
+    context: Optional[List[str]] = Route.adapter(  # type: ignore[assignment]
+        default=None,
+        description=(
+            "(Optional) A list of file or directory paths to be used as context for the AI model. "
+            "The content of these files is made available to the model, either directly in the prompt "
+            "(for smaller files) or via a searchable vector store (for larger files). "
+            "The system automatically handles this split based on the model's context window size. "
+            "Syntax: An array of strings (not a JSON string). Do not wrap the array in quotes. "
+            "Each string must be an absolute path. "
+            "PREFERRED FORMAT: [\"/path/to/project/main.py\", \"/path/to/project/utils/\"] "
+            "NOT: \"[\"/path/to/project/main.py\", \"/path/to/project/utils/\"]\""
+        ),
+    )
+
+    priority_context: Optional[List[str]] = Route.adapter(  # type: ignore[assignment]
+        default=None,
+        description=(
+            "(Optional) A list of file or directory paths that should be prioritized for inline "
+            "inclusion in the prompt, even if they would normally overflow to the vector store. "
+            "Ensures critical files are always directly in the model's context window, as long as "
+            "they fit within the total token budget. Files in priority_context are processed before "
+            "files in context. "
+            "Syntax: An array of strings (not a JSON string). Do not wrap the array in quotes. "
+            "Each string must be an absolute path. "
+            "PREFERRED FORMAT: [\"/path/to/project/critical_config.yaml\"] "
+            "NOT: \"[\"/path/to/project/critical_config.yaml\"]\""
+        ),
+    )

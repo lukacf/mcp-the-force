@@ -121,11 +121,13 @@ class ToolExecutor:
         timeout_override = kwargs.pop("timeout", None)
         if timeout_override is not None:
             logger.debug(f"[EXECUTOR] Extracted timeout override: {timeout_override}s")
-            
+
         # CHATTER: Extract FastMCP Context for progress reporting
         ctx = kwargs.pop("ctx", None)
         if ctx is not None:
-            logger.warning("[CHATTER-DEBUG] ✅ Context extracted successfully in executor")
+            logger.warning(
+                "[CHATTER-DEBUG] ✅ Context extracted successfully in executor"
+            )
         else:
             logger.warning("[CHATTER-DEBUG] ❌ No Context found in executor kwargs")
 
@@ -365,10 +367,14 @@ class ToolExecutor:
 
                 # Execute the service (pass ctx for progress reporting if available)
                 if ctx is not None:
-                    logger.warning("[CHATTER-DEBUG] ✅ Passing Context to CollaborationService")
+                    logger.warning(
+                        "[CHATTER-DEBUG] ✅ Passing Context to CollaborationService"
+                    )
                     adapter_params["ctx"] = ctx
                 else:
-                    logger.warning("[CHATTER-DEBUG] ❌ No Context to pass to CollaborationService")
+                    logger.warning(
+                        "[CHATTER-DEBUG] ❌ No Context to pass to CollaborationService"
+                    )
                 result = await service.execute(**adapter_params)
                 # Convert dict/list results to JSON for MCP compatibility
                 if isinstance(result, (dict, list)):
