@@ -46,6 +46,7 @@ class TestCollaborationServiceKwargsHandling:
             session_id="kwargs-test",
             objective="Test objective",
             models=["chat_with_gpt5"],
+            output_format="Test deliverable format",
             user_input="Test input",
             structured_output_schema={
                 "type": "object",
@@ -68,6 +69,7 @@ class TestCollaborationServiceKwargsHandling:
             session_id="multi-kwargs-test",
             objective="Test objective",
             models=["chat_with_gpt5"],
+            output_format="Test deliverable format",
             user_input="Test input",
             structured_output_schema={"type": "object"},
             some_other_param="value",
@@ -88,6 +90,7 @@ class TestCollaborationServiceKwargsHandling:
             session_id="flow-test",
             objective="Test flow with kwargs",
             models=["chat_with_gpt5", "chat_with_gemini25_pro"],
+            output_format="Test deliverable format",
             user_input="Test user input",
             mode="round_robin",
             max_steps=5,
@@ -123,10 +126,10 @@ class TestCollaborationServiceKwargsHandling:
             session_id="config-kwargs-test",
             objective="Test with custom config and kwargs",
             models=["chat_with_gpt5"],
+            output_format="JSON response with analysis",
             config=custom_config,
             # MCP framework parameters
             structured_output_schema={"type": "object"},
-            output_format="JSON response with analysis",
             temperature=0.7,
         )
 

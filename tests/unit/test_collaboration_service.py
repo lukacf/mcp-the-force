@@ -106,6 +106,7 @@ class TestCollaborationServiceExecution:
             session_id="new-session-123",
             objective="Solve a complex AI problem",
             models=["chat_with_gpt5", "chat_with_gemini25_pro"],
+            output_format="Test deliverable format",
             user_input="Let's start collaborating!",
             config=CollaborationConfig(max_steps=5),
         )
@@ -122,7 +123,7 @@ class TestCollaborationServiceExecution:
 
         assert collab_state_call is not None
         # Args: (project, tool, session_id, key, value)
-        assert collab_state_call[0][1] == "chatter_collaborate"  # tool
+        assert collab_state_call[0][1] == "group_think"  # tool
         assert collab_state_call[0][2] == "new-session-123"  # session_id
 
         saved_state = collab_state_call[0][4]  # value (collab_state)
@@ -175,6 +176,7 @@ class TestCollaborationServiceExecution:
             session_id="existing-session",
             objective="Should be ignored - using existing",
             models=["should", "be", "ignored"],
+            output_format="Test deliverable format",
             user_input="Continue the conversation",
         )
 
@@ -220,6 +222,7 @@ class TestCollaborationServiceRoundRobin:
                 session_id="round-robin-test",
                 objective="",
                 models=[],
+                output_format="Test deliverable format",
                 user_input="Turn 1",
             )
 
@@ -271,7 +274,11 @@ class TestCollaborationServiceRoundRobin:
         collaboration_service.executor.execute.return_value = "Wrapped response"
 
         await collaboration_service.execute(
-            session_id="wrap-test", objective="", models=[], user_input="Test wrap"
+            session_id="wrap-test",
+            objective="",
+            models=[],
+            output_format="Test deliverable format",
+            user_input="Test wrap",
         )
 
         # Should have called model_2 (index 1) in round-robin
@@ -326,6 +333,7 @@ class TestCollaborationServiceModelExecution:
             session_id="model-test",
             objective="",
             models=[],
+            output_format="Test deliverable format",
             user_input="Analyze the situation",
         )
 
@@ -382,6 +390,7 @@ class TestCollaborationServiceModelExecution:
             session_id="whiteboard-inject-test",
             objective="",
             models=[],
+            output_format="Test deliverable format",
             user_input="Use the whiteboard",
         )
 
@@ -418,6 +427,7 @@ class TestCollaborationServiceModelExecution:
             session_id="isolation-test",
             objective="",
             models=[],
+            output_format="Test deliverable format",
             user_input="Test isolation",
         )
 
@@ -465,6 +475,7 @@ class TestCollaborationServiceErrorHandling:
             session_id="error-test",
             objective="",
             models=[],
+            output_format="Test deliverable format",
             user_input="This will fail",
         )
 
@@ -507,6 +518,7 @@ class TestCollaborationServiceErrorHandling:
                 session_id="timeout-test",
                 objective="",
                 models=[],
+                output_format="Test deliverable format",
                 user_input="Test timeout config",
                 config=config,
             )
@@ -552,6 +564,7 @@ class TestCollaborationServiceSummarization:
             session_id="summarize-test",
             objective="",
             models=[],
+            output_format="Test deliverable format",
             user_input="Continue long conversation",
             config=config,
         )
@@ -595,6 +608,7 @@ class TestCollaborationServiceOrchestrator:
             session_id="orchestrator-test",
             objective="",
             models=[],
+            output_format="Test deliverable format",
             user_input="Test orchestrator",
         )
 

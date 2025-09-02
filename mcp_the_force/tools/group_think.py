@@ -8,14 +8,15 @@ from ..local_services.collaboration_service import CollaborationService
 
 
 @tool
-class ChatterCollaborate(ToolSpec):
-    """Enable multiple AI models to collaborate on complex problems through structured multi-turn conversations."""
+class GroupThink(ToolSpec):
+    """Enable multiple AI models to think together on complex problems through structured multi-turn conversations."""
 
-    model_name = "chatter_collaborate"
+    model_name = "group_think"
     description = (
-        "Orchestrate multi-model collaborations where multiple AI models (GPT-5, Gemini 2.5 Pro, Claude, etc.) "
-        "work together on complex problems through structured conversations. Models share a whiteboard vector store "
-        "and can build on each other's ideas across multiple turns. Supports both round-robin and orchestrated modes."
+        "Orchestrate group thinking sessions where multiple AI models (GPT-5, Gemini 2.5 Pro, Claude, etc.) "
+        "collaborate on complex problems through structured conversations. Models share a whiteboard vector store "
+        "and can build on each other's ideas across multiple turns. Provides comprehensive final reports. "
+        "Supports both round-robin and orchestrated modes."
     )
 
     # This uses our CollaborationService
@@ -56,6 +57,18 @@ class ChatterCollaborate(ToolSpec):
             "chat_with_gpt5_mini, chat_with_gemini25_flash, chat_with_grok4, etc. "
             "Syntax: An array of strings (model tool names). "
             "Example: ['chat_with_gpt5', 'chat_with_gemini25_pro', 'chat_with_claude41_opus']"
+        ),
+    )
+
+    output_format: str = Route.adapter(  # type: ignore[assignment]
+        description=(
+            "(Required) Specification of exactly what the group should produce and in what format. "
+            "This is the only guidance the synthesis agent receives - be as detailed or general as needed. "
+            "Examples: 'List of exactly 5 jokes with explanations', 'Complete Python implementation with docstrings and tests', "
+            "'Technical design document with sections: Architecture, API Design, Database Schema, Deployment Guide'. "
+            "The more specific, the more precisely the group will deliver what you want. "
+            "Syntax: Clear specification of desired output format and content. "
+            "Example: 'JSON object with keys: summary, recommendations, code_examples, next_steps'"
         ),
     )
 
@@ -118,8 +131,8 @@ class ChatterCollaborate(ToolSpec):
             "The system automatically handles this split based on the model's context window size. "
             "Syntax: An array of strings (not a JSON string). Do not wrap the array in quotes. "
             "Each string must be an absolute path. "
-            "PREFERRED FORMAT: [\"/path/to/project/main.py\", \"/path/to/project/utils/\"] "
-            "NOT: \"[\"/path/to/project/main.py\", \"/path/to/project/utils/\"]\""
+            'PREFERRED FORMAT: ["/path/to/project/main.py", "/path/to/project/utils/"] '
+            'NOT: "["/path/to/project/main.py", "/path/to/project/utils/"]"'
         ),
     )
 
@@ -133,7 +146,42 @@ class ChatterCollaborate(ToolSpec):
             "files in context. "
             "Syntax: An array of strings (not a JSON string). Do not wrap the array in quotes. "
             "Each string must be an absolute path. "
-            "PREFERRED FORMAT: [\"/path/to/project/critical_config.yaml\"] "
-            "NOT: \"[\"/path/to/project/critical_config.yaml\"]\""
+            'PREFERRED FORMAT: ["/path/to/project/critical_config.yaml"] '
+            'NOT: "["/path/to/project/critical_config.yaml"]"'
+        ),
+    )
+
+    discussion_turns: int = Route.adapter(  # type: ignore[assignment]
+        default=6,
+        description=(
+            "(Optional) Number of turns for the discussion phase before synthesis. "
+            "Models explore the objective and build shared understanding during this phase. "
+            "Syntax: An integer. "
+            "Default: 6. "
+            "Example: discussion_turns=8"
+        ),
+    )
+
+    synthesis_model: str = Route.adapter(  # type: ignore[assignment]
+        default="chat_with_gemini25_pro",
+        description=(
+            "(Optional) Large context model to use for synthesis phase. This model reviews the "
+            "entire discussion and creates the final deliverable. Should have large context window. "
+            "Available large context models: chat_with_gemini25_pro (1M), chat_with_gpt41 (1M), "
+            "chat_with_claude4_sonnet (1M). "
+            "Syntax: A model tool name. "
+            "Default: 'chat_with_gemini25_pro'. "
+            "Example: synthesis_model='chat_with_gpt41'"
+        ),
+    )
+
+    validation_rounds: int = Route.adapter(  # type: ignore[assignment]
+        default=2,
+        description=(
+            "(Optional) Number of validation rounds where original models review the synthesized deliverable. "
+            "Models provide feedback and the synthesis agent refines based on input. "
+            "Syntax: An integer. "
+            "Default: 2. "
+            "Example: validation_rounds=3"
         ),
     )

@@ -101,7 +101,7 @@ class TestWhiteboardManagerCreation:
         # Verify metadata was stored with project parameter
         mock_unified_session_cache.set_metadata.assert_called_once_with(
             "mcp-the-force",  # project name
-            "chatter_collaborate",  # tool
+            "group_think",  # tool
             "metadata-test",  # session_id
             "whiteboard",  # key
             {"store_id": "vs_test_789", "provider": "openai"},  # value
@@ -280,7 +280,7 @@ class TestWhiteboardManagerStoreInfo:
         # Verify correct metadata key was requested with project parameter
         mock_unified_session_cache.get_metadata.assert_called_once_with(
             "mcp-the-force",  # project
-            "chatter_collaborate",  # tool
+            "group_think",  # tool
             "stored-session",  # session_id
             "whiteboard",  # key
         )
@@ -407,7 +407,7 @@ class TestWhiteboardManagerSummarization:
             calls = whiteboard_manager.session_cache.set_metadata.call_args_list
             expected_call = (
                 "mcp-the-force",  # project
-                "chatter_collaborate",  # tool
+                "group_think",  # tool
                 "rollover-test",  # session_id
                 "whiteboard",  # key
                 new_store_info,  # value

@@ -7,6 +7,37 @@ from typing import Dict, Any, List, Literal, Optional
 
 
 @dataclass
+class DeliverableContract:
+    """Simple contract specifying what the group should deliver (assumption-free)."""
+
+    objective: str
+    output_format: str
+
+    # Legacy fields kept for compatibility but not used in prompts
+    deliverable_type: str = "user_specified"
+    success_criteria: List = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        return {
+            "objective": self.objective,
+            "output_format": self.output_format,
+            "deliverable_type": self.deliverable_type,
+            "success_criteria": self.success_criteria,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "DeliverableContract":
+        """Create from dictionary."""
+        return cls(
+            objective=data["objective"],
+            output_format=data["output_format"],
+            deliverable_type=data.get("deliverable_type", "user_specified"),
+            success_criteria=data.get("success_criteria", []),
+        )
+
+
+@dataclass
 class CollaborationMessage:
     """A message in a multi-model collaboration."""
 

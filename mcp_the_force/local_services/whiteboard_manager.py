@@ -1,7 +1,7 @@
 """WhiteboardManager - Vector store backend for multi-model collaborations."""
 
 import logging
-from typing import Dict, Optional, cast
+from typing import Dict, Optional
 from datetime import datetime
 from pathlib import Path
 import os
@@ -118,7 +118,7 @@ class WhiteboardManager:
         project = Path(settings.logging.project_path or os.getcwd()).name
 
         await self.session_cache.set_metadata(
-            project, "chatter_collaborate", session_id, "whiteboard", store_info
+            project, "group_think", session_id, "whiteboard", store_info
         )
 
         return store_info
@@ -138,13 +138,13 @@ class WhiteboardManager:
         project = Path(settings.logging.project_path or os.getcwd()).name
 
         result = await self.session_cache.get_metadata(
-            project, "chatter_collaborate", session_id, "whiteboard"
+            project, "group_think", session_id, "whiteboard"
         )
         # Type cast since get_metadata returns Any but we know it's Dict[str, str] | None
         if result is None:
             return None
         if isinstance(result, dict):
-            return result  # type: ignore[return-value] 
+            return result  # type: ignore[return-value]
         return None
 
     async def get_or_create_store(self, session_id: str) -> Dict[str, str]:
@@ -193,7 +193,7 @@ class WhiteboardManager:
 
         # Get and increment atomic counter in metadata
         current_seq = await self.session_cache.get_metadata(
-            project, "chatter_collaborate", session_id, "whiteboard_seq"
+            project, "group_think", session_id, "whiteboard_seq"
         )
 
         if current_seq is None:
@@ -205,7 +205,7 @@ class WhiteboardManager:
 
         # Update counter atomically before using it
         await self.session_cache.set_metadata(
-            project, "chatter_collaborate", session_id, "whiteboard_seq", message_idx
+            project, "group_think", session_id, "whiteboard_seq", message_idx
         )
 
         # Create VSFile with proper path and metadata
@@ -271,7 +271,7 @@ class WhiteboardManager:
         project = Path(settings.logging.project_path or os.getcwd()).name
 
         collab_state = await self.session_cache.get_metadata(
-            project, "chatter_collaborate", session_id, "collab_state"
+            project, "group_think", session_id, "collab_state"
         )
 
         if not collab_state or len(collab_state.get("messages", [])) < threshold:
@@ -335,12 +335,12 @@ class WhiteboardManager:
 
             # Update session metadata to point to new store
             await self.session_cache.set_metadata(
-                project, "chatter_collaborate", session_id, "whiteboard", new_store_info
+                project, "group_think", session_id, "whiteboard", new_store_info
             )
 
             # Reset atomic counter for new store (summary is message 1)
             await self.session_cache.set_metadata(
-                project, "chatter_collaborate", session_id, "whiteboard_seq", 1
+                project, "group_think", session_id, "whiteboard_seq", 1
             )
 
             logger.info(
