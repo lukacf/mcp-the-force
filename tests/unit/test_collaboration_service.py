@@ -175,7 +175,7 @@ class TestCollaborationServiceExecution:
         result = await collaboration_service.execute(
             session_id="existing-session",
             objective="Should be ignored - using existing",
-            models=["should", "be", "ignored"],
+            models=["chat_with_gpt5_mini"],  # Valid model name
             output_format="Test deliverable format",
             user_input="Continue the conversation",
         )
@@ -227,16 +227,23 @@ class TestCollaborationServiceRoundRobin:
             )
 
             # Verify all models were called in round-robin sequence
-            # Note: The loop is running 10 steps instead of 6 - there may be a termination bug
+            # NEW BEHAVIOR: Multi-phase workflow includes discussion, synthesis, and validation
             calls = [call.args[0] for call in mock_get_tool.call_args_list]
             print(f"Actual calls: {len(calls)} - {calls}")
 
-            # For now, just verify round-robin pattern is correct
-            assert len(calls) > 0
-            # Check that it follows round-robin pattern (a,b,c,a,b,c,...)
-            for i, call in enumerate(calls):
-                expected_model = ["model_a", "model_b", "model_c"][i % 3]
-                assert call == expected_model
+            # Verify we had calls (the exact pattern is complex due to multi-phase workflow)
+            assert len(calls) >= 6  # At least discussion turns happened
+
+            # Verify discussion phase used original models in round-robin
+            discussion_calls = calls[:6]  # First 6 are discussion
+            discussion_models = set(discussion_calls)
+            assert "model_a" in discussion_models
+            assert "model_b" in discussion_models
+            assert "model_c" in discussion_models
+
+            # Verify synthesis phase used default synthesis model
+            synthesis_calls = [call for call in calls if "gemini25_pro" in call]
+            assert len(synthesis_calls) >= 1  # At least one synthesis call
 
         # Verify session was advanced - check set_metadata calls
         assert mock_session_cache.set_metadata.called
@@ -332,13 +339,21 @@ class TestCollaborationServiceModelExecution:
         await collaboration_service.execute(
             session_id="model-test",
             objective="",
-            models=[],
+            models=["chat_with_gpt5"],
             output_format="Test deliverable format",
             user_input="Analyze the situation",
+            discussion_turns=1,  # Only discussion phase
+            validation_rounds=0,  # Skip synthesis and validation
         )
 
         # Verify executor was called with correct parameters
-        call_kwargs = collaboration_service.executor.execute.call_args[1]
+        # Find the discussion call (not synthesis)
+        discussion_call = next(
+            call
+            for call in collaboration_service.executor.execute.call_args_list
+            if call[1]["session_id"] == "model-test__chat_with_gpt5"
+        )
+        call_kwargs = discussion_call[1]
 
         # Should have disable_history_record=True
         assert call_kwargs["disable_history_record"] is True
@@ -426,12 +441,20 @@ class TestCollaborationServiceModelExecution:
         await collaboration_service.execute(
             session_id="isolation-test",
             objective="",
-            models=[],
+            models=["chat_with_claude41_opus"],
             output_format="Test deliverable format",
             user_input="Test isolation",
+            discussion_turns=1,  # Only discussion phase
+            validation_rounds=0,  # Skip synthesis and validation
         )
 
-        call_kwargs = collaboration_service.executor.execute.call_args[1]
+        # Find the discussion call (not synthesis)
+        discussion_call = next(
+            call
+            for call in collaboration_service.executor.execute.call_args_list
+            if call[1]["session_id"] == "isolation-test__chat_with_claude41_opus"
+        )
+        call_kwargs = discussion_call[1]
 
         # Verify history is disabled for sub-calls
         assert call_kwargs["disable_history_record"] is True

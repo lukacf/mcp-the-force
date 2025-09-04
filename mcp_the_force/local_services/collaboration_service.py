@@ -105,8 +105,12 @@ class CollaborationService:
             f"Starting collaboration session {session_id} with {len(models)} models"
         )
 
-        # Auto-install progress components on first use if not already installed
-        await self._ensure_progress_components_installed()
+        try:
+            # Auto-install progress components on first use if not already installed
+            await self._ensure_progress_components_installed()
+        except Exception as e:
+            # Don't let installer failures break collaboration
+            logger.warning(f"Failed to install progress components: {e}")
 
         try:
             # Get project name for UnifiedSessionCache
@@ -653,6 +657,16 @@ The whiteboard contains the full conversation history. Use file_search to access
 
             await self.whiteboard.append_message(session.session_id, model_message)
             session.add_message(model_message)
+
+            # Summarization trigger (simple threshold)
+            if (
+                config
+                and config.summarization_threshold
+                and len(session.messages) >= config.summarization_threshold
+            ):
+                await self.whiteboard.summarize_and_rollover(
+                    session.session_id, config.summarization_threshold
+                )
 
             # Add to transcript
             await self.session_cache.append_responses_message(
