@@ -30,7 +30,28 @@ def ensure_config_exists():
     # Use current working directory as project root (MCP clients set this correctly)
     # Create .mcp-the-force directory to keep configs organized
     config_dir = cwd / ".mcp-the-force"
-    config_dir.mkdir(exist_ok=True)
+
+    try:
+        config_dir.mkdir(exist_ok=True)
+    except PermissionError as e:
+        print(
+            f"[MCP The-Force] ERROR: Cannot create config directory {config_dir}",
+            file=sys.stderr,
+        )
+        print(f"[MCP The-Force] Permission denied: {e}", file=sys.stderr)
+        print(f"[MCP The-Force] Please ensure write access to {cwd}", file=sys.stderr)
+        sys.exit(1)
+    except OSError as e:
+        print(
+            f"[MCP The-Force] ERROR: Cannot create config directory {config_dir}",
+            file=sys.stderr,
+        )
+        print(f"[MCP The-Force] Filesystem error: {e}", file=sys.stderr)
+        print(
+            f"[MCP The-Force] Check disk space and permissions for {cwd}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     config_file = config_dir / "config.yaml"
     secrets_file = config_dir / "secrets.yaml"

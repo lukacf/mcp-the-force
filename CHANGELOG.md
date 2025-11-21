@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.9
+- Hardened vector-store deduplication against multiprocess races with per-hash token files plus token cleanup on finalize/rollback.
+- Added optional `MCP_SERIALIZE_DEDUP=1` global mutex for noisy CI runners.
+- Multiprocess atomic tests now use the safer `spawn` start method for cross-platform stability.
+
 ## 1.0.8
 Added 1M context window support for Claude 4 Sonnet (claude-sonnet-4-20250514)
 Fixed GPT-5 context window documentation to reflect 272k input limit (400k total including reasoning/output)

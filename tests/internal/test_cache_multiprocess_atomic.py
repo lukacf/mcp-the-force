@@ -18,7 +18,10 @@ import tempfile
 import os
 from pathlib import Path
 
-from mcp_the_force.dedup.simple_cache import DeduplicationCache
+from mcp_the_force.dedup.simple_cache import DeduplicationCache, _global_mp_lock
+
+# Use spawn to avoid fork-related issues with multi-threaded parent processes.
+multiprocessing.set_start_method("spawn", force=True)
 
 
 # Global test database path for sharing between processes
@@ -83,22 +86,45 @@ def _sync_atomic_cache_or_get(cache, content_hash, placeholder="PENDING"):
         raise RuntimeError("Database connection is closed")
 
     now = int(time.time())
-    with cache._lock, cache._conn:
-        # Use BEGIN IMMEDIATE to avoid write starvation under high concurrency
-        cache._conn.execute("BEGIN IMMEDIATE")
+    from contextlib import nullcontext
+
+    # Cross-process guard mirrors the production cache
+    cm = cache._process_lock() if hasattr(cache, "_process_lock") else nullcontext()
+
+    token_acquired = False
+    token_path: Path | None = None
+
+    with cm, _global_mp_lock(), cache._lock, cache._conn:
+        token_path = (
+            cache._token_path(content_hash) if hasattr(cache, "_token_path") else None
+        )
+
+        if token_path:
+            try:
+                fd = os.open(str(token_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                os.write(fd, str(os.getpid()).encode())
+                os.close(fd)
+                token_acquired = True
+            except FileExistsError:
+                token_acquired = False
+
+        # Use EXCLUSIVE to ensure only one process can perform the insert at a time.
+        cache._conn.execute("BEGIN EXCLUSIVE")
 
         try:
-            # Attempt to atomically reserve this content hash
+            # Attempt to atomically reserve this content hash (RETURNING avoids rowcount ambiguity)
             cursor = cache._conn.execute(
                 """
                 INSERT INTO file_cache (content_hash, file_id, created_at, updated_at)
                 VALUES (?, ?, ?, ?)
                 ON CONFLICT(content_hash) DO NOTHING
+                RETURNING content_hash
                 """,
                 (content_hash, placeholder, now, now),
             )
 
-            we_are_uploader = cursor.rowcount == 1
+            row = cursor.fetchone()
+            we_are_uploader = row is not None and token_acquired
 
             if not we_are_uploader:
                 # Another process already has this hash - fetch the current value
@@ -109,7 +135,7 @@ def _sync_atomic_cache_or_get(cache, content_hash, placeholder="PENDING"):
                 result = cursor.fetchone()
                 existing_file_id = result[0] if result else None
                 cache._conn.commit()
-                return existing_file_id, False
+                return existing_file_id or "PENDING", False
             else:
                 # We successfully reserved this hash
                 cache._conn.commit()
@@ -118,6 +144,14 @@ def _sync_atomic_cache_or_get(cache, content_hash, placeholder="PENDING"):
         except Exception:
             cache._conn.rollback()
             raise
+        finally:
+            if not we_are_uploader and token_path:
+                try:
+                    token_path.unlink()
+                except FileNotFoundError:
+                    pass
+                except Exception:
+                    pass
 
 
 def _sync_finalize_file_id(cache, content_hash, file_id):
@@ -136,6 +170,9 @@ def _sync_finalize_file_id(cache, content_hash, file_id):
             (file_id, now, content_hash),
         )
         cache._conn.commit()
+    # Upload completed; clean up token so future uploads can proceed.
+    if hasattr(cache, "_cleanup_token"):
+        cache._cleanup_token(content_hash)
 
 
 def _sync_cleanup_failed_upload(cache, content_hash):
@@ -149,6 +186,8 @@ def _sync_cleanup_failed_upload(cache, content_hash):
             (content_hash,),
         )
         cache._conn.commit()
+    if hasattr(cache, "_cleanup_token"):
+        cache._cleanup_token(content_hash)
 
 
 def _sync_get_file_id(cache, content_hash):

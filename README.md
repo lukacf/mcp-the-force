@@ -11,6 +11,7 @@ The Force is a Model Context Protocol (MCP) server that unifies the world's most
 - **Unified Multi-Model Access**: Work with premier models from OpenAI, Google, Anthropic, and xAI through one consistent set of tools. Leverage the best model for every task without switching contexts.
 - **Infinite Context**: Provide entire codebases as context, regardless of size. The Force intelligently includes critical files directly in the prompt and makes the rest available via high-performance vector search, effectively breaking through model context window limitations. It intelligently handles context updates when files change.
 - **Self-Building Project History**: Automatically captures and indexes every AI conversation and git commit. This creates a searchable, long-term history of your project's design decisions, debates, and evolution.
+- **Multi-Model Collaboration (GroupThink)**: Orchestrate GPT‑5, Gemini 2.5 Pro/Flash, Claude, Grok, and others to co-create multi-turn solutions with shared context, automatic summaries, and validation passes.
 
 ## Quick Start
 
@@ -223,6 +224,29 @@ cd your-project
 # Run from the mcp-the-force repository directory:
 bash /path/to/mcp-the-force/scripts/install-history-hook.sh
 ```
+
+### Multi-Model Collaboration (GroupThink)
+
+GroupThink lets multiple models think together on the same objective with shared memory:
+- **Mix models by strength**: e.g., `chat_with_gpt5` (reasoning), `chat_with_gemini25_pro` (1M-context code analysis), `chat_with_claude41_opus` (writing).
+- **Shared whiteboard**: Every turn writes to a vector-store “whiteboard” so later turns see all prior arguments.
+- **Two phases + validation**: Discussion turns → synthesis by a large-context model → validation rounds by the original panel.
+- **Resume anytime**: Reuse the same `session_id` to continue an ongoing collaboration.
+
+Quick start:
+```json
+{
+  "session_id": "design-rag-pipeline-2025-11-21",
+  "objective": "Design a production-ready RAG pipeline for our docs service",
+  "models": ["chat_with_gpt5", "chat_with_gemini25_pro", "chat_with_claude41_opus"],
+  "output_format": "Architecture doc with: Overview, Data Flow, Components, Ops, Risks",
+  "discussion_turns": 6,
+  "validation_rounds": 2,
+  "context": ["/abs/path/to/repo"],
+  "priority_context": ["/abs/path/to/repo/diagrams/system.md"]
+}
+```
+Run it by invoking the `group_think` tool from your MCP client (e.g., Claude Code or `mcp-cli`). Keep the `session_id` stable to let the models build on prior turns; change it to start a fresh panel.
 
 ## Advanced Topics
 

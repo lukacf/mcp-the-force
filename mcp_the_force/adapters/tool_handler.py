@@ -146,11 +146,30 @@ class ToolHandler:
                 )
 
             # Add task files search tool when vector stores are provided
-            # Only for adapters without native file search (those with native_vector_store_provider use their own)
-            if vector_store_ids and not capabilities.native_vector_store_provider:
-                logger.info(
-                    f"Adding task files search tool with {len(vector_store_ids)} vector stores"
-                )
+            # Case 1: Non-native providers always get search_task_files
+            # Case 2: OpenAI provider with non-OpenAI store IDs (HNSW fallback) also needs search_task_files
+            should_add_search_task_files = False
+
+            if vector_store_ids:
+                if not capabilities.native_vector_store_provider:
+                    # Non-native providers always need search_task_files
+                    should_add_search_task_files = True
+                    logger.info(
+                        f"Adding search_task_files for non-native provider with {len(vector_store_ids)} stores"
+                    )
+                elif capabilities.native_vector_store_provider == "openai":
+                    # Check if any store IDs are non-OpenAI (don't start with "vs_")
+                    has_non_openai_stores = any(
+                        not str(store_id).startswith("vs_")
+                        for store_id in vector_store_ids
+                    )
+                    if has_non_openai_stores:
+                        should_add_search_task_files = True
+                        logger.info(
+                            "[CHATTER FIX] OpenAI model with HNSW stores detected - adding search_task_files fallback"
+                        )
+
+            if should_add_search_task_files:
                 declarations.append(self._get_task_files_declaration_openai())
             else:
                 logger.debug("[TOOL_HANDLER] Not adding search_task_files because:")
@@ -160,6 +179,11 @@ class ToolHandler:
                 logger.debug(
                     f"  - native_vector_store_provider is {capabilities.native_vector_store_provider}"
                 )
+                if (
+                    vector_store_ids
+                    and capabilities.native_vector_store_provider == "openai"
+                ):
+                    logger.debug("  - All store IDs are OpenAI native (vs_*)")
         else:
             logger.debug(
                 "[TOOL_HANDLER] Skipping all custom tools because adapter doesn't support them"

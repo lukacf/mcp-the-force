@@ -173,6 +173,24 @@ for model in response:
 
 ### Advanced Workflows
 
+#### Multi-Model Collaboration (GroupThink)
+```python
+group_think(
+    session_id="refactor-auth-2025-11-21",
+    objective="Redesign auth service for zero-downtime rotations",
+    models=["chat_with_gpt5", "chat_with_gemini25_pro", "chat_with_claude41_opus"],
+    output_format="Design doc + migration steps + rollback plan",
+    discussion_turns=6,
+    validation_rounds=2,
+    context=["/abs/path/to/auth-service"],
+    priority_context=["/abs/path/to/auth-service/docs/security.md"]
+)
+```
+- Keep `session_id` stable to continue the same panel across turns.
+- Choose a large-context `synthesis_model` (default: `chat_with_gemini25_pro`) for the final merge.
+- Use `mode="round_robin"` (current default) to ensure every model contributes; orchestration smarts build on this.
+- Validation rounds re-open the floor so panelists can critique the synthesized result.
+
 #### Multi-Model Code Review
 ```python
 # 1. Overview (fast)

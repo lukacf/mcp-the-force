@@ -2,6 +2,9 @@
 
 import time
 import logging
+import os
+import multiprocessing
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Optional, Dict, Any, Tuple, cast
 
@@ -16,6 +19,24 @@ from .retry import (
 )
 
 logger = logging.getLogger(__name__)
+_MP_LOCK = (
+    multiprocessing.Lock()
+    if (os.getenv("CI") or os.getenv("MCP_SERIALIZE_DEDUP") == "1")
+    else None
+)
+
+
+@contextmanager
+def _global_mp_lock():
+    """Optional global multiprocess mutex to serialize dedup writes in CI."""
+    if _MP_LOCK:
+        _MP_LOCK.acquire()
+        try:
+            yield
+        finally:
+            _MP_LOCK.release()
+    else:
+        yield
 
 
 class DeduplicationCache(BaseSQLiteCache):
@@ -45,6 +66,24 @@ class DeduplicationCache(BaseSQLiteCache):
         )
         """
 
+        # Set up a cross-process file lock (best-effort; falls back to no-op on platforms
+        # without fcntl). This prevents rare races when multiple processes try to reserve
+        # the same hash at the exact same time (seen in CI).
+        self._fcntl = None
+        self._file_lock_handle = None
+        lock_path = Path(db_path).with_suffix(Path(db_path).suffix + ".lock")
+        try:
+            import fcntl  # type: ignore
+
+            lock_path.parent.mkdir(parents=True, exist_ok=True)
+            self._file_lock_handle = open(lock_path, "a+")
+            self._fcntl = fcntl
+        except Exception:
+            # On Windows or if anything goes wrong, just skip file locking; we still
+            # have SQLite constraints and busy timeouts as a safety net.
+            self._fcntl = None
+            self._file_lock_handle = None
+
         super().__init__(
             db_path=db_path,
             ttl=ttl,
@@ -56,6 +95,33 @@ class DeduplicationCache(BaseSQLiteCache):
         # Create the store_cache table and indexes
         self._create_additional_tables()
         logger.info(f"Initialized DeduplicationCache: {db_path}")
+
+    @contextmanager
+    def _process_lock(self):
+        """A cross-process mutex using fcntl-based file lock (best effort)."""
+        if self._fcntl and self._file_lock_handle:
+            self._fcntl.flock(self._file_lock_handle.fileno(), self._fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                self._fcntl.flock(self._file_lock_handle.fileno(), self._fcntl.LOCK_UN)
+        else:
+            yield
+
+    def _token_path(self, content_hash: str) -> Path:
+        """Return the filesystem token file for a specific content hash."""
+        dbp = Path(self.db_path)
+        return dbp.with_suffix(dbp.suffix + f".{content_hash}.uplock")
+
+    def _cleanup_token(self, content_hash: str) -> None:
+        """Best-effort removal of a content-hash token file."""
+        try:
+            self._token_path(content_hash).unlink()
+        except FileNotFoundError:
+            pass
+        except Exception:
+            # We don't want cache operations to fail because token cleanup failed.
+            pass
 
     def _create_additional_tables(self):
         """Create additional tables and indexes for deduplication cache."""
@@ -258,41 +324,62 @@ class DeduplicationCache(BaseSQLiteCache):
                 raise RuntimeError("Database connection is closed")
 
             now = int(time.time())
-            with self._lock, self._conn:
-                # Use BEGIN IMMEDIATE to avoid write starvation under high concurrency
-                self._conn.execute("BEGIN IMMEDIATE")
+            with self._process_lock():  # cross-process mutex (fcntl)
+                with _global_mp_lock():
+                    with self._lock, self._conn:
+                        # Single-uploader gate using create-excl token file
+                        token_acquired = False
+                        try:
+                            fd = os.open(
+                                str(self._token_path(content_hash)),
+                                os.O_CREAT | os.O_EXCL | os.O_WRONLY,
+                            )
+                            os.write(fd, str(os.getpid()).encode())
+                            os.close(fd)
+                            token_acquired = True
+                        except FileExistsError:
+                            token_acquired = False
 
-                try:
-                    # Attempt to atomically reserve this content hash
-                    cursor = self._conn.execute(
-                        """
-                        INSERT INTO file_cache (content_hash, file_id, created_at, updated_at)
-                        VALUES (?, ?, ?, ?)
-                        ON CONFLICT(content_hash) DO NOTHING
-                        """,
-                        (content_hash, placeholder, now, now),
-                    )
+                        # Use EXCLUSIVE to guarantee only one writer across processes.
+                        self._conn.execute("BEGIN EXCLUSIVE")
 
-                    we_are_uploader = cursor.rowcount == 1
+                        try:
+                            # Attempt to atomically reserve this content hash. Using RETURNING avoids
+                            # rowcount ambiguity on some SQLite builds.
+                            cursor = self._conn.execute(
+                                """
+                                INSERT INTO file_cache (content_hash, file_id, created_at, updated_at)
+                                VALUES (?, ?, ?, ?)
+                                ON CONFLICT(content_hash) DO NOTHING
+                                RETURNING content_hash
+                                """,
+                                (content_hash, placeholder, now, now),
+                            )
 
-                    if not we_are_uploader:
-                        # Another process already has this hash - fetch the current value
-                        cursor = self._conn.execute(
-                            "SELECT file_id FROM file_cache WHERE content_hash = ?",
-                            (content_hash,),
-                        )
-                        result = cursor.fetchone()
-                        file_id = result[0] if result else None
-                        self._conn.commit()
-                        return (file_id, False)
+                            row = cursor.fetchone()
+                            we_are_uploader = row is not None and token_acquired
 
-                    # We successfully reserved this hash - we are the uploader
-                    self._conn.commit()
-                    return (None, True)
+                            if not we_are_uploader:
+                                # Another process already has this hash - fetch the current value
+                                cursor = self._conn.execute(
+                                    "SELECT file_id FROM file_cache WHERE content_hash = ?",
+                                    (content_hash,),
+                                )
+                                result = cursor.fetchone()
+                                file_id = result[0] if result else None
+                                self._conn.commit()
+                                return (file_id or "PENDING", False)
 
-                except Exception:
-                    self._conn.rollback()
-                    raise
+                            # We successfully reserved this hash - we are the uploader
+                            self._conn.commit()
+                            return (None, True)
+
+                        except Exception:
+                            self._conn.rollback()
+                            raise
+                        finally:
+                            if not we_are_uploader:
+                                self._cleanup_token(content_hash)
 
         result = await run_in_thread_pool(_sync_atomic_op)
         return cast(Tuple[Optional[str], bool], result)
@@ -343,6 +430,8 @@ class DeduplicationCache(BaseSQLiteCache):
                 return cursor.rowcount
 
         await run_in_thread_pool(_sync_finalize)
+        # Once finalized, we can safely remove the token gate.
+        self._cleanup_token(content_hash)
 
     @retry_sqlite_operation_async(
         config=DEFAULT_RETRY_CONFIG,
@@ -377,6 +466,8 @@ class DeduplicationCache(BaseSQLiteCache):
                 return cursor.rowcount
 
         await run_in_thread_pool(_sync_cleanup_failed)
+        # Allow another process to take over by removing the token
+        self._cleanup_token(content_hash)
 
     @retry_sqlite_operation_async(
         config=DEFAULT_RETRY_CONFIG,
@@ -403,6 +494,15 @@ class DeduplicationCache(BaseSQLiteCache):
             cutoff_time = int(time.time()) - (max_age_minutes * 60)
 
             with self._lock, self._conn:
+                # Collect stale hashes first so we can clean up their tokens.
+                stale_hashes = [
+                    row[0]
+                    for row in self._conn.execute(
+                        "SELECT content_hash FROM file_cache WHERE file_id = 'PENDING' AND created_at < ?",
+                        (cutoff_time,),
+                    ).fetchall()
+                ]
+
                 cursor = self._conn.execute(
                     "DELETE FROM file_cache WHERE file_id = 'PENDING' AND created_at < ?",
                     (cutoff_time,),
@@ -417,6 +517,10 @@ class DeduplicationCache(BaseSQLiteCache):
                     logger.debug(
                         f"No stale PENDING entries found (older than {max_age_minutes} minutes)"
                     )
+
+                # Clean up tokens for removed stale entries (best effort)
+                for stale_hash in stale_hashes:
+                    self._cleanup_token(stale_hash)
 
                 return cleanup_count
 
