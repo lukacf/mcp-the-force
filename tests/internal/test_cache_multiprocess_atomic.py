@@ -83,7 +83,12 @@ def _sync_atomic_cache_or_get(cache, content_hash, placeholder="PENDING"):
         raise RuntimeError("Database connection is closed")
 
     now = int(time.time())
-    with cache._lock, cache._conn:
+    from contextlib import nullcontext
+
+    # Cross-process guard mirrors the production cache
+    cm = cache._process_lock() if hasattr(cache, "_process_lock") else nullcontext()
+
+    with cm, cache._lock, cache._conn:
         # Use EXCLUSIVE to ensure only one process can perform the insert at a time.
         cache._conn.execute("BEGIN EXCLUSIVE")
 
