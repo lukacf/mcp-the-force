@@ -295,17 +295,20 @@ class DeduplicationCache(BaseSQLiteCache):
                     self._conn.execute("BEGIN EXCLUSIVE")
 
                     try:
-                        # Attempt to atomically reserve this content hash
+                        # Attempt to atomically reserve this content hash. Using RETURNING avoids
+                        # rowcount ambiguity on some SQLite builds.
                         cursor = self._conn.execute(
                             """
                             INSERT INTO file_cache (content_hash, file_id, created_at, updated_at)
                             VALUES (?, ?, ?, ?)
                             ON CONFLICT(content_hash) DO NOTHING
+                            RETURNING content_hash
                             """,
                             (content_hash, placeholder, now, now),
                         )
 
-                        we_are_uploader = cursor.rowcount == 1
+                        row = cursor.fetchone()
+                        we_are_uploader = row is not None
 
                         if not we_are_uploader:
                             # Another process already has this hash - fetch the current value
