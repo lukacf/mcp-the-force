@@ -224,7 +224,7 @@ class GPT5SeriesCapabilities(OSeriesCapabilities):
 
     model_family: str = "gpt-5"
     max_context_window: int = (
-        272_000  # Input limit: 272k + reasoning/output: 128k = 400k total
+        400_000  # Input limit: 400k + reasoning/output: 128k = 528k total
     )
     supports_reasoning_effort: bool = True
     supports_web_search: bool = True
@@ -236,11 +236,11 @@ class GPT5SeriesCapabilities(OSeriesCapabilities):
 
 
 @dataclass
-class GPT5Capabilities(GPT5SeriesCapabilities):
-    """GPT-5 model capabilities - the world's smartest reasoning model."""
+class GPT51CodexCapabilities(GPT5SeriesCapabilities):
+    """GPT-5.1 Codex model capabilities - the world's smartest reasoning model."""
 
-    model_name: str = "gpt-5"
-    description: str = "Top-tier coding + agentic orchestration with strong parallel tool use. Speed: medium. Tool use: excellent (parallel). When to use: Complex refactors, end-to-end builds, long-context codebase Q&A, durable agents—your smartest default for hard work."
+    model_name: str = "gpt-5.1-codex"
+    description: str = "High-performance coding model with agentic capabilities, Windows training, and 400k context. Excellent for sustained coding tasks."
 
 
 @dataclass
@@ -275,7 +275,7 @@ def get_openai_model_capabilities():
         "gpt-4.1": GPT41Capabilities(),
         "o3-deep-research": O3DeepResearchCapabilities(),
         "o4-mini-deep-research": O4MiniDeepResearchCapabilities(),
-        "gpt-5": GPT5Capabilities(),
+        "gpt-5.1-codex": GPT51CodexCapabilities(),
         "gpt-5-mini": GPT5MiniCapabilities(),
         "gpt-5-nano": GPT5NanoCapabilities(),
     }
@@ -300,8 +300,8 @@ def _calculate_timeout(model_name: str) -> int:
     """Calculate appropriate timeout for a model."""
     if "deep-research" in model_name:
         return 3600  # 1 hour for deep research
-    elif model_name == "gpt-5":
-        return 3000  # 50 minutes for GPT-5 (superior reasoning takes time)
+    elif model_name == "gpt-5.1-codex":
+        return 3000  # 50 minutes for GPT-5.1 Codex (superior reasoning takes time)
     elif model_name in ["gpt-5-mini", "gpt-5-nano"]:
         return 1800  # 30 minutes for GPT-5 mini/nano variants
     elif model_name == "o3-pro":
@@ -383,7 +383,7 @@ def _generate_and_register_blueprints():
         "gpt-4.1",
         "o3-deep-research",
         "o4-mini-deep-research",
-        "gpt-5",
+        "gpt-5.1-codex",
         "gpt-5-mini",
         "gpt-5-nano",
     ]

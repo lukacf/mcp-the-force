@@ -3,9 +3,13 @@
 import pytest
 from unittest.mock import AsyncMock, Mock, patch
 from datetime import datetime
+from pathlib import Path
+import os
 
 from mcp_the_force.local_services.whiteboard_manager import WhiteboardManager
 from mcp_the_force.types.collaboration import CollaborationMessage
+
+CURRENT_PROJECT = Path(os.getcwd()).name
 
 
 @pytest.fixture
@@ -100,7 +104,7 @@ class TestWhiteboardManagerCreation:
 
         # Verify metadata was stored with project parameter
         mock_unified_session_cache.set_metadata.assert_called_once_with(
-            "mcp-the-force",  # project name
+            CURRENT_PROJECT,  # project name
             "group_think",  # tool
             "metadata-test",  # session_id
             "whiteboard",  # key
@@ -202,7 +206,9 @@ class TestWhiteboardManagerMessages:
         await whiteboard_manager.append_message("index-test", msg1)
 
         # Add second message
-        msg2 = CollaborationMessage("chat_with_gpt5", "Second message", datetime.now())
+        msg2 = CollaborationMessage(
+            "chat_with_gpt51_codex", "Second message", datetime.now()
+        )
         await whiteboard_manager.append_message("index-test", msg2)
 
         # Verify path indices
@@ -214,7 +220,7 @@ class TestWhiteboardManagerMessages:
 
         # Second call - should be 0002
         second_call_vsfile = mock_store.add_files.call_args_list[1][0][0][0]
-        assert "0002_chat_with_gpt5.txt" in second_call_vsfile.path
+        assert "0002_chat_with_gpt51_codex.txt" in second_call_vsfile.path
 
     @pytest.mark.asyncio
     async def test_append_message_includes_metadata(self, whiteboard_manager):
@@ -245,10 +251,14 @@ class TestWhiteboardManagerMessages:
         )
 
         message = CollaborationMessage(
-            speaker="chat_with_gemini25_pro",
+            speaker="chat_with_gemini3_pro_preview",
             content="Gemini response",
             timestamp=datetime.now(),
-            metadata={"model": "gemini-2.5-pro", "turn": 3, "reasoning_effort": "high"},
+            metadata={
+                "model": "gemini-3-pro-preview",
+                "turn": 3,
+                "reasoning_effort": "high",
+            },
         )
 
         await whiteboard_manager.append_message("meta-test", message)
@@ -256,8 +266,8 @@ class TestWhiteboardManagerMessages:
         vsfile = mock_store.add_files.call_args[0][0][0]
 
         # Check VSFile metadata includes message metadata
-        assert vsfile.metadata["speaker"] == "chat_with_gemini25_pro"
-        assert vsfile.metadata["model"] == "gemini-2.5-pro"
+        assert vsfile.metadata["speaker"] == "chat_with_gemini3_pro_preview"
+        assert vsfile.metadata["model"] == "gemini-3-pro-preview"
         assert vsfile.metadata["turn"] == 3
         assert vsfile.metadata["reasoning_effort"] == "high"
 
@@ -279,7 +289,7 @@ class TestWhiteboardManagerStoreInfo:
 
         # Verify correct metadata key was requested with project parameter
         mock_unified_session_cache.get_metadata.assert_called_once_with(
-            "mcp-the-force",  # project
+            CURRENT_PROJECT,  # project
             "group_think",  # tool
             "stored-session",  # session_id
             "whiteboard",  # key
@@ -406,7 +416,7 @@ class TestWhiteboardManagerSummarization:
             # Note: set_metadata may be called multiple times, so check if our call exists
             calls = whiteboard_manager.session_cache.set_metadata.call_args_list
             expected_call = (
-                "mcp-the-force",  # project
+                CURRENT_PROJECT,  # project
                 "group_think",  # tool
                 "rollover-test",  # session_id
                 "whiteboard",  # key

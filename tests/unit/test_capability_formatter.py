@@ -169,14 +169,16 @@ class TestCapabilityFormatter:
     def test_real_model_examples(self):
         """Test with real model capability patterns."""
 
-        # OpenAI GPT-5 style
+        # OpenAI GPT-5.1 Codex style
         @dataclass
         class GPT5Capabilities(AdapterCapabilities):
             max_context_window: int = 400_000
             supports_tools: bool = True
             supports_web_search: bool = True
             supports_reasoning_effort: bool = True
-            supports_temperature: bool = False  # GPT-5 doesn't support temperature
+            supports_temperature: bool = (
+                False  # GPT-5.1 Codex doesn't support temperature
+            )
             supports_structured_output: bool = True
             parallel_function_calls: int = -1
 

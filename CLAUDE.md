@@ -33,12 +33,12 @@ They are your task force, your work force, your close collaborators.
 5. **Understand and Utilize Each Force Member's Unique Strengths**:
    - The Force provides access to 17 cutting-edge AI models through `chat_with_*` tools
    - **For 90% of your work, use these two key models:**
-     - **`chat_with_gpt5`**: The smartest model available (400k context). Best at search and complex reasoning.
-     - **`chat_with_gemini25_pro`**: Smart, fast, and reliable (1M context). Excellent for code analysis and long documents.
+     - **`chat_with_gpt51_codex`**: The smartest model available (400k context). Best at search and complex reasoning.
+     - **`chat_with_gemini3_pro_preview`**: Smart, fast, and reliable (1M context). Excellent for code analysis and long documents.
    - **Fast large-context alternatives:**
      - **`chat_with_gemini25_flash`**: Ultra-fast with 1M context. Perfect for quick summaries.
      - **`chat_with_gpt41`**: Fast processing with 1M context and dependable tool use.
-   - **For search tasks:** While GPT-5 is best at search, **`chat_with_grok4`** is a good and faster alternative
+   - **For search tasks:** While GPT-5.1 Codex is best at search, **`chat_with_grok41`** is a good and faster alternative
    - Each model's tool description shows its capabilities, context window, and best use cases
    - Provide relevant context to each Force member at the start of a session; be transparent about your AI nature and collaboration goals
    - Avoid using Tasks for calling the assistants; use general prompts and conversation
@@ -112,9 +112,9 @@ MCP The-Force Server - A Model Context Protocol (MCP) server that provides acces
 The Force provides access to 17 cutting-edge AI models through `chat_with_*` tools, each with dynamically-generated descriptions showing their capabilities, context limits, and best use cases.
 
 **Key models for most tasks:**
-- For 90% of your work, use **`chat_with_gpt5`** (smartest, 400k context) or **`chat_with_gemini25_pro`** (smart, 1M context, fast)
+- For 90% of your work, use **`chat_with_gpt51_codex`** (smartest, 400k context) or **`chat_with_gemini3_pro_preview`** (smart, 1M context, fast)
 - For fast large-context work: **`chat_with_gemini25_flash`** or **`chat_with_gpt41`**
-- For search: **`chat_with_gpt5`** is best, but **`chat_with_grok4`** is good and faster
+- For search: **`chat_with_gpt51_codex`** is best, but **`chat_with_grok41`** is good and faster
 
 **Utility tools:**
 - `list_sessions`: List existing AI conversation sessions for the current project

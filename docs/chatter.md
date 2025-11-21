@@ -6,7 +6,7 @@ Chatter enables multiple AI models to work together on complex problems through 
 
 ## Architecture: Whiteboard Vector Store Pattern
 
-Based on GPT-5's critical review, we'll implement a "whiteboard vector store" approach that leverages existing MCP infrastructure without requiring adapter changes.
+Based on GPT-5.1 Codex's critical review, we'll implement a "whiteboard vector store" approach that leverages existing MCP infrastructure without requiring adapter changes.
 
 ### Core Components
 
@@ -17,7 +17,7 @@ Based on GPT-5's critical review, we'll implement a "whiteboard vector store" ap
 
 ## Critical Integration Requirements
 
-**ESSENTIAL**: Based on GPT-5's review, these fixes are required for the architecture to work:
+**ESSENTIAL**: Based on GPT-5.1 Codex's review, these fixes are required for the architecture to work:
 
 ### 1. Executor Vector Store Passthrough
 - **Issue**: Current `ToolExecutor` only propagates `vector_store_ids` for tools that declare it as a parameter. Chat tools don't have this parameter.
@@ -268,7 +268,7 @@ class ChatterCollaborate(ToolSpec):
         description="The main task or problem for models to solve collaboratively"
     )
     models: List[str] = Route.adapter(
-        description="List of model tools to participate (e.g., ['chat_with_gpt5', 'chat_with_gemini25_pro'])"
+        description="List of model tools to participate (e.g., ['chat_with_gpt51_codex', 'chat_with_gemini3_pro_preview'])"
     )
     user_input: str = Route.adapter(
         default="",

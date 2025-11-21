@@ -642,7 +642,7 @@ This directory contains scripts for displaying real-time collaboration progress 
 
 ## Usage:
 - Progress automatically appears in Claude Code status line during collaborations
-- Shows: [Chatter] 3/7 • 43% • GPT-5 thinking (ETA 2m)
+- Shows: [Chatter] 3/7 • 43% • GPT-5.1 Codex thinking (ETA 2m)
 
 ## Control:
 - Disable: `touch disable_statusline` 

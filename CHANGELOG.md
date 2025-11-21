@@ -7,7 +7,7 @@
 
 ## 1.0.8
 Added 1M context window support for Claude 4 Sonnet (claude-sonnet-4-20250514)
-Fixed GPT-5 context window documentation to reflect 272k input limit (400k total including reasoning/output)
+Fixed GPT-5.1 Codex context window documentation to reflect 272k input limit (400k total including reasoning/output)
 Added anthropic-beta header support for 1M context activation (context-1m-2025-08-07)
 Enhanced tool parameter descriptions with discovery hints and improved formatting
 Implemented smart beta header combination for multiple Anthropic features
@@ -28,14 +28,14 @@ Added comprehensive unit tests for file filtering and XML escaping fixes
 Added dynamic capability injection to model descriptions showing context window, tools, and features
 Implemented model filtering to supported list of 17 AI models (excluding experimental/unavailable ones)
 Enhanced model descriptions with summary, speed, tool use guidance, and recommended use cases
-Updated documentation to highlight GPT-5 and Gemini 2.5 Pro as primary models for most tasks
+Updated documentation to highlight GPT-5.1 Codex and Gemini 3 Pro Preview as primary models for most tasks
 Fixed unit tests to handle filtered models and updated test expectations
 Added comprehensive capability formatter with human-readable output (e.g., "1M tokens" → "1M")
 Fixed multiprocess cache race condition in tests for better CI stability
 Fixed Ollama discovery tests for environments without psutil
 
 ## 1.0.5
-Added GPT-5 model family support (gpt-5, gpt-5-mini, gpt-5-nano) with 400k context windows
+Added GPT-5.1 Codex model family support (gpt-5.1-codex, gpt-5.1-codex-mini, gpt-5.1-codex-nano) with 400k context windows
 Fixed history system to restore proper conversation summarization flow 
 Added model-specific developer prompts with parallelized tool call instructions
 Fixed Force conversations not showing in project history search

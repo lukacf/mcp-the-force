@@ -75,7 +75,7 @@ class CollaborationService:
         context: Optional[list[str]] = None,
         priority_context: Optional[list[str]] = None,
         discussion_turns: int = 6,
-        synthesis_model: str = "chat_with_gemini25_pro",
+        synthesis_model: str = "chat_with_gemini3_pro_preview",
         validation_rounds: int = 2,
         **kwargs,
     ) -> str:
@@ -822,8 +822,8 @@ The whiteboard contains the full conversation history. Use file_search to access
                     disable_history_search=True,
                     timeout=min(
                         config.timeout_per_step if config else 120, 120
-                    ),  # Add timeout per GPT-5
-                    # Remove context from validation per GPT-5 suggestion
+                    ),  # Add timeout per GPT-5.1 Codex
+                    # Remove context from validation per GPT-5.1 Codex suggestion
                     context=None,
                     priority_context=None,
                 )
@@ -868,8 +868,8 @@ The whiteboard contains the full conversation history. Use file_search to access
                     disable_history_search=True,
                     timeout=config.timeout_per_step
                     if config
-                    else 300,  # Add timeout per GPT-5
-                    context=None,  # Remove context from refinement per GPT-5
+                    else 300,  # Add timeout per GPT-5.1 Codex
+                    context=None,  # Remove context from refinement per GPT-5.1 Codex
                     priority_context=None,
                 )
 
@@ -881,7 +881,7 @@ The whiteboard contains the full conversation history. Use file_search to access
                     f"No valid reviews in round {round_num + 1} - synthesis agent proceeding without feedback"
                 )
 
-        # Account for actual validation rounds run (step accounting fix per GPT-5)
+        # Account for actual validation rounds run (step accounting fix per GPT-5.1 Codex)
         session.current_step += rounds_run
         await self.session_cache.set_metadata(
             project,
@@ -991,7 +991,7 @@ You have full discretion to decide which feedback to incorporate. Use your judgm
 **If you disagree with reviewer feedback:**
 - Still incorporate it if it's reasonable
 - If you reject significant feedback, note the disagreement in an "Editorial Notes" section
-- Example: "Editorial Notes: GPT-5 suggested adding authentication, but this was deemed excessive for a simple hello world example."
+- Example: "Editorial Notes: GPT-5.1 Codex suggested adding authentication, but this was deemed excessive for a simple hello world example."
 
 **Output Requirements:**
 - Follow the exact output format: {contract.output_format}

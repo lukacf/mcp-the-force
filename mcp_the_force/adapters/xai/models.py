@@ -45,16 +45,16 @@ class Grok3FastCapabilities(Grok3Capabilities):
 
 
 @dataclass
-class Grok4Capabilities(GrokBaseCapabilities):
-    """Grok 4 models with 256k context."""
+class Grok41Capabilities(GrokBaseCapabilities):
+    """Grok 4.1 models with 256k context."""
 
     max_context_window: int = 256_000
     supports_reasoning_effort: bool = False
-    description: str = "Advanced multi-agent reasoning, large documents"
+    description: str = "Grok 4.1: Enhanced reasoning, reduced hallucinations, 256k context. Advanced xAI model with multi-agent reasoning and long context."
 
 
 @dataclass
-class Grok4HeavyCapabilities(Grok4Capabilities):
+class Grok4HeavyCapabilities(Grok41Capabilities):
     """Grok 4 Heavy model."""
 
     description: str = "Maximum capability (if available)"
@@ -87,7 +87,7 @@ class GrokMiniFastCapabilities(GrokMiniCapabilities):
 GROK_MODEL_CAPABILITIES = {
     "grok-3-beta": Grok3BetaCapabilities(),
     "grok-3-fast": Grok3FastCapabilities(),
-    "grok-4": Grok4Capabilities(),
+    "grok-4.1": Grok41Capabilities(),
     "grok-4-heavy": Grok4HeavyCapabilities(),
     "grok-3-mini": GrokMiniCapabilities(),
     "grok-3-mini-beta": GrokMiniBetaCapabilities(),

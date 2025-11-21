@@ -161,17 +161,17 @@ class Grok3FastCapabilities(Grok3Capabilities):
 
 
 @dataclass
-class Grok4Capabilities(GrokBaseCapabilities):
-    """Grok 4 models with 256k context."""
+class Grok41Capabilities(GrokBaseCapabilities):
+    """Grok 4.1 models with 256k context."""
 
-    model_name: str = "grok-4"
+    model_name: str = "grok-4.1"
     max_context_window: int = 256_000
     supports_reasoning_effort: bool = False
-    description: str = "Advanced xAI model with multi-agent reasoning and long context. Speed: medium/low. Tool use: strong (parallel). When to use: Complex analysis, planning, cross-document synthesis—pick when you need xAI's deeper reasoning."
+    description: str = "Grok 4.1: Enhanced reasoning, reduced hallucinations, 256k context. Advanced xAI model with multi-agent reasoning and long context."
 
 
 @dataclass
-class Grok4HeavyCapabilities(Grok4Capabilities):
+class Grok4HeavyCapabilities(Grok41Capabilities):
     """Grok 4 Heavy model."""
 
     model_name: str = "grok-4-heavy"
@@ -210,7 +210,7 @@ class GrokMiniFastCapabilities(GrokMiniCapabilities):
 GROK_MODEL_CAPABILITIES = {
     "grok-3-beta": Grok3BetaCapabilities(),
     "grok-3-fast": Grok3FastCapabilities(),
-    "grok-4": Grok4Capabilities(),
+    "grok-4.1": Grok41Capabilities(),
     "grok-4-heavy": Grok4HeavyCapabilities(),
     "grok-3-mini": GrokMiniCapabilities(),
     "grok-3-mini-beta": GrokMiniBetaCapabilities(),
@@ -225,7 +225,7 @@ GROK_MODEL_CAPABILITIES = {
 
 def _calculate_timeout(model_name: str) -> int:
     """Calculate appropriate timeout for a model."""
-    if model_name == "grok-4" or model_name == "grok-4-heavy":
+    if model_name == "grok-4.1" or model_name == "grok-4-heavy":
         return 600  # 10 minutes for grok-4 family
     elif model_name == "grok-3-beta":
         return 420  # 7 minutes for grok-3-beta
@@ -238,7 +238,7 @@ def _generate_and_register_blueprints():
     blueprints = []
 
     # Only register supported models
-    supported_models = ["grok-3-fast", "grok-4"]
+    supported_models = ["grok-3-fast", "grok-4.1"]
 
     for model_name, capabilities in GROK_MODEL_CAPABILITIES.items():
         if model_name not in supported_models:

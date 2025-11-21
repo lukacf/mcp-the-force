@@ -272,7 +272,7 @@ class TestGroupThinkMultiPhaseWorkflow:
         existing_session_data = {
             "session_id": "existing-session",
             "objective": "Original objective",
-            "models": ["chat_with_gpt5"],
+            "models": ["chat_with_gpt51_codex"],
             "messages": [],
             "current_step": 2,  # Already completed some steps
             "mode": "round_robin",
@@ -348,7 +348,7 @@ class TestCollaborationServiceUnitMethods:
         session = CollaborationSession(
             session_id="progress-test",
             objective="Test progress",
-            models=["chat_with_gpt5"],
+            models=["chat_with_gpt51_codex"],
             messages=[],
             current_step=2,
             mode="round_robin",

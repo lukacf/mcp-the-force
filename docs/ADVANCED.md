@@ -58,7 +58,7 @@ chat_with_gpt4_1(
 )
 
 # Subsequent calls: Reference same session for efficient processing
-chat_with_gemini25_pro(
+chat_with_gemini3_pro_preview(
     context=["/specific/files"],  # Can add new context
     session_id="analysis-main"  # Reuses vector store from session
 )
@@ -154,7 +154,7 @@ chat_with_gpt4_1(
 )
 
 # Follow-up queries leverage memory
-chat_with_gemini25_pro(
+chat_with_gemini3_pro_preview(
     instructions="Focus on security aspects",
     context=[],  # Relies on session memory
     session_id=session_id
@@ -178,7 +178,7 @@ for model in response:
 group_think(
     session_id="refactor-auth-2025-11-21",
     objective="Redesign auth service for zero-downtime rotations",
-    models=["chat_with_gpt5", "chat_with_gemini25_pro", "chat_with_claude41_opus"],
+    models=["chat_with_gpt51_codex", "chat_with_gemini3_pro_preview", "chat_with_claude41_opus"],
     output_format="Design doc + migration steps + rollback plan",
     discussion_turns=6,
     validation_rounds=2,
@@ -187,7 +187,7 @@ group_think(
 )
 ```
 - Keep `session_id` stable to continue the same panel across turns.
-- Choose a large-context `synthesis_model` (default: `chat_with_gemini25_pro`) for the final merge.
+- Choose a large-context `synthesis_model` (default: `chat_with_gemini3_pro_preview`) for the final merge.
 - Use `mode="round_robin"` (current default) to ensure every model contributes; orchestration smarts build on this.
 - Validation rounds re-open the floor so panelists can critique the synthesized result.
 
@@ -230,7 +230,7 @@ implementation = await chat_with_o3(
 )
 
 # 3. Validate approach
-validation = await chat_with_gemini25_pro(
+validation = await chat_with_gemini3_pro_preview(
     "Review implementation for compliance with researched practices",
     context=[implementation],
     session_id="validation-session"
@@ -248,7 +248,7 @@ for iteration in range(max_iterations):
     )
     
     # Test hypothesis
-    test_result = await chat_with_gemini25_pro(
+    test_result = await chat_with_gemini3_pro_preview(
         f"Test this hypothesis: {hypothesis}",
         context=["/test", "/src"],
         session_id=f"test-iteration-{iteration}"

@@ -452,7 +452,7 @@ class TestForceConversationIntegration:
             "VALUES (?, ?, ?, ?, ?)",
             (
                 "mcp-the-force",
-                "chat_with_gemini25_pro",
+                "chat_with_gemini3_pro_preview",
                 "test-session",
                 "[]",
                 1234567890,
@@ -474,7 +474,7 @@ class TestForceConversationIntegration:
         stores = config.get_stores_with_types(["session"])
         assert len(stores) == 1
         assert stores[0][0] == "session"
-        assert "||chat_with_gemini25_pro||" in stores[0][1]
+        assert "||chat_with_gemini3_pro_preview||" in stores[0][1]
 
     def test_get_stores_with_types_empty_request(self, temp_db):
         """Test get_stores_with_types with empty store_types list."""
@@ -514,14 +514,14 @@ class TestForceConversationIntegration:
             ("mcp-the-force", "chat_with_o3", "session2", '{"messages": []}', True),
             (
                 "mcp-the-force",
-                "chat_with_grok4",
+                "chat_with_grok41",
                 "session3",
                 '[{"role": "user"}]',
                 True,
             ),
             # Should be excluded - empty/null history
             ("mcp-the-force", "chat_with_claude3_opus", "empty1", None, False),
-            ("mcp-the-force", "chat_with_gemini25_pro", "empty2", "", False),
+            ("mcp-the-force", "chat_with_gemini3_pro_preview", "empty2", "", False),
             # Should be excluded - not chat tools
             (
                 "mcp-the-force",
@@ -559,7 +559,7 @@ class TestForceConversationIntegration:
         expected_included = [
             "mcp-the-force||chat_with_gemini25_flash||session1",
             "mcp-the-force||chat_with_o3||session2",
-            "mcp-the-force||chat_with_grok4||session3",
+            "mcp-the-force||chat_with_grok41||session3",
         ]
 
         for expected in expected_included:
@@ -568,7 +568,7 @@ class TestForceConversationIntegration:
         # Verify expected exclusions
         expected_excluded = [
             "mcp-the-force||chat_with_claude3_opus||empty1",
-            "mcp-the-force||chat_with_gemini25_pro||empty2",
+            "mcp-the-force||chat_with_gemini3_pro_preview||empty2",
             "mcp-the-force||search_project_history||search1",
             "mcp-the-force||count_project_tokens||count1",
             "mcp-the-force||list_sessions||list1",

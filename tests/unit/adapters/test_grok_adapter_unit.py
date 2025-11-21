@@ -31,7 +31,7 @@ def mock_litellm_response():
 @pytest.fixture
 def grok_adapter_with_mock(mock_env):
     """Create GrokAdapter with mocked dependencies for unit testing."""
-    adapter = GrokAdapter(model="grok-4")
+    adapter = GrokAdapter(model="grok-4.1")
     return adapter
 
 
@@ -72,7 +72,7 @@ class TestGrokAdapterUnit:
                 ctx = CallContext(
                     session_id="test-session-simple",
                     project="test-project",
-                    tool="chat_with_grok4",
+                    tool="chat_with_grok41",
                 )
 
                 # Mock tool dispatcher with empty tools
@@ -90,7 +90,7 @@ class TestGrokAdapterUnit:
 
                 # Verify adapter called session cache correctly
                 mock_cache_class.get_history.assert_called_once_with(
-                    "test-project", "chat_with_grok4", "test-session-simple"
+                    "test-project", "chat_with_grok41", "test-session-simple"
                 )
                 mock_cache_class.set_history.assert_called_once()
 
@@ -149,7 +149,7 @@ class TestGrokAdapterUnit:
                 )
 
                 ctx = CallContext(
-                    session_id="", project="test-project", tool="chat_with_grok4"
+                    session_id="", project="test-project", tool="chat_with_grok41"
                 )
 
                 # Mock tool dispatcher that doesn't have the unknown tool
@@ -213,7 +213,7 @@ class TestGrokAdapterUnit:
                 ctx = CallContext(
                     session_id="test-session-123",
                     project="test-project",
-                    tool="chat_with_grok4",
+                    tool="chat_with_grok41",
                 )
 
                 # Mock tool dispatcher with empty tools
@@ -229,7 +229,7 @@ class TestGrokAdapterUnit:
 
                 # Verify session cache was called with correct session ID
                 mock_cache_class.get_history.assert_called_once_with(
-                    "test-project", "chat_with_grok4", "test-session-123"
+                    "test-project", "chat_with_grok41", "test-session-123"
                 )
                 mock_cache_class.set_history.assert_called_once()
 
@@ -240,5 +240,5 @@ class TestGrokAdapterUnit:
                 tool_arg = call_args[0][1]
                 session_id_arg = call_args[0][2]
                 assert project_arg == "test-project"
-                assert tool_arg == "chat_with_grok4"
+                assert tool_arg == "chat_with_grok41"
                 assert session_id_arg == "test-session-123"

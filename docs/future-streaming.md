@@ -19,7 +19,7 @@ FastMCP 2.3+ has built-in streaming support that we can leverage:
 ### Models with Streaming Capability
 - ✅ **Already streaming internally**: o3, o4-mini, gpt-4.1 (OpenAI models)
 - 🚫 **Intentionally non-streaming**: o3-pro (background-only due to long processing times)
-- ⚠️ **Could stream but don't**: Gemini 2.5 Pro/Flash, Grok 3 Beta/4
+- ⚠️ **Could stream but don't**: Gemini 3 Pro Preview/Flash, Grok 3 Beta/4
 
 ## Implementation Plan
 

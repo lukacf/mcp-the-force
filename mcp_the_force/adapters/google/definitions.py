@@ -46,7 +46,7 @@ class GeminiToolParams(BaseToolParams):  # type: ignore[misc]
         description=(
             "(Optional) Controls the 'thinking budget' allocated to the model for reasoning. Maps to "
             "a specific token budget for the model's internal reasoning process, affecting the depth "
-            "of analysis. For Gemini 2.5 Pro: 'low'=13107 tokens, 'medium'=19660 tokens, 'high'=32768 tokens. "
+            "of analysis. For Gemini 3 Pro Preview: 'low'=13107 tokens, 'medium'=19660 tokens, 'high'=32768 tokens. "
             "For Gemini 2.5 Flash: 'low'=9830 tokens, 'medium'=14745 tokens, 'high'=24576 tokens. "
             "Syntax: A string, one of 'low', 'medium', or 'high'. "
             "Default: 'medium'. "
@@ -105,12 +105,12 @@ class GeminiBaseCapabilities(AdapterCapabilities):
 
 
 @dataclass
-class Gemini25ProCapabilities(GeminiBaseCapabilities):
-    """Gemini 2.5 Pro model capabilities."""
+class Gemini3ProPreviewCapabilities(GeminiBaseCapabilities):
+    """Gemini 3 Pro Preview model capabilities."""
 
-    model_name: str = "gemini-2.5-pro"
+    model_name: str = "gemini-3-pro-preview"
     max_context_window: int = 1_000_000
-    description: str = "Deep multimodal analyst; massive context and steady tools. Speed: medium. Tool use: strong. When to use: Mixed-media RAG (docs/images/spreadsheets), giant summarization jobs, bug triage with screenshots—your long-context workhorse."
+    description: str = "Gemini 3 Pro Preview: 1M context, sparse MoE, multimodal agentic reasoning. Deep multimodal analyst; massive context and steady tools."
     reasoning_effort_map: Dict[str, int] = field(
         default_factory=lambda: {
             "low": int(_MAX_BUDGET_PRO * 0.40),  # 13107
@@ -141,7 +141,7 @@ class Gemini25FlashCapabilities(GeminiBaseCapabilities):
 # ====================================================================
 
 GEMINI_MODEL_CAPABILITIES = {
-    "gemini-2.5-pro": Gemini25ProCapabilities(),
+    "gemini-3-pro-preview": Gemini3ProPreviewCapabilities(),
     "gemini-2.5-flash": Gemini25FlashCapabilities(),
 }
 

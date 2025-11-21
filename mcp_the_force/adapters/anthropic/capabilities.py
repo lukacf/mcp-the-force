@@ -54,7 +54,7 @@ class Claude3OpusCapabilities(AnthropicBaseCapabilities):
     supports_reasoning_effort: bool = (
         False  # Claude 3 doesn't support extended thinking
     )
-    description: str = "Prior flagship known for thoughtful, low-hallucination writing. Speed: low/medium. Tool use: good. When to use: Well-structured reports and literature summaries—prefer newer Sonnet/Opus 4-series or GPT-5 for tool-heavy tasks."
+    description: str = "Prior flagship known for thoughtful, low-hallucination writing. Speed: low/medium. Tool use: good. When to use: Well-structured reports and literature summaries—prefer newer Sonnet/Opus 4-series or GPT-5.1 Codex for tool-heavy tasks."
 
 
 # Map of model names to their capability instances

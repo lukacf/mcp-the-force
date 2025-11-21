@@ -87,7 +87,8 @@ async def test_describe_session_cache_key_mismatch_bug(isolate_test_databases):
 
     # Use a different tool for summarization
     result = await service.execute(
-        session_id="test-key-mismatch", summarization_model="chat_with_gemini25_pro"
+        session_id="test-key-mismatch",
+        summarization_model="chat_with_gemini3_pro_preview",
     )
 
     # Parse the mock response
@@ -100,5 +101,5 @@ async def test_describe_session_cache_key_mismatch_bug(isolate_test_databases):
 
     # Also verify the model used was the one we requested
     assert (
-        mock_response["model"] == "gemini-2.5-pro"
+        mock_response["model"] == "gemini-3-pro-preview"
     ), "Wrong model was used for summarization"

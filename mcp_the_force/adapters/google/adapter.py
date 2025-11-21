@@ -6,7 +6,7 @@ import subprocess
 from pathlib import Path
 from typing import Any, Dict, List
 
-from ..errors import InvalidModelException, ConfigurationException
+from ..errors import ConfigurationException
 from ..litellm_base import LiteLLMBaseAdapter
 from ..protocol import CallContext, ToolDispatcher
 from .definitions import GeminiToolParams, GEMINI_MODEL_CAPABILITIES
@@ -105,21 +105,28 @@ class GeminiAdapter(LiteLLMBaseAdapter):
 
     param_class = GeminiToolParams
 
-    def __init__(self, model: str = "gemini-2.5-pro"):
-        """Initialize the Gemini adapter."""
-        if model not in GEMINI_MODEL_CAPABILITIES:
-            raise InvalidModelException(
-                model=model,
-                supported_models=list(GEMINI_MODEL_CAPABILITIES.keys()),
-                provider="Gemini",
-            )
+    def __init__(self, model: str = "gemini-3-pro-preview"):
+        """Initialize the Gemini adapter.
 
+        Args:
+            model: The model name to use (e.g. "gemini-3-pro-preview", "gemini-2.5-flash")
+        """
         self.model_name = model
-        self.display_name = f"Gemini {model} (LiteLLM)"
-        self.capabilities = GEMINI_MODEL_CAPABILITIES[model]
-        self._auth_method = "uninitialized"  # To be set by _validate_environment
-
+        self.display_name = f"Gemini {model}"
         super().__init__()
+        self.client = None
+
+        # Load capabilities
+        capabilities = GEMINI_MODEL_CAPABILITIES.get(model)
+
+        if capabilities:
+            self.capabilities = capabilities
+        else:
+            # Fallback for unknown models - assume they're like Pro
+            logger.warning(f"Unknown Gemini model '{model}', assuming Pro capabilities")
+            from .definitions import Gemini3ProPreviewCapabilities
+
+            self.capabilities = Gemini3ProPreviewCapabilities(model_name=model)
 
     def _validate_environment(self):
         """Validate Gemini/Vertex AI authentication in the correct order."""

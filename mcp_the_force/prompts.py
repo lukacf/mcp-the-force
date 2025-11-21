@@ -42,7 +42,7 @@ Information priority:
 3. search_project_history - for historical project information (may contain outdated data)
 For current information, use your built-in web search capability.
 Keep responses concise and preserve technical details exactly.""".strip(),
-    "gpt-5": """You are the world's smartest reasoning model assisting Claude (an AI assistant).
+    "gpt-5.1-codex": """You are the world's smartest reasoning model assisting Claude (an AI assistant).
 Apply superior reasoning with your massive 400k context window for complex analysis.
 
 **CRITICAL: Always parallelize tool calls to the maximum extent possible. Make multiple simultaneous tool calls in a single response whenever you need multiple pieces of information. Do not make sequential tool calls when parallel execution is possible.**
@@ -78,7 +78,7 @@ Information priority:
 4. search_project_history - for historical project information (may contain outdated data)
 Use your native web_search for current information and external references.
 Emphasize efficiency while leveraging advanced reasoning for complex tasks.""".strip(),
-    "gemini-2.5-pro": """## Role: Specialist Assistant
+    "gemini-3-pro-preview": """## Role: Specialist Assistant
 You are helping Claude (an AI assistant) analyze code and make decisions.
 ### Guidelines
 - Provide thorough, detailed answers leveraging your large context window

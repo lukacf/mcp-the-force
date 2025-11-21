@@ -24,7 +24,7 @@ class TestMultiTurnErrors:
         """
         # Execute with session_id using MockAdapter
         result = await run_tool(
-            "chat_with_gemini25_pro",
+            "chat_with_gemini3_pro_preview",
             instructions="Test instruction",
             output_format="Test format",
             context=[],
@@ -37,7 +37,7 @@ class TestMultiTurnErrors:
         # Verify the plumbing worked correctly:
         # 1. MockAdapter was used
         assert data["mock"] is True
-        assert data["model"] == "gemini-2.5-pro"
+        assert data["model"] == "gemini-3-pro-preview"
 
         # 2. Session ID was passed through to adapter
         assert (
@@ -65,7 +65,7 @@ class TestMultiTurnErrors:
 
         # First turn
         result1 = await run_tool(
-            "chat_with_gemini25_pro",
+            "chat_with_gemini3_pro_preview",
             instructions="First message",
             output_format="OK",
             context=[],
@@ -74,7 +74,7 @@ class TestMultiTurnErrors:
 
         # Second turn with same session
         result2 = await run_tool(
-            "chat_with_gemini25_pro",
+            "chat_with_gemini3_pro_preview",
             instructions="Second message",
             output_format="OK",
             context=[],
@@ -106,7 +106,7 @@ class TestMultiTurnErrors:
         This simulates the bug where models used search_project_history
         instead of conversation history.
         """
-        metadata = get_tool("chat_with_gemini25_pro")
+        metadata = get_tool("chat_with_gemini3_pro_preview")
         session_id = session_id_generator()
 
         # Override system instruction to old version
@@ -157,7 +157,7 @@ class TestMultiTurnErrors:
         grok_session = session_id_generator()
 
         # Gemini: Store fact A
-        gemini_meta = get_tool("chat_with_gemini25_pro")
+        gemini_meta = get_tool("chat_with_gemini3_pro_preview")
         await executor.execute(
             gemini_meta,
             instructions="Gemini fact: Earth has one moon",
@@ -167,7 +167,7 @@ class TestMultiTurnErrors:
         )
 
         # Grok: Store fact B (different session ID)
-        grok_meta = get_tool("chat_with_grok4")
+        grok_meta = get_tool("chat_with_grok41")
         await executor.execute(
             grok_meta,
             instructions="Grok fact: Mars has two moons",
@@ -205,7 +205,7 @@ class TestMultiTurnErrors:
     @pytest.mark.asyncio
     async def test_empty_session_id_rejected(self, clean_session_caches):
         """Test that empty session_id is handled properly."""
-        metadata = get_tool("chat_with_gemini25_pro")
+        metadata = get_tool("chat_with_gemini3_pro_preview")
 
         # Empty string session_id is technically valid (just a string)
         # This test documents that behavior
@@ -228,7 +228,7 @@ class TestMultiTurnErrors:
         """Test that concurrent sessions don't interfere with each other."""
         import asyncio
 
-        metadata = get_tool("chat_with_gemini25_pro")
+        metadata = get_tool("chat_with_gemini3_pro_preview")
 
         async def session_flow(session_num: int):
             session_id = f"concurrent-{session_num}"

@@ -99,13 +99,13 @@ class TestCollaborationServiceExecution:
 
         # Mock successful model execution
         collaboration_service.executor.execute.return_value = (
-            "GPT-5 response to the objective"
+            "GPT-5.1 Codex response to the objective"
         )
 
         result = await collaboration_service.execute(
             session_id="new-session-123",
             objective="Solve a complex AI problem",
-            models=["chat_with_gpt5", "chat_with_gemini25_pro"],
+            models=["chat_with_gpt51_codex", "chat_with_gemini3_pro_preview"],
             output_format="Test deliverable format",
             user_input="Let's start collaborating!",
             config=CollaborationConfig(max_steps=5),
@@ -128,7 +128,10 @@ class TestCollaborationServiceExecution:
 
         saved_state = collab_state_call[0][4]  # value (collab_state)
         assert saved_state["objective"] == "Solve a complex AI problem"
-        assert saved_state["models"] == ["chat_with_gpt5", "chat_with_gemini25_pro"]
+        assert saved_state["models"] == [
+            "chat_with_gpt51_codex",
+            "chat_with_gemini3_pro_preview",
+        ]
         assert saved_state["mode"] == "round_robin"  # Default
         assert saved_state["max_steps"] == 5
 
@@ -141,7 +144,7 @@ class TestCollaborationServiceExecution:
         collaboration_service.executor.execute.assert_called()
 
         # Verify response
-        assert "GPT-5 response" in result
+        assert "GPT-5.1 Codex response" in result
 
     @pytest.mark.asyncio
     async def test_execute_continues_existing_session(
@@ -153,7 +156,7 @@ class TestCollaborationServiceExecution:
         existing_state = {
             "session_id": "existing-session",
             "objective": "Ongoing project",
-            "models": ["chat_with_gpt5", "chat_with_claude41_opus"],
+            "models": ["chat_with_gpt51_codex", "chat_with_claude41_opus"],
             "messages": [
                 {
                     "speaker": "user",
@@ -242,7 +245,7 @@ class TestCollaborationServiceRoundRobin:
             assert "model_c" in discussion_models
 
             # Verify synthesis phase used default synthesis model
-            synthesis_calls = [call for call in calls if "gemini25_pro" in call]
+            synthesis_calls = [call for call in calls if "gemini3_pro_preview" in call]
             assert len(synthesis_calls) >= 1  # At least one synthesis call
 
         # Verify session was advanced - check set_metadata calls
@@ -316,7 +319,7 @@ class TestCollaborationServiceModelExecution:
         session = CollaborationSession(
             session_id="model-test",
             objective="Test model execution",
-            models=["chat_with_gpt5"],
+            models=["chat_with_gpt51_codex"],
             messages=[],
             current_step=0,
             mode="round_robin",
@@ -333,13 +336,13 @@ class TestCollaborationServiceModelExecution:
 
         # Mock executor response
         collaboration_service.executor.execute.return_value = (
-            "GPT-5 analyzed the whiteboard and responded"
+            "GPT-5.1 Codex analyzed the whiteboard and responded"
         )
 
         await collaboration_service.execute(
             session_id="model-test",
             objective="",
-            models=["chat_with_gpt5"],
+            models=["chat_with_gpt51_codex"],
             output_format="Test deliverable format",
             user_input="Analyze the situation",
             discussion_turns=1,  # Only discussion phase
@@ -351,21 +354,21 @@ class TestCollaborationServiceModelExecution:
         discussion_call = next(
             call
             for call in collaboration_service.executor.execute.call_args_list
-            if call[1]["session_id"] == "model-test__chat_with_gpt5"
+            if call[1]["session_id"] == "model-test__chat_with_gpt51_codex"
         )
         call_kwargs = discussion_call[1]
 
         # Should have disable_history_record=True
         assert call_kwargs["disable_history_record"] is True
 
-        # Should have disable_history_search=True (GPT-5's recommendation)
+        # Should have disable_history_search=True (GPT-5.1 Codex's recommendation)
         assert call_kwargs["disable_history_search"] is True
 
         # Should have vector_store_ids with whiteboard store
         assert call_kwargs["vector_store_ids"] == ["vs_model_test"]
 
         # Should have unique sub-session ID
-        assert call_kwargs["session_id"] == "model-test__chat_with_gpt5"
+        assert call_kwargs["session_id"] == "model-test__chat_with_gpt51_codex"
 
         # Should have instructions referencing whiteboard
         assert "whiteboard" in call_kwargs["instructions"].lower()
@@ -380,7 +383,7 @@ class TestCollaborationServiceModelExecution:
         session = CollaborationSession(
             session_id="whiteboard-inject-test",
             objective="Test whiteboard injection",
-            models=["chat_with_gemini25_pro"],
+            models=["chat_with_gemini3_pro_preview"],
             messages=[],
             current_step=0,
             mode="round_robin",
@@ -568,7 +571,7 @@ class TestCollaborationServiceSummarization:
         session = CollaborationSession(
             session_id="summarize-test",
             objective="Long conversation",
-            models=["chat_with_gpt5"],
+            models=["chat_with_gpt51_codex"],
             messages=messages,
             current_step=49,  # About to reach threshold
             mode="round_robin",
@@ -615,7 +618,7 @@ class TestCollaborationServiceOrchestrator:
         session = CollaborationSession(
             session_id="orchestrator-test",
             objective="Test orchestrator mode",
-            models=["chat_with_gpt5", "chat_with_claude41_opus"],
+            models=["chat_with_gpt51_codex", "chat_with_claude41_opus"],
             messages=[],
             current_step=0,
             mode="orchestrator",  # Different mode
