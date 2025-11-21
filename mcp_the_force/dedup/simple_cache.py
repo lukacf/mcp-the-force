@@ -259,8 +259,9 @@ class DeduplicationCache(BaseSQLiteCache):
 
             now = int(time.time())
             with self._lock, self._conn:
-                # Use BEGIN IMMEDIATE to avoid write starvation under high concurrency
-                self._conn.execute("BEGIN IMMEDIATE")
+                # Use an EXCLUSIVE transaction to guarantee only one writer across processes.
+                # This is stricter than IMMEDIATE and avoids rare dual-uploader races seen in CI.
+                self._conn.execute("BEGIN EXCLUSIVE")
 
                 try:
                     # Attempt to atomically reserve this content hash

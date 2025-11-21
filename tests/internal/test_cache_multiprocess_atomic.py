@@ -84,8 +84,8 @@ def _sync_atomic_cache_or_get(cache, content_hash, placeholder="PENDING"):
 
     now = int(time.time())
     with cache._lock, cache._conn:
-        # Use BEGIN IMMEDIATE to avoid write starvation under high concurrency
-        cache._conn.execute("BEGIN IMMEDIATE")
+        # Use EXCLUSIVE to ensure only one process can perform the insert at a time.
+        cache._conn.execute("BEGIN EXCLUSIVE")
 
         try:
             # Attempt to atomically reserve this content hash
