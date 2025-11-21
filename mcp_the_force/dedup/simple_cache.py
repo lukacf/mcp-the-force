@@ -2,6 +2,8 @@
 
 import time
 import logging
+import os
+import multiprocessing
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Optional, Dict, Any, Tuple, cast
@@ -17,6 +19,24 @@ from .retry import (
 )
 
 logger = logging.getLogger(__name__)
+_MP_LOCK = (
+    multiprocessing.Lock()
+    if (os.getenv("CI") or os.getenv("MCP_SERIALIZE_DEDUP") == "1")
+    else None
+)
+
+
+@contextmanager
+def _global_mp_lock():
+    """Optional global multiprocess mutex to serialize dedup writes in CI."""
+    if _MP_LOCK:
+        _MP_LOCK.acquire()
+        try:
+            yield
+        finally:
+            _MP_LOCK.release()
+    else:
+        yield
 
 
 class DeduplicationCache(BaseSQLiteCache):
@@ -289,45 +309,46 @@ class DeduplicationCache(BaseSQLiteCache):
                 raise RuntimeError("Database connection is closed")
 
             now = int(time.time())
-            with self._process_lock():  # cross-process mutex
-                with self._lock, self._conn:
-                    # Use EXCLUSIVE to guarantee only one writer across processes.
-                    self._conn.execute("BEGIN EXCLUSIVE")
+            with self._process_lock():  # cross-process mutex (fcntl)
+                with _global_mp_lock():
+                    with self._lock, self._conn:
+                        # Use EXCLUSIVE to guarantee only one writer across processes.
+                        self._conn.execute("BEGIN EXCLUSIVE")
 
-                    try:
-                        # Attempt to atomically reserve this content hash. Using RETURNING avoids
-                        # rowcount ambiguity on some SQLite builds.
-                        cursor = self._conn.execute(
-                            """
-                            INSERT INTO file_cache (content_hash, file_id, created_at, updated_at)
-                            VALUES (?, ?, ?, ?)
-                            ON CONFLICT(content_hash) DO NOTHING
-                            RETURNING content_hash
-                            """,
-                            (content_hash, placeholder, now, now),
-                        )
-
-                        row = cursor.fetchone()
-                        we_are_uploader = row is not None
-
-                        if not we_are_uploader:
-                            # Another process already has this hash - fetch the current value
+                        try:
+                            # Attempt to atomically reserve this content hash. Using RETURNING avoids
+                            # rowcount ambiguity on some SQLite builds.
                             cursor = self._conn.execute(
-                                "SELECT file_id FROM file_cache WHERE content_hash = ?",
-                                (content_hash,),
+                                """
+                                INSERT INTO file_cache (content_hash, file_id, created_at, updated_at)
+                                VALUES (?, ?, ?, ?)
+                                ON CONFLICT(content_hash) DO NOTHING
+                                RETURNING content_hash
+                                """,
+                                (content_hash, placeholder, now, now),
                             )
-                            result = cursor.fetchone()
-                            file_id = result[0] if result else None
+
+                            row = cursor.fetchone()
+                            we_are_uploader = row is not None
+
+                            if not we_are_uploader:
+                                # Another process already has this hash - fetch the current value
+                                cursor = self._conn.execute(
+                                    "SELECT file_id FROM file_cache WHERE content_hash = ?",
+                                    (content_hash,),
+                                )
+                                result = cursor.fetchone()
+                                file_id = result[0] if result else None
+                                self._conn.commit()
+                                return (file_id, False)
+
+                            # We successfully reserved this hash - we are the uploader
                             self._conn.commit()
-                            return (file_id, False)
+                            return (None, True)
 
-                        # We successfully reserved this hash - we are the uploader
-                        self._conn.commit()
-                        return (None, True)
-
-                    except Exception:
-                        self._conn.rollback()
-                        raise
+                        except Exception:
+                            self._conn.rollback()
+                            raise
 
         result = await run_in_thread_pool(_sync_atomic_op)
         return cast(Tuple[Optional[str], bool], result)
