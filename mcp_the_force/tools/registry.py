@@ -32,7 +32,7 @@ def _ensure_populated() -> None:
 
     # Also check for critical model tools that should always be available
     expected_model_tools = [
-        "chat_with_gemini25_pro",
+        "chat_with_gemini3_pro_preview",
         "chat_with_gemini25_flash",
         "chat_with_o3",
     ]

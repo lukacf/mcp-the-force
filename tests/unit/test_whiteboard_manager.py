@@ -202,7 +202,9 @@ class TestWhiteboardManagerMessages:
         await whiteboard_manager.append_message("index-test", msg1)
 
         # Add second message
-        msg2 = CollaborationMessage("chat_with_gpt5", "Second message", datetime.now())
+        msg2 = CollaborationMessage(
+            "chat_with_gpt51_codex", "Second message", datetime.now()
+        )
         await whiteboard_manager.append_message("index-test", msg2)
 
         # Verify path indices
@@ -214,7 +216,7 @@ class TestWhiteboardManagerMessages:
 
         # Second call - should be 0002
         second_call_vsfile = mock_store.add_files.call_args_list[1][0][0][0]
-        assert "0002_chat_with_gpt5.txt" in second_call_vsfile.path
+        assert "0002_chat_with_gpt51_codex.txt" in second_call_vsfile.path
 
     @pytest.mark.asyncio
     async def test_append_message_includes_metadata(self, whiteboard_manager):
@@ -245,10 +247,14 @@ class TestWhiteboardManagerMessages:
         )
 
         message = CollaborationMessage(
-            speaker="chat_with_gemini25_pro",
+            speaker="chat_with_gemini3_pro_preview",
             content="Gemini response",
             timestamp=datetime.now(),
-            metadata={"model": "gemini-2.5-pro", "turn": 3, "reasoning_effort": "high"},
+            metadata={
+                "model": "gemini-3-pro-preview",
+                "turn": 3,
+                "reasoning_effort": "high",
+            },
         )
 
         await whiteboard_manager.append_message("meta-test", message)
@@ -256,8 +262,8 @@ class TestWhiteboardManagerMessages:
         vsfile = mock_store.add_files.call_args[0][0][0]
 
         # Check VSFile metadata includes message metadata
-        assert vsfile.metadata["speaker"] == "chat_with_gemini25_pro"
-        assert vsfile.metadata["model"] == "gemini-2.5-pro"
+        assert vsfile.metadata["speaker"] == "chat_with_gemini3_pro_preview"
+        assert vsfile.metadata["model"] == "gemini-3-pro-preview"
         assert vsfile.metadata["turn"] == 3
         assert vsfile.metadata["reasoning_effort"] == "high"
 

@@ -82,7 +82,7 @@ class GrokToolParams(BaseToolParams):  # type: ignore[misc]
         description=(
             "(Optional) Adjusts reasoning effort for Grok mini models only. Unlike other models that "
             "support 'low', 'medium', and 'high', Grok mini models only support 'low' or 'high'. "
-            "This parameter is not applicable to standard Grok models (grok-3-beta, grok-4). "
+            "This parameter is not applicable to standard Grok models (grok-3-beta, grok-4.1). "
             "Syntax: A string, either 'low' or 'high'. "
             "Default: None (uses model default). "
             "Example: reasoning_effort='high'"
@@ -161,20 +161,20 @@ class Grok3FastCapabilities(Grok3Capabilities):
 
 
 @dataclass
-class Grok4Capabilities(GrokBaseCapabilities):
-    """Grok 4 models with 256k context."""
+class Grok41Capabilities(GrokBaseCapabilities):
+    """Grok 4.1 models with expanded context."""
 
-    model_name: str = "grok-4"
-    max_context_window: int = 256_000
+    model_name: str = "grok-4.1"
+    max_context_window: int = 2_000_000
     supports_reasoning_effort: bool = False
-    description: str = "Advanced xAI model with multi-agent reasoning and long context. Speed: medium/low. Tool use: strong (parallel). When to use: Complex analysis, planning, cross-document synthesis—pick when you need xAI's deeper reasoning."
+    description: str = "xAI Grok 4.1 with ~2M context and improved safety/latency. Best for massive long-form synthesis and code review across very large corpora."
 
 
 @dataclass
-class Grok4HeavyCapabilities(Grok4Capabilities):
-    """Grok 4 Heavy model."""
+class Grok41HeavyCapabilities(Grok41Capabilities):
+    """Grok 4.1 Heavy model."""
 
-    model_name: str = "grok-4-heavy"
+    model_name: str = "grok-4.1-heavy"
     description: str = "Maximum capability (if available)"
 
 
@@ -210,8 +210,8 @@ class GrokMiniFastCapabilities(GrokMiniCapabilities):
 GROK_MODEL_CAPABILITIES = {
     "grok-3-beta": Grok3BetaCapabilities(),
     "grok-3-fast": Grok3FastCapabilities(),
-    "grok-4": Grok4Capabilities(),
-    "grok-4-heavy": Grok4HeavyCapabilities(),
+    "grok-4.1": Grok41Capabilities(),
+    "grok-4.1-heavy": Grok41HeavyCapabilities(),
     "grok-3-mini": GrokMiniCapabilities(),
     "grok-3-mini-beta": GrokMiniBetaCapabilities(),
     "grok-3-mini-fast": GrokMiniFastCapabilities(),
@@ -225,8 +225,8 @@ GROK_MODEL_CAPABILITIES = {
 
 def _calculate_timeout(model_name: str) -> int:
     """Calculate appropriate timeout for a model."""
-    if model_name == "grok-4" or model_name == "grok-4-heavy":
-        return 600  # 10 minutes for grok-4 family
+    if model_name in ["grok-4.1", "grok-4.1-heavy"]:
+        return 600  # 10 minutes for grok-4.1 family
     elif model_name == "grok-3-beta":
         return 420  # 7 minutes for grok-3-beta
     else:
@@ -238,7 +238,7 @@ def _generate_and_register_blueprints():
     blueprints = []
 
     # Only register supported models
-    supported_models = ["grok-3-fast", "grok-4"]
+    supported_models = ["grok-3-fast", "grok-4.1"]
 
     for model_name, capabilities in GROK_MODEL_CAPABILITIES.items():
         if model_name not in supported_models:

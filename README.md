@@ -151,8 +151,8 @@ Use the-force search_project_history with {"query": "JWT implementation decision
 The Force provides access to cutting-edge AI models through `chat_with_*` tools, each with dynamically-generated descriptions showing their capabilities, context limits, and best use cases.
 
 ### Recommended Models for Most Tasks
-- **`chat_with_gpt5`**: The smartest model available. 400k context, excellent tool use, and strong reasoning. Your go-to for complex tasks.
-- **`chat_with_gemini25_pro`**: Powerful multimodal model with massive 1M context. Fast and reliable for code analysis and long documents.
+- **`chat_with_gpt51_codex`**: The smartest model available. 400k context, excellent tool use, and strong reasoning. Your go-to for complex tasks.
+- **`chat_with_gemini3_pro_preview`**: Powerful multimodal model with 2M context (preview). Fast and reliable for code analysis and long documents.
 
 ### Fast Large-Context Models
 - **`chat_with_gemini25_flash`**: Ultra-fast with 1M context. Perfect for quick summaries and initial analysis.
@@ -164,14 +164,12 @@ The Force provides access to cutting-edge AI models through `chat_with_*` tools,
 - `chat_with_o3_pro`: Deep analysis and formal reasoning with web search
 - `chat_with_codex_mini`: Fast coding-specialized reasoning model
 - `chat_with_gpt41`: Fast long-context processing with web search
-- `chat_with_gpt5`: World's smartest reasoning model
-- `chat_with_gpt5_mini`: Fast superior reasoning model
-- `chat_with_gpt5_nano`: Efficient superior reasoning model
+- `chat_with_gpt51_codex`: World's smartest reasoning model
 - `research_with_o3_deep_research`: Ultra-deep research with extensive web search (10-60 min)
 - `research_with_o4_mini_deep_research`: Fast research with web search (2-10 min)
 
 **Google Models:**
-- `chat_with_gemini25_pro`: Deep multimodal analysis and complex reasoning
+- `chat_with_gemini3_pro_preview`: Deep multimodal analysis and complex reasoning
 - `chat_with_gemini25_flash`: Fast summarization and quick analysis
 
 **Anthropic Models:**
@@ -181,7 +179,7 @@ The Force provides access to cutting-edge AI models through `chat_with_*` tools,
 
 **xAI Models:**
 - `chat_with_grok3_fast`: Fast inference with Grok 3
-- `chat_with_grok4`: Advanced assistant with multi-agent reasoning
+- `chat_with_grok41`: Advanced assistant with multi-agent reasoning and ~2M context
 
 **Local Models (if Ollama is installed):**
 The Force automatically detects and provides access to any Ollama models you have installed locally.
@@ -228,7 +226,7 @@ bash /path/to/mcp-the-force/scripts/install-history-hook.sh
 ### Multi-Model Collaboration (GroupThink)
 
 GroupThink lets multiple models think together on the same objective with shared memory:
-- **Mix models by strength**: e.g., `chat_with_gpt5` (reasoning), `chat_with_gemini25_pro` (1M-context code analysis), `chat_with_claude41_opus` (writing).
+- **Mix models by strength**: e.g., `chat_with_gpt51_codex` (reasoning), `chat_with_gemini3_pro_preview` (2M-context code analysis), `chat_with_claude41_opus` (writing).
 - **Shared whiteboard**: Every turn writes to a vector-store “whiteboard” so later turns see all prior arguments.
 - **Two phases + validation**: Discussion turns → synthesis by a large-context model → validation rounds by the original panel.
 - **Resume anytime**: Reuse the same `session_id` to continue an ongoing collaboration.
@@ -238,7 +236,7 @@ Quick start:
 {
   "session_id": "design-rag-pipeline-2025-11-21",
   "objective": "Design a production-ready RAG pipeline for our docs service",
-  "models": ["chat_with_gpt5", "chat_with_gemini25_pro", "chat_with_claude41_opus"],
+  "models": ["chat_with_gpt51_codex", "chat_with_gemini3_pro_preview", "chat_with_claude41_opus"],
   "output_format": "Architecture doc with: Overview, Data Flow, Components, Ops, Risks",
   "discussion_turns": 6,
   "validation_rounds": 2,

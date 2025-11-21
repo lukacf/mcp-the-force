@@ -51,7 +51,7 @@ class TestGroupThinkMultiPhaseWorkflow:
 
         # Mock the tool registry to return valid tool metadata
         mock_tool_metadata = Mock()
-        mock_tool_metadata.tool_name = "chat_with_gpt5_mini"
+        mock_tool_metadata.tool_name = "chat_with_gpt51_codex"
 
         # Simple mock that returns consistent responses
         mock_executor.execute.return_value = "Mock model response"
@@ -76,7 +76,7 @@ class TestGroupThinkMultiPhaseWorkflow:
             result = await service.execute(
                 session_id="test-workflow",
                 objective="Test multi-phase collaboration",
-                models=["chat_with_gpt5_mini", "chat_with_gemini25_flash"],
+                models=["chat_with_gpt51_codex", "chat_with_gemini25_flash"],
                 output_format="Test deliverable with sections: Summary, Details",
                 discussion_turns=1,  # Reduce complexity for this test
                 validation_rounds=1,
@@ -138,7 +138,7 @@ class TestGroupThinkMultiPhaseWorkflow:
                 session_id="round-robin-test",
                 objective="Test round-robin pattern",
                 models=[
-                    "chat_with_gpt5_mini",
+                    "chat_with_gpt51_codex",
                     "chat_with_gemini25_flash",
                     "chat_with_grok3_fast",
                 ],
@@ -153,7 +153,7 @@ class TestGroupThinkMultiPhaseWorkflow:
         # Note: We can't easily verify the exact pattern without better mocking,
         # but we can verify all original models participated
         discussion_models = set(discussion_calls)
-        assert "chat_with_gpt5_mini" in discussion_models
+        assert "chat_with_gpt51_codex" in discussion_models
         assert "chat_with_gemini25_flash" in discussion_models
         assert "chat_with_grok3_fast" in discussion_models
 
@@ -193,7 +193,7 @@ class TestGroupThinkMultiPhaseWorkflow:
             await service.execute(
                 session_id="synthesis-test",
                 objective="Test synthesis model",
-                models=["chat_with_gpt5_mini"],
+                models=["chat_with_gpt51_codex"],
                 output_format="Test deliverable",
                 discussion_turns=1,
                 synthesis_model="chat_with_claude4_sonnet",  # Custom synthesis model
@@ -247,7 +247,7 @@ class TestGroupThinkMultiPhaseWorkflow:
             await service.execute(
                 session_id="validation-test",
                 objective="Test validation rounds",
-                models=["chat_with_gpt5_mini", "chat_with_gemini25_flash"],
+                models=["chat_with_gpt51_codex", "chat_with_gemini25_flash"],
                 output_format="Test deliverable",
                 discussion_turns=1,
                 validation_rounds=2,
@@ -272,7 +272,7 @@ class TestGroupThinkMultiPhaseWorkflow:
         existing_session_data = {
             "session_id": "existing-session",
             "objective": "Original objective",
-            "models": ["chat_with_gpt5"],
+            "models": ["chat_with_gpt51_codex"],
             "messages": [],
             "current_step": 2,  # Already completed some steps
             "mode": "round_robin",
@@ -299,7 +299,7 @@ class TestGroupThinkMultiPhaseWorkflow:
             result = await service.execute(
                 session_id="existing-session",
                 objective="New objective should be ignored",
-                models=["chat_with_gpt5_mini"],
+                models=["chat_with_gpt51_codex"],
                 output_format="Test continuation",
                 discussion_turns=1,
             )
@@ -348,7 +348,7 @@ class TestCollaborationServiceUnitMethods:
         session = CollaborationSession(
             session_id="progress-test",
             objective="Test progress",
-            models=["chat_with_gpt5"],
+            models=["chat_with_gpt51_codex"],
             messages=[],
             current_step=2,
             mode="round_robin",
@@ -363,7 +363,7 @@ class TestCollaborationServiceUnitMethods:
         ):
             service._write_progress_file(
                 session=session,
-                current_model="chat_with_gpt5_mini",
+                current_model="chat_with_gpt51_codex",
                 phase="discussing",
                 start_time=time.time() - 60,  # 60 seconds ago
                 total_phases=5,
@@ -381,7 +381,7 @@ class TestCollaborationServiceUnitMethods:
         assert progress_data["step"] == 2
         assert progress_data["total"] == 5
         assert progress_data["percent"] == 40  # 2/5 * 100
-        assert progress_data["current_model"] == "chat_with_gpt5_mini"
+        assert progress_data["current_model"] == "chat_with_gpt51_codex"
         assert "eta_s" in progress_data
 
     def test_cleanup_progress_file(self, service):
@@ -440,7 +440,7 @@ class TestGroupThinkErrorScenarios:
             result = await service.execute(
                 session_id="timeout-test",
                 objective="Test timeout handling",
-                models=["chat_with_gpt5_mini"],
+                models=["chat_with_gpt51_codex"],
                 output_format="Test result",
                 discussion_turns=1,
                 validation_rounds=0,
@@ -483,7 +483,7 @@ class TestGroupThinkErrorScenarios:
             result = await service.execute(
                 session_id="installer-failure-test",
                 objective="Test installer failure handling",
-                models=["chat_with_gpt5_mini"],
+                models=["chat_with_gpt51_codex"],
                 output_format="Test result",
                 discussion_turns=1,
                 validation_rounds=0,

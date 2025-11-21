@@ -57,7 +57,7 @@ class TestGroupThinkIntegration:
                 result = await service.execute(
                     session_id="integration-test",
                     objective="Test component integration",
-                    models=["chat_with_gpt5_nano"],
+                    models=["chat_with_gpt51_codex"],
                     output_format="Integration test result",
                     discussion_turns=1,
                     validation_rounds=0,

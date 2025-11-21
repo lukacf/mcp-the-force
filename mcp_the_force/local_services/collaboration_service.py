@@ -75,7 +75,7 @@ class CollaborationService:
         context: Optional[list[str]] = None,
         priority_context: Optional[list[str]] = None,
         discussion_turns: int = 6,
-        synthesis_model: str = "chat_with_gemini25_pro",
+        synthesis_model: str = "chat_with_gemini3_pro_preview",
         validation_rounds: int = 2,
         **kwargs,
     ) -> str:

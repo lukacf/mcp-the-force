@@ -14,7 +14,7 @@ from .definitions import (
     GROK_MODEL_CAPABILITIES,
     GrokBaseCapabilities,
     Grok3Capabilities,
-    Grok4Capabilities,
+    Grok41Capabilities,
     GrokMiniCapabilities,
 )
 
@@ -23,6 +23,6 @@ __all__ = [
     "GROK_MODEL_CAPABILITIES",
     "GrokBaseCapabilities",
     "Grok3Capabilities",
-    "Grok4Capabilities",
+    "Grok41Capabilities",
     "GrokMiniCapabilities",
 ]

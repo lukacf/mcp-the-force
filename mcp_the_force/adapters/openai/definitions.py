@@ -28,7 +28,7 @@ class OpenAIToolParams(BaseToolParams):  # type: ignore[misc]
         description=(
             "(Optional) Controls the randomness of the model's output. Higher values result in more "
             "creative and varied responses, while lower values produce more deterministic and focused output. "
-            "Only supported by GPT-4 models. O-series models (o3, o3-pro, o4-mini) and GPT-5 models (gpt-5, gpt-5-mini, gpt-5-nano) do not support this parameter. "
+            "Supported by GPT-4 models and GPT-5.1 Codex. O-series models (o3, o3-pro, o4-mini) do not support this parameter. "
             "Syntax: A float between 0.0 and 2.0. "
             "Default: 0.2. "
             "Example: temperature=0.8"
@@ -42,10 +42,10 @@ class OpenAIToolParams(BaseToolParams):  # type: ignore[misc]
             "(Optional) Controls the amount of internal 'thinking' the model does before providing an answer. "
             "Higher effort results in more thorough and accurate reasoning but may increase latency. "
             "'low' is faster but may be less accurate for complex problems. "
-            "Supported by o-series models (o3, o3-pro, o4-mini) and GPT-5 models (gpt-5, gpt-5-mini, gpt-5-nano). Not supported by GPT-4 models. "
+            "Supported by o-series models (o3, o3-pro, o4-mini) and GPT-5.1 Codex. Not supported by GPT-4 models. "
             "Syntax: A string, one of 'low', 'medium', or 'high'. "
-            "Default: 'medium' ('high' for o3-pro and gpt-5, 'medium' for gpt-5-mini and gpt-5-nano). "
-            "Examples: reasoning_effort='high' (for gpt-5), reasoning_effort='medium' (for gpt-5-mini)"
+            "Default: 'medium' ('high' for o3-pro and gpt-5.1-codex). "
+            "Examples: reasoning_effort='high' (for gpt-5.1-codex)"
         ),
         requires_capability=lambda c: c.supports_reasoning_effort,
     )
@@ -219,46 +219,23 @@ class O4MiniDeepResearchCapabilities(DeepResearchCapabilities):
 
 
 @dataclass
-class GPT5SeriesCapabilities(OSeriesCapabilities):
-    """GPT-5 series capabilities - superior reasoning models."""
+class GPT51CodexCapabilities(OSeriesCapabilities):
+    """GPT-5.1 Codex capabilities - updated superior coding/agent model."""
 
-    model_family: str = "gpt-5"
-    max_context_window: int = (
-        272_000  # Input limit: 272k + reasoning/output: 128k = 400k total
-    )
+    model_family: str = "gpt-5.1-codex"
+    model_name: str = "gpt-5.1-codex"
+    max_context_window: int = 400_000  # 400k total context per OpenAI pricing page
     supports_reasoning_effort: bool = True
+    supports_temperature: bool = True  # Temperature supported on codex
     supports_web_search: bool = True
     supports_live_search: bool = True
     web_search_tool: str = "web_search"
-    supports_temperature: bool = False  # GPT-5 doesn't support temperature
-    parallel_function_calls: int = -1  # Unlimited
-    default_reasoning_effort: str = "high"  # Default to high reasoning
-
-
-@dataclass
-class GPT5Capabilities(GPT5SeriesCapabilities):
-    """GPT-5 model capabilities - the world's smartest reasoning model."""
-
-    model_name: str = "gpt-5"
-    description: str = "Top-tier coding + agentic orchestration with strong parallel tool use. Speed: medium. Tool use: excellent (parallel). When to use: Complex refactors, end-to-end builds, long-context codebase Q&A, durable agents—your smartest default for hard work."
-
-
-@dataclass
-class GPT5MiniCapabilities(GPT5SeriesCapabilities):
-    """GPT-5-mini model capabilities - fast superior reasoning."""
-
-    model_name: str = "gpt-5-mini"
-    description: str = "Faster, cheaper sibling of GPT-5 with strong reasoning and tools. Speed: high. Tool use: strong. When to use: Day-to-day coding, midsize refactors, responsive agents and RAG—use when you want ~85–90% of GPT-5 at lower latency."
-    default_reasoning_effort: str = "medium"  # Slightly lower for mini
-
-
-@dataclass
-class GPT5NanoCapabilities(GPT5SeriesCapabilities):
-    """GPT-5-nano model capabilities - efficient superior reasoning."""
-
-    model_name: str = "gpt-5-nano"
-    description: str = "Efficiency-tuned variant for ultra-fast, small-hop tasks. Speed: very high. Tool use: solid. When to use: Autocomplete, quick unit tests, small feature tweaks, and fast agent steps—escalate to 5-mini/5 for deep synthesis."
-    default_reasoning_effort: str = "medium"  # Efficient reasoning
+    parallel_function_calls: int = -1  # Unlimited parallel tool use
+    default_reasoning_effort: str = "high"
+    description: str = (
+        "Latest Codex-grade successor with 400k context and strong parallel tools. "
+        "Use for complex refactors, multi-file synthesis, and long-horizon agents."
+    )
 
 
 # ====================================================================
@@ -275,9 +252,7 @@ def get_openai_model_capabilities():
         "gpt-4.1": GPT41Capabilities(),
         "o3-deep-research": O3DeepResearchCapabilities(),
         "o4-mini-deep-research": O4MiniDeepResearchCapabilities(),
-        "gpt-5": GPT5Capabilities(),
-        "gpt-5-mini": GPT5MiniCapabilities(),
-        "gpt-5-nano": GPT5NanoCapabilities(),
+        "gpt-5.1-codex": GPT51CodexCapabilities(),
     }
 
 
@@ -300,10 +275,8 @@ def _calculate_timeout(model_name: str) -> int:
     """Calculate appropriate timeout for a model."""
     if "deep-research" in model_name:
         return 3600  # 1 hour for deep research
-    elif model_name == "gpt-5":
-        return 3000  # 50 minutes for GPT-5 (superior reasoning takes time)
-    elif model_name in ["gpt-5-mini", "gpt-5-nano"]:
-        return 1800  # 30 minutes for GPT-5 mini/nano variants
+    elif model_name == "gpt-5.1-codex":
+        return 3000  # 50 minutes for GPT-5.1 Codex (long reasoning)
     elif model_name == "o3-pro":
         return 2700  # 45 minutes for o3-pro
     elif model_name == "o3":
@@ -383,9 +356,7 @@ def _generate_and_register_blueprints():
         "gpt-4.1",
         "o3-deep-research",
         "o4-mini-deep-research",
-        "gpt-5",
-        "gpt-5-mini",
-        "gpt-5-nano",
+        "gpt-5.1-codex",
     ]
 
     for model_name, capabilities in OPENAI_MODEL_CAPABILITIES.items():

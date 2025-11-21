@@ -56,7 +56,7 @@ class TestBasicMCP:
         transport = FastMCPTransport(mcp_server)
         async with Client(transport) as client:
             result = await client.call_tool(
-                "chat_with_gemini25_pro",
+                "chat_with_gemini3_pro_preview",
                 {
                     "instructions": "test",
                     "output_format": "json",
@@ -77,7 +77,7 @@ class TestBasicMCP:
             # Mock should return JSON (but handle if it doesn't)
             try:
                 data = json.loads(content[0].text)
-                assert data["model"] == "gemini-2.5-pro"
+                assert data["model"] == "gemini-3-pro-preview"
             except json.JSONDecodeError:
                 # If not JSON, just verify we got a response
                 assert len(content[0].text) > 0
@@ -90,7 +90,7 @@ class TestBasicMCP:
         transport = FastMCPTransport(mcp_server)
         async with Client(transport) as client:
             result = await client.call_tool(
-                "chat_with_grok4",
+                "chat_with_grok41",
                 {
                     "instructions": "test",
                     "output_format": "json",
@@ -110,7 +110,7 @@ class TestBasicMCP:
             # MockAdapter returns JSON metadata
             data = json.loads(content[0].text)
             assert data["mock"] is True
-            assert data["model"] == "grok-4"
+            assert data["model"] == "grok-4.1"
             assert data["prompt_length"] > 0
 
     async def test_count_project_tokens_callable(self, mcp_server):

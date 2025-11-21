@@ -105,7 +105,7 @@ class GeminiAdapter(LiteLLMBaseAdapter):
 
     param_class = GeminiToolParams
 
-    def __init__(self, model: str = "gemini-2.5-pro"):
+    def __init__(self, model: str = "gemini-3-pro-preview"):
         """Initialize the Gemini adapter."""
         if model not in GEMINI_MODEL_CAPABILITIES:
             raise InvalidModelException(

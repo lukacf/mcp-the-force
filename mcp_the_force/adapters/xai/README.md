@@ -13,7 +13,7 @@ This is a complete reimplementation of the Grok adapter following the protocol-b
 
 ## Key Features
 
-- ✅ Supports all 7 Grok models (grok-3-beta, grok-3-fast, grok-4, grok-4-heavy, grok-3-mini, grok-3-mini-beta, grok-3-mini-fast)
+- ✅ Supports all 7 Grok models (grok-3-beta, grok-3-fast, grok-4.1, grok-4.1-heavy, grok-3-mini, grok-3-mini-beta, grok-3-mini-fast)
 - ✅ Live Search (web/X search) with proper parameter handling
 - ✅ Session continuation using unified session cache
 - ✅ Tool calling with OpenAI-compatible format
@@ -33,7 +33,7 @@ from mcp_the_force.adapters.protocol import CallContext
 from mcp_the_force.adapters.tool_dispatcher import ToolDispatcher
 
 # Create adapter
-adapter = GrokAdapter("grok-4")
+adapter = GrokAdapter("grok-4.1")
 
 # Create parameters
 params = GrokToolParams(
@@ -63,7 +63,7 @@ result = await adapter.generate(
 ### Legacy System Usage (Current)
 ```python
 # The bridge adapter is registered as "xai_protocol"
-adapter = get_adapter("xai_protocol", "grok-4")
+adapter = get_adapter("xai_protocol", "grok-4.1")
 
 # Use like any other BaseAdapter
 result = await adapter.generate(

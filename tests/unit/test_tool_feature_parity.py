@@ -7,9 +7,14 @@ from mcp_the_force.tools.base import ToolSpec
 
 
 # Tool names as they appear in the registry
-OPENAI_TOOL_NAMES = ["chat_with_o3_pro", "chat_with_gpt41", "chat_with_codex_mini"]
-GEMINI_TOOL_NAMES = ["chat_with_gemini25_pro", "chat_with_gemini25_flash"]
-GROK_TOOL_NAMES = ["chat_with_grok4", "chat_with_grok3_fast"]
+OPENAI_TOOL_NAMES = [
+    "chat_with_o3_pro",
+    "chat_with_gpt41",
+    "chat_with_codex_mini",
+    "chat_with_gpt51_codex",
+]
+GEMINI_TOOL_NAMES = ["chat_with_gemini3_pro_preview", "chat_with_gemini25_flash"]
+GROK_TOOL_NAMES = ["chat_with_grok41", "chat_with_grok3_fast"]
 ALL_CHAT_TOOL_NAMES = OPENAI_TOOL_NAMES + GEMINI_TOOL_NAMES + GROK_TOOL_NAMES
 
 

@@ -32,7 +32,7 @@ class GrokAdapter(LiteLLMBaseAdapter):
         """Initialize Grok adapter.
 
         Args:
-            model: Grok model name (e.g., "grok-4", "grok-3-beta")
+            model: Grok model name (e.g., "grok-4.1", "grok-3-beta")
 
         Raises:
             ValueError: If model is not supported

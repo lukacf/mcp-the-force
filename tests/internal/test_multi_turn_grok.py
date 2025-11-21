@@ -17,7 +17,7 @@ class TestGrokMultiTurn:
         self, clean_session_caches, session_id_generator
     ):
         """Test basic Grok 4 multi-turn conversation."""
-        metadata = get_tool("chat_with_grok4")
+        metadata = get_tool("chat_with_grok41")
         session_id = session_id_generator()
 
         # First turn
@@ -86,7 +86,7 @@ class TestGrokMultiTurn:
         self, clean_session_caches, session_id_generator
     ):
         """Test that custom temperature is preserved across turns."""
-        metadata = get_tool("chat_with_grok4")
+        metadata = get_tool("chat_with_grok41")
         session_id = session_id_generator()
 
         # First turn with custom temperature
@@ -121,7 +121,7 @@ class TestGrokMultiTurn:
         self, clean_session_caches, session_id_generator
     ):
         """Test that Grok models get updated priority instructions."""
-        metadata = get_tool("chat_with_grok4")
+        metadata = get_tool("chat_with_grok41")
         session_id = session_id_generator()
 
         result = await executor.execute(
@@ -155,7 +155,7 @@ class TestGrokMultiTurn:
         self, clean_session_caches, session_id_generator
     ):
         """Test that Grok sessions are properly isolated."""
-        metadata = get_tool("chat_with_grok4")
+        metadata = get_tool("chat_with_grok41")
         session1 = session_id_generator()
         session2 = session_id_generator()
 

@@ -46,9 +46,9 @@ def test_smoke_all_models(claude, call_claude_tool, parse_response):
     models_to_test = [
         ("chat_with_o3", "O3"),
         ("chat_with_gemini25_flash", "Gemini Flash"),
-        ("chat_with_gemini25_pro", "Gemini Pro"),
+        ("chat_with_gemini3_pro_preview", "Gemini Pro"),
         ("chat_with_gpt41", "GPT-4.1"),
-        ("chat_with_grok4", "Grok"),
+        ("chat_with_grok41", "Grok"),
     ]
 
     for model_name, display_name in models_to_test:
