@@ -200,6 +200,18 @@ Settings for built-in tools.
 
 ---
 
+## Deduplication Cache (`dedup`)
+
+Controls contention handling for the content-hash cache used during file uploads.
+
+| YAML Path | Environment Variable | Type | Default Value | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| _n/a_ | `MCP_SERIALIZE_DEDUP` | `bool` | `False` | When set to `1`, adds a global multiprocessing lock around dedup writes (in addition to per-hash token files) to calm especially flaky CI runners. Leave unset for fastest local performance. |
+
+**Always on:** Per-hash token files with SQLite `BEGIN EXCLUSIVE` are enabled by default; no configuration is needed for the single-uploader guarantee.
+
+---
+
 ## Features (`features`)
 
 This section is for experimental feature flags. Currently, there are no features configured.

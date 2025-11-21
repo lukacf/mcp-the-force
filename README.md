@@ -11,6 +11,7 @@ The Force is a Model Context Protocol (MCP) server that unifies the world's most
 - **Unified Multi-Model Access**: Work with premier models from OpenAI, Google, Anthropic, and xAI through one consistent set of tools. Leverage the best model for every task without switching contexts.
 - **Infinite Context**: Provide entire codebases as context, regardless of size. The Force intelligently includes critical files directly in the prompt and makes the rest available via high-performance vector search, effectively breaking through model context window limitations. It intelligently handles context updates when files change.
 - **Self-Building Project History**: Automatically captures and indexes every AI conversation and git commit. This creates a searchable, long-term history of your project's design decisions, debates, and evolution.
+- **Atomically Safe Dedup Uploads**: A single process now owns each content hash end-to-end, even under heavy CI/CD multiprocess contention. Per-hash token files and SQLite exclusives prevent double uploads while keeping other processes non-blocked with `PENDING` reads; optional `MCP_SERIALIZE_DEDUP=1` further serializes writes in flaky runners.
 
 ## Quick Start
 
@@ -223,6 +224,15 @@ cd your-project
 # Run from the mcp-the-force repository directory:
 bash /path/to/mcp-the-force/scripts/install-history-hook.sh
 ```
+
+### Deduplication Cache: Single Uploader Guarantee
+
+The vector-store deduplication cache now guarantees that **exactly one** process uploads a given content hash:
+- Each hash gets a tiny token file (`*.uplock`) created with `O_CREAT|O_EXCL`, combined with `BEGIN EXCLUSIVE` SQLite transactions. If you don't win the token, you immediately see `PENDING` and skip uploading.
+- Tokens are cleaned up after successful finalize, on failed uploads, and when stale `PENDING` entries are purged.
+- In especially noisy CI runners you can add `MCP_SERIALIZE_DEDUP=1` to serialize multiprocess writes with an extra global mutex.
+
+This makes multiprocess uploads deterministic in CI/CD while remaining fast for local workflows.
 
 ## Advanced Topics
 
