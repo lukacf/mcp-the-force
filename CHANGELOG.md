@@ -2,8 +2,10 @@
 
 ## 1.1.0
 - Replaced legacy models with latest releases: OpenAI `gpt-5.1-codex` (400k), Google `gemini-3-pro-preview` (1M input), and xAI `grok-4.1` (~2M).
-- Updated tool registry, prompts, documentation, and tests to the new model IDs and capabilities.
-- Added coverage for new tool names across collaboration/group-think flows and MCP integration tests.
+- Added Claude Sonnet 4.5 (1M context, beta header `context-1m-2025-08-07`) with updated capabilities, blueprints, and docs.
+- Updated tool registry, prompts, documentation, and tests to the new model IDs and capabilities; clarified smoke E2E to target broadly available models.
+- Dockerized E2E runner now ships a static Docker CLI to fix "docker not found" in compose-based tests.
+- Added unit coverage for Sonnet 4.5 headers and adjusted anthropic blueprint expectations.
 
 ## 1.0.9
 - Hardened vector-store deduplication against multiprocess races with per-hash token files plus token cleanup on finalize/rollback.

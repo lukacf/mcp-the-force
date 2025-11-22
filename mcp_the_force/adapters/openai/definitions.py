@@ -226,7 +226,9 @@ class GPT51CodexCapabilities(OSeriesCapabilities):
     model_name: str = "gpt-5.1-codex"
     max_context_window: int = 400_000  # 400k total context per OpenAI pricing page
     supports_reasoning_effort: bool = True
-    supports_temperature: bool = True  # Temperature supported on codex
+    supports_temperature: bool = (
+        False  # Responses API forbids temperature for gpt-5.1-codex
+    )
     supports_web_search: bool = True
     supports_live_search: bool = True
     web_search_tool: str = "web_search"
