@@ -6,7 +6,7 @@ import subprocess
 from pathlib import Path
 from typing import Any, Dict, List
 
-from ..errors import InvalidModelException, ConfigurationException
+from ..errors import ConfigurationException
 from ..litellm_base import LiteLLMBaseAdapter
 from ..protocol import CallContext, ToolDispatcher
 from .definitions import GeminiToolParams, GEMINI_MODEL_CAPABILITIES
@@ -106,20 +106,30 @@ class GeminiAdapter(LiteLLMBaseAdapter):
     param_class = GeminiToolParams
 
     def __init__(self, model: str = "gemini-3-pro-preview"):
-        """Initialize the Gemini adapter."""
-        if model not in GEMINI_MODEL_CAPABILITIES:
-            raise InvalidModelException(
-                model=model,
-                supported_models=list(GEMINI_MODEL_CAPABILITIES.keys()),
-                provider="Gemini",
-            )
+        """Initialize the Gemini adapter.
 
+        Args:
+            model: Gemini model name (e.g., "gemini-3-pro-preview", "gemini-2.5-flash").
+        """
         self.model_name = model
-        self.display_name = f"Gemini {model} (LiteLLM)"
-        self.capabilities = GEMINI_MODEL_CAPABILITIES[model]
-        self._auth_method = "uninitialized"  # To be set by _validate_environment
+        self.display_name = f"Gemini {model}"
+        super().__init__()  # Initialize base before custom state
+        self.client = None
 
-        super().__init__()
+        # Load capabilities safely
+        capabilities = GEMINI_MODEL_CAPABILITIES.get(model)
+        if capabilities:
+            self.capabilities = capabilities
+        else:
+            logger.warning(
+                "Unknown Gemini model '%s', defaulting to gemini-3-pro-preview capabilities",
+                model,
+            )
+            from .definitions import Gemini3ProPreviewCapabilities
+
+            self.capabilities = Gemini3ProPreviewCapabilities()
+
+        self._auth_method = "uninitialized"  # To be set by _validate_environment
 
     def _validate_environment(self):
         """Validate Gemini/Vertex AI authentication in the correct order."""
