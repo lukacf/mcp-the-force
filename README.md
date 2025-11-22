@@ -174,7 +174,7 @@ The Force provides access to cutting-edge AI models through `chat_with_*` tools,
 
 **Anthropic Models:**
 - `chat_with_claude41_opus`: Deep analysis with extended thinking
-- `chat_with_claude4_sonnet`: Fast long-context processing with extended thinking
+- `chat_with_claude45_sonnet`: Fast long-context processing with extended thinking (1M)
 - `chat_with_claude3_opus`: Exceptional theory of mind and deep discussions
 
 **xAI Models:**
@@ -226,7 +226,7 @@ bash /path/to/mcp-the-force/scripts/install-history-hook.sh
 ### Multi-Model Collaboration (GroupThink)
 
 GroupThink lets multiple models think together on the same objective with shared memory:
-- **Mix models by strength**: e.g., `chat_with_gpt51_codex` (reasoning), `chat_with_gemini3_pro_preview` (1M-context code analysis), `chat_with_claude41_opus` (writing).
+- **Mix models by strength**: e.g., `chat_with_gpt51_codex` (reasoning), `chat_with_gemini3_pro_preview` (1M-context code analysis), `chat_with_claude45_sonnet` (writing).
 - **Shared whiteboard**: Every turn writes to a vector-store “whiteboard” so later turns see all prior arguments.
 - **Two phases + validation**: Discussion turns → synthesis by a large-context model → validation rounds by the original panel.
 - **Resume anytime**: Reuse the same `session_id` to continue an ongoing collaboration.
