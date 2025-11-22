@@ -113,7 +113,8 @@ class GeminiAdapter(LiteLLMBaseAdapter):
         """
         self.model_name = model
         self.display_name = f"Gemini {model}"
-        super().__init__()  # Initialize base before custom state
+        self._auth_method = "uninitialized"
+        super().__init__()  # Initialize base before custom state (runs _validate_environment)
         self.client = None
 
         # Load capabilities safely
@@ -128,8 +129,6 @@ class GeminiAdapter(LiteLLMBaseAdapter):
             from .definitions import Gemini3ProPreviewCapabilities
 
             self.capabilities = Gemini3ProPreviewCapabilities()
-
-        self._auth_method = "uninitialized"  # To be set by _validate_environment
 
     def _validate_environment(self):
         """Validate Gemini/Vertex AI authentication in the correct order."""
