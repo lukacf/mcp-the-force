@@ -1,7 +1,7 @@
 # Changelog
 
 ## 1.0.10
-- Replaced legacy models with latest releases: OpenAI `gpt-5.1-codex` (400k), Google `gemini-3-pro-preview` (2M), and xAI `grok-4.1` (~2M).
+- Replaced legacy models with latest releases: OpenAI `gpt-5.1-codex` (400k), Google `gemini-3-pro-preview` (1M input), and xAI `grok-4.1` (~2M).
 - Updated tool registry, prompts, documentation, and tests to the new model IDs and capabilities.
 - Added coverage for new tool names across collaboration/group-think flows and MCP integration tests.
 

@@ -109,8 +109,8 @@ class Gemini3ProPreviewCapabilities(GeminiBaseCapabilities):
     """Gemini 3 Pro Preview model capabilities."""
 
     model_name: str = "gemini-3-pro-preview"
-    max_context_window: int = 2_000_000
-    description: str = "Next-gen multimodal analyst (preview) with expanded 2M-context and strong tools. Use for giant code/document synthesis and design reviews where breadth matters."
+    max_context_window: int = 1_000_000
+    description: str = "Next-gen multimodal analyst (preview) with 1M input context and strong tools. Use for giant code/document synthesis and design reviews where breadth matters."
     reasoning_effort_map: Dict[str, int] = field(
         default_factory=lambda: {
             "low": int(_MAX_BUDGET_PRO * 0.40),  # reuse existing budget mapping

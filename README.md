@@ -152,7 +152,7 @@ The Force provides access to cutting-edge AI models through `chat_with_*` tools,
 
 ### Recommended Models for Most Tasks
 - **`chat_with_gpt51_codex`**: The smartest model available. 400k context, excellent tool use, and strong reasoning. Your go-to for complex tasks.
-- **`chat_with_gemini3_pro_preview`**: Powerful multimodal model with 2M context (preview). Fast and reliable for code analysis and long documents.
+- **`chat_with_gemini3_pro_preview`**: Powerful multimodal model with 1M context (preview). Fast and reliable for code analysis and long documents.
 
 ### Fast Large-Context Models
 - **`chat_with_gemini25_flash`**: Ultra-fast with 1M context. Perfect for quick summaries and initial analysis.
@@ -226,7 +226,7 @@ bash /path/to/mcp-the-force/scripts/install-history-hook.sh
 ### Multi-Model Collaboration (GroupThink)
 
 GroupThink lets multiple models think together on the same objective with shared memory:
-- **Mix models by strength**: e.g., `chat_with_gpt51_codex` (reasoning), `chat_with_gemini3_pro_preview` (2M-context code analysis), `chat_with_claude41_opus` (writing).
+- **Mix models by strength**: e.g., `chat_with_gpt51_codex` (reasoning), `chat_with_gemini3_pro_preview` (1M-context code analysis), `chat_with_claude41_opus` (writing).
 - **Shared whiteboard**: Every turn writes to a vector-store “whiteboard” so later turns see all prior arguments.
 - **Two phases + validation**: Discussion turns → synthesis by a large-context model → validation rounds by the original panel.
 - **Resume anytime**: Reuse the same `session_id` to continue an ongoing collaboration.

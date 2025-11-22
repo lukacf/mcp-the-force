@@ -34,7 +34,7 @@ They are your task force, your work force, your close collaborators.
    - The Force provides access to 17 cutting-edge AI models through `chat_with_*` tools
    - **For 90% of your work, use these two key models:**
      - **`chat_with_gpt51_codex`**: The smartest model available (400k context). Best at search and complex reasoning.
-     - **`chat_with_gemini3_pro_preview`**: Smart, fast, and reliable (2M context). Excellent for code analysis and long documents.
+     - **`chat_with_gemini3_pro_preview`**: Smart, fast, and reliable (1M context). Excellent for code analysis and long documents.
    - **Fast large-context alternatives:**
      - **`chat_with_gemini25_flash`**: Ultra-fast with 1M context. Perfect for quick summaries.
      - **`chat_with_gpt41`**: Fast processing with 1M context and dependable tool use.
