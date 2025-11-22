@@ -105,8 +105,8 @@ class AnthropicAdapter(LiteLLMBaseAdapter):
                     f"Enabled extended thinking with budget: {thinking_budget} tokens"
                 )
 
-        # Enable 1M context for Claude 4 Sonnet
-        if self.model_name == "claude-sonnet-4-20250514":
+        # Enable 1M context beta header for Claude Sonnet 4.x (4.0/4.5)
+        if self.model_name in {"claude-sonnet-4-20250514", "claude-sonnet-4-5"}:
             if "extra_headers" not in request_params:
                 request_params["extra_headers"] = {}
 
@@ -124,7 +124,9 @@ class AnthropicAdapter(LiteLLMBaseAdapter):
             else:
                 request_params["extra_headers"]["anthropic-beta"] = context_beta
 
-            logger.debug("Enabled 1M context window for Claude 4 Sonnet")
+            logger.debug(
+                "Enabled 1M context window beta for Claude Sonnet %s", self.model_name
+            )
 
         # Handle structured output
         if (
