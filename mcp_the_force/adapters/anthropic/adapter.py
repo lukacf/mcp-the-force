@@ -55,7 +55,11 @@ class AnthropicAdapter(LiteLLMBaseAdapter):
         # In mock/test runs allow a dummy key so unit tests don't require secrets.yaml,
         # but never for the api_key_validation test (it must raise).
         if not api_key and "test_api_key_validation" not in current_test:
-            if settings.adapter_mock is True or os.getenv("MCP_ADAPTER_MOCK") or "pytest" in sys.modules:
+            if (
+                settings.adapter_mock is True
+                or os.getenv("MCP_ADAPTER_MOCK")
+                or "pytest" in sys.modules
+            ):
                 api_key = "test-anthropic-key"
                 os.environ.setdefault("ANTHROPIC_API_KEY", api_key)
 
