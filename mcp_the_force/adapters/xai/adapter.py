@@ -37,6 +37,10 @@ class GrokAdapter(LiteLLMBaseAdapter):
         Raises:
             ValueError: If model is not supported
         """
+        # Backward-compatible alias
+        if model == "grok-4.1":
+            model = "grok-4-1-fast-reasoning"
+
         if model not in GROK_MODEL_CAPABILITIES:
             raise InvalidModelException(
                 model=model,
@@ -125,10 +129,23 @@ class GrokAdapter(LiteLLMBaseAdapter):
         **kwargs: Any,
     ) -> Dict[str, Any]:
         """Build Grok-specific request parameters."""
-        # Build base parameters
+        # Build both Responses-format input and OpenAI-style messages to maximize compatibility
+        messages = []
+        for entry in conversation_input:
+            if entry.get("type") == "message":
+                text_chunks = [
+                    c.get("text", "")
+                    for c in entry.get("content", [])
+                    if c.get("type") == "text"
+                ]
+                messages.append(
+                    {"role": entry.get("role", "user"), "content": "".join(text_chunks)}
+                )
+
         request_params = {
             "model": f"{self._get_model_prefix()}/{self.model_name}",
             "input": conversation_input,
+            "messages": messages,  # Fallback for providers expecting OpenAI format
             "api_key": self.api_key,
             "temperature": getattr(params, "temperature", 0.7),
         }
@@ -160,6 +177,17 @@ class GrokAdapter(LiteLLMBaseAdapter):
         # Add structured output
         structured_output_schema = getattr(params, "structured_output_schema", None)
         if structured_output_schema:
+            # Allow schema to be provided as a JSON string (e.g., from NL prompts)
+            import json
+
+            if isinstance(structured_output_schema, str):
+                try:
+                    structured_output_schema = json.loads(structured_output_schema)
+                except json.JSONDecodeError:
+                    logger.warning(
+                        "[GROK_ADAPTER] Failed to parse structured_output_schema string; sending raw string"
+                    )
+
             request_params["response_format"] = {
                 "type": "json_schema",
                 "json_schema": {

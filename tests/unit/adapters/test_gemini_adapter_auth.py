@@ -63,7 +63,7 @@ class TestGeminiAuthScenarios:
         adapter = GeminiAdapter()
 
         assert adapter._auth_method == "api_key"
-        assert adapter._get_model_prefix() == "google"
+        assert adapter._get_model_prefix() == "gemini"
         assert "Prioritizing Gemini API key" in caplog.text
 
         params = adapter._build_request_params([], MagicMock(), [])

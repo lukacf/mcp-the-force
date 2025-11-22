@@ -164,18 +164,11 @@ class Grok3FastCapabilities(Grok3Capabilities):
 class Grok41Capabilities(GrokBaseCapabilities):
     """Grok 4.1 models with expanded context."""
 
-    model_name: str = "grok-4.1"
+    # Latest public model id (Nov 2025): grok-4-1-fast-reasoning
+    model_name: str = "grok-4-1-fast-reasoning"
     max_context_window: int = 2_000_000
     supports_reasoning_effort: bool = False
     description: str = "xAI Grok 4.1 with ~2M context and improved safety/latency. Best for massive long-form synthesis and code review across very large corpora."
-
-
-@dataclass
-class Grok41HeavyCapabilities(Grok41Capabilities):
-    """Grok 4.1 Heavy model."""
-
-    model_name: str = "grok-4.1-heavy"
-    description: str = "Maximum capability (if available)"
 
 
 @dataclass
@@ -210,8 +203,8 @@ class GrokMiniFastCapabilities(GrokMiniCapabilities):
 GROK_MODEL_CAPABILITIES = {
     "grok-3-beta": Grok3BetaCapabilities(),
     "grok-3-fast": Grok3FastCapabilities(),
-    "grok-4.1": Grok41Capabilities(),
-    "grok-4.1-heavy": Grok41HeavyCapabilities(),
+    "grok-4-1-fast-reasoning": Grok41Capabilities(),
+    "grok-4.1": Grok41Capabilities(),  # backward-compatible alias
     "grok-3-mini": GrokMiniCapabilities(),
     "grok-3-mini-beta": GrokMiniBetaCapabilities(),
     "grok-3-mini-fast": GrokMiniFastCapabilities(),
@@ -225,7 +218,7 @@ GROK_MODEL_CAPABILITIES = {
 
 def _calculate_timeout(model_name: str) -> int:
     """Calculate appropriate timeout for a model."""
-    if model_name in ["grok-4.1", "grok-4.1-heavy"]:
+    if model_name in ["grok-4-1-fast-reasoning"]:
         return 600  # 10 minutes for grok-4.1 family
     elif model_name == "grok-3-beta":
         return 420  # 7 minutes for grok-3-beta
@@ -238,7 +231,7 @@ def _generate_and_register_blueprints():
     blueprints = []
 
     # Only register supported models
-    supported_models = ["grok-3-fast", "grok-4.1"]
+    supported_models = ["grok-3-fast", "grok-4-1-fast-reasoning", "grok-4.1"]
 
     for model_name, capabilities in GROK_MODEL_CAPABILITIES.items():
         if model_name not in supported_models:
@@ -250,6 +243,12 @@ def _generate_and_register_blueprints():
         if capability_info:
             full_description = f"{capabilities.description} [{capability_info}]"
 
+        tool_name = None
+        if model_name in ("grok-4-1-fast-reasoning", "grok-4.1"):
+            tool_name = "grok41"  # stable friendly id used in tests/e2e
+        elif model_name == "grok-3-fast":
+            tool_name = "grok3_fast"
+
         blueprint = ToolBlueprint(
             model_name=model_name,
             adapter_key="xai",
@@ -258,6 +257,7 @@ def _generate_and_register_blueprints():
             timeout=_calculate_timeout(model_name),
             context_window=capabilities.max_context_window,
             tool_type="chat",  # All Grok models are chat tools
+            tool_name=tool_name,
         )
         blueprints.append(blueprint)
 

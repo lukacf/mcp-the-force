@@ -440,7 +440,13 @@ class Settings(BaseSettings):
 
         # Get file paths from environment
         config_file = Path(os.getenv("MCP_CONFIG_FILE", str(CONFIG_FILE)))
-        secrets_file = Path(os.getenv("MCP_SECRETS_FILE", str(SECRETS_FILE)))
+        # If a custom config is supplied but no explicit secrets file, look next to it
+        if "MCP_SECRETS_FILE" in os.environ:
+            secrets_file = Path(os.getenv("MCP_SECRETS_FILE", str(SECRETS_FILE)))
+        elif "MCP_CONFIG_FILE" in os.environ:
+            secrets_file = config_file.parent / "secrets.yaml"
+        else:
+            secrets_file = Path(SECRETS_FILE)
 
         # Load main config file
         if config_file.exists():

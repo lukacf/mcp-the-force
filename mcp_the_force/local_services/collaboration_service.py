@@ -450,7 +450,10 @@ The whiteboard contains the full conversation history. Use file_search to access
 
     def _get_tool_metadata(self, tool_name: str):
         """Get tool metadata for the given tool name."""
-        from ..tools.registry import get_tool
+        from ..tools.registry import get_tool, list_tools
+
+        # Ensure registry is populated (lazy autogen can leave registry empty early)
+        list_tools()
 
         metadata = get_tool(tool_name)
         if metadata is None:

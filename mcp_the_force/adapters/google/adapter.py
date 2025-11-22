@@ -202,7 +202,7 @@ class GeminiAdapter(LiteLLMBaseAdapter):
     def _get_model_prefix(self) -> str:
         """Get the LiteLLM model prefix based on the auth method."""
         if self._auth_method == "api_key":
-            return "google"  # Use 'google' for direct API key auth
+            return "gemini"  # LiteLLM provider prefix for Gemini API key auth
         return "vertex_ai"  # Use 'vertex_ai' for all other auth methods
 
     def _build_request_params(

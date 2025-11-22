@@ -25,8 +25,8 @@ def test_smoke_all_models(claude, call_claude_tool, parse_response):
 
     # Check that expected tools are present (check for MCP-prefixed tool IDs)
     assert any(
-        tid.endswith("chat_with_gpt41") for tid in tool_ids
-    ), f"Missing chat_with_gpt41 in: {tool_ids}"
+        tid.endswith("chat_with_gpt51_codex") for tid in tool_ids
+    ), f"Missing chat_with_gpt51_codex in: {tool_ids}"
     assert any(
         tid.endswith("chat_with_gemini25_flash") for tid in tool_ids
     ), f"Missing chat_with_gemini25_flash in: {tool_ids}"
@@ -47,7 +47,7 @@ def test_smoke_all_models(claude, call_claude_tool, parse_response):
     }
 
     models_to_test = [
-        ("chat_with_gpt41", "GPT-4.1"),
+        ("chat_with_gpt51_codex", "GPT-5.1 Codex"),
         ("chat_with_gemini25_flash", "Gemini Flash"),
         ("chat_with_grok41", "Grok 4.1"),
         ("chat_with_claude45_sonnet", "Claude 4.5 Sonnet"),
