@@ -129,7 +129,7 @@ class GrokAdapter(LiteLLMBaseAdapter):
         **kwargs: Any,
     ) -> Dict[str, Any]:
         """Build Grok-specific request parameters."""
-        # Build both Responses-format input and OpenAI-style messages to maximize compatibility
+        # Build OpenAI-style messages payload (xAI expects this shape)
         messages = []
         for entry in conversation_input:
             if entry.get("type") == "message":
@@ -144,8 +144,9 @@ class GrokAdapter(LiteLLMBaseAdapter):
 
         request_params = {
             "model": f"{self._get_model_prefix()}/{self.model_name}",
-            "input": conversation_input,
-            "messages": messages,  # Fallback for providers expecting OpenAI format
+            "messages": messages,
+            # LiteLLM aresponses expects an 'input' field; xAI needs messages. Reuse messages for both.
+            "input": messages,
             "api_key": self.api_key,
             "temperature": getattr(params, "temperature", 0.7),
         }
@@ -188,14 +189,16 @@ class GrokAdapter(LiteLLMBaseAdapter):
                         "[GROK_ADAPTER] Failed to parse structured_output_schema string; sending raw string"
                     )
 
-            request_params["response_format"] = {
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "structured_response",
-                    "schema": structured_output_schema,
-                    "strict": True,
-                },
-            }
+                    request_params["response_format"] = {
+                        "type": "json_schema",
+                        "json_schema": {
+                            "name": "structured_response",
+                            "schema": structured_output_schema,
+                            "strict": True,
+                        },
+                    }
+        else:
+            request_params.pop("response_format", None)
 
         # Add tools if any
         if tools:
