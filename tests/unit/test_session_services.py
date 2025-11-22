@@ -31,7 +31,7 @@ async def populated_session_db(isolate_test_databases):
 
     session2 = UnifiedSession(
         project=project_name,
-        tool="chat_with_gemini25_pro",
+        tool="chat_with_gemini3_pro_preview",
         session_id="test-session-2",
         history=[{"role": "user", "content": "Test query"}],
         updated_at=int(time.time()),
@@ -116,7 +116,7 @@ class TestListSessionsService:
         # Search by tool name substring
         result = await service.execute(search="gemini")
         assert len(result) == 1
-        assert result[0]["tool_name"] == "chat_with_gemini25_pro"
+        assert result[0]["tool_name"] == "chat_with_gemini3_pro_preview"
 
         # Search that matches multiple sessions
         result = await service.execute(search="test-session")
@@ -399,11 +399,11 @@ class TestDescribeSessionService:
 
         # Test with Grok model
         result = await service.execute(
-            session_id="test-session-1", summarization_model="chat_with_grok4"
+            session_id="test-session-1", summarization_model="chat_with_grok41"
         )
         assert (
             result
-            == "Error: Only Gemini models are supported for summarization. Got 'chat_with_grok4'"
+            == "Error: Only Gemini models are supported for summarization. Got 'chat_with_grok41'"
         )
 
         # Test that Gemini models are accepted (mock to avoid actual call)
@@ -426,7 +426,8 @@ class TestDescribeSessionService:
         mock_executor.return_value = test_summary
 
         result = await service.execute(
-            session_id="test-session-1", summarization_model="chat_with_gemini25_pro"
+            session_id="test-session-1",
+            summarization_model="chat_with_gemini3_pro_preview",
         )
         assert not result.startswith("Error: Only Gemini models are supported")
         assert result == test_summary

@@ -105,17 +105,17 @@ class GeminiBaseCapabilities(AdapterCapabilities):
 
 
 @dataclass
-class Gemini25ProCapabilities(GeminiBaseCapabilities):
-    """Gemini 2.5 Pro model capabilities."""
+class Gemini3ProPreviewCapabilities(GeminiBaseCapabilities):
+    """Gemini 3 Pro Preview model capabilities."""
 
-    model_name: str = "gemini-2.5-pro"
+    model_name: str = "gemini-3-pro-preview"
     max_context_window: int = 1_000_000
-    description: str = "Deep multimodal analyst; massive context and steady tools. Speed: medium. Tool use: strong. When to use: Mixed-media RAG (docs/images/spreadsheets), giant summarization jobs, bug triage with screenshots—your long-context workhorse."
+    description: str = "Next-gen multimodal analyst (preview) with 1M input context and strong tools. Use for giant code/document synthesis and design reviews where breadth matters."
     reasoning_effort_map: Dict[str, int] = field(
         default_factory=lambda: {
-            "low": int(_MAX_BUDGET_PRO * 0.40),  # 13107
-            "medium": int(_MAX_BUDGET_PRO * 0.60),  # 19660
-            "high": _MAX_BUDGET_PRO,  # 32768
+            "low": int(_MAX_BUDGET_PRO * 0.40),  # reuse existing budget mapping
+            "medium": int(_MAX_BUDGET_PRO * 0.60),
+            "high": _MAX_BUDGET_PRO,
         }
     )
 
@@ -141,7 +141,7 @@ class Gemini25FlashCapabilities(GeminiBaseCapabilities):
 # ====================================================================
 
 GEMINI_MODEL_CAPABILITIES = {
-    "gemini-2.5-pro": Gemini25ProCapabilities(),
+    "gemini-3-pro-preview": Gemini3ProPreviewCapabilities(),
     "gemini-2.5-flash": Gemini25FlashCapabilities(),
 }
 
@@ -165,7 +165,7 @@ def _get_friendly_name(model_name: str) -> str:
     """Generate a friendly tool name from the model name.
 
     Examples:
-    - 'gemini-2.5-pro' -> 'chat_with_gemini25_pro'
+    - 'gemini-3-pro-preview' -> 'chat_with_gemini3_pro_preview'
     - 'gemini-2.5-flash' -> 'chat_with_gemini25_flash'
     """
     # Replace dots and hyphens with underscores

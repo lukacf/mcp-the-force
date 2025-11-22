@@ -63,7 +63,7 @@ class TestSessionManagement:
 
         # Step 1: Store technical information in session A
         response = call_claude_tool(
-            "chat_with_gemini25_pro",
+            "chat_with_gemini3_pro_preview",
             instructions=f"I need you to remember this information: Protocol {protocol_name} uses port {port_number}. Please acknowledge that you have stored this information.",
             output_format="JSON confirming the stored information",
             context=[],
@@ -90,7 +90,7 @@ class TestSessionManagement:
 
         # Step 2: Test immediate recall in same session
         response = call_claude_tool(
-            "chat_with_gemini25_pro",
+            "chat_with_gemini3_pro_preview",
             instructions="What protocol and port number did I mention?",
             output_format="JSON with protocol details",
             context=[],
@@ -116,7 +116,7 @@ class TestSessionManagement:
 
         # Step 3: Test session persistence (return to original session)
         response = call_claude_tool(
-            "chat_with_gemini25_pro",
+            "chat_with_gemini3_pro_preview",
             instructions="Recall the protocol configuration from earlier",
             output_format="JSON with protocol details",
             context=[],

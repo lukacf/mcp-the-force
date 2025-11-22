@@ -30,7 +30,7 @@ async def populated_test_sessions(isolate_test_databases):
         ),
         UnifiedSession(
             project=project_name,
-            tool="chat_with_gemini25_pro",
+            tool="chat_with_gemini3_pro_preview",
             session_id="integration-test-2",
             history=[{"role": "user", "content": "Integration test 2"}],
             updated_at=int(time.time()) - 10,  # Older session

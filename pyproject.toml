@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mcp_the_force"
-version = "1.0.8"
+version = "1.1.0"
 description = "MCP server providing access to multiple AI models with intelligent context management for large codebases."
 authors = [{name = "Luka Crnkovic-Friis"}]
 readme = "README.md"
@@ -119,4 +119,3 @@ mcp = { git = "https://github.com/modelcontextprotocol/python-sdk.git", rev = "d
 
 [tool.hatch.build.targets.wheel]
 packages = ["mcp_the_force"]
-

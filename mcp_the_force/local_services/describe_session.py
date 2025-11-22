@@ -280,7 +280,7 @@ Generate a structured JSON summary of this conversation following the schema and
       "edit",
       "bash",
       "grep",
-      "mcp__the-force__chat_with_gemini25_pro"
+      "mcp__the-force__chat_with_gemini3_pro_preview"
     ]
   }},
   "metrics": {{

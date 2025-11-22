@@ -53,10 +53,10 @@ class GroupThink(ToolSpec):
             "(Required) List of AI model tool names to participate in the collaboration. "
             "Models will take turns contributing to the discussion. Use a mix of different models "
             "for diverse perspectives (e.g., GPT-5 for reasoning, Gemini for code analysis, Claude for writing). "
-            "Available models include: chat_with_gpt5, chat_with_gemini25_pro, chat_with_claude41_opus, "
-            "chat_with_gpt5_mini, chat_with_gemini25_flash, chat_with_grok4, etc. "
+            "Available models include: chat_with_gpt51_codex, chat_with_gemini3_pro_preview, chat_with_claude41_opus, "
+            "chat_with_gemini25_flash, chat_with_grok41, etc. "
             "Syntax: An array of strings (model tool names). "
-            "Example: ['chat_with_gpt5', 'chat_with_gemini25_pro', 'chat_with_claude41_opus']"
+            "Example: ['chat_with_gpt51_codex', 'chat_with_gemini3_pro_preview', 'chat_with_claude41_opus']"
         ),
     )
 
@@ -163,14 +163,14 @@ class GroupThink(ToolSpec):
     )
 
     synthesis_model: str = Route.adapter(  # type: ignore[assignment]
-        default="chat_with_gemini25_pro",
+        default="chat_with_gemini3_pro_preview",
         description=(
             "(Optional) Large context model to use for synthesis phase. This model reviews the "
             "entire discussion and creates the final deliverable. Should have large context window. "
-            "Available large context models: chat_with_gemini25_pro (1M), chat_with_gpt41 (1M), "
+            "Available large context models: chat_with_gemini3_pro_preview (2M), chat_with_gpt41 (1M), "
             "chat_with_claude4_sonnet (1M). "
             "Syntax: A model tool name. "
-            "Default: 'chat_with_gemini25_pro'. "
+            "Default: 'chat_with_gemini3_pro_preview'. "
             "Example: synthesis_model='chat_with_gpt41'"
         ),
     )

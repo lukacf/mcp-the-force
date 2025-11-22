@@ -91,7 +91,7 @@ def populated_db(temp_db):
         },
         {
             "project": "mcp-the-force",
-            "tool": "chat_with_grok4",
+            "tool": "chat_with_grok41",
             "session_id": "architecture-discussion",
             "history": json.dumps(
                 [
@@ -163,7 +163,7 @@ class TestStoreDiscoveryIntegration:
             in store_ids
         )
         assert "mcp-the-force||chat_with_o3||ollama-debug-session" in store_ids
-        assert "mcp-the-force||chat_with_grok4||architecture-discussion" in store_ids
+        assert "mcp-the-force||chat_with_grok41||architecture-discussion" in store_ids
 
 
 class TestRegressionPrevention:
@@ -243,7 +243,7 @@ class TestRegressionPrevention:
         excluded_sessions = [
             ("mcp-the-force", "chat_with_gemini25_flash", "null-history", None),
             ("mcp-the-force", "chat_with_o3", "empty-history", ""),
-            ("mcp-the-force", "chat_with_grok4", "whitespace-history", "   "),
+            ("mcp-the-force", "chat_with_grok41", "whitespace-history", "   "),
         ]
 
         for i, (project, tool, session_id, history) in enumerate(excluded_sessions):
@@ -263,7 +263,7 @@ class TestRegressionPrevention:
         excluded_ids = [
             "mcp-the-force||chat_with_gemini25_flash||null-history",
             "mcp-the-force||chat_with_o3||empty-history",
-            "mcp-the-force||chat_with_grok4||whitespace-history",
+            "mcp-the-force||chat_with_grok41||whitespace-history",
         ]
 
         for excluded_id in excluded_ids:

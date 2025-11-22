@@ -21,7 +21,7 @@ class TestGeminiMultiTurn:
         self, clean_session_caches, session_id_generator
     ):
         """Test that Gemini remembers information across conversation turns."""
-        metadata = get_tool("chat_with_gemini25_pro")
+        metadata = get_tool("chat_with_gemini3_pro_preview")
         session_id = session_id_generator()
 
         # First turn: Ask model to remember something
@@ -106,7 +106,7 @@ class TestGeminiMultiTurn:
         self, clean_session_caches, session_id_generator
     ):
         """Test that system instruction includes correct priority order."""
-        metadata = get_tool("chat_with_gemini25_pro")
+        metadata = get_tool("chat_with_gemini3_pro_preview")
         session_id = session_id_generator()
 
         # Execute a call
@@ -136,7 +136,7 @@ class TestGeminiMultiTurn:
         self, clean_session_caches, session_id_generator
     ):
         """Test that different sessions don't share history."""
-        metadata = get_tool("chat_with_gemini25_pro")
+        metadata = get_tool("chat_with_gemini3_pro_preview")
         session1 = session_id_generator()
         session2 = session_id_generator()
 
@@ -189,7 +189,7 @@ class TestGeminiMultiTurn:
         self, clean_session_caches, session_id_generator
     ):
         """Test a longer conversation with multiple turns."""
-        metadata = get_tool("chat_with_gemini25_pro")
+        metadata = get_tool("chat_with_gemini3_pro_preview")
         session_id = session_id_generator()
 
         # Turn 1: Introduction
@@ -232,7 +232,7 @@ class TestGeminiMultiTurn:
     @pytest.mark.asyncio
     async def test_regression_no_session_id_passed(self, clean_session_caches):
         """Regression test: Verify failure if session_id not passed to adapter."""
-        metadata = get_tool("chat_with_gemini25_pro")
+        metadata = get_tool("chat_with_gemini3_pro_preview")
 
         # Import patch here
         from unittest.mock import patch
@@ -275,7 +275,7 @@ class TestGeminiMultiTurn:
         self, clean_session_caches, session_id_generator
     ):
         """Test that stable-list works correctly with sessions."""
-        metadata = get_tool("chat_with_gemini25_pro")
+        metadata = get_tool("chat_with_gemini3_pro_preview")
         session_id = session_id_generator()
 
         # First turn with context

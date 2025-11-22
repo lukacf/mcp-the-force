@@ -85,7 +85,7 @@ def test_gemini_adapter_protocol_compliance():
     from mcp_the_force.adapters.google import GeminiAdapter
 
     # Create an instance to check protocol compliance
-    adapter = GeminiAdapter("gemini-2.5-pro")
+    adapter = GeminiAdapter("gemini-3-pro-preview")
 
     # Verify required attributes
     assert hasattr(adapter, "model_name")
@@ -96,7 +96,7 @@ def test_gemini_adapter_protocol_compliance():
     assert callable(adapter.generate)
 
     # Check that it has the right structure
-    assert adapter.model_name == "gemini-2.5-pro"
+    assert adapter.model_name == "gemini-3-pro-preview"
     assert adapter.display_name
     assert adapter.capabilities is not None
     assert adapter.param_class is not None
@@ -113,7 +113,7 @@ def test_all_adapters_follow_mcp_protocol():
     adapters = [
         GrokAdapter("grok-3-beta"),
         OpenAIProtocolAdapter("o3"),
-        GeminiAdapter("gemini-2.5-pro"),
+        GeminiAdapter("gemini-3-pro-preview"),
     ]
 
     for adapter in adapters:
@@ -159,8 +159,8 @@ def test_adapter_registry_integration():
     openai_adapter = openai_class("o3")
     assert openai_adapter.model_name == "o3"
 
-    google_adapter = google_class("gemini-2.5-pro")
-    assert google_adapter.model_name == "gemini-2.5-pro"
+    google_adapter = google_class("gemini-3-pro-preview")
+    assert google_adapter.model_name == "gemini-3-pro-preview"
 
     xai_adapter = xai_class("grok-3-beta")
     assert xai_adapter.model_name == "grok-3-beta"
