@@ -45,6 +45,17 @@ class Claude4SonnetCapabilities(AnthropicBaseCapabilities):
 
 
 @dataclass
+class Claude45SonnetCapabilities(AnthropicBaseCapabilities):
+    """Capabilities for Claude 4.5 Sonnet (1M context preview)."""
+
+    model_name: str = "claude-sonnet-4-5"
+    max_context_window: int = 1_000_000
+    max_output_tokens: int = 64_000
+    supports_reasoning_effort: bool = True
+    description: str = "Claude 4.5 Sonnet with 1M context (beta). Faster, more factual, stronger coding/tool use than 4.1/4.0."
+
+
+@dataclass
 class Claude3OpusCapabilities(AnthropicBaseCapabilities):
     """Capabilities for Claude 3 Opus."""
 
@@ -61,5 +72,6 @@ class Claude3OpusCapabilities(AnthropicBaseCapabilities):
 ANTHROPIC_MODEL_CAPABILITIES: Dict[str, AnthropicBaseCapabilities] = {
     "claude-opus-4-1-20250805": Claude41OpusCapabilities(),
     "claude-sonnet-4-20250514": Claude4SonnetCapabilities(),
+    "claude-sonnet-4-5": Claude45SonnetCapabilities(),
     "claude-3-opus-20240229": Claude3OpusCapabilities(),
 }

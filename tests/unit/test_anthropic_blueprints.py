@@ -13,8 +13,8 @@ class TestAnthropicBlueprints:
     def test_blueprint_count(self):
         """Test that correct number of blueprints are generated."""
         blueprints = get_anthropic_blueprints()
-        assert len(blueprints) == 3
-        assert len(BLUEPRINTS) == 3
+        assert len(blueprints) == 4
+        assert len(BLUEPRINTS) == 4
 
     def test_blueprint_names(self):
         """Test that blueprints have correct generated names."""
@@ -23,12 +23,14 @@ class TestAnthropicBlueprints:
         model_names = [bp.model_name for bp in blueprints]
         assert "claude-opus-4-1-20250805" in model_names
         assert "claude-sonnet-4-20250514" in model_names
+        assert "claude-sonnet-4-5" in model_names
         assert "claude-3-opus-20240229" in model_names
 
         # Check friendly tool names
         tool_names = [bp.tool_name for bp in blueprints]
         assert "chat_with_claude41_opus" in tool_names
         assert "chat_with_claude4_sonnet" in tool_names
+        assert "chat_with_claude45_sonnet" in tool_names
         assert "chat_with_claude3_opus" in tool_names
 
     def test_blueprint_model_mapping(self):
@@ -38,6 +40,7 @@ class TestAnthropicBlueprints:
 
         assert "claude-opus-4-1-20250805" in model_names
         assert "claude-sonnet-4-20250514" in model_names
+        assert "claude-sonnet-4-5" in model_names
         assert "claude-3-opus-20240229" in model_names
 
     def test_blueprint_adapter_key(self):

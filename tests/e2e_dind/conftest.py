@@ -497,6 +497,19 @@ def claude(stack, request) -> Callable[[str, int], str]:
             print(f"MCP configuration failed: {stderr}")
             raise RuntimeError(f"Failed to configure MCP server: {stderr}")
         print(f"MCP server configured successfully: {stdout}")
+
+        # Warm up the newly-added MCP server to avoid first-call race conditions
+        try:
+            warmup_cmd = [
+                "gosu",
+                "claude",
+                "bash",
+                "-c",
+                "cd /host-project && timeout 20s claude -p --dangerously-skip-permissions 'Use the-force list_models and return READY'",
+            ]
+            stack.exec_in_container(warmup_cmd, "test-runner")
+        except Exception as e:  # pragma: no cover - best effort warmup
+            print(f"Warmup call for the-force failed (continuing): {e}")
     except Exception as e:
         print(f"Failed to configure MCP: {e}")
         raise

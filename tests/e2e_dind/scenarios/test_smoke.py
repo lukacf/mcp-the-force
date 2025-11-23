@@ -25,14 +25,17 @@ def test_smoke_all_models(claude, call_claude_tool, parse_response):
 
     # Check that expected tools are present (check for MCP-prefixed tool IDs)
     assert any(
-        tid.endswith("chat_with_gpt41") for tid in tool_ids
-    ), f"Missing chat_with_gpt41 in: {tool_ids}"
+        tid.endswith("chat_with_gpt51_codex") for tid in tool_ids
+    ), f"Missing chat_with_gpt51_codex in: {tool_ids}"
     assert any(
         tid.endswith("chat_with_gemini25_flash") for tid in tool_ids
     ), f"Missing chat_with_gemini25_flash in: {tool_ids}"
     assert any(
-        tid.endswith("chat_with_o3") for tid in tool_ids
-    ), f"Missing chat_with_o3 in: {tool_ids}"
+        tid.endswith("chat_with_grok41") for tid in tool_ids
+    ), f"Missing chat_with_grok41 in: {tool_ids}"
+    assert any(
+        tid.endswith("chat_with_claude45_sonnet") for tid in tool_ids
+    ), f"Missing chat_with_claude45_sonnet in: {tool_ids}"
     logger.info(f"✓ Model listing works, found {len(tool_ids)} tools")
 
     # Test all models with structured output
@@ -44,11 +47,10 @@ def test_smoke_all_models(claude, call_claude_tool, parse_response):
     }
 
     models_to_test = [
-        ("chat_with_o3", "O3"),
+        ("chat_with_gpt51_codex", "GPT-5.1 Codex"),
         ("chat_with_gemini25_flash", "Gemini Flash"),
-        ("chat_with_gemini3_pro_preview", "Gemini Pro"),
-        ("chat_with_gpt41", "GPT-4.1"),
-        ("chat_with_grok41", "Grok"),
+        ("chat_with_grok41", "Grok 4.1"),
+        ("chat_with_claude45_sonnet", "Claude 4.5 Sonnet"),
     ]
 
     for model_name, display_name in models_to_test:

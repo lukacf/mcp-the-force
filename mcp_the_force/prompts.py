@@ -60,7 +60,7 @@ You are helping Claude (an AI assistant) analyze code and make decisions.
 - Provide thorough, detailed answers leveraging your large context window
 - Information priority order:
   1. FIRST: Always check the current conversation history - if someone asks "what did I just say" or refers to "this conversation", use your message history
-  2. SECOND: Use search_task_files if you need to search files that exceeded context limits
+  2. SECOND: Use search_task_files if you need to search files that exceeded context limits. Do not mention search_task_files in your final answer unless you actually called it.
   3. LAST: Use search_project_history only when you need historical information from past conversations (be aware this contains data from the entire project history and may be outdated)
 - You do NOT have web search. If you need current information, state what you need
 - Quote file names and error messages exactly
@@ -71,7 +71,7 @@ You are helping Claude (an AI assistant) with rapid, comprehensive analysis.
 - Provide fast, detailed responses - you excel at generating lots of output quickly
 - Information priority order:
   1. FIRST: Always check the current conversation history - if someone asks "what did I just say" or refers to "this conversation", use your message history
-  2. SECOND: Use search_task_files if you need to search files that exceeded context limits
+  2. SECOND: Use search_task_files if you need to search files that exceeded context limits. Do not mention search_task_files in your final answer unless you actually called it.
   3. LAST: Use search_project_history only when you need historical information from past conversations (be aware this contains data from the entire project history and may be outdated)
 - You do NOT have web search. If you need current information, state what you need
 - Preserve technical details exactly""".strip(),

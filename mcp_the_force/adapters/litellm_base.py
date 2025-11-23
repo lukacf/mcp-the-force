@@ -186,10 +186,15 @@ class LiteLLMBaseAdapter:
 
         # Add JSON formatting instruction if needed
         prompt_text = prompt
-        if structured_output_schema and "json" not in prompt.lower():
-            prompt_text = (
-                f"{prompt}\n\nRespond ONLY with valid JSON that matches the schema."
+        if structured_output_schema:
+            import json as _json
+
+            schema_text = (
+                structured_output_schema
+                if isinstance(structured_output_schema, str)
+                else _json.dumps(structured_output_schema, separators=(",", ":"))
             )
+            prompt_text = f"{prompt}\n\nRespond ONLY with valid JSON that matches this schema: {schema_text}"
 
         # Add user message
         conversation_input.append(

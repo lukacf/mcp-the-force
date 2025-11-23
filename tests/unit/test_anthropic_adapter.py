@@ -7,6 +7,7 @@ from mcp_the_force.adapters.anthropic.adapter import AnthropicAdapter
 from mcp_the_force.adapters.anthropic.capabilities import (
     Claude41OpusCapabilities,
     Claude4SonnetCapabilities,
+    Claude45SonnetCapabilities,
     Claude3OpusCapabilities,
 )
 from mcp_the_force.adapters.anthropic.params import AnthropicToolParams
@@ -21,7 +22,8 @@ class TestAnthropicAdapter:
         assert "claude-opus-4-1-20250805" in models
         assert "claude-sonnet-4-20250514" in models
         assert "claude-3-opus-20240229" in models
-        assert len(models) == 3
+        assert "claude-sonnet-4-5" in models
+        assert len(models) == 4
 
     def test_model_string_format(self):
         """Test model string formatting for LiteLLM."""
@@ -82,6 +84,14 @@ class TestAnthropicAdapter:
         assert caps.max_output_tokens == 64_000
         assert caps.supports_reasoning_effort is True
 
+    def test_claude45_sonnet_capabilities(self):
+        """Test Claude 4.5 Sonnet capabilities."""
+        caps = Claude45SonnetCapabilities()
+        assert caps.model_name == "claude-sonnet-4-5"
+        assert caps.max_context_window == 1_000_000
+        assert caps.max_output_tokens == 64_000
+        assert caps.supports_reasoning_effort is True
+
     def test_claude3_opus_capabilities(self):
         """Test Claude 3 Opus capabilities."""
         caps = Claude3OpusCapabilities()
@@ -109,6 +119,29 @@ class TestAnthropicAdapter:
         )
 
         # Should include the 1M context beta header
+        assert "extra_headers" in request_params
+        assert "anthropic-beta" in request_params["extra_headers"]
+        assert (
+            "context-1m-2025-08-07" in request_params["extra_headers"]["anthropic-beta"]
+        )
+
+    def test_sonnet45_1m_context_header(self):
+        """Test that Sonnet 4.5 includes 1M context beta header."""
+        from unittest.mock import Mock
+
+        adapter = AnthropicAdapter("claude-sonnet-4-5")
+
+        params = Mock()
+        params.temperature = 0.7
+        params.max_tokens = 4096
+        params.structured_output_schema = None
+
+        request_params = adapter._build_request_params(
+            conversation_input=[{"role": "user", "content": "test"}],
+            params=params,
+            tools=[],
+        )
+
         assert "extra_headers" in request_params
         assert "anthropic-beta" in request_params["extra_headers"]
         assert (

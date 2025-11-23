@@ -112,7 +112,7 @@ MCP The-Force Server - A Model Context Protocol (MCP) server that provides acces
 The Force provides access to 17 cutting-edge AI models through `chat_with_*` tools, each with dynamically-generated descriptions showing their capabilities, context limits, and best use cases.
 
 **Key models for most tasks:**
-- For 90% of your work, use **`chat_with_gpt51_codex`** (smartest, 400k context) or **`chat_with_gemini3_pro_preview`** (smart, 2M context, fast)
+- For 90% of your work, use **`chat_with_gpt51_codex`** (smartest, 400k context) or **`chat_with_gemini3_pro_preview`** (smart, 1M context, fast)
 - For fast large-context work: **`chat_with_gemini25_flash`** or **`chat_with_gpt41`**
 - For search: **`chat_with_gpt51_codex`** is best, but **`chat_with_grok41`** is good and faster
 

@@ -17,6 +17,7 @@ def _get_friendly_name(model_name: str) -> str:
     - 'claude-opus-4-0' -> 'chat_with_claude4_opus'
     - 'claude-sonnet-4-0' -> 'chat_with_claude4_sonnet'
     - 'claude-opus-4-1-20250805' -> 'chat_with_claude41_opus'
+    - 'claude-sonnet-4-5' -> 'chat_with_claude45_sonnet'
     """
     # Remove -0 suffix if present
     if model_name.endswith("-0"):
@@ -29,13 +30,9 @@ def _get_friendly_name(model_name: str) -> str:
         if parts[0] == "claude" and parts[1].isdigit():
             # Pattern: claude-3-opus -> claude3_opus
             result = f"{parts[0]}{parts[1]}_{parts[2]}"
-        elif (
-            parts[0] == "claude"
-            and parts[2] == "4"
-            and parts[3] == "1"
-            and len(parts) >= 5
-        ):
+        elif parts[0] == "claude" and parts[2] == "4" and parts[3] in ["1", "5"]:
             # Pattern: claude-opus-4-1-20250805 -> claude41_opus
+            #          claude-sonnet-4-5 -> claude45_sonnet
             result = f"{parts[0]}{parts[2]}{parts[3]}_{parts[1]}"
         elif parts[0] == "claude" and parts[2] == "4":
             # Pattern: claude-opus-4 -> claude4_opus
@@ -54,6 +51,10 @@ def get_anthropic_blueprints() -> List[ToolBlueprint]:
     blueprints = []
 
     for model_name, capabilities in ANTHROPIC_MODEL_CAPABILITIES.items():
+        tool_name = _get_friendly_name(model_name)
+        if model_name == "claude-sonnet-4-5":
+            tool_name = "chat_with_claude45_sonnet"
+
         # Format capabilities and append to description
         capability_info = format_capabilities(capabilities)
         full_description = capabilities.description
@@ -62,7 +63,7 @@ def get_anthropic_blueprints() -> List[ToolBlueprint]:
 
         blueprint = ToolBlueprint(
             model_name=model_name,
-            tool_name=_get_friendly_name(model_name),
+            tool_name=tool_name,
             adapter_key="anthropic",
             param_class=AnthropicToolParams,
             description=full_description,
