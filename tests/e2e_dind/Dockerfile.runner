@@ -3,8 +3,11 @@ FROM python:3.13-slim
 
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends curl ca-certificates git jq nodejs npm \
-    build-essential g++ && \
+    apt-get install -y --no-install-recommends \
+        curl ca-certificates git jq nodejs npm \
+        build-essential g++ \
+        procps \ 
+    && \
     rm -rf /var/lib/apt/lists/*
 
 # Install a static Docker CLI (arm64/amd64) since Debian slim may not ship docker.io

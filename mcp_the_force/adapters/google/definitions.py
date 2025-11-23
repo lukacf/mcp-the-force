@@ -29,13 +29,13 @@ class GeminiToolParams(BaseToolParams):  # type: ignore[misc]
     """Gemini-specific parameters with capability requirements."""
 
     temperature: float = Route.adapter(  # type: ignore[assignment]
-        default=1.0,
+        default=0.2,
         description=(
             "(Optional) Controls the randomness of the model's output. Higher values result in more "
             "creative and varied responses, while lower values produce more deterministic output. "
-            "Gemini models support a wider default temperature (1.0) compared to OpenAI models. "
+            "Gemini models support a wider default temperature range. "
             "Syntax: A float between 0.0 and 2.0. "
-            "Default: 1.0. "
+            "Default: 0.2 for deterministic recalls. "
             "Example: temperature=0.5"
         ),
         requires_capability=lambda c: c.supports_temperature,
