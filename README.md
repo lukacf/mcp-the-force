@@ -173,7 +173,7 @@ The Force provides access to cutting-edge AI models through `chat_with_*` tools,
 - `chat_with_gemini25_flash`: Fast summarization and quick analysis
 
 **Anthropic Models:**
-- `chat_with_claude41_opus`: Deep analysis with extended thinking
+- `chat_with_claude45_opus`: Premium long-form reasoning with extended thinking
 - `chat_with_claude45_sonnet`: Fast long-context processing with extended thinking (1M)
 - `chat_with_claude3_opus`: Exceptional theory of mind and deep discussions
 
@@ -246,7 +246,7 @@ Quick start:
 {
   "session_id": "design-rag-pipeline-2025-11-21",
   "objective": "Design a production-ready RAG pipeline for our docs service",
-  "models": ["chat_with_gpt51_codex", "chat_with_gemini3_pro_preview", "chat_with_claude41_opus"],
+  "models": ["chat_with_gpt51_codex", "chat_with_gemini3_pro_preview", "chat_with_claude45_opus"],
   "output_format": "Architecture doc with: Overview, Data Flow, Components, Ops, Risks",
   "discussion_turns": 6,
   "validation_rounds": 2,

@@ -156,7 +156,7 @@ class TestCollaborationServiceExecution:
         existing_state = {
             "session_id": "existing-session",
             "objective": "Ongoing project",
-            "models": ["chat_with_gpt51_codex", "chat_with_claude41_opus"],
+            "models": ["chat_with_gpt51_codex", "chat_with_claude45_opus"],
             "messages": [
                 {
                     "speaker": "user",
@@ -428,7 +428,7 @@ class TestCollaborationServiceModelExecution:
         session = CollaborationSession(
             session_id="isolation-test",
             objective="Test isolation",
-            models=["chat_with_claude41_opus"],
+            models=["chat_with_claude45_opus"],
             messages=[],
             current_step=0,
             mode="round_robin",
@@ -444,7 +444,7 @@ class TestCollaborationServiceModelExecution:
         await collaboration_service.execute(
             session_id="isolation-test",
             objective="",
-            models=["chat_with_claude41_opus"],
+            models=["chat_with_claude45_opus"],
             output_format="Test deliverable format",
             user_input="Test isolation",
             discussion_turns=1,  # Only discussion phase
@@ -455,7 +455,7 @@ class TestCollaborationServiceModelExecution:
         discussion_call = next(
             call
             for call in collaboration_service.executor.execute.call_args_list
-            if call[1]["session_id"] == "isolation-test__chat_with_claude41_opus"
+            if call[1]["session_id"] == "isolation-test__chat_with_claude45_opus"
         )
         call_kwargs = discussion_call[1]
 
@@ -464,7 +464,7 @@ class TestCollaborationServiceModelExecution:
         assert call_kwargs["disable_history_search"] is True
 
         # Verify unique sub-session ID format
-        expected_sub_session = "isolation-test__chat_with_claude41_opus"
+        expected_sub_session = "isolation-test__chat_with_claude45_opus"
         assert call_kwargs["session_id"] == expected_sub_session
 
         # This prevents pollution of project history and individual model sessions
@@ -618,7 +618,7 @@ class TestCollaborationServiceOrchestrator:
         session = CollaborationSession(
             session_id="orchestrator-test",
             objective="Test orchestrator mode",
-            models=["chat_with_gpt51_codex", "chat_with_claude41_opus"],
+            models=["chat_with_gpt51_codex", "chat_with_claude45_opus"],
             messages=[],
             current_step=0,
             mode="orchestrator",  # Different mode

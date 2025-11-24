@@ -16,7 +16,7 @@ def _get_friendly_name(model_name: str) -> str:
     - 'claude-3-opus' -> 'chat_with_claude3_opus'
     - 'claude-opus-4-0' -> 'chat_with_claude4_opus'
     - 'claude-sonnet-4-0' -> 'chat_with_claude4_sonnet'
-    - 'claude-opus-4-1-20250805' -> 'chat_with_claude41_opus'
+    - 'claude-opus-4-5-20251101' -> 'chat_with_claude45_opus'
     - 'claude-sonnet-4-5' -> 'chat_with_claude45_sonnet'
     """
     # Remove -0 suffix if present
@@ -31,7 +31,7 @@ def _get_friendly_name(model_name: str) -> str:
             # Pattern: claude-3-opus -> claude3_opus
             result = f"{parts[0]}{parts[1]}_{parts[2]}"
         elif parts[0] == "claude" and parts[2] == "4" and parts[3] in ["1", "5"]:
-            # Pattern: claude-opus-4-1-20250805 -> claude41_opus
+            # Pattern: claude-opus-4-5-20251101 -> claude45_opus
             #          claude-sonnet-4-5 -> claude45_sonnet
             result = f"{parts[0]}{parts[2]}{parts[3]}_{parts[1]}"
         elif parts[0] == "claude" and parts[2] == "4":

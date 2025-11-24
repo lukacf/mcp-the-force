@@ -24,13 +24,7 @@ class AnthropicBaseCapabilities(AdapterCapabilities):
 
 @dataclass
 class Claude41OpusCapabilities(AnthropicBaseCapabilities):
-    """Capabilities for Claude 4.1 Opus."""
-
-    model_name: str = "claude-opus-4-1-20250805"
-    max_context_window: int = 200_000
-    max_output_tokens: int = 32_000
-    supports_reasoning_effort: bool = True
-    description: str = "Anthropic's careful long-form reasoner/writer. Speed: low. Tool use: strong. When to use: Policy/legal/medical summaries, careful synthesis, premium writing where caution and clarity matter."
+    """Deprecated (superseded by Claude 4.5 Opus)."""
 
 
 @dataclass
@@ -56,6 +50,19 @@ class Claude45SonnetCapabilities(AnthropicBaseCapabilities):
 
 
 @dataclass
+class Claude45OpusCapabilities(AnthropicBaseCapabilities):
+    """Capabilities for Claude 4.5 Opus."""
+
+    model_name: str = "claude-opus-4-5-20251101"
+    max_context_window: int = 200_000  # 1M beta not announced for Opus 4.5
+    max_output_tokens: int = 64_000
+    supports_reasoning_effort: bool = True
+    description: str = (
+        "Claude 4.5 Opus: premium maximum-intelligence model with extended thinking."
+    )
+
+
+@dataclass
 class Claude3OpusCapabilities(AnthropicBaseCapabilities):
     """Capabilities for Claude 3 Opus."""
 
@@ -70,7 +77,7 @@ class Claude3OpusCapabilities(AnthropicBaseCapabilities):
 
 # Map of model names to their capability instances
 ANTHROPIC_MODEL_CAPABILITIES: Dict[str, AnthropicBaseCapabilities] = {
-    "claude-opus-4-1-20250805": Claude41OpusCapabilities(),
+    "claude-opus-4-5-20251101": Claude45OpusCapabilities(),
     "claude-sonnet-4-20250514": Claude4SonnetCapabilities(),
     "claude-sonnet-4-5": Claude45SonnetCapabilities(),
     "claude-3-opus-20240229": Claude3OpusCapabilities(),

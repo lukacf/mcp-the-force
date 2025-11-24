@@ -17,7 +17,7 @@ class AnthropicAdapter(LiteLLMBaseAdapter):
 
     param_class = AnthropicToolParams
 
-    def __init__(self, model: str = "claude-opus-4-1-20250805"):
+    def __init__(self, model: str = "claude-opus-4-5-20251101"):
         """Initialize Anthropic adapter."""
         if model not in ANTHROPIC_MODEL_CAPABILITIES:
             raise ValueError(

@@ -178,7 +178,7 @@ for model in response:
 group_think(
     session_id="refactor-auth-2025-11-21",
     objective="Redesign auth service for zero-downtime rotations",
-    models=["chat_with_gpt51_codex", "chat_with_gemini3_pro_preview", "chat_with_claude41_opus"],
+    models=["chat_with_gpt51_codex", "chat_with_gemini3_pro_preview", "chat_with_claude45_opus"],
     output_format="Design doc + migration steps + rollback plan",
     discussion_turns=6,
     validation_rounds=2,
