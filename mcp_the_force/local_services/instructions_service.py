@@ -1,7 +1,7 @@
 """Local service that returns a usage guide for The Force by reading a markdown file."""
 
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 
 class InstructionsService:
@@ -9,15 +9,22 @@ class InstructionsService:
         self.default_path = default_path
 
     async def execute(
-        self, guide_path: Optional[str] = None, include_async: bool = False
+        self,
+        guide_path: Optional[str] = None,
+        include_async: bool | str = False,
+        **_: Any,
     ) -> Dict[str, str]:
         """
         Return the contents of the instructions markdown file.
 
         Args:
             guide_path: Optional path to a markdown guide. If relative, resolved from CWD.
-            include_async: Ignored for now; async guidance is part of the doc.
+            include_async: When truthy, append an async usage tip.
         """
+        # Coerce include_async from string/bool
+        if isinstance(include_async, str):
+            include_async = include_async.lower() in {"1", "true", "yes", "y"}
+
         path = Path(guide_path or self.default_path)
         if not path.is_absolute():
             path = Path.cwd() / path
