@@ -27,6 +27,8 @@ RUN mkdir -p /usr/local/lib/docker/cli-plugins && \
 
 # Claude-Code CLI + test tools + uv for MCP server
 RUN npm install -g @anthropic-ai/claude-code
+# Preconfigure Claude CLI to use env key (avoids interactive /login)
+ENV CLAUDE_CODE_API_KEY=${ANTHROPIC_API_KEY}
 RUN pip install --no-cache-dir \
       pytest pytest-timeout testcontainers[compose] \
       anyio pytest-asyncio rich uv uvicorn httpx \
