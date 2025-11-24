@@ -328,6 +328,12 @@ class LiteLLMBaseAdapter:
                     thought_sig = getattr(
                         tool_call, "provider_specific_fields", {}
                     ).get("thought_signature")
+                logger.debug(
+                    f"[TOOL_CALL] name={getattr(tool_call, 'name', None)} "
+                    f"call_id={getattr(tool_call, 'call_id', None)} "
+                    f"has_thought_sig={bool(thought_sig)} "
+                    f"provider_fields={getattr(tool_call, 'provider_specific_fields', None)}"
+                )
                 if thought_sig:
                     fc_msg["thought_signature"] = thought_sig
                 updated_conversation.append(fc_msg)
