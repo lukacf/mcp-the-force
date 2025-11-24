@@ -315,7 +315,9 @@ class LiteLLMBaseAdapter:
 
             # Execute tool calls
             for tool_call in tool_calls:
-                logger.debug(f"Executing tool: {tool_call.name}")
+                logger.debug(
+                    f"Executing tool: {tool_call.name} raw={getattr(tool_call, '__dict__', {})}"
+                )
                 # Preserve the function_call record (including thought_signature for Gemini)
                 fc_msg = {
                     "type": "function_call",
