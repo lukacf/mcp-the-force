@@ -336,28 +336,27 @@ class LiteLLMBaseAdapter:
                     f"has_thought_sig={bool(thought_sig)} "
                     f"provider_fields={getattr(tool_call, 'provider_specific_fields', None)}"
                 )
-                if thought_sig:
-                    fc_msg["thought_signature"] = thought_sig
-                    fc_msg["thoughtSignature"] = (
-                        thought_sig  # some SDKs expect camelCase
-                    )
-                    # Gemini expects the signature nested under functionCall
-                    try:
-                        import json as _json
+                if not thought_sig:
+                    thought_sig = "synthetic-thought-signature"  # fallback to satisfy Gemini requirement
+                fc_msg["thought_signature"] = thought_sig
+                fc_msg["thoughtSignature"] = thought_sig  # some SDKs expect camelCase
+                # Gemini expects the signature nested under functionCall
+                try:
+                    import json as _json
 
-                        parsed_args = getattr(tool_call, "arguments", None)
-                        if isinstance(parsed_args, str):
-                            try:
-                                parsed_args = _json.loads(parsed_args)
-                            except Exception:
-                                parsed_args = parsed_args
-                        fc_msg["functionCall"] = {
-                            "name": getattr(tool_call, "name", None),
-                            "args": parsed_args,
-                            "thoughtSignature": thought_sig,
-                        }
-                    except Exception:
-                        pass  # non-fatal; best-effort enrichment
+                    parsed_args = getattr(tool_call, "arguments", None)
+                    if isinstance(parsed_args, str):
+                        try:
+                            parsed_args = _json.loads(parsed_args)
+                        except Exception:
+                            parsed_args = parsed_args
+                    fc_msg["functionCall"] = {
+                        "name": getattr(tool_call, "name", None),
+                        "args": parsed_args,
+                        "thoughtSignature": thought_sig,
+                    }
+                except Exception:
+                    pass  # non-fatal; best-effort enrichment
                 updated_conversation.append(fc_msg)
 
                 try:
