@@ -341,6 +341,23 @@ class LiteLLMBaseAdapter:
                     fc_msg["thoughtSignature"] = (
                         thought_sig  # some SDKs expect camelCase
                     )
+                    # Gemini expects the signature nested under functionCall
+                    try:
+                        import json as _json
+
+                        parsed_args = getattr(tool_call, "arguments", None)
+                        if isinstance(parsed_args, str):
+                            try:
+                                parsed_args = _json.loads(parsed_args)
+                            except Exception:
+                                parsed_args = parsed_args
+                        fc_msg["functionCall"] = {
+                            "name": getattr(tool_call, "name", None),
+                            "args": parsed_args,
+                            "thoughtSignature": thought_sig,
+                        }
+                    except Exception:
+                        pass  # non-fatal; best-effort enrichment
                 updated_conversation.append(fc_msg)
 
                 try:

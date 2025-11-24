@@ -63,8 +63,8 @@ test-unit:
 
 test-integration:
 	@echo "Running integration tests with mock adapters..."
-	MCP_ADAPTER_MOCK=1 $(PYTEST) tests/internal -v --tb=short
-	MCP_ADAPTER_MOCK=1 $(PYTEST) tests/integration_mcp -v --tb=short
+	LITELLM_LOCAL_MODEL_COST_MAP=1 LITELLM_MODEL_COST_MAP= MCP_ADAPTER_MOCK=1 $(PYTEST) tests/internal -v --tb=short
+	LITELLM_LOCAL_MODEL_COST_MAP=1 LITELLM_MODEL_COST_MAP= MCP_ADAPTER_MOCK=1 $(PYTEST) tests/integration_mcp -v --tb=short
 
 test-all: test-unit test-integration e2e
 	@echo "✓ All tests passed!"
