@@ -7,7 +7,11 @@ from ..jobs.queue import get_job_queue
 
 class StartJobService:
     async def execute(
-        self, target_tool: str, args: Dict[str, Any], max_runtime_s: int = 3600
+        self,
+        target_tool: str,
+        args: Dict[str, Any],
+        max_runtime_s: int = 3600,
+        **_: Any,
     ) -> Dict[str, Any]:
         queue = get_job_queue()
         import uuid
@@ -25,7 +29,7 @@ class StartJobService:
 
 
 class PollJobService:
-    async def execute(self, job_id: str) -> Dict[str, Any]:
+    async def execute(self, job_id: str, **_: Any) -> Dict[str, Any]:
         queue = get_job_queue()
         job = await queue.get(job_id)
         if not job:
@@ -34,7 +38,7 @@ class PollJobService:
 
 
 class CancelJobService:
-    async def execute(self, job_id: str) -> Dict[str, Any]:
+    async def execute(self, job_id: str, **_: Any) -> Dict[str, Any]:
         queue = get_job_queue()
         await queue.cancel(job_id)
         return {"job_id": job_id, "status": "cancelled_requested"}
