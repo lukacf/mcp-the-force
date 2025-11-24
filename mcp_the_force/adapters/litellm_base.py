@@ -316,6 +316,18 @@ class LiteLLMBaseAdapter:
             # Execute tool calls
             for tool_call in tool_calls:
                 logger.debug(f"Executing tool: {tool_call.name}")
+                # Preserve the function_call record (including thought_signature for Gemini)
+                fc_msg = {
+                    "type": "function_call",
+                    "name": getattr(tool_call, "name", None),
+                    "arguments": getattr(tool_call, "arguments", None),
+                    "call_id": getattr(tool_call, "call_id", None),
+                }
+                thought_sig = getattr(tool_call, "thought_signature", None)
+                if thought_sig:
+                    fc_msg["thought_signature"] = thought_sig
+                updated_conversation.append(fc_msg)
+
                 try:
                     result = await tool_dispatcher.execute(
                         tool_name=tool_call.name,
