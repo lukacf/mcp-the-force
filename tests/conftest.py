@@ -28,6 +28,7 @@ PRODUCTION_DBS = {
     "sessions.sqlite3",
     "stable_list_cache.sqlite3",
     "logs.sqlite3",
+    "jobs.sqlite3",
     # Deduplication cache
     "vdb_cache.db",
 }
