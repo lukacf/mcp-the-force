@@ -6,6 +6,7 @@ from typing import Any, Dict, Optional
 
 class InstructionsService:
     def __init__(self, default_path: str = "docs/INSTRUCTIONS.md") -> None:
+        # Use repository-local default if it exists; otherwise fall back to packaged docs
         self.default_path = default_path
 
     async def execute(
@@ -25,13 +26,22 @@ class InstructionsService:
         if isinstance(include_async, str):
             include_async = include_async.lower() in {"1", "true", "yes", "y"}
 
-        path = Path(guide_path or self.default_path)
+        candidate = guide_path or self.default_path
+        path = Path(candidate)
         if not path.is_absolute():
-            path = Path.cwd() / path
+            # prefer repo-local docs if present
+            repo_path = Path.cwd() / path
+            if repo_path.exists():
+                path = repo_path
+            else:
+                # fall back to installed package location
+                pkg_root = Path(__file__).resolve().parent.parent  # mcp_the_force/
+                fallback = pkg_root.parent / "docs" / "INSTRUCTIONS.md"
+                path = fallback if fallback.exists() else repo_path
 
         if not path.exists():
             return {
-                "error": f"Guide file not found: {path}. Provide guide_path or add docs/INSTRUCTIONS.md."
+                "error": f"Guide file not found: {path}. Provide guide_path or ensure docs/INSTRUCTIONS.md is available."
             }
         try:
             content = path.read_text(encoding="utf-8")
