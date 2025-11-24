@@ -336,6 +336,9 @@ class LiteLLMBaseAdapter:
                 )
                 if thought_sig:
                     fc_msg["thought_signature"] = thought_sig
+                    fc_msg["thoughtSignature"] = (
+                        thought_sig  # some SDKs expect camelCase
+                    )
                 updated_conversation.append(fc_msg)
 
                 try:
