@@ -190,6 +190,16 @@ The Force automatically detects and provides access to any Ollama models you hav
 - `describe_session`: Get an AI-powered summary of a past session
 - `count_project_tokens`: Analyze token usage for specified files/directories
 - `search_mcp_debug_logs`: Query debug logs with LogsQL (developer mode only)
+- `start_job`, `poll_job`, `cancel_job`: Run any existing tool asynchronously via the built-in job queue
+
+### Asynchronous Tool Execution
+- **Why**: Long-running operations often exceed the 60s MCP tool timeout. The async job queue lets you offload work and check back later.
+- **How it works**: `start_job` enqueues a tool call into `jobs.sqlite3`; a background worker (started with the server) processes jobs and persists results.
+- **Usage pattern**:
+  1) Call `start_job` with the target tool name and arguments; it returns a `job_id`.
+  2) Poll with `poll_job` to see `pending`/`running`/`completed`/`failed`/`cancelled` plus any result payload.
+  3) Use `cancel_job` to stop a pending or running job.
+- **Limits**: Only existing tools can be run asynchronously. Jobs resume after server restarts; cancellation is best-effort for running work.
 
 ## Core Concepts Explained
 

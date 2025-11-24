@@ -6,6 +6,7 @@
 - Updated tool registry, prompts, documentation, and tests to the new model IDs and capabilities; clarified smoke E2E to target broadly available models.
 - Dockerized E2E runner now ships a static Docker CLI to fix "docker not found" in compose-based tests.
 - Added unit coverage for Sonnet 4.5 headers and adjusted anthropic blueprint expectations.
+- Introduced asynchronous job queue with `start_job`, `poll_job`, and `cancel_job` tools backed by `jobs.sqlite3`, plus background worker lifecycle integration.
 
 ## 1.0.9
 - Hardened vector-store deduplication against multiprocess races with per-hash token files plus token cleanup on finalize/rollback.
