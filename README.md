@@ -152,6 +152,7 @@ The Force provides access to cutting-edge AI models through `chat_with_*` tools,
 
 ### Recommended Models for Most Tasks
 - **`chat_with_gpt51_codex`**: The smartest model available. 400k context, excellent tool use, and strong reasoning. Your go-to for complex tasks.
+- **`chat_with_gpt5_pro`**: Flagship GPT-5 Pro with 400k context and strong agentic/tooling performance.
 - **`chat_with_gemini3_pro_preview`**: Powerful multimodal model with 1M context (preview). Fast and reliable for code analysis and long documents.
 
 ### Fast Large-Context Models
@@ -165,6 +166,7 @@ The Force provides access to cutting-edge AI models through `chat_with_*` tools,
 - `chat_with_codex_mini`: Fast coding-specialized reasoning model
 - `chat_with_gpt41`: Fast long-context processing with web search
 - `chat_with_gpt51_codex`: World's smartest reasoning model
+- `chat_with_gpt5_pro`: Flagship GPT-5 Pro with 400k context and strong agentic/tooling performance
 - `research_with_o3_deep_research`: Ultra-deep research with extensive web search (10-60 min)
 - `research_with_o4_mini_deep_research`: Fast research with web search (2-10 min)
 

@@ -240,6 +240,25 @@ class GPT51CodexCapabilities(OSeriesCapabilities):
     )
 
 
+@dataclass
+class GPT5ProCapabilities(OSeriesCapabilities):
+    """GPT-5 Pro capabilities — parity with GPT-5.1 Codex."""
+
+    model_family: str = "gpt-5-pro"
+    model_name: str = "gpt-5-pro"
+    max_context_window: int = 400_000
+    supports_reasoning_effort: bool = True
+    supports_temperature: bool = (
+        False  # Responses API forbids temperature for gpt-5 codex/pro
+    )
+    supports_web_search: bool = True
+    supports_live_search: bool = True
+    web_search_tool: str = "web_search"
+    parallel_function_calls: int = -1
+    default_reasoning_effort: str = "high"
+    description: str = "GPT-5 Pro: flagship general/agentic model with 400k context, strong tool use, and coding parity with GPT-5.1 Codex."
+
+
 # ====================================================================
 # MODEL REGISTRY
 # ====================================================================
@@ -255,6 +274,7 @@ def get_openai_model_capabilities():
         "o3-deep-research": O3DeepResearchCapabilities(),
         "o4-mini-deep-research": O4MiniDeepResearchCapabilities(),
         "gpt-5.1-codex": GPT51CodexCapabilities(),
+        "gpt-5-pro": GPT5ProCapabilities(),
     }
 
 
@@ -277,8 +297,8 @@ def _calculate_timeout(model_name: str) -> int:
     """Calculate appropriate timeout for a model."""
     if "deep-research" in model_name:
         return 3600  # 1 hour for deep research
-    elif model_name == "gpt-5.1-codex":
-        return 3000  # 50 minutes for GPT-5.1 Codex (long reasoning)
+    elif model_name in {"gpt-5.1-codex", "gpt-5-pro"}:
+        return 3000  # 50 minutes for GPT-5.1 Codex / GPT-5 Pro (long reasoning)
     elif model_name == "o3-pro":
         return 2700  # 45 minutes for o3-pro
     elif model_name == "o3":
