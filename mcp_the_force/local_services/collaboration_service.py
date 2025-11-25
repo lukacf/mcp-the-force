@@ -124,16 +124,24 @@ class CollaborationService:
                 project, session_id, objective, models, mode, config
             )
 
-            # Check if session is completed and return cached deliverable if available
+            # Check if session is completed
             if session.is_completed():
                 cached = await self.session_cache.get_metadata(
                     project, "group_think", session_id, "collab_deliverable"
                 )
                 if cached:
                     return str(cached)
-                return (
-                    f"Collaboration session {session_id} has completed "
-                    f"({session.current_step}/{session.max_steps} steps) and no deliverable was cached."
+                # If no deliverable cached, reactivate and continue so user can resume/finish
+                session.status = "active"
+                logger.info(
+                    f"Session {session_id} marked completed but no deliverable found; reactivating at step {session.current_step}/{session.max_steps}."
+                )
+                await self.session_cache.set_metadata(
+                    project,
+                    "group_think",
+                    session_id,
+                    "collab_state",
+                    session.to_dict(),
                 )
 
             # 2. Ensure whiteboard exists
