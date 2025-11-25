@@ -48,6 +48,13 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[None]:
     cleanup_task = asyncio.create_task(_periodic_cleanup_task())
     logger.info("Background vector store cleanup task started")
 
+    # Start async job worker
+    from .jobs.worker import worker_loop
+
+    stop_event = asyncio.Event()
+    job_worker = asyncio.create_task(worker_loop(stop_event=stop_event))
+    logger.info("Background job worker started")
+
     # Ollama adapter already pre-initialized during server setup
     # Just log that we're starting up
     logger.info("Server lifespan started - Ollama tools should be available")
@@ -55,6 +62,11 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[None]:
     try:
         yield  # Server is now running
     finally:
+        stop_event.set()
+        job_worker.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await job_worker
+        logger.info("Background job worker stopped")
         # Shutdown Ollama adapter
         try:
             ollama_startup.shutdown()

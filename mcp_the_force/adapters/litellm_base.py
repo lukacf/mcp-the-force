@@ -315,7 +315,50 @@ class LiteLLMBaseAdapter:
 
             # Execute tool calls
             for tool_call in tool_calls:
-                logger.debug(f"Executing tool: {tool_call.name}")
+                logger.debug(
+                    f"Executing tool: {tool_call.name} raw={getattr(tool_call, '__dict__', {})}"
+                )
+                # Preserve the function_call record (including thought_signature for Gemini)
+                fc_msg = {
+                    "type": "function_call",
+                    "name": getattr(tool_call, "name", None),
+                    "arguments": getattr(tool_call, "arguments", None),
+                    "call_id": getattr(tool_call, "call_id", None),
+                }
+                thought_sig = getattr(tool_call, "thought_signature", None)
+                if not thought_sig and hasattr(tool_call, "provider_specific_fields"):
+                    thought_sig = getattr(
+                        tool_call, "provider_specific_fields", {}
+                    ).get("thought_signature")
+                logger.debug(
+                    f"[TOOL_CALL] name={getattr(tool_call, 'name', None)} "
+                    f"call_id={getattr(tool_call, 'call_id', None)} "
+                    f"has_thought_sig={bool(thought_sig)} "
+                    f"provider_fields={getattr(tool_call, 'provider_specific_fields', None)}"
+                )
+                if not thought_sig:
+                    thought_sig = "synthetic-thought-signature"  # fallback to satisfy Gemini requirement
+                fc_msg["thought_signature"] = thought_sig
+                fc_msg["thoughtSignature"] = thought_sig  # some SDKs expect camelCase
+                # Gemini expects the signature nested under functionCall
+                try:
+                    import json as _json
+
+                    parsed_args = getattr(tool_call, "arguments", None)
+                    if isinstance(parsed_args, str):
+                        try:
+                            parsed_args = _json.loads(parsed_args)
+                        except Exception:
+                            parsed_args = parsed_args
+                    fc_msg["functionCall"] = {
+                        "name": getattr(tool_call, "name", None),
+                        "args": parsed_args,
+                        "thoughtSignature": thought_sig,
+                    }
+                except Exception:
+                    pass  # non-fatal; best-effort enrichment
+                updated_conversation.append(fc_msg)
+
                 try:
                     result = await tool_dispatcher.execute(
                         tool_name=tool_call.name,

@@ -126,7 +126,23 @@ class CollaborationService:
 
             # Check if session is completed
             if session.is_completed():
-                return f"Collaboration session {session_id} has completed ({session.current_step}/{session.max_steps} steps)."
+                cached = await self.session_cache.get_metadata(
+                    project, "group_think", session_id, "collab_deliverable"
+                )
+                if cached:
+                    return str(cached)
+                # If no deliverable cached, reactivate and continue so user can resume/finish
+                session.status = "active"
+                logger.info(
+                    f"Session {session_id} marked completed but no deliverable found; reactivating at step {session.current_step}/{session.max_steps}."
+                )
+                await self.session_cache.set_metadata(
+                    project,
+                    "group_think",
+                    session_id,
+                    "collab_state",
+                    session.to_dict(),
+                )
 
             # 2. Ensure whiteboard exists
             whiteboard_info = await self.whiteboard.get_or_create_store(session_id)
@@ -234,6 +250,15 @@ class CollaborationService:
 
             # Clean up progress file on success
             self._cleanup_progress_file()
+
+            # Cache deliverable for future calls/resume requests
+            await self.session_cache.set_metadata(
+                project,
+                "group_think",
+                session_id,
+                "collab_deliverable",
+                final_deliverable,
+            )
 
             # Return the actual deliverable (not meta-report)
             return final_deliverable

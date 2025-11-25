@@ -152,6 +152,7 @@ The Force provides access to cutting-edge AI models through `chat_with_*` tools,
 
 ### Recommended Models for Most Tasks
 - **`chat_with_gpt51_codex`**: The smartest model available. 400k context, excellent tool use, and strong reasoning. Your go-to for complex tasks.
+- **`chat_with_gpt5_pro`**: Flagship GPT-5 Pro with 400k context and strong agentic/tooling performance.
 - **`chat_with_gemini3_pro_preview`**: Powerful multimodal model with 1M context (preview). Fast and reliable for code analysis and long documents.
 
 ### Fast Large-Context Models
@@ -165,6 +166,7 @@ The Force provides access to cutting-edge AI models through `chat_with_*` tools,
 - `chat_with_codex_mini`: Fast coding-specialized reasoning model
 - `chat_with_gpt41`: Fast long-context processing with web search
 - `chat_with_gpt51_codex`: World's smartest reasoning model
+- `chat_with_gpt5_pro`: Flagship GPT-5 Pro with 400k context and strong agentic/tooling performance
 - `research_with_o3_deep_research`: Ultra-deep research with extensive web search (10-60 min)
 - `research_with_o4_mini_deep_research`: Fast research with web search (2-10 min)
 
@@ -173,7 +175,7 @@ The Force provides access to cutting-edge AI models through `chat_with_*` tools,
 - `chat_with_gemini25_flash`: Fast summarization and quick analysis
 
 **Anthropic Models:**
-- `chat_with_claude41_opus`: Deep analysis with extended thinking
+- `chat_with_claude45_opus`: Premium long-form reasoning with extended thinking
 - `chat_with_claude45_sonnet`: Fast long-context processing with extended thinking (1M)
 - `chat_with_claude3_opus`: Exceptional theory of mind and deep discussions
 
@@ -190,6 +192,16 @@ The Force automatically detects and provides access to any Ollama models you hav
 - `describe_session`: Get an AI-powered summary of a past session
 - `count_project_tokens`: Analyze token usage for specified files/directories
 - `search_mcp_debug_logs`: Query debug logs with LogsQL (developer mode only)
+- `start_job`, `poll_job`, `cancel_job`: Run any existing tool asynchronously via the built-in job queue
+
+### Asynchronous Tool Execution
+- **Why**: Long-running operations often exceed the 60s MCP tool timeout. The async job queue lets you offload work and check back later.
+- **How it works**: `start_job` enqueues a tool call into `jobs.sqlite3`; a background worker (started with the server) processes jobs and persists results.
+- **Usage pattern**:
+  1) Call `start_job` with the target tool name and arguments; it returns a `job_id`.
+  2) Poll with `poll_job` to see `pending`/`running`/`completed`/`failed`/`cancelled` plus any result payload.
+  3) Use `cancel_job` to stop a pending or running job.
+- **Limits**: Only existing tools can be run asynchronously. Jobs resume after server restarts; cancellation is best-effort for running work.
 
 ## Core Concepts Explained
 
@@ -236,7 +248,7 @@ Quick start:
 {
   "session_id": "design-rag-pipeline-2025-11-21",
   "objective": "Design a production-ready RAG pipeline for our docs service",
-  "models": ["chat_with_gpt51_codex", "chat_with_gemini3_pro_preview", "chat_with_claude41_opus"],
+  "models": ["chat_with_gpt51_codex", "chat_with_gemini3_pro_preview", "chat_with_claude45_opus"],
   "output_format": "Architecture doc with: Overview, Data Flow, Components, Ops, Risks",
   "discussion_turns": 6,
   "validation_rounds": 2,
