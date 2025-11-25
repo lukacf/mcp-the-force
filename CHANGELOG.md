@@ -1,7 +1,5 @@
 # Changelog
 
-# Changelog
-
 ## 1.2.0
 - Added OpenAI `gpt-5-pro` model (400k context, high reasoning/tooling) with full blueprint/capability support and docs.
 - Replaced Anthropic Claude Opus 4.1 with Opus 4.5 (`claude-opus-4-5-20251101`), updating adapters, blueprints, docs, and tests.
