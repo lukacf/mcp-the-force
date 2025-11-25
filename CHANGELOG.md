@@ -1,5 +1,13 @@
 # Changelog
 
+# Changelog
+
+## 1.2.0
+- Added OpenAI `gpt-5-pro` model (400k context, high reasoning/tooling) with full blueprint/capability support and docs.
+- Replaced Anthropic Claude Opus 4.1 with Opus 4.5 (`claude-opus-4-5-20251101`), updating adapters, blueprints, docs, and tests.
+- GroupThink: now returns cached deliverable if available and can resume when a session is marked complete without a stored output.
+- Instructions tool: reads `docs/INSTRUCTIONS.md` with robust path fallback; added GroupThink guidance.
+
 ## 1.1.0
 - Replaced legacy models with latest releases: OpenAI `gpt-5.1-codex` (400k), Google `gemini-3-pro-preview` (1M input), and xAI `grok-4.1` (~2M).
 - Added Claude Sonnet 4.5 (1M context, beta header `context-1m-2025-08-07`) with updated capabilities, blueprints, and docs.
