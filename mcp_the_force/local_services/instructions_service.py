@@ -27,6 +27,15 @@ class InstructionsService:
         if isinstance(include_async, str):
             include_async = include_async.lower() in {"1", "true", "yes", "y"}
 
+        # Map well-known URIs
+        if guide_path and guide_path.startswith("force://guides/"):
+            if guide_path.endswith("usage"):
+                guide_path = self.default_path
+            elif guide_path.endswith("async"):
+                guide_path = self.default_path  # async section in same doc
+            elif guide_path.endswith("groupthink"):
+                guide_path = self.default_path  # groupthink section in same doc
+
         candidate = guide_path or self.default_path
         paths_to_try = []
 
