@@ -1,5 +1,6 @@
 """Local service that returns a usage guide for The Force by reading a markdown file."""
 
+import importlib.resources as pkg_resources
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -27,25 +28,38 @@ class InstructionsService:
             include_async = include_async.lower() in {"1", "true", "yes", "y"}
 
         candidate = guide_path or self.default_path
-        path = Path(candidate)
-        if not path.is_absolute():
-            # prefer repo-local docs if present
-            repo_path = Path.cwd() / path
-            if repo_path.exists():
-                path = repo_path
-            else:
-                # fall back to installed package location
-                pkg_root = Path(__file__).resolve().parent.parent  # mcp_the_force/
-                fallback = pkg_root.parent / "docs" / "INSTRUCTIONS.md"
-                path = fallback if fallback.exists() else repo_path
+        paths_to_try = []
 
-        if not path.exists():
-            return {
-                "error": f"Guide file not found: {path}. Provide guide_path or ensure docs/INSTRUCTIONS.md is available."
-            }
-        try:
-            content = path.read_text(encoding="utf-8")
-        except Exception as exc:  # pragma: no cover
-            return {"error": f"Failed to read guide: {exc}"}
+        p = Path(candidate)
+        if p.is_absolute():
+            paths_to_try.append(p)
+        else:
+            paths_to_try.append(Path.cwd() / p)  # caller's CWD
+            # repo-root fallback (two levels up from this file)
+            paths_to_try.append(
+                Path(__file__).resolve().parents[2] / "docs" / "INSTRUCTIONS.md"
+            )
+            # package data (if bundled)
+            try:
+                pkg_docs = (
+                    pkg_resources.files("mcp_the_force") / "docs" / "INSTRUCTIONS.md"
+                )
+                paths_to_try.append(Path(str(pkg_docs)))
+            except Exception:
+                pass
 
-        return {"instructions": content}
+        for path in paths_to_try:
+            if path.exists():
+                try:
+                    return {"instructions": path.read_text(encoding="utf-8")}
+                except Exception as exc:  # pragma: no cover
+                    return {"error": f"Failed to read guide: {exc}"}
+
+        # Ultimate fallback: short inline guide
+        fallback = (
+            "The Force MCP Guide unavailable on disk. Core usage: "
+            "use chat_with_* tools with absolute paths in context/priority_context; "
+            "set session_id to persist history; use start_job/poll_job/cancel_job for long tasks; "
+            "group_think orchestrates multiple models; see docs/INSTRUCTIONS.md for full details."
+        )
+        return {"instructions": fallback}
