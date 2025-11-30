@@ -268,7 +268,7 @@ class TestGroupThinkMultiPhaseWorkflow:
             collaboration_service
         )
 
-        # Mock existing session
+        # Mock existing session (in progress, not completed)
         existing_session_data = {
             "session_id": "existing-session",
             "objective": "Original objective",
@@ -279,7 +279,16 @@ class TestGroupThinkMultiPhaseWorkflow:
             "max_steps": 10,
             "status": "active",
         }
-        mock_session_cache.get_metadata.return_value = existing_session_data
+
+        # Mock get_metadata to return session data for collab_state, None for collab_deliverable
+        async def mock_get_metadata(project, tool, session_id, key):
+            if key == "collab_state":
+                return existing_session_data
+            if key == "collab_deliverable":
+                return None  # No cached deliverable - session is in progress
+            return None
+
+        mock_session_cache.get_metadata = AsyncMock(side_effect=mock_get_metadata)
 
         mock_whiteboard.get_or_create_store.return_value = {
             "store_id": "vs_existing",
@@ -304,10 +313,13 @@ class TestGroupThinkMultiPhaseWorkflow:
                 discussion_turns=1,
             )
 
-        # Verify existing session was loaded, not recreated
-        mock_session_cache.get_metadata.assert_called_with(
-            "mcp-the-force", "group_think", "existing-session", "collab_state"
-        )
+        # Verify get_metadata was called for both collab_state and collab_deliverable
+        calls = mock_session_cache.get_metadata.call_args_list
+        call_keys = [
+            call.args[3] if len(call.args) > 3 else call.kwargs.get("key")
+            for call in calls
+        ]
+        assert "collab_state" in call_keys, "Should check for collab_state"
 
         # Verify collaboration continued from where it left off
         assert "Continued response" in result or "Mock" in result

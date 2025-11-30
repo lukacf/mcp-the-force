@@ -45,6 +45,23 @@ def mock_session_cache():
     return cache
 
 
+def create_metadata_mock(collab_state=None, collab_deliverable=None):
+    """Create a get_metadata mock that returns different values based on key.
+
+    This helper ensures proper behavior with the session completion fix,
+    which checks for both collab_state and collab_deliverable.
+    """
+
+    async def mock_get_metadata(project, tool, session_id, key):
+        if key == "collab_state":
+            return collab_state
+        if key == "collab_deliverable":
+            return collab_deliverable
+        return None
+
+    return AsyncMock(side_effect=mock_get_metadata)
+
+
 @pytest.fixture
 def collaboration_service(mock_executor, mock_whiteboard_manager, mock_session_cache):
     """CollaborationService with mocked dependencies."""
@@ -152,7 +169,7 @@ class TestCollaborationServiceExecution:
     ):
         """Test resuming existing session."""
 
-        # Mock existing session state in metadata
+        # Mock existing session state in metadata (no cached deliverable - session in progress)
         existing_state = {
             "session_id": "existing-session",
             "objective": "Ongoing project",
@@ -170,7 +187,10 @@ class TestCollaborationServiceExecution:
             "max_steps": 10,
             "status": "active",
         }
-        mock_session_cache.get_metadata.return_value = existing_state
+        # Use helper to properly mock both collab_state and collab_deliverable lookups
+        mock_session_cache.get_metadata = create_metadata_mock(
+            collab_state=existing_state, collab_deliverable=None
+        )
 
         # Mock model execution
         collaboration_service.executor.execute.return_value = "Claude response"
@@ -211,7 +231,10 @@ class TestCollaborationServiceRoundRobin:
             max_steps=6,
             status="active",
         )
-        mock_session_cache.get_metadata.return_value = session.to_dict()
+        # Use helper to properly mock both collab_state and collab_deliverable lookups
+        mock_session_cache.get_metadata = create_metadata_mock(
+            collab_state=session.to_dict(), collab_deliverable=None
+        )
 
         # Mock tool metadata lookup
         with patch.object(collaboration_service, "_get_tool_metadata") as mock_get_tool:
@@ -279,7 +302,10 @@ class TestCollaborationServiceRoundRobin:
             max_steps=10,
             status="active",
         )
-        mock_session_cache.get_metadata.return_value = session.to_dict()
+        # Use helper to properly mock both collab_state and collab_deliverable lookups
+        mock_session_cache.get_metadata = create_metadata_mock(
+            collab_state=session.to_dict(), collab_deliverable=None
+        )
 
         collaboration_service.executor.execute.return_value = "Wrapped response"
 
@@ -326,7 +352,10 @@ class TestCollaborationServiceModelExecution:
             max_steps=5,
             status="active",
         )
-        mock_session_cache.get_metadata.return_value = session.to_dict()
+        # Use helper to properly mock both collab_state and collab_deliverable lookups
+        mock_session_cache.get_metadata = create_metadata_mock(
+            collab_state=session.to_dict(), collab_deliverable=None
+        )
 
         # Mock whiteboard store info
         mock_whiteboard_manager.get_or_create_store.return_value = {
@@ -391,9 +420,9 @@ class TestCollaborationServiceModelExecution:
             status="active",
         )
 
-        # Mock dependencies
-        collaboration_service.session_cache.get_metadata = AsyncMock(
-            return_value=session.to_dict()
+        # Use helper to properly mock both collab_state and collab_deliverable lookups
+        collaboration_service.session_cache.get_metadata = create_metadata_mock(
+            collab_state=session.to_dict(), collab_deliverable=None
         )
         mock_whiteboard_manager.get_or_create_store.return_value = {
             "store_id": "vs_inject_123",
@@ -435,7 +464,10 @@ class TestCollaborationServiceModelExecution:
             max_steps=2,
             status="active",
         )
-        mock_session_cache.get_metadata.return_value = session.to_dict()
+        # Use helper to properly mock both collab_state and collab_deliverable lookups
+        mock_session_cache.get_metadata = create_metadata_mock(
+            collab_state=session.to_dict(), collab_deliverable=None
+        )
 
         collaboration_service.executor.execute.return_value = (
             "Claude response with isolation"
@@ -489,7 +521,10 @@ class TestCollaborationServiceErrorHandling:
             max_steps=3,
             status="active",
         )
-        mock_session_cache.get_metadata.return_value = session.to_dict()
+        # Use helper to properly mock both collab_state and collab_deliverable lookups
+        mock_session_cache.get_metadata = create_metadata_mock(
+            collab_state=session.to_dict(), collab_deliverable=None
+        )
 
         # Mock executor failure
         collaboration_service.executor.execute.side_effect = Exception(
@@ -525,7 +560,10 @@ class TestCollaborationServiceErrorHandling:
             max_steps=5,
             status="active",
         )
-        mock_session_cache.get_metadata.return_value = session.to_dict()
+        # Use helper to properly mock both collab_state and collab_deliverable lookups
+        mock_session_cache.get_metadata = create_metadata_mock(
+            collab_state=session.to_dict(), collab_deliverable=None
+        )
 
         # Mock tool metadata lookup
         with patch.object(collaboration_service, "_get_tool_metadata") as mock_get_tool:
@@ -578,7 +616,10 @@ class TestCollaborationServiceSummarization:
             max_steps=51,  # Just one more step to trigger summarization
             status="active",
         )
-        mock_session_cache.get_metadata.return_value = session.to_dict()
+        # Use helper to properly mock both collab_state and collab_deliverable lookups
+        mock_session_cache.get_metadata = create_metadata_mock(
+            collab_state=session.to_dict(), collab_deliverable=None
+        )
 
         collaboration_service.executor.execute.return_value = (
             "Response after summarization"
@@ -625,7 +666,10 @@ class TestCollaborationServiceOrchestrator:
             max_steps=5,
             status="active",
         )
-        mock_session_cache.get_metadata.return_value = session.to_dict()
+        # Use helper to properly mock both collab_state and collab_deliverable lookups
+        mock_session_cache.get_metadata = create_metadata_mock(
+            collab_state=session.to_dict(), collab_deliverable=None
+        )
 
         collaboration_service.executor.execute.return_value = "Orchestrated response"
 

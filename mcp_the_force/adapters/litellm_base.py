@@ -54,6 +54,48 @@ def _ensure_litellm_header_patch() -> None:
     litellm._mcp_header_patch_installed = True
 
 
+def _dedup_tool_ids(conversation_input: List[Dict[str, Any]]) -> None:
+    """
+    Deduplicate tool/function IDs to satisfy providers (e.g., Anthropic) that require unique ids per request.
+    Mutates conversation_input in-place.
+    """
+
+    seen_call_ids: set[str] = set()
+    seen_tool_use_ids: set[str] = set()
+
+    def uniq(raw_id: Optional[str], seen: set, prefix: str) -> Optional[str]:
+        if not raw_id:
+            return None
+        if raw_id not in seen:
+            seen.add(raw_id)
+            return raw_id
+        i = 2
+        new_id = f"{raw_id}-{prefix}{i}"
+        while new_id in seen:
+            i += 1
+            new_id = f"{raw_id}-{prefix}{i}"
+        seen.add(new_id)
+        return new_id
+
+    for msg in conversation_input:
+        # Responses API function calls / outputs
+        if msg.get("type") in {"function_call", "function_call_output"}:
+            cid = msg.get("call_id")
+            new_cid = uniq(cid, seen_call_ids, "dup")
+            if new_cid and new_cid != cid:
+                msg["call_id"] = new_cid
+
+        # Anthropic-style tool_use blocks may be nested inside content
+        content = msg.get("content")
+        if isinstance(content, list):
+            for part in content:
+                if isinstance(part, dict) and part.get("type") == "tool_use":
+                    tid = part.get("id")
+                    new_tid = uniq(tid, seen_tool_use_ids, "dup")
+                    if new_tid and new_tid != tid:
+                        part["id"] = new_tid
+
+
 def _update_litellm_model_limits() -> None:
     """
     Update LiteLLM's internal model cost table to reflect 1M context for Claude 4 Sonnet.
@@ -499,6 +541,9 @@ class LiteLLMBaseAdapter:
                     ),
                 )
             )
+
+            # Deduplicate tool/function ids to satisfy providers (e.g., Anthropic)
+            _dedup_tool_ids(conversation_input)
 
             # Get tool declarations
             disable_history_search_value = getattr(

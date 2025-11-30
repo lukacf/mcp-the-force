@@ -124,13 +124,15 @@ class CollaborationService:
                 project, session_id, objective, models, mode, config
             )
 
-            # Check if session is completed
+            # Check if session is completed OR has a cached deliverable (backward compat)
+            # The backward compat check handles sessions completed before the status fix
+            cached_deliverable = await self.session_cache.get_metadata(
+                project, "group_think", session_id, "collab_deliverable"
+            )
+
             if session.is_completed():
-                cached = await self.session_cache.get_metadata(
-                    project, "group_think", session_id, "collab_deliverable"
-                )
-                if cached:
-                    return str(cached)
+                if cached_deliverable:
+                    return str(cached_deliverable)
                 # If no deliverable cached, reactivate and continue so user can resume/finish
                 session.status = "active"
                 logger.info(
@@ -143,6 +145,22 @@ class CollaborationService:
                     "collab_state",
                     session.to_dict(),
                 )
+            elif cached_deliverable:
+                # Backward compatibility: session has deliverable but status wasn't updated
+                # This can happen for sessions completed before the status fix was applied
+                logger.info(
+                    f"Session {session_id} has cached deliverable but status is '{session.status}'; "
+                    f"returning cached result and fixing status."
+                )
+                session.status = "completed"
+                await self.session_cache.set_metadata(
+                    project,
+                    "group_think",
+                    session_id,
+                    "collab_state",
+                    session.to_dict(),
+                )
+                return str(cached_deliverable)
 
             # 2. Ensure whiteboard exists
             whiteboard_info = await self.whiteboard.get_or_create_store(session_id)
@@ -250,6 +268,16 @@ class CollaborationService:
 
             # Clean up progress file on success
             self._cleanup_progress_file()
+
+            # Mark session as completed and cache deliverable
+            session.status = "completed"
+            await self.session_cache.set_metadata(
+                project,
+                "group_think",
+                session_id,
+                "collab_state",
+                session.to_dict(),
+            )
 
             # Cache deliverable for future calls/resume requests
             await self.session_cache.set_metadata(
