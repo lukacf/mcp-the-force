@@ -130,24 +130,46 @@ class CollaborationService:
                 project, "group_think", session_id, "collab_deliverable"
             )
 
+            # Determine if this is a continuation (new user_input) or just resumption (no new input)
+            has_new_input = user_input and user_input.strip()
+
             if session.is_completed():
-                if cached_deliverable:
+                if cached_deliverable and not has_new_input:
+                    # Resumption: return cached result if no new input
+                    logger.info(
+                        f"Session {session_id} completed with cached deliverable; returning cached result (no new input)"
+                    )
                     return str(cached_deliverable)
-                # If no deliverable cached, reactivate and continue so user can resume/finish
-                session.status = "active"
-                logger.info(
-                    f"Session {session_id} marked completed but no deliverable found; reactivating at step {session.current_step}/{session.max_steps}."
-                )
-                await self.session_cache.set_metadata(
-                    project,
-                    "group_think",
-                    session_id,
-                    "collab_state",
-                    session.to_dict(),
-                )
-            elif cached_deliverable:
+                elif has_new_input:
+                    # Continuation: reactivate to continue with new input
+                    logger.info(
+                        f"Session {session_id} completed but has new user_input; reactivating for continuation"
+                    )
+                    session.status = "active"
+                    await self.session_cache.set_metadata(
+                        project,
+                        "group_think",
+                        session_id,
+                        "collab_state",
+                        session.to_dict(),
+                    )
+                else:
+                    # Completed but no deliverable cached - reactivate
+                    session.status = "active"
+                    logger.info(
+                        f"Session {session_id} marked completed but no deliverable found; reactivating at step {session.current_step}/{session.max_steps}."
+                    )
+                    await self.session_cache.set_metadata(
+                        project,
+                        "group_think",
+                        session_id,
+                        "collab_state",
+                        session.to_dict(),
+                    )
+            elif cached_deliverable and not has_new_input:
                 # Backward compatibility: session has deliverable but status wasn't updated
                 # This can happen for sessions completed before the status fix was applied
+                # Only return cached if no new input (resumption, not continuation)
                 logger.info(
                     f"Session {session_id} has cached deliverable but status is '{session.status}'; "
                     f"returning cached result and fixing status."

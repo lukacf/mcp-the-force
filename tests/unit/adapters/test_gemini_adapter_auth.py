@@ -77,6 +77,8 @@ class TestGeminiAuthScenarios:
         mock_settings.vertex = ProviderConfig(
             project="test-project", location="us-central1"
         )
+        # Explicitly clear gemini API key to test ADC path
+        mock_settings.gemini = ProviderConfig(api_key=None)
 
         with patch.dict(
             os.environ, {"GOOGLE_APPLICATION_CREDENTIALS": "/fake/path.json"}
@@ -93,6 +95,8 @@ class TestGeminiAuthScenarios:
         mock_settings.vertex = ProviderConfig(
             project="test-project", location="us-central1"
         )
+        # Explicitly clear gemini API key to test ADC path
+        mock_settings.gemini = ProviderConfig(api_key=None)
 
         adapter = GeminiAdapter()
 

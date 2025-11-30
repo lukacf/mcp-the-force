@@ -366,7 +366,7 @@ class UnifiedSessionCache:
             "role": role,
             "content": [
                 {
-                    "type": "input_text" if role != "assistant" else "output_text",
+                    "type": "text",  # Responses API uses "text" for all text content
                     "text": text,
                 }
             ],
