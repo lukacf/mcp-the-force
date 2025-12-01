@@ -10,6 +10,36 @@ class InstructionsService:
         # Use repository-local default if it exists; otherwise fall back to packaged docs
         self.default_path = default_path
 
+    async def list_guides(
+        self, verbose: bool | str = False, **_: Any
+    ) -> Dict[str, Any]:
+        """
+        List available Force guides with URIs and titles.
+
+        Args:
+            verbose: When truthy, include one-line summaries with each guide.
+        """
+        # Coerce verbose from string/bool
+        if isinstance(verbose, str):
+            verbose = verbose.lower() in {"1", "true", "yes", "y"}
+
+        guides = [
+            {"uri": "force://guides/usage", "title": "Usage Guide (full)"},
+            {"uri": "force://guides/async", "title": "Async Jobs Quickstart"},
+            {"uri": "force://guides/groupthink", "title": "GroupThink Quickstart"},
+        ]
+        if verbose:
+            guides[0]["summary"] = (
+                "How to use chat_with_*, context, sessions, priority_context."
+            )
+            guides[1]["summary"] = (
+                "When to use start_job/poll_job/cancel_job and patterns."
+            )
+            guides[2]["summary"] = (
+                "How to run collaborative panels, sessions, and synthesis."
+            )
+        return {"guides": guides}
+
     async def execute(
         self,
         guide_path: Optional[str] = None,

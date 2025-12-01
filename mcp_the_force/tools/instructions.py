@@ -31,31 +31,16 @@ class ListGuidesTool(ToolSpec):
     """List available Force guides (URIs and titles) for quick reference."""
 
     model_name = "list_force_guides"
-    adapter_class = "local"
+    adapter_class = None  # local service, no provider call
     description = "List built-in Force guides (usage, async jobs, group think) with URIs you can pass to read_force_guide."
     timeout = 15
+    service_cls = InstructionsService
+    service_method = "list_guides"
+
     verbose: bool = Route.prompt(  # type: ignore[assignment]
         default=False,
         description="When true, include one-line summaries with each guide.",
     )
-
-    def run(self, verbose: bool = False) -> dict:  # type: ignore[override]
-        guides = [
-            {"uri": "force://guides/usage", "title": "Usage Guide (full)"},
-            {"uri": "force://guides/async", "title": "Async Jobs Quickstart"},
-            {"uri": "force://guides/groupthink", "title": "GroupThink Quickstart"},
-        ]
-        if verbose:
-            guides[0]["summary"] = (
-                "How to use chat_with_*, context, sessions, priority_context."
-            )
-            guides[1]["summary"] = (
-                "When to use start_job/poll_job/cancel_job and patterns."
-            )
-            guides[2]["summary"] = (
-                "How to run collaborative panels, sessions, and synthesis."
-            )
-        return {"guides": guides}
 
 
 @tool
