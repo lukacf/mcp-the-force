@@ -58,12 +58,16 @@ def _dedup_tool_ids(conversation_input: List[Dict[str, Any]]) -> None:
     """
     Deduplicate tool/function IDs to satisfy providers (e.g., Anthropic) that require unique ids per request.
     Maintains call_id sync between function_call and function_call_output pairs.
+    Handles overlapping calls (multiple calls with same ID before any outputs).
     Mutates conversation_input in-place.
     """
+    from collections import defaultdict
 
-    seen_call_ids: set[str] = set()  # All call_ids encountered
+    seen_call_ids: set[str] = set()  # All rewritten call_ids encountered
     seen_tool_use_ids: set[str] = set()
-    pending_calls: dict[str, str] = {}  # original_id -> rewritten_id (for open calls)
+    pending_calls: dict[str, list[str]] = defaultdict(
+        list
+    )  # original_id -> queue of rewritten_ids
     tool_use_id_mapping: dict[str, str] = {}
 
     def get_unique_call_id(raw_id: Optional[str], msg_type: str) -> Optional[str]:
@@ -72,29 +76,28 @@ def _dedup_tool_ids(conversation_input: List[Dict[str, Any]]) -> None:
             return None
 
         if msg_type == "function_call":
-            # Check if this is a duplicate of a completed (closed) call
-            if raw_id in seen_call_ids and raw_id not in pending_calls:
-                # This call_id was already used and its output seen - duplicate!
+            # Check if this is a duplicate (pending calls OR already seen before)
+            if pending_calls[raw_id] or raw_id in seen_call_ids:
+                # Duplicate - generate new unique ID
                 i = 2
                 new_id = f"{raw_id}-dup{i}"
                 while new_id in seen_call_ids:
                     i += 1
                     new_id = f"{raw_id}-dup{i}"
                 seen_call_ids.add(new_id)
-                pending_calls[raw_id] = new_id  # Map for the upcoming output
+                pending_calls[raw_id].append(new_id)  # Add to queue
                 return new_id
             else:
-                # First occurrence or unclosed previous call
+                # First occurrence
                 seen_call_ids.add(raw_id)
-                pending_calls[raw_id] = raw_id
+                pending_calls[raw_id].append(raw_id)  # Add to queue
                 return raw_id
 
         elif msg_type == "function_call_output":
-            # Look for the matching pending call
-            if raw_id in pending_calls:
+            # Pop the oldest pending call with this original ID (FIFO)
+            if pending_calls[raw_id]:
                 # Use the same (possibly renamed) ID as the call
-                rewritten_id = pending_calls[raw_id]
-                del pending_calls[raw_id]  # Close the call
+                rewritten_id = pending_calls[raw_id].pop(0)  # Pop from front (FIFO)
                 return rewritten_id
             else:
                 # Orphaned output without a preceding call
