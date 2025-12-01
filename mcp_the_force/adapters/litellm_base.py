@@ -57,31 +57,88 @@ def _ensure_litellm_header_patch() -> None:
 def _dedup_tool_ids(conversation_input: List[Dict[str, Any]]) -> None:
     """
     Deduplicate tool/function IDs to satisfy providers (e.g., Anthropic) that require unique ids per request.
+    Maintains call_id sync between function_call and function_call_output pairs.
     Mutates conversation_input in-place.
     """
 
-    seen_call_ids: set[str] = set()
+    seen_call_ids: set[str] = set()  # All call_ids encountered
     seen_tool_use_ids: set[str] = set()
+    pending_calls: dict[str, str] = {}  # original_id -> rewritten_id (for open calls)
+    tool_use_id_mapping: dict[str, str] = {}
 
-    def uniq(raw_id: Optional[str], seen: set, prefix: str) -> Optional[str]:
+    def get_unique_call_id(raw_id: Optional[str], msg_type: str) -> Optional[str]:
+        """Map a call_id considering function_call/function_call_output pairing."""
         if not raw_id:
             return None
-        if raw_id not in seen:
-            seen.add(raw_id)
+
+        if msg_type == "function_call":
+            # Check if this is a duplicate of a completed (closed) call
+            if raw_id in seen_call_ids and raw_id not in pending_calls:
+                # This call_id was already used and its output seen - duplicate!
+                i = 2
+                new_id = f"{raw_id}-dup{i}"
+                while new_id in seen_call_ids:
+                    i += 1
+                    new_id = f"{raw_id}-dup{i}"
+                seen_call_ids.add(new_id)
+                pending_calls[raw_id] = new_id  # Map for the upcoming output
+                return new_id
+            else:
+                # First occurrence or unclosed previous call
+                seen_call_ids.add(raw_id)
+                pending_calls[raw_id] = raw_id
+                return raw_id
+
+        elif msg_type == "function_call_output":
+            # Look for the matching pending call
+            if raw_id in pending_calls:
+                # Use the same (possibly renamed) ID as the call
+                rewritten_id = pending_calls[raw_id]
+                del pending_calls[raw_id]  # Close the call
+                return rewritten_id
+            else:
+                # Orphaned output without a preceding call
+                if raw_id not in seen_call_ids:
+                    seen_call_ids.add(raw_id)
+                    return raw_id
+                i = 2
+                new_id = f"{raw_id}-dup{i}"
+                while new_id in seen_call_ids:
+                    i += 1
+                    new_id = f"{raw_id}-dup{i}"
+                seen_call_ids.add(new_id)
+                return new_id
+
+        return None
+
+    def get_unique_tool_use_id(raw_id: Optional[str]) -> Optional[str]:
+        """Map a tool_use ID to a unique value."""
+        if not raw_id:
+            return None
+
+        if raw_id in tool_use_id_mapping:
+            return tool_use_id_mapping[raw_id]
+
+        if raw_id not in seen_tool_use_ids:
+            seen_tool_use_ids.add(raw_id)
+            tool_use_id_mapping[raw_id] = raw_id
             return raw_id
+
         i = 2
-        new_id = f"{raw_id}-{prefix}{i}"
-        while new_id in seen:
+        new_id = f"{raw_id}-dup{i}"
+        while new_id in seen_tool_use_ids:
             i += 1
-            new_id = f"{raw_id}-{prefix}{i}"
-        seen.add(new_id)
+            new_id = f"{raw_id}-dup{i}"
+        seen_tool_use_ids.add(new_id)
+        tool_use_id_mapping[raw_id] = new_id
         return new_id
 
     for msg in conversation_input:
         # Responses API function calls / outputs
-        if msg.get("type") in {"function_call", "function_call_output"}:
+        msg_type = msg.get("type")
+        if msg_type in {"function_call", "function_call_output"}:
             cid = msg.get("call_id")
-            new_cid = uniq(cid, seen_call_ids, "dup")
+            new_cid = get_unique_call_id(cid, msg_type)
             if new_cid and new_cid != cid:
                 msg["call_id"] = new_cid
 
@@ -91,7 +148,7 @@ def _dedup_tool_ids(conversation_input: List[Dict[str, Any]]) -> None:
             for part in content:
                 if isinstance(part, dict) and part.get("type") == "tool_use":
                     tid = part.get("id")
-                    new_tid = uniq(tid, seen_tool_use_ids, "dup")
+                    new_tid = get_unique_tool_use_id(tid)
                     if new_tid and new_tid != tid:
                         part["id"] = new_tid
 
