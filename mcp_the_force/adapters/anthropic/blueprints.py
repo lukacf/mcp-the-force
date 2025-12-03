@@ -67,7 +67,7 @@ def get_anthropic_blueprints() -> List[ToolBlueprint]:
             adapter_key="anthropic",
             param_class=AnthropicToolParams,
             description=full_description,
-            timeout=600,  # 10 minutes default timeout
+            timeout=1800,  # 30 minutes for heavyweight reasoning models
             context_window=capabilities.max_context_window
             or 200_000,  # All Anthropic models have 200k context
             tool_type="chat",  # All Anthropic models are chat tools

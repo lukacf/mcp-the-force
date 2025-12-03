@@ -10,11 +10,11 @@ blueprints = []
 for model_name, capabilities in GEMINI_MODEL_CAPABILITIES.items():
     # Set timeout based on model
     if "flash" in model_name:
-        timeout = 300  # 5 minutes for flash
+        timeout = 600  # 10 minutes for flash (fast models)
     elif "pro" in model_name:
-        timeout = 480  # 8 minutes for pro
+        timeout = 1800  # 30 minutes for pro (heavyweight models)
     else:
-        timeout = 300  # Default 5 minutes
+        timeout = 1800  # Default 30 minutes
 
     blueprint = ToolBlueprint(
         model_name=model_name,

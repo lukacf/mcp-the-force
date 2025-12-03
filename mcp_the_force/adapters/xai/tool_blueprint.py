@@ -18,13 +18,11 @@ user_facing_models = {
 for model_name, custom_description in user_facing_models.items():
     capabilities = GROK_MODEL_CAPABILITIES[model_name]
 
-    # Set timeout based on model
-    if model_name == "grok-4.1":
-        timeout = 600  # 10 minutes for grok-4.1
-    elif model_name == "grok-3-beta":
-        timeout = 420  # 7 minutes for grok-3-beta
+    # Set timeout based on model type
+    if "fast" in model_name or "mini" in model_name:
+        timeout = 600  # 10 minutes for fast/lightweight models
     else:
-        timeout = 300  # Default 5 minutes
+        timeout = 1800  # 30 minutes for heavyweight reasoning models
 
     blueprint = ToolBlueprint(
         model_name=model_name,

@@ -31,7 +31,9 @@ class OpenAIRequest(BaseModel):
     disable_history_search: bool = Field(default=False, exclude=True)
     return_debug: bool = Field(default=False, exclude=True)
     max_output_tokens: Optional[int] = Field(default=None, exclude=True)
-    timeout: float = Field(default=300.0, exclude=True)
+    timeout: float = Field(
+        default=1800.0, exclude=True
+    )  # 30 minutes for reasoning models
 
     def to_api_format(self) -> Dict[str, Any]:
         """Convert to OpenAI API format, handling nested reasoning and structured outputs."""
