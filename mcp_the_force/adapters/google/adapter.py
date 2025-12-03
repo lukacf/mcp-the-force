@@ -131,7 +131,14 @@ class GeminiAdapter(LiteLLMBaseAdapter):
             self.capabilities = Gemini3ProPreviewCapabilities()
 
     def _validate_environment(self):
-        """Validate Gemini/Vertex AI authentication in the correct order."""
+        """Validate Gemini/Vertex AI authentication in the correct order.
+
+        Priority order (Gemini API key first - simpler, more reliable):
+        1. Gemini API Key (preferred)
+        2. Service Account (via adc_credentials_path)
+        3. Implicit ADC (GOOGLE_APPLICATION_CREDENTIALS)
+        4. Fallback ADC (gcloud auth)
+        """
         settings = get_settings()
         logger.debug(f"[DEBUG] Settings ID: {id(settings)}, Working dir: {os.getcwd()}")
 
@@ -148,7 +155,18 @@ class GeminiAdapter(LiteLLMBaseAdapter):
                 f"[DEBUG] gemini.api_key = {'SET' if settings.gemini.api_key else 'NOT SET'}"
             )
 
-        # 1. Service Account (via adc_credentials_path)
+        # 1. Gemini API Key (PREFERRED - simpler, more reliable than Vertex AI)
+        if settings.gemini and settings.gemini.api_key:
+            if settings.vertex.project or settings.vertex.location:
+                logger.debug(
+                    "Both Gemini API key and Vertex AI config are present. "
+                    "Using Gemini API key (preferred)."
+                )
+            self._auth_method = "api_key"
+            logger.info("Using Gemini API key.")
+            return
+
+        # 2. Service Account (via adc_credentials_path)
         logger.debug(
             f"[DEBUG] Checking service account: adc={bool(settings.vertex.adc_credentials_path)}, project={bool(settings.vertex.project)}, location={bool(settings.vertex.location)}"
         )
@@ -161,17 +179,6 @@ class GeminiAdapter(LiteLLMBaseAdapter):
             logger.info("Using Vertex AI with specified ADC credentials.")
             return
         logger.debug("[DEBUG] Service account check failed, moving to next method")
-
-        # 2. Gemini API Key
-        if settings.gemini and settings.gemini.api_key:
-            if settings.vertex.project or settings.vertex.location:
-                logger.warning(
-                    "Both Gemini API key and Vertex AI config are present. "
-                    "Prioritizing Gemini API key."
-                )
-            self._auth_method = "api_key"
-            logger.info("Using Gemini API key.")
-            return
 
         # 3. Implicit Application Default Credentials (ADC)
         if (
@@ -193,8 +200,8 @@ class GeminiAdapter(LiteLLMBaseAdapter):
 
         raise ConfigurationException(
             "No valid Gemini/Vertex AI credentials found. Please configure one of the following:\n"
-            "1. Service Account: Set `vertex.adc_credentials_path`, `vertex.project`, and `vertex.location`.\n"
-            "2. API Key: Set `gemini.api_key`.\n"
+            "1. API Key: Set `gemini.api_key` or GEMINI_API_KEY env var (recommended).\n"
+            "2. Service Account: Set `vertex.adc_credentials_path`, `vertex.project`, and `vertex.location`.\n"
             "3. ADC: Run `gcloud auth application-default login` and set `vertex.project` and `vertex.location`.",
             provider="Gemini",
         )

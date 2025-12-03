@@ -23,21 +23,49 @@ def mock_settings():
 
 
 class TestGeminiAuthScenarios:
-    def test_service_account_precedence(self, mock_settings, tmp_path):
+    def test_api_key_always_takes_precedence(self, mock_settings, tmp_path, caplog):
         """
-        Tests that service account credentials (adc_credentials_path) are prioritized.
+        Tests that Gemini API key ALWAYS takes precedence over Vertex AI,
+        even when service account credentials are configured.
         """
         # Setup: Create a dummy ADC file
         adc_file = tmp_path / "adc.json"
         adc_file.write_text("{}")
 
-        # Configure multiple auth methods
+        # Configure multiple auth methods - API key should ALWAYS win
         mock_settings.vertex = ProviderConfig(
             adc_credentials_path=str(adc_file),
             project="test-project",
             location="us-central1",
         )
         mock_settings.gemini = ProviderConfig(api_key="gemini-api-key")
+
+        # Initialize adapter
+        adapter = GeminiAdapter()
+
+        # Assertions - API key should win
+        assert adapter._auth_method == "api_key"
+        assert adapter._get_model_prefix() == "gemini"
+
+        params = adapter._build_request_params([], MagicMock(), [])
+        assert "api_key" in params
+        assert "vertex_project" not in params
+
+    def test_service_account_used_without_api_key(self, mock_settings, tmp_path):
+        """
+        Tests that service account credentials are used when API key is not set.
+        """
+        # Setup: Create a dummy ADC file
+        adc_file = tmp_path / "adc.json"
+        adc_file.write_text("{}")
+
+        # Configure only Vertex AI (no API key)
+        mock_settings.vertex = ProviderConfig(
+            adc_credentials_path=str(adc_file),
+            project="test-project",
+            location="us-central1",
+        )
+        mock_settings.gemini = ProviderConfig(api_key=None)
 
         # Initialize adapter
         adapter = GeminiAdapter()
@@ -50,11 +78,15 @@ class TestGeminiAuthScenarios:
         assert "vertex_project" in params
         assert "api_key" not in params
 
-    def test_api_key_precedence(self, mock_settings, caplog):
+    def test_api_key_with_vertex_config_logs_debug(self, mock_settings, caplog):
         """
-        Tests that API key is used when adc_credentials_path is not set.
+        Tests that having both API key and Vertex config logs a debug message.
         """
-        # Configure API key and Vertex settings (to trigger warning)
+        import logging
+
+        caplog.set_level(logging.DEBUG)
+
+        # Configure API key and Vertex settings
         mock_settings.gemini = ProviderConfig(api_key="gemini-api-key")
         mock_settings.vertex = ProviderConfig(
             project="test-project", location="us-central1"
@@ -64,7 +96,7 @@ class TestGeminiAuthScenarios:
 
         assert adapter._auth_method == "api_key"
         assert adapter._get_model_prefix() == "gemini"
-        assert "Prioritizing Gemini API key" in caplog.text
+        assert "Using Gemini API key (preferred)" in caplog.text
 
         params = adapter._build_request_params([], MagicMock(), [])
         assert "api_key" in params
