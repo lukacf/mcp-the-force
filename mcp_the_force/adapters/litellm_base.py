@@ -54,6 +54,52 @@ def _ensure_litellm_header_patch() -> None:
     litellm._mcp_header_patch_installed = True
 
 
+def _sanitize_conversation_input(conversation_input: List[Dict[str, Any]]) -> None:
+    """
+    Sanitize conversation_input to fix common issues that cause provider errors.
+
+    Fixes:
+    - Messages with content=None (causes "Invalid content type: NoneType" in Anthropic)
+    - Messages with missing required fields
+    - Items without content field (litellm bug: it calls .get("content") on ALL items)
+
+    Mutates conversation_input in-place.
+    """
+    for msg in conversation_input:
+        msg_type = msg.get("type")
+
+        # CRITICAL WORKAROUND for litellm bug:
+        # litellm's _transform_responses_api_input_item_to_chat_completion_message calls
+        # input_item.get("content") on ALL items, including function_call and function_call_output.
+        # When content is missing or None, it fails with "Invalid content type: NoneType".
+        # We must ensure ALL items have a valid content field.
+        if "content" not in msg or msg["content"] is None:
+            # Set to empty text content array for Responses API format
+            msg["content"] = [{"type": "text", "text": ""}]
+            logger.debug(
+                f"Sanitized item with missing/None content: type={msg_type}, role={msg.get('role')}"
+            )
+
+        # For message types with content, ensure content items are valid
+        if msg_type == "message":
+            content = msg.get("content")
+            if isinstance(content, list):
+                # Ensure all content items have valid structure
+                for item in content:
+                    if isinstance(item, dict):
+                        if item.get("type") == "text" and item.get("text") is None:
+                            item["text"] = ""
+                            logger.debug("Sanitized text content item with None text")
+
+        # For function_call and function_call_output, ensure required fields exist
+        elif msg_type == "function_call":
+            if msg.get("arguments") is None:
+                msg["arguments"] = "{}"
+        elif msg_type == "function_call_output":
+            if msg.get("output") is None:
+                msg["output"] = ""
+
+
 def _dedup_tool_ids(conversation_input: List[Dict[str, Any]]) -> None:
     """
     Deduplicate tool/function IDs to satisfy providers (e.g., Anthropic) that require unique ids per request.
@@ -488,6 +534,30 @@ class LiteLLMBaseAdapter:
                     )
 
             # Continue conversation with tool results
+            logger.warning(
+                f"[{self.display_name}] TOOL LOOP BEFORE SANITIZE: {len(updated_conversation)} items"
+            )
+            for idx, item in enumerate(updated_conversation):
+                if "content" in item and item["content"] is None:
+                    logger.error(
+                        f"[{self.display_name}] TOOL LOOP PRE-SANITIZE content=None at {idx}: {item}"
+                    )
+            _sanitize_conversation_input(updated_conversation)
+            logger.warning(
+                f"[{self.display_name}] TOOL LOOP AFTER SANITIZE: {len(updated_conversation)} items"
+            )
+            for idx, item in enumerate(updated_conversation):
+                item_type = item.get("type", "NO_TYPE")
+                item_content = item.get("content")
+                content_type = type(item_content).__name__
+                logger.warning(
+                    f"[{self.display_name}] TOOL_LOOP_INPUT[{idx}]: type={item_type}, "
+                    f"content_type={content_type}, has_content={'content' in item}"
+                )
+                if "content" in item and item["content"] is None:
+                    logger.error(
+                        f"[{self.display_name}] TOOL LOOP POST-SANITIZE content=None at {idx}: {item}"
+                    )
             request_params["input"] = updated_conversation
             response = await aresponses(**request_params)
             final_response = response
@@ -602,7 +672,24 @@ class LiteLLMBaseAdapter:
                 )
             )
 
-            # Deduplicate tool/function ids to satisfy providers (e.g., Anthropic)
+            # Sanitize and deduplicate conversation input to satisfy providers (e.g., Anthropic)
+            logger.warning(
+                f"[{self.display_name}] BEFORE SANITIZE: {len(conversation_input)} items"
+            )
+            for idx, item in enumerate(conversation_input):
+                if "content" in item and item["content"] is None:
+                    logger.error(
+                        f"[{self.display_name}] PRE-SANITIZE content=None at {idx}: {item}"
+                    )
+            _sanitize_conversation_input(conversation_input)
+            logger.warning(
+                f"[{self.display_name}] AFTER SANITIZE: {len(conversation_input)} items"
+            )
+            for idx, item in enumerate(conversation_input):
+                if "content" in item and item["content"] is None:
+                    logger.error(
+                        f"[{self.display_name}] POST-SANITIZE content=None at {idx}: {item}"
+                    )
             _dedup_tool_ids(conversation_input)
 
             # Get tool declarations
@@ -624,18 +711,43 @@ class LiteLLMBaseAdapter:
             )
 
             # Debug logging for request parameters
+            import json as _json
+
+            input_data = request_params.get("input", [])
+            input_size = len(_json.dumps(input_data, default=str))
+            tools_count = len(request_params.get("tools", []))
             logger.info(
                 f"[{self.display_name}] LiteLLM request: model={request_params.get('model')}, "
                 f"has_api_key={bool(request_params.get('api_key'))}, "
                 f"vertex_project={request_params.get('vertex_project')}, "
-                f"vertex_location={request_params.get('vertex_location')}"
+                f"vertex_location={request_params.get('vertex_location')}, "
+                f"input_size={input_size:,} bytes, tools_count={tools_count}"
             )
+
+            # DEBUG: Log each input item to find content=None issue
+            for idx, item in enumerate(input_data):
+                item_type = item.get("type", "NO_TYPE")
+                item_role = item.get("role", "NO_ROLE")
+                item_content = item.get("content")
+                content_type = type(item_content).__name__
+                logger.warning(
+                    f"[{self.display_name}] INPUT[{idx}]: type={item_type}, role={item_role}, "
+                    f"content_type={content_type}, has_content={'content' in item}"
+                )
+                if item_content is None and "content" in item:
+                    logger.error(
+                        f"[{self.display_name}] FOUND content=None at index {idx}: {item}"
+                    )
 
             # Ensure headers propagate to acompletion even if aresponses drops them
             token = _LITELLM_EXTRA_HEADERS_CTX.set(request_params.get("extra_headers"))
 
-            # Make the API call
+            # Make the API call with explicit timeout
             import time as _time
+
+            # Use a 5 minute timeout - should be plenty for any reasonable API call
+            # (curl returns in ~20s for the same request)
+            request_params["timeout"] = 300
 
             _api_start = _time.monotonic()
             response = await aresponses(**request_params)
