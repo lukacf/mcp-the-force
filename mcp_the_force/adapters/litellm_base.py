@@ -623,11 +623,26 @@ class LiteLLMBaseAdapter:
                 conversation_input, params, tools, **kwargs
             )
 
+            # Debug logging for request parameters
+            logger.info(
+                f"[{self.display_name}] LiteLLM request: model={request_params.get('model')}, "
+                f"has_api_key={bool(request_params.get('api_key'))}, "
+                f"vertex_project={request_params.get('vertex_project')}, "
+                f"vertex_location={request_params.get('vertex_location')}"
+            )
+
             # Ensure headers propagate to acompletion even if aresponses drops them
             token = _LITELLM_EXTRA_HEADERS_CTX.set(request_params.get("extra_headers"))
 
             # Make the API call
+            import time as _time
+
+            _api_start = _time.monotonic()
             response = await aresponses(**request_params)
+            _api_elapsed = _time.monotonic() - _api_start
+            logger.info(
+                f"[{self.display_name}] LiteLLM API call completed in {_api_elapsed:.2f}s"
+            )
 
             # Handle tool calls if present (still under the same context headers)
             final_response, updated_conversation = await self._handle_tool_calls(

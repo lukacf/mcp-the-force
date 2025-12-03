@@ -232,6 +232,10 @@ class GeminiAdapter(LiteLLMBaseAdapter):
         if self._auth_method == "api_key":
             if settings.gemini and settings.gemini.api_key:
                 request_params["api_key"] = settings.gemini.api_key
+            # Explicitly override any Vertex AI env vars to prevent litellm from using them
+            # This is critical because litellm checks VERTEX_PROJECT/VERTEX_LOCATION env vars
+            request_params["vertex_project"] = None
+            request_params["vertex_location"] = None
         else:  # service_account, implicit_adc, fallback_adc
             if settings.vertex.project:
                 request_params["vertex_project"] = settings.vertex.project

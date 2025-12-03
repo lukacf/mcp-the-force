@@ -49,7 +49,9 @@ class TestGeminiAuthScenarios:
 
         params = adapter._build_request_params([], MagicMock(), [])
         assert "api_key" in params
-        assert "vertex_project" not in params
+        # vertex_project/location should be explicitly None to override env vars
+        assert params.get("vertex_project") is None
+        assert params.get("vertex_location") is None
 
     def test_service_account_used_without_api_key(self, mock_settings, tmp_path):
         """
@@ -100,7 +102,9 @@ class TestGeminiAuthScenarios:
 
         params = adapter._build_request_params([], MagicMock(), [])
         assert "api_key" in params
-        assert "vertex_project" not in params
+        # vertex_project/location should be explicitly None to override env vars
+        assert params.get("vertex_project") is None
+        assert params.get("vertex_location") is None
 
     def test_implicit_adc_auth(self, mock_settings):
         """
