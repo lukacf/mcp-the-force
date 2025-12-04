@@ -144,7 +144,7 @@ class CollaborationConfig:
 
     max_steps: int = 10
     parallel_limit: int = 1  # Number of models to run in parallel
-    timeout_per_step: int = 300  # Seconds per step
+    timeout_per_step: int = 600  # Seconds per step (10 min for heavyweight models)
     summarization_threshold: int = 50  # Messages before summarization
     cost_limit_usd: Optional[float] = None
 
@@ -175,7 +175,7 @@ class CollaborationConfig:
         return cls(
             max_steps=data.get("max_steps", 10),
             parallel_limit=data.get("parallel_limit", 1),
-            timeout_per_step=data.get("timeout_per_step", 300),
+            timeout_per_step=data.get("timeout_per_step", 600),
             summarization_threshold=data.get("summarization_threshold", 50),
             cost_limit_usd=data.get("cost_limit_usd"),
         )

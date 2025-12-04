@@ -77,6 +77,7 @@ class CollaborationService:
         discussion_turns: int = 6,
         synthesis_model: str = "chat_with_gemini3_pro_preview",
         validation_rounds: int = 2,
+        direct_context: bool = True,
         **kwargs,
     ) -> str:
         """Main orchestration logic for multi-model collaboration.
@@ -99,7 +100,7 @@ class CollaborationService:
         """
         # Use config defaults if not provided
         if config is None:
-            config = CollaborationConfig(max_steps=max_steps, timeout_per_step=300)
+            config = CollaborationConfig(max_steps=max_steps, timeout_per_step=600)
 
         logger.info(
             f"Starting collaboration session {session_id} with {len(models)} models"
@@ -124,57 +125,13 @@ class CollaborationService:
                 project, session_id, objective, models, mode, config
             )
 
-            # Check if session is completed OR has a cached deliverable (backward compat)
-            # The backward compat check handles sessions completed before the status fix
-            cached_deliverable = await self.session_cache.get_metadata(
-                project, "group_think", session_id, "collab_deliverable"
-            )
-
-            # Determine if this is a continuation (new user_input) or just resumption (no new input)
-            has_new_input = user_input and user_input.strip()
-
+            # Always reactivate completed sessions for continuation
+            # Sessions build on shared whiteboard - calling again means "continue"
             if session.is_completed():
-                if cached_deliverable and not has_new_input:
-                    # Resumption: return cached result if no new input
-                    logger.info(
-                        f"Session {session_id} completed with cached deliverable; returning cached result (no new input)"
-                    )
-                    return str(cached_deliverable)
-                elif has_new_input:
-                    # Continuation: reactivate to continue with new input
-                    logger.info(
-                        f"Session {session_id} completed but has new user_input; reactivating for continuation"
-                    )
-                    session.status = "active"
-                    await self.session_cache.set_metadata(
-                        project,
-                        "group_think",
-                        session_id,
-                        "collab_state",
-                        session.to_dict(),
-                    )
-                else:
-                    # Completed but no deliverable cached - reactivate
-                    session.status = "active"
-                    logger.info(
-                        f"Session {session_id} marked completed but no deliverable found; reactivating at step {session.current_step}/{session.max_steps}."
-                    )
-                    await self.session_cache.set_metadata(
-                        project,
-                        "group_think",
-                        session_id,
-                        "collab_state",
-                        session.to_dict(),
-                    )
-            elif cached_deliverable and not has_new_input:
-                # Backward compatibility: session has deliverable but status wasn't updated
-                # This can happen for sessions completed before the status fix was applied
-                # Only return cached if no new input (resumption, not continuation)
                 logger.info(
-                    f"Session {session_id} has cached deliverable but status is '{session.status}'; "
-                    f"returning cached result and fixing status."
+                    f"Reactivating completed session {session_id} for continuation"
                 )
-                session.status = "completed"
+                session.status = "active"
                 await self.session_cache.set_metadata(
                     project,
                     "group_think",
@@ -182,7 +139,6 @@ class CollaborationService:
                     "collab_state",
                     session.to_dict(),
                 )
-                return str(cached_deliverable)
 
             # 2. Ensure whiteboard exists
             whiteboard_info = await self.whiteboard.get_or_create_store(session_id)
@@ -240,6 +196,7 @@ class CollaborationService:
                 project,
                 config,
                 total_phases,
+                direct_context,
             )
 
             # No decision extraction needed - synthesis agent reads whiteboard directly
@@ -291,7 +248,7 @@ class CollaborationService:
             # Clean up progress file on success
             self._cleanup_progress_file()
 
-            # Mark session as completed and cache deliverable
+            # Mark session as completed
             session.status = "completed"
             await self.session_cache.set_metadata(
                 project,
@@ -299,15 +256,6 @@ class CollaborationService:
                 session_id,
                 "collab_state",
                 session.to_dict(),
-            )
-
-            # Cache deliverable for future calls/resume requests
-            await self.session_cache.set_metadata(
-                project,
-                "group_think",
-                session_id,
-                "collab_deliverable",
-                final_deliverable,
             )
 
             # Return the actual deliverable (not meta-report)
@@ -423,6 +371,7 @@ class CollaborationService:
         timeout: Optional[int] = None,
         context: Optional[list[str]] = None,
         priority_context: Optional[list[str]] = None,
+        direct_context: bool = True,
     ) -> str:
         """Execute single model turn with whiteboard and file context.
 
@@ -436,6 +385,7 @@ class CollaborationService:
             timeout: Optional timeout in seconds for this turn
             context: Optional list of file/directory paths for context
             priority_context: Optional list of priority file/directory paths
+            direct_context: If True, inject conversation history directly into instructions
         """
         # Get next model based on orchestration mode
         if session.mode == "round_robin":
@@ -447,8 +397,10 @@ class CollaborationService:
 
         logger.debug(f"Executing turn for {next_model} in session {session.session_id}")
 
-        # Build instructions that reference the whiteboard
-        instructions = self._build_collaboration_instructions(session, next_model)
+        # Build instructions - either with direct history injection or whiteboard reference
+        instructions = self._build_collaboration_instructions(
+            session, next_model, direct_context
+        )
 
         # Create unique sub-session ID to prevent history pollution
         sub_session_id = f"{session.session_id}__{next_model}"
@@ -498,9 +450,51 @@ class CollaborationService:
             return f"Error from {next_model}: {str(e)}"
 
     def _build_collaboration_instructions(
-        self, session: CollaborationSession, model_name: str
+        self,
+        session: CollaborationSession,
+        model_name: str,
+        direct_context: bool = True,
     ) -> str:
-        """Build instructions for the model that reference the whiteboard."""
+        """Build instructions for the model.
+
+        Args:
+            session: Current collaboration session
+            model_name: Name of the model being instructed
+            direct_context: If True, inject conversation history directly
+        """
+        # Build the conversation history section
+        if direct_context and session.messages:
+            # Direct injection: include full conversation history
+            history_lines = ["**Previous Discussion:**"]
+            for i, msg in enumerate(session.messages, 1):
+                # Truncate very long messages to keep context manageable
+                content = msg.content
+                if len(content) > 2000:
+                    content = content[:2000] + "... [truncated]"
+                history_lines.append(f"[Turn {i}] {msg.speaker}: {content}")
+            history_section = "\n".join(history_lines)
+
+            context_instructions = """**Instructions:**
+1. Review the previous discussion above
+2. Consider previous contributions from other models and the user
+3. Provide your unique perspective and analysis
+4. Build on others' ideas constructively
+5. Ask clarifying questions if needed
+6. Keep your response focused and collaborative
+
+Now add your contribution to the discussion."""
+        else:
+            # Whiteboard mode: models must search
+            history_section = ""
+            context_instructions = """**Instructions:**
+1. Use file_search to review the whiteboard conversation history
+2. Consider previous contributions from other models and the user
+3. Provide your unique perspective and analysis
+4. Build on others' ideas constructively
+5. Ask clarifying questions if needed
+6. Keep your response focused and collaborative
+
+The whiteboard contains the full conversation history. Use file_search to access it before responding."""
 
         instructions = f"""You are participating in a multi-model collaboration session.
 
@@ -511,15 +505,9 @@ class CollaborationService:
 **Mode:** {session.mode}
 **Other Participants:** {', '.join([m for m in session.models if m != model_name])}
 
-**Instructions:**
-1. Use file_search to review the whiteboard conversation history
-2. Consider previous contributions from other models and the user
-3. Provide your unique perspective and analysis
-4. Build on others' ideas constructively
-5. Ask clarifying questions if needed
-6. Keep your response focused and collaborative
+{history_section}
 
-The whiteboard contains the full conversation history. Use file_search to access it before responding."""
+{context_instructions}"""
 
         return instructions
 
@@ -683,6 +671,7 @@ The whiteboard contains the full conversation history. Use file_search to access
         project: str,
         config: CollaborationConfig,
         total_phases: int,
+        direct_context: bool = True,
     ) -> str:
         """Run the discussion phase (Phase 1)."""
 
@@ -722,7 +711,12 @@ The whiteboard contains the full conversation history. Use file_search to access
                 config.timeout_per_step if config else 300
             )  # Default timeout
             response = await self._execute_model_turn(
-                session, whiteboard_info, timeout_per_step, context, priority_context
+                session,
+                whiteboard_info,
+                timeout_per_step,
+                context,
+                priority_context,
+                direct_context,
             )
 
             # Add response to session and whiteboard
@@ -898,9 +892,7 @@ The whiteboard contains the full conversation history. Use file_search to access
                     session_id=review_session_id,
                     disable_history_record=True,
                     disable_history_search=True,
-                    timeout=min(
-                        config.timeout_per_step if config else 120, 120
-                    ),  # Add timeout per GPT-5
+                    timeout=config.timeout_per_step if config else 600,
                     # Remove context from validation per GPT-5 suggestion
                     context=None,
                     priority_context=None,
@@ -944,9 +936,7 @@ The whiteboard contains the full conversation history. Use file_search to access
                     session_id=refinement_session_id,
                     disable_history_record=True,
                     disable_history_search=True,
-                    timeout=config.timeout_per_step
-                    if config
-                    else 300,  # Add timeout per GPT-5
+                    timeout=config.timeout_per_step if config else 600,
                     context=None,  # Remove context from refinement per GPT-5
                     priority_context=None,
                 )

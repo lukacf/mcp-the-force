@@ -185,3 +185,15 @@ class GroupThink(ToolSpec):
             "Example: validation_rounds=3"
         ),
     )
+
+    direct_context: bool = Route.adapter(  # type: ignore[assignment]
+        default=True,
+        description=(
+            "(Optional) When enabled, injects previous conversation turns directly into each model's context "
+            "instead of relying on whiteboard vector search. This provides more reliable context passing "
+            "between turns. When disabled, models must use file_search to query the whiteboard for history. "
+            "Syntax: A boolean (true or false). "
+            "Default: true. "
+            "Example: direct_context=false"
+        ),
+    )

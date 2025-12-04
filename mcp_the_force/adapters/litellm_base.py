@@ -95,6 +95,11 @@ def _sanitize_conversation_input(conversation_input: List[Dict[str, Any]]) -> No
         elif msg_type == "function_call":
             if msg.get("arguments") is None:
                 msg["arguments"] = "{}"
+            # Gemini requires thought_signature on all function_call items
+            # Use the special bypass signature if not present
+            if not msg.get("thought_signature"):
+                msg["thought_signature"] = "skip_thought_signature_validator"
+                msg["thoughtSignature"] = "skip_thought_signature_validator"
         elif msg_type == "function_call_output":
             if msg.get("output") is None:
                 msg["output"] = ""
@@ -485,7 +490,9 @@ class LiteLLMBaseAdapter:
                     f"provider_fields={getattr(tool_call, 'provider_specific_fields', None)}"
                 )
                 if not thought_sig:
-                    thought_sig = "synthetic-thought-signature"  # fallback to satisfy Gemini requirement
+                    # Use Gemini's special validator-skip signature when no real signature is available
+                    # See: https://ai.google.dev/gemini-api/docs/thought-signatures
+                    thought_sig = "skip_thought_signature_validator"
                 fc_msg["thought_signature"] = thought_sig
                 fc_msg["thoughtSignature"] = thought_sig  # some SDKs expect camelCase
                 # Gemini expects the signature nested under functionCall

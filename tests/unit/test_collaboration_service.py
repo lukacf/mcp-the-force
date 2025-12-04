@@ -399,8 +399,9 @@ class TestCollaborationServiceModelExecution:
         # Should have unique sub-session ID
         assert call_kwargs["session_id"] == "model-test__chat_with_gpt51_codex"
 
-        # Should have instructions referencing whiteboard
-        assert "whiteboard" in call_kwargs["instructions"].lower()
+        # Should have instructions with context (direct injection is default)
+        # With direct_context=True, instructions show "Previous Discussion"
+        assert "previous discussion" in call_kwargs["instructions"].lower()
 
     @pytest.mark.asyncio
     async def test_whiteboard_context_injection(

@@ -1,4 +1,4 @@
-"""Protocol-based Gemini adapter using LiteLLM."""
+"""Native Gemini adapter using google-genai SDK directly."""
 
 from .adapter import GeminiAdapter
 

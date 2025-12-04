@@ -1,18 +1,36 @@
-"""Protocol-based Gemini adapter using LiteLLM."""
+"""Native Gemini adapter using google-genai SDK directly.
 
+This adapter bypasses LiteLLM to use the google-genai SDK natively,
+preserving thought_signature fields for Gemini 3+ models.
+"""
+
+import json
 import logging
 import os
 import subprocess
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
+
+from google import genai
+from google.genai import types
 
 from ..errors import ConfigurationException
-from ..litellm_base import LiteLLMBaseAdapter
 from ..protocol import CallContext, ToolDispatcher
 from .definitions import GeminiToolParams, GEMINI_MODEL_CAPABILITIES
+from .converters import (
+    responses_to_contents,
+    tools_to_gemini,
+    extract_text_from_response,
+    extract_function_calls,
+)
 from ...config import get_settings
+from ...unified_session_cache import UnifiedSessionCache
+from ...prompts import get_developer_prompt
 
 logger = logging.getLogger(__name__)
+
+# Client cache to avoid recreating clients
+_client_cache: Dict[str, genai.Client] = {}
 
 
 def setup_project_adc() -> str:
@@ -95,12 +113,11 @@ def setup_project_adc() -> str:
         )
 
 
-class GeminiAdapter(LiteLLMBaseAdapter):
-    """Protocol-based Gemini adapter using LiteLLM.
+class GeminiAdapter:
+    """Native Gemini adapter using google-genai SDK directly.
 
-    This adapter uses LiteLLM to communicate with Google's Gemini models via
-    Vertex AI. LiteLLM handles all the complex type conversions and API
-    specifics internally.
+    This adapter uses the google-genai SDK to communicate with Google's Gemini
+    models. It supports both Gemini API (via API key) and Vertex AI authentication.
     """
 
     param_class = GeminiToolParams
@@ -114,8 +131,10 @@ class GeminiAdapter(LiteLLMBaseAdapter):
         self.model_name = model
         self.display_name = f"Gemini {model}"
         self._auth_method = "uninitialized"
-        super().__init__()  # Initialize base before custom state (runs _validate_environment)
-        self.client = None
+        self._client: Optional[genai.Client] = None
+
+        # Validate environment first
+        self._validate_environment()
 
         # Load capabilities safely
         capabilities = GEMINI_MODEL_CAPABILITIES.get(model)
@@ -206,74 +225,79 @@ class GeminiAdapter(LiteLLMBaseAdapter):
             provider="Gemini",
         )
 
-    def _get_model_prefix(self) -> str:
-        """Get the LiteLLM model prefix based on the auth method."""
-        if self._auth_method == "api_key":
-            return "gemini"  # LiteLLM provider prefix for Gemini API key auth
-        return "vertex_ai"  # Use 'vertex_ai' for all other auth methods
-
-    def _build_request_params(
-        self,
-        conversation_input: List[Dict[str, Any]],
-        params: GeminiToolParams,
-        tools: List[Dict[str, Any]],
-        **kwargs: Any,
-    ) -> Dict[str, Any]:
-        """Build Gemini-specific request parameters."""
-        request_params = {
-            "model": f"{self._get_model_prefix()}/{self.model_name}",
-            "input": conversation_input,
-            "temperature": getattr(params, "temperature", 1.0),
-        }
-
+    def _get_client(self) -> genai.Client:
+        """Get or create a google-genai client based on auth method."""
+        # Create cache key based on auth method and settings
         settings = get_settings()
+        cache_key = f"{self._auth_method}_{self.model_name}"
 
-        # Add parameters based on the authentication method
+        if cache_key in _client_cache:
+            return _client_cache[cache_key]
+
         if self._auth_method == "api_key":
-            if settings.gemini and settings.gemini.api_key:
-                request_params["api_key"] = settings.gemini.api_key
-            # Explicitly override any Vertex AI env vars to prevent litellm from using them
-            # This is critical because litellm checks VERTEX_PROJECT/VERTEX_LOCATION env vars
-            request_params["vertex_project"] = None
-            request_params["vertex_location"] = None
-        else:  # service_account, implicit_adc, fallback_adc
-            if settings.vertex.project:
-                request_params["vertex_project"] = settings.vertex.project
-            if settings.vertex.location:
-                request_params["vertex_location"] = settings.vertex.location
+            # Use Gemini API with API key
+            client = genai.Client(api_key=settings.gemini.api_key)
+        else:
+            # Use Vertex AI
+            client = genai.Client(
+                vertexai=True,
+                project=settings.vertex.project,
+                location=settings.vertex.location,
+            )
 
-        # Add instructions if provided
-        if hasattr(params, "instructions") and params.instructions:
-            request_params["instructions"] = params.instructions
+        _client_cache[cache_key] = client
+        return client
 
-        # Add tools if any
+    def _build_generation_config(
+        self, params: GeminiToolParams, tools: List[types.Tool], **kwargs: Any
+    ) -> types.GenerateContentConfig:
+        """Build GenerateContentConfig from params."""
+        config_kwargs: Dict[str, Any] = {}
+
+        # Temperature
+        if hasattr(params, "temperature") and params.temperature is not None:
+            config_kwargs["temperature"] = params.temperature
+
+        # System instruction
+        system_instruction = kwargs.get("system_instruction")
+        if not system_instruction:
+            system_instruction = get_developer_prompt(self.model_name)
+        if system_instruction:
+            config_kwargs["system_instruction"] = system_instruction
+
+        # Tools
         if tools:
-            request_params["tools"] = tools
-            request_params["tool_choice"] = kwargs.get("tool_choice", "auto")
+            config_kwargs["tools"] = tools
 
-        # Add reasoning effort
+        # Reasoning effort -> thinking config
         if hasattr(params, "reasoning_effort") and params.reasoning_effort:
-            request_params["reasoning_effort"] = params.reasoning_effort
-            logger.info(f"[GEMINI] Using reasoning_effort: {params.reasoning_effort}")
+            thinking_budget = self._get_thinking_budget(params.reasoning_effort)
+            if thinking_budget:
+                config_kwargs["thinking_config"] = types.ThinkingConfig(
+                    thinking_budget=thinking_budget,
+                )
+                logger.info(
+                    f"[GEMINI] Using reasoning_effort: {params.reasoning_effort} -> budget: {thinking_budget}"
+                )
 
-        # Add structured output schema
+        # Structured output schema
         if (
             hasattr(params, "structured_output_schema")
             and params.structured_output_schema
         ):
-            request_params["response_format"] = {
-                "type": "json_object",
-                "response_schema": params.structured_output_schema,
-                "enforce_validation": True,
-            }
+            config_kwargs["response_mime_type"] = "application/json"
+            config_kwargs["response_schema"] = params.structured_output_schema
             logger.info("[GEMINI] Using structured output schema")
 
-        # Add any extra kwargs that LiteLLM might use
-        for key in ["max_tokens", "top_p", "frequency_penalty", "presence_penalty"]:
-            if key in kwargs:
-                request_params[key] = kwargs[key]
+        return types.GenerateContentConfig(**config_kwargs)
 
-        return request_params
+    def _get_thinking_budget(self, reasoning_effort: str) -> Optional[int]:
+        """Map reasoning_effort to thinking budget tokens."""
+        if not hasattr(self.capabilities, "reasoning_effort_map"):
+            return None
+
+        effort_map = self.capabilities.reasoning_effort_map
+        return effort_map.get(reasoning_effort, effort_map.get("medium"))
 
     async def generate(
         self,
@@ -284,23 +308,89 @@ class GeminiAdapter(LiteLLMBaseAdapter):
         tool_dispatcher: ToolDispatcher,
         **kwargs: Any,
     ) -> Dict[str, Any]:
-        """Generate a response using LiteLLM with ADC error handling.
+        """Generate a response using the native google-genai SDK.
 
-        Uses the base implementation with Gemini-specific overrides.
+        Args:
+            prompt: User prompt
+            params: GeminiToolParams instance
+            ctx: Call context with session info
+            tool_dispatcher: Tool dispatcher for function calls
+            **kwargs: Additional arguments (system_instruction, etc.)
+
+        Returns:
+            Dict with "content" key containing the response text
         """
         try:
-            # Gemini doesn't support citations, so we override the result
-            result = await super().generate(
-                prompt=prompt,
-                params=params,
-                ctx=ctx,
-                tool_dispatcher=tool_dispatcher,
-                **kwargs,
+            client = self._get_client()
+
+            # Load session history
+            original_history: List[Dict[str, Any]] = []
+            if ctx.session_id:
+                original_history = await UnifiedSessionCache.get_history(
+                    ctx.project, ctx.tool, ctx.session_id
+                )
+                logger.debug(
+                    f"[GEMINI] Loaded {len(original_history)} history items for session {ctx.session_id}"
+                )
+
+            # Convert history to google-genai format
+            contents = responses_to_contents(original_history)
+
+            # Add current user message
+            user_message = {
+                "type": "message",
+                "role": "user",
+                "content": [{"type": "text", "text": prompt}],
+            }
+            contents.append(types.Content(role="user", parts=[types.Part(text=prompt)]))
+
+            # Get tool declarations
+            disable_history_search = getattr(params, "disable_history_search", False)
+            tools_openai = tool_dispatcher.get_tool_declarations(
+                capabilities=self.capabilities,
+                disable_history_search=disable_history_search,
+            )
+            tools_gemini = tools_to_gemini(tools_openai)
+
+            # Build config
+            config = self._build_generation_config(params, tools_gemini, **kwargs)
+
+            # Make API call
+            logger.info(
+                f"[GEMINI] Calling {self.model_name} with {len(contents)} content items"
+            )
+            response = await client.aio.models.generate_content(
+                model=self.model_name,
+                contents=contents,
+                config=config,
             )
 
-            # Ensure we don't return citations for Gemini
-            result["citations"] = None
-            return result
+            # Handle tool calls if any
+            tool_interactions: List[Dict[str, Any]] = []
+            final_content, tool_interactions = await self._handle_tool_loop(
+                client=client,
+                response=response,
+                contents=contents,
+                config=config,
+                tool_dispatcher=tool_dispatcher,
+                ctx=ctx,
+            )
+
+            # Save session
+            if ctx.session_id:
+                await self._save_session(
+                    ctx=ctx,
+                    original_history=original_history,
+                    user_message=user_message,
+                    tool_interactions=tool_interactions,
+                    final_content=final_content,
+                )
+
+            return {
+                "content": final_content,
+                "citations": None,  # Gemini doesn't support citations
+            }
+
         except Exception as e:
             error_str = str(e).lower()
             # Check for various authentication-related errors
@@ -344,3 +434,152 @@ class GeminiAdapter(LiteLLMBaseAdapter):
 
             # Re-raise other errors
             raise
+
+    async def _handle_tool_loop(
+        self,
+        client: genai.Client,
+        response: types.GenerateContentResponse,
+        contents: List[types.Content],
+        config: types.GenerateContentConfig,
+        tool_dispatcher: ToolDispatcher,
+        ctx: CallContext,
+    ) -> tuple[str, List[Dict[str, Any]]]:
+        """Execute tool calls until model returns final text response.
+
+        Preserves thought_signature natively via the SDK.
+
+        Args:
+            client: google-genai client
+            response: Initial response from generate_content
+            contents: Current conversation contents
+            config: Generation config
+            tool_dispatcher: Tool dispatcher
+            ctx: Call context
+
+        Returns:
+            Tuple of (final_text_content, tool_interactions_for_history)
+        """
+        tool_interactions: List[Dict[str, Any]] = []
+        max_iterations = 10  # Prevent infinite loops
+
+        for iteration in range(max_iterations):
+            # Extract function calls from response
+            function_call_parts = extract_function_calls(response)
+
+            if not function_call_parts:
+                # No more tool calls - return final text
+                final_text = extract_text_from_response(response)
+                return final_text, tool_interactions
+
+            logger.info(
+                f"[GEMINI] Tool loop iteration {iteration + 1}: {len(function_call_parts)} function calls"
+            )
+
+            # Add model's response to contents (includes function calls with thought_signature)
+            if response.candidates and response.candidates[0].content:
+                contents.append(response.candidates[0].content)
+
+            # Execute each function call and collect responses
+            function_response_parts: List[types.Part] = []
+
+            for fc_part in function_call_parts:
+                fc = fc_part.function_call
+
+                # Record function call in history (with thought_signature!)
+                fc_history_item = {
+                    "type": "function_call",
+                    "name": fc.name,
+                    "arguments": json.dumps(fc.args) if fc.args else "{}",
+                    "call_id": fc.id,
+                }
+                if fc_part.thought_signature:
+                    if isinstance(fc_part.thought_signature, bytes):
+                        fc_history_item["thought_signature"] = (
+                            fc_part.thought_signature.decode("utf-8")
+                        )
+                    else:
+                        fc_history_item["thought_signature"] = str(
+                            fc_part.thought_signature
+                        )
+                tool_interactions.append(fc_history_item)
+
+                # Execute tool
+                try:
+                    args_str = json.dumps(fc.args) if fc.args else "{}"
+                    result = await tool_dispatcher.execute(
+                        tool_name=fc.name,
+                        tool_args=args_str,
+                        context=ctx,
+                    )
+                    result_str = str(result) if result is not None else ""
+                except Exception as e:
+                    logger.error(f"[GEMINI] Tool execution error: {e}")
+                    result_str = f"Error executing tool: {str(e)}"
+
+                # Record function output in history
+                tool_interactions.append(
+                    {
+                        "type": "function_call_output",
+                        "call_id": fc.id,
+                        "name": fc.name,
+                        "output": result_str,
+                    }
+                )
+
+                # Build function response for API
+                function_response_parts.append(
+                    types.Part(
+                        function_response=types.FunctionResponse(
+                            id=fc.id,
+                            name=fc.name,
+                            response={"result": result_str},
+                        )
+                    )
+                )
+
+            # Add function responses as user turn
+            contents.append(types.Content(role="user", parts=function_response_parts))
+
+            # Continue conversation
+            response = await client.aio.models.generate_content(
+                model=self.model_name,
+                contents=contents,
+                config=config,
+            )
+
+        # Max iterations reached
+        logger.warning(f"[GEMINI] Max tool loop iterations ({max_iterations}) reached")
+        return extract_text_from_response(response), tool_interactions
+
+    async def _save_session(
+        self,
+        ctx: CallContext,
+        original_history: List[Dict[str, Any]],
+        user_message: Dict[str, Any],
+        tool_interactions: List[Dict[str, Any]],
+        final_content: str,
+    ) -> None:
+        """Save updated session history."""
+        updated_history = list(original_history)
+
+        # Add user message
+        updated_history.append(user_message)
+
+        # Add tool interactions (function_call and function_call_output items)
+        updated_history.extend(tool_interactions)
+
+        # Add assistant response
+        updated_history.append(
+            {
+                "type": "message",
+                "role": "assistant",
+                "content": [{"type": "text", "text": final_content}],
+            }
+        )
+
+        await UnifiedSessionCache.set_history(
+            ctx.project, ctx.tool, ctx.session_id, updated_history
+        )
+        logger.debug(
+            f"[GEMINI] Saved {len(updated_history)} history items for session {ctx.session_id}"
+        )

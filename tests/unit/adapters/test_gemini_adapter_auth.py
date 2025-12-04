@@ -1,6 +1,6 @@
 import os
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from mcp_the_force.adapters.google.adapter import GeminiAdapter
 from mcp_the_force.adapters.errors import ConfigurationException
@@ -45,13 +45,6 @@ class TestGeminiAuthScenarios:
 
         # Assertions - API key should win
         assert adapter._auth_method == "api_key"
-        assert adapter._get_model_prefix() == "gemini"
-
-        params = adapter._build_request_params([], MagicMock(), [])
-        assert "api_key" in params
-        # vertex_project/location should be explicitly None to override env vars
-        assert params.get("vertex_project") is None
-        assert params.get("vertex_location") is None
 
     def test_service_account_used_without_api_key(self, mock_settings, tmp_path):
         """
@@ -74,11 +67,6 @@ class TestGeminiAuthScenarios:
 
         # Assertions
         assert adapter._auth_method == "service_account"
-        assert adapter._get_model_prefix() == "vertex_ai"
-
-        params = adapter._build_request_params([], MagicMock(), [])
-        assert "vertex_project" in params
-        assert "api_key" not in params
 
     def test_api_key_with_vertex_config_logs_debug(self, mock_settings, caplog):
         """
@@ -97,14 +85,7 @@ class TestGeminiAuthScenarios:
         adapter = GeminiAdapter()
 
         assert adapter._auth_method == "api_key"
-        assert adapter._get_model_prefix() == "gemini"
         assert "Using Gemini API key (preferred)" in caplog.text
-
-        params = adapter._build_request_params([], MagicMock(), [])
-        assert "api_key" in params
-        # vertex_project/location should be explicitly None to override env vars
-        assert params.get("vertex_project") is None
-        assert params.get("vertex_location") is None
 
     def test_implicit_adc_auth(self, mock_settings):
         """
@@ -122,7 +103,6 @@ class TestGeminiAuthScenarios:
             adapter = GeminiAdapter()
 
         assert adapter._auth_method == "implicit_adc"
-        assert adapter._get_model_prefix() == "vertex_ai"
 
     def test_fallback_adc_auth(self, mock_settings):
         """
@@ -137,7 +117,6 @@ class TestGeminiAuthScenarios:
         adapter = GeminiAdapter()
 
         assert adapter._auth_method == "fallback_adc"
-        assert adapter._get_model_prefix() == "vertex_ai"
 
     def test_no_credentials_raises_exception(self, mock_settings):
         """

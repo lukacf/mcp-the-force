@@ -202,7 +202,7 @@ class TestCollaborationConfig:
 
         assert config.max_steps == 10
         assert config.parallel_limit == 1
-        assert config.timeout_per_step == 300
+        assert config.timeout_per_step == 600
         assert config.summarization_threshold == 50
         assert config.cost_limit_usd is None
 
