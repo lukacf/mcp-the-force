@@ -37,7 +37,9 @@ class TestToolExecutionIntegration:
         assert (
             data["adapter_kwargs"]["temperature"] == 1.0
         )  # Default for flash (updated)
-        assert data["adapter_kwargs"]["timeout"] == 300
+        assert (
+            data["adapter_kwargs"]["timeout"] == 600
+        )  # Updated default for heavyweight models
 
     @pytest.mark.asyncio
     async def test_openai_tool_with_session(self, run_tool, parse_adapter_response):

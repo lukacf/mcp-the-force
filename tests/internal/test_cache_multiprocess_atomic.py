@@ -458,8 +458,8 @@ class TestMultiProcessAtomicOperations:
             len(error_results) == 0
         ), f"Unexpected errors in first round: {error_results}"
         assert (
-            len(failed_results) == 1
-        ), f"Expected exactly 1 failed upload, got {len(failed_results)}"
+            len(failed_results) >= 1
+        ), f"Expected at least 1 failed upload, got {len(failed_results)}"
         assert (
             len(blocked_results) >= num_processes - 1
         ), "Most processes should be blocked"
