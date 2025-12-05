@@ -61,6 +61,102 @@ class CollaborationService:
         else:
             self.session_cache = session_cache
 
+        # Fallback models for retry logic (large context models suitable for synthesis)
+        self._synthesis_fallback_models = [
+            "chat_with_gpt41",  # 1M context, strong tool use
+            "chat_with_claude4_sonnet",  # 1M context, reliable
+            "chat_with_gemini25_flash",  # 1M context, fast
+        ]
+
+    async def _execute_with_retry(
+        self,
+        model: str,
+        instructions: str,
+        output_format: str,
+        session_id: str,
+        timeout: int,
+        context: Optional[list[str]] = None,
+        priority_context: Optional[list[str]] = None,
+        vector_store_ids: Optional[list[str]] = None,
+        max_retries: int = 2,
+        fallback_models: Optional[list[str]] = None,
+    ) -> tuple[str, str]:
+        """Execute model call with retry and fallback logic.
+
+        Args:
+            model: Primary model to use
+            instructions: Task instructions
+            output_format: Expected output format
+            session_id: Session identifier
+            timeout: Timeout per attempt
+            context: Optional context files
+            priority_context: Optional priority context files
+            vector_store_ids: Optional vector store IDs
+            max_retries: Max retries before fallback (default 2)
+            fallback_models: List of fallback models to try
+
+        Returns:
+            Tuple of (response_text, model_used)
+        """
+        models_to_try = [model]
+        if fallback_models:
+            # Filter out the primary model from fallbacks
+            models_to_try.extend([m for m in fallback_models if m != model])
+
+        last_error: Exception | None = None
+        for model_idx, current_model in enumerate(models_to_try):
+            retry_session_id = (
+                session_id if model_idx == 0 else f"{session_id}__fallback_{model_idx}"
+            )
+
+            for attempt in range(max_retries):
+                try:
+                    response = await self.executor.execute(
+                        metadata=self._get_tool_metadata(current_model),
+                        instructions=instructions,
+                        output_format=output_format,
+                        session_id=retry_session_id,
+                        disable_history_record=True,
+                        disable_history_search=True,
+                        timeout=timeout,
+                        context=context,
+                        priority_context=priority_context,
+                        vector_store_ids=vector_store_ids,
+                    )
+
+                    # Validate non-empty response
+                    if response and response.strip():
+                        if model_idx > 0 or attempt > 0:
+                            logger.info(
+                                f"Retry successful: model={current_model}, attempt={attempt + 1}"
+                            )
+                        return response, current_model
+
+                    # Empty response - log and retry
+                    logger.warning(
+                        f"Empty response from {current_model} (attempt {attempt + 1}/{max_retries})"
+                    )
+                    last_error = ValueError(f"Empty response from {current_model}")
+
+                except Exception as e:
+                    logger.warning(
+                        f"Error from {current_model} (attempt {attempt + 1}/{max_retries}): {e}"
+                    )
+                    last_error = e
+
+                # Brief delay before retry
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(1)
+
+            # All retries exhausted for this model, try next fallback
+            if model_idx < len(models_to_try) - 1:
+                logger.warning(
+                    f"All retries exhausted for {current_model}, trying fallback model"
+                )
+
+        # All models exhausted
+        raise RuntimeError(f"All models failed after retries. Last error: {last_error}")
+
     async def execute(
         self,
         session_id: str,
@@ -808,34 +904,36 @@ The whiteboard contains the full conversation history. Use file_search to access
         # Create synthesis session ID
         synthesis_session_id = f"{session.session_id}__synthesis"
 
-        # Execute synthesis model
-        response = await self.executor.execute(
-            metadata=self._get_tool_metadata(synthesis_model),
+        # Execute synthesis model with retry and fallback
+        # This is critical - we don't want to waste the discussion on a failed synthesis
+        response, model_used = await self._execute_with_retry(
+            model=synthesis_model,
             instructions=synthesis_instructions,
             output_format=contract.output_format,
             session_id=synthesis_session_id,
-            disable_history_record=True,
-            disable_history_search=True,
+            timeout=600,  # Synthesis can be long
             vector_store_ids=[whiteboard_info["store_id"]],
             context=context,
             priority_context=priority_context,
+            max_retries=2,
+            fallback_models=self._synthesis_fallback_models,
         )
 
-        # Validate synthesis response - critical failure if empty
-        if not response or not response.strip():
-            raise ValueError(
-                f"Synthesis model {synthesis_model} returned empty response - "
-                "unable to generate deliverable from discussion"
-            )
+        if model_used != synthesis_model:
+            logger.info(f"Synthesis completed using fallback model: {model_used}")
 
         # No automated validation - synthesis agent produces deliverable based on discussion
 
         # Add synthesis response to session
         synthesis_message = CollaborationMessage(
-            speaker=synthesis_model,
+            speaker=model_used,  # Use actual model (may be fallback)
             content=response,
             timestamp=datetime.now(),
-            metadata={"step": session.current_step, "phase": "synthesis"},
+            metadata={
+                "step": session.current_step,
+                "phase": "synthesis",
+                "requested_model": synthesis_model,
+            },
         )
 
         await self.whiteboard.append_message(session.session_id, synthesis_message)
@@ -944,27 +1042,33 @@ The whiteboard contains the full conversation history. Use file_search to access
                     f"{session.session_id}__advisory_r{round_num + 1}"
                 )
 
-                refined_deliverable = await self.executor.execute(
-                    metadata=self._get_tool_metadata(synthesis_model),
-                    instructions=refinement_instructions,
-                    output_format=contract.output_format,
-                    session_id=refinement_session_id,
-                    disable_history_record=True,
-                    disable_history_search=True,
-                    timeout=config.timeout_per_step if config else 600,
-                    context=None,  # Remove context from refinement per GPT-5
-                    priority_context=None,
-                )
-
-                # Validate refinement response - retain previous deliverable if empty
-                if refined_deliverable and refined_deliverable.strip():
-                    current_deliverable = refined_deliverable
-                    logger.info(
-                        f"Synthesis agent refined deliverable based on round {round_num + 1} feedback"
+                # Use retry with fallback to prevent losing discussion due to transient failures
+                try:
+                    refined_deliverable, model_used = await self._execute_with_retry(
+                        model=synthesis_model,
+                        instructions=refinement_instructions,
+                        output_format=contract.output_format,
+                        session_id=refinement_session_id,
+                        timeout=config.timeout_per_step if config else 600,
+                        context=None,  # Remove context from refinement per GPT-5
+                        priority_context=None,
+                        max_retries=2,
+                        fallback_models=self._synthesis_fallback_models,
                     )
-                else:
+                    current_deliverable = refined_deliverable
+                    if model_used != synthesis_model:
+                        logger.info(
+                            f"Synthesis agent (fallback: {model_used}) refined deliverable "
+                            f"based on round {round_num + 1} feedback"
+                        )
+                    else:
+                        logger.info(
+                            f"Synthesis agent refined deliverable based on round {round_num + 1} feedback"
+                        )
+                except RuntimeError as e:
+                    # All retries and fallbacks exhausted - retain previous deliverable
                     logger.warning(
-                        f"Synthesis agent returned empty response in round {round_num + 1} - "
+                        f"All synthesis attempts failed in round {round_num + 1}: {e} - "
                         "retaining previous deliverable"
                     )
             else:

@@ -175,8 +175,8 @@ class TestSynthesisEmptyResponse:
     """Test that synthesis phase validates non-empty response."""
 
     @pytest.mark.asyncio
-    async def test_synthesis_raises_on_empty_response(self):
-        """Synthesis phase should raise ValueError if model returns empty."""
+    async def test_synthesis_raises_after_all_retries_exhausted(self):
+        """Synthesis phase should raise RuntimeError after all retries and fallbacks fail."""
         service = CollaborationService()
         # Create executor mock with execute method that returns empty string
         mock_executor = MagicMock()
@@ -202,7 +202,8 @@ class TestSynthesisEmptyResponse:
             output_format="Report",
         )
 
-        with pytest.raises(ValueError, match="returned empty response"):
+        # Now raises RuntimeError after all retries and fallbacks exhausted
+        with pytest.raises(RuntimeError, match="All models failed after retries"):
             await service._run_synthesis_phase(
                 session=session,
                 whiteboard_info={"store_id": "test-store"},
@@ -213,3 +214,210 @@ class TestSynthesisEmptyResponse:
                 ctx=None,
                 project="test-project",
             )
+
+    @pytest.mark.asyncio
+    async def test_synthesis_succeeds_with_fallback_model(self):
+        """Synthesis should succeed if fallback model returns valid response."""
+        service = CollaborationService()
+
+        # First model fails, fallback succeeds
+        call_count = 0
+
+        async def mock_execute(**kwargs):
+            nonlocal call_count
+            call_count += 1
+            # First 4 calls fail (2 retries x 2 models), 5th succeeds
+            if call_count <= 4:
+                return ""
+            return "Valid synthesis output"
+
+        mock_executor = MagicMock()
+        mock_executor.execute = mock_execute
+        service.executor = mock_executor
+        service.session_cache = AsyncMock()
+        service.whiteboard = AsyncMock()
+        service._get_tool_metadata = MagicMock(return_value={"id": "test_model"})
+
+        session = CollaborationSession(
+            session_id="test",
+            objective="test",
+            models=["model1"],
+            messages=[],
+            current_step=5,
+            mode="round_robin",
+            max_steps=10,
+            status="active",
+        )
+
+        contract = DeliverableContract(
+            objective="Test",
+            output_format="Report",
+        )
+
+        result = await service._run_synthesis_phase(
+            session=session,
+            whiteboard_info={"store_id": "test-store"},
+            contract=contract,
+            synthesis_model="test_model",
+            context=None,
+            priority_context=None,
+            ctx=None,
+            project="test-project",
+        )
+
+        assert result == "Valid synthesis output"
+
+
+class TestRetryWithFallback:
+    """Test retry logic with model fallback."""
+
+    @pytest.mark.asyncio
+    async def test_retry_succeeds_on_second_attempt(self):
+        """Retry should succeed if second attempt returns valid response."""
+        service = CollaborationService()
+
+        call_count = 0
+
+        async def mock_execute(**kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return ""  # First attempt fails
+            return "Success on retry"
+
+        mock_executor = MagicMock()
+        mock_executor.execute = mock_execute
+        service.executor = mock_executor
+        service._get_tool_metadata = MagicMock(return_value={"id": "test_model"})
+
+        response, model_used = await service._execute_with_retry(
+            model="test_model",
+            instructions="test",
+            output_format="text",
+            session_id="test-session",
+            timeout=60,
+        )
+
+        assert response == "Success on retry"
+        assert model_used == "test_model"
+        assert call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_retry_succeeds_with_fallback_model(self):
+        """Retry should use fallback model after primary fails."""
+        service = CollaborationService()
+
+        call_count = 0
+
+        async def mock_execute(**kwargs):
+            nonlocal call_count
+            call_count += 1
+            # First 2 attempts (primary model) fail, 3rd (first fallback) succeeds
+            if call_count <= 2:
+                return ""
+            return "Fallback success"
+
+        mock_executor = MagicMock()
+        mock_executor.execute = mock_execute
+        service.executor = mock_executor
+        service._get_tool_metadata = MagicMock(return_value={"id": "model"})
+
+        response, model_used = await service._execute_with_retry(
+            model="primary_model",
+            instructions="test",
+            output_format="text",
+            session_id="test-session",
+            timeout=60,
+            fallback_models=["fallback_model"],
+        )
+
+        assert response == "Fallback success"
+        assert model_used == "fallback_model"
+
+    @pytest.mark.asyncio
+    async def test_retry_handles_exception(self):
+        """Retry should handle exceptions and try again."""
+        service = CollaborationService()
+
+        call_count = 0
+
+        async def mock_execute(**kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise ValueError("API error")
+            return "Success after error"
+
+        mock_executor = MagicMock()
+        mock_executor.execute = mock_execute
+        service.executor = mock_executor
+        service._get_tool_metadata = MagicMock(return_value={"id": "model"})
+
+        response, model_used = await service._execute_with_retry(
+            model="test_model",
+            instructions="test",
+            output_format="text",
+            session_id="test-session",
+            timeout=60,
+        )
+
+        assert response == "Success after error"
+        assert call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_advisory_validation_retry_preserves_deliverable(self):
+        """Advisory validation should preserve deliverable even after retry succeeds."""
+        service = CollaborationService()
+
+        call_count = 0
+
+        async def mock_execute(**kwargs):
+            nonlocal call_count
+            call_count += 1
+            # Reviewer feedback (first 2 calls)
+            if call_count <= 2:
+                return "Good feedback"
+            # Refinement: first attempt fails, second succeeds
+            if call_count == 3:
+                return ""  # Empty
+            return "Refined deliverable"
+
+        mock_executor = MagicMock()
+        mock_executor.execute = mock_execute
+        service.executor = mock_executor
+        service.session_cache = AsyncMock()
+        service._get_tool_metadata = MagicMock(return_value={"id": "model"})
+
+        session = CollaborationSession(
+            session_id="test",
+            objective="test",
+            models=["model1", "model2"],
+            messages=[],
+            current_step=8,
+            mode="round_robin",
+            max_steps=15,
+            status="active",
+        )
+
+        contract = DeliverableContract(
+            objective="Test",
+            output_format="Report",
+        )
+
+        result = await service._run_advisory_validation(
+            session=session,
+            whiteboard_info={"store_id": "test-store"},
+            contract=contract,
+            synthesized_deliverable="Original deliverable",
+            original_models=["model1", "model2"],
+            max_rounds=1,
+            synthesis_model="synthesis_model",
+            context=None,
+            priority_context=None,
+            ctx=None,
+            project="test-project",
+            config=None,
+        )
+
+        # Should get the refined deliverable after retry succeeded
+        assert result == "Refined deliverable"
