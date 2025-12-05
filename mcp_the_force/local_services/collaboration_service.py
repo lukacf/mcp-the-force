@@ -821,6 +821,13 @@ The whiteboard contains the full conversation history. Use file_search to access
             priority_context=priority_context,
         )
 
+        # Validate synthesis response - critical failure if empty
+        if not response or not response.strip():
+            raise ValueError(
+                f"Synthesis model {synthesis_model} returned empty response - "
+                "unable to generate deliverable from discussion"
+            )
+
         # No automated validation - synthesis agent produces deliverable based on discussion
 
         # Add synthesis response to session
@@ -937,7 +944,7 @@ The whiteboard contains the full conversation history. Use file_search to access
                     f"{session.session_id}__advisory_r{round_num + 1}"
                 )
 
-                current_deliverable = await self.executor.execute(
+                refined_deliverable = await self.executor.execute(
                     metadata=self._get_tool_metadata(synthesis_model),
                     instructions=refinement_instructions,
                     output_format=contract.output_format,
@@ -949,9 +956,17 @@ The whiteboard contains the full conversation history. Use file_search to access
                     priority_context=None,
                 )
 
-                logger.info(
-                    f"Synthesis agent considered feedback from round {round_num + 1}"
-                )
+                # Validate refinement response - retain previous deliverable if empty
+                if refined_deliverable and refined_deliverable.strip():
+                    current_deliverable = refined_deliverable
+                    logger.info(
+                        f"Synthesis agent refined deliverable based on round {round_num + 1} feedback"
+                    )
+                else:
+                    logger.warning(
+                        f"Synthesis agent returned empty response in round {round_num + 1} - "
+                        "retaining previous deliverable"
+                    )
             else:
                 logger.warning(
                     f"No valid reviews in round {round_num + 1} - synthesis agent proceeding without feedback"
