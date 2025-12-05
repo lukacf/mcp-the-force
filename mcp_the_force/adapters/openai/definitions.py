@@ -324,7 +324,9 @@ def _generate_and_register_blueprints():
 
     settings = get_settings()
     api_key = settings.openai_api_key
-    logger.debug(f"[OPENAI_DEFINITIONS] Raw api_key: {type(api_key)} = {api_key}")
+    logger.debug(
+        f"[OPENAI_DEFINITIONS] Raw api_key: {type(api_key)}, present={bool(api_key)}"
+    )
 
     if isinstance(api_key, SecretStr):
         api_key = api_key.get_secret_value()
@@ -333,11 +335,13 @@ def _generate_and_register_blueprints():
     env_key1 = os.getenv("OPENAI_API_KEY")
     env_key2 = os.getenv("MCP_OPENAI_API_KEY")
     logger.debug(
-        f"[OPENAI_DEFINITIONS] Env vars: OPENAI_API_KEY={env_key1}, MCP_OPENAI_API_KEY={env_key2}"
+        f"[OPENAI_DEFINITIONS] Env vars: OPENAI_API_KEY={bool(env_key1)}, MCP_OPENAI_API_KEY={bool(env_key2)}"
     )
 
     api_key = api_key or env_key1 or env_key2
-    logger.debug(f"[OPENAI_DEFINITIONS] Final api_key: {repr(api_key)}")
+    logger.debug(
+        f"[OPENAI_DEFINITIONS] Final api_key present: {bool(api_key and str(api_key).strip())}"
+    )
 
     # Check if we're in mock mode - if so, allow registration without API key for test discoverability
     mock_mode = settings.adapter_mock  # Use config system instead of direct env var
