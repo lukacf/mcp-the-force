@@ -60,49 +60,143 @@ def _sanitize_conversation_input(conversation_input: List[Dict[str, Any]]) -> No
 
     Fixes:
     - Messages with content=None (causes "Invalid content type: NoneType" in Anthropic)
+    - Messages with empty text content (causes "text content blocks must be non-empty" in Anthropic)
     - Messages with missing required fields
     - Items without content field (litellm bug: it calls .get("content") on ALL items)
+    - function_call items registered in litellm's cache (so outputs can be paired)
 
     Mutates conversation_input in-place.
     """
-    for msg in conversation_input:
+    # Import litellm's tool cache to register function_call items
+    # This is needed because litellm expects tool calls to be in its cache
+    # when processing function_call_output items
+    try:
+        from litellm.responses.litellm_completion_transformation.transformation import (
+            TOOL_CALLS_CACHE,
+        )
+
+        has_tool_cache = True
+    except ImportError:
+        has_tool_cache = False
+        logger.debug("Could not import TOOL_CALLS_CACHE from litellm")
+
+    # First pass: collect and remove function_call items
+    # We need to remove them from the input because litellm doesn't know how to handle them
+    # Instead, we register them in the cache and the outputs will create the proper message format
+    items_to_remove = []
+    for i, msg in enumerate(conversation_input):
         msg_type = msg.get("type")
 
-        # CRITICAL WORKAROUND for litellm bug:
-        # litellm's _transform_responses_api_input_item_to_chat_completion_message calls
-        # input_item.get("content") on ALL items, including function_call and function_call_output.
-        # When content is missing or None, it fails with "Invalid content type: NoneType".
-        # We must ensure ALL items have a valid content field.
-        if "content" not in msg or msg["content"] is None:
-            # Set to empty text content array for Responses API format
-            msg["content"] = [{"type": "text", "text": ""}]
-            logger.debug(
-                f"Sanitized item with missing/None content: type={msg_type}, role={msg.get('role')}"
+        # Items without a type but with a role should be treated as messages
+        # This handles malformed items from session history
+        if msg_type is None and msg.get("role") in ("user", "assistant", "system"):
+            msg["type"] = "message"
+            msg_type = "message"
+            logger.warning(
+                f"Added missing type='message' to item with role={msg.get('role')}"
             )
 
-        # For message types with content, ensure content items are valid
+        # For message types, handle content field
         if msg_type == "message":
             content = msg.get("content")
-            if isinstance(content, list):
+
+            # Handle missing or None content
+            if content is None:
+                # Use a placeholder - Anthropic requires non-empty text
+                msg["content"] = [{"type": "text", "text": "(empty)"}]
+                logger.debug(
+                    f"Sanitized message with None content: role={msg.get('role')}"
+                )
+            elif isinstance(content, list):
                 # Ensure all content items have valid structure
+                has_valid_content = False
                 for item in content:
                     if isinstance(item, dict):
-                        if item.get("type") == "text" and item.get("text") is None:
-                            item["text"] = ""
-                            logger.debug("Sanitized text content item with None text")
+                        if item.get("type") == "text":
+                            text_value = item.get("text")
+                            if text_value is None or text_value == "":
+                                # Replace empty text with placeholder
+                                item["text"] = "(empty)"
+                                logger.debug("Sanitized empty text content item")
+                            else:
+                                has_valid_content = True
+                        elif item.get("type") in ("input_text", "image_url", "image"):
+                            has_valid_content = True
 
-        # For function_call and function_call_output, ensure required fields exist
+                # If no valid content after sanitization, add placeholder
+                if not has_valid_content and content:
+                    # Check if all items were sanitized to placeholder
+                    pass  # Already handled above
+
+        # For function_call items, we need to:
+        # 1. Register them in litellm's TOOL_CALLS_CACHE so outputs can be paired
+        # 2. Mark them for removal from input (litellm doesn't expect them in input)
         elif msg_type == "function_call":
+            # Remove any spurious content field
+            if "content" in msg:
+                del msg["content"]
             if msg.get("arguments") is None:
                 msg["arguments"] = "{}"
             # Gemini requires thought_signature on all function_call items
-            # Use the special bypass signature if not present
             if not msg.get("thought_signature"):
                 msg["thought_signature"] = "skip_thought_signature_validator"
                 msg["thoughtSignature"] = "skip_thought_signature_validator"
+
+            # Register in litellm's cache so function_call_output can find it
+            call_id = msg.get("call_id")
+            if has_tool_cache and call_id:
+                # Format expected by litellm's cache
+                # See transformation.py lines 387-395
+                tool_definition = {
+                    "id": call_id,
+                    "type": "function",
+                    "function": {
+                        "name": msg.get("name") or "",
+                        "arguments": msg.get("arguments") or "{}",
+                    },
+                }
+                TOOL_CALLS_CACHE.set_cache(key=call_id, value=tool_definition)
+                logger.debug(
+                    f"Registered function_call in litellm cache: call_id={call_id}, name={msg.get('name')}"
+                )
+
+            # Mark for removal - litellm doesn't expect function_call in input
+            items_to_remove.append(i)
+
         elif msg_type == "function_call_output":
+            # Remove any spurious content field that might have been added
+            if "content" in msg:
+                del msg["content"]
             if msg.get("output") is None:
                 msg["output"] = ""
+
+        # CRITICAL: Catch-all for any item type that has content=None
+        # litellm's transformation code calls .get("content") on ALL items
+        # and crashes if it returns None. This catches any edge cases.
+        else:
+            # For unknown types, if content exists and is None, remove it
+            # or if it doesn't exist but the item type is ambiguous
+            if "content" in msg and msg["content"] is None:
+                # For message-like items without explicit type, add placeholder
+                if msg.get("role") in ("user", "assistant", "system"):
+                    msg["content"] = [{"type": "text", "text": "(empty)"}]
+                    logger.warning(
+                        f"Sanitized unknown item with content=None: type={msg_type}, role={msg.get('role')}"
+                    )
+                else:
+                    # For non-message items, remove the content field entirely
+                    del msg["content"]
+                    logger.warning(
+                        f"Removed content=None from non-message item: type={msg_type}"
+                    )
+
+    # Remove function_call items (they've been registered in the cache)
+    # Remove in reverse order to preserve indices
+    for i in reversed(items_to_remove):
+        removed = conversation_input.pop(i)
+        logger.debug(
+            f"Removed function_call from input: call_id={removed.get('call_id')}, name={removed.get('name')}"
+        )
 
 
 def _dedup_tool_ids(conversation_input: List[Dict[str, Any]]) -> None:

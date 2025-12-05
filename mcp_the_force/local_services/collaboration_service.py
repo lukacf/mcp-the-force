@@ -128,10 +128,18 @@ class CollaborationService:
             # Always reactivate completed sessions for continuation
             # Sessions build on shared whiteboard - calling again means "continue"
             if session.is_completed():
+                # To truly reactivate, we must bump max_steps so is_completed() returns False
+                # Otherwise the discussion loop guard `not session.is_completed()` blocks immediately
+                old_max = session.max_steps
+                new_max = (
+                    session.current_step + discussion_turns + 1 + validation_rounds
+                )
                 logger.info(
-                    f"Reactivating completed session {session_id} for continuation"
+                    f"Reactivating completed session {session_id} for continuation: "
+                    f"bumping max_steps from {old_max} to {new_max}"
                 )
                 session.status = "active"
+                session.max_steps = new_max
                 await self.session_cache.set_metadata(
                     project,
                     "group_think",

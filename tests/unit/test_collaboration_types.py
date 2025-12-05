@@ -152,6 +152,83 @@ class TestCollaborationSession:
         assert session.current_step == 5
         assert session.is_completed()
 
+    def test_session_reactivation_requires_max_steps_bump(self):
+        """Test that reactivating a completed session requires bumping max_steps.
+
+        Regression test: Simply setting status='active' on a completed session
+        is insufficient because is_completed() also checks current_step >= max_steps.
+        The collaboration service must bump max_steps when reactivating.
+        """
+        # Create a completed session (current_step >= max_steps)
+        session = CollaborationSession(
+            session_id="test",
+            objective="test",
+            models=["model1"],
+            messages=[],
+            current_step=10,  # At max_steps
+            mode="round_robin",
+            max_steps=10,
+            status="completed",
+        )
+
+        # Verify session is completed
+        assert session.is_completed()
+        assert session.status == "completed"
+        assert session.current_step >= session.max_steps
+
+        # Just setting status to active is NOT enough
+        session.status = "active"
+        assert (
+            session.is_completed()
+        ), "is_completed() should still return True because current_step >= max_steps"
+
+        # Must also bump max_steps to truly reactivate
+        session.max_steps = session.current_step + 10  # Allow 10 more steps
+        assert not session.is_completed(), "is_completed() should now return False"
+
+    def test_is_completed_checks_both_conditions(self):
+        """Test that is_completed() checks both status AND current_step."""
+        # Case 1: status=completed, current_step < max_steps
+        session1 = CollaborationSession(
+            session_id="test1",
+            objective="test",
+            models=["model1"],
+            messages=[],
+            current_step=3,
+            mode="round_robin",
+            max_steps=10,
+            status="completed",
+        )
+        assert session1.is_completed(), "Should be completed due to status"
+
+        # Case 2: status=active, current_step >= max_steps
+        session2 = CollaborationSession(
+            session_id="test2",
+            objective="test",
+            models=["model1"],
+            messages=[],
+            current_step=10,
+            mode="round_robin",
+            max_steps=10,
+            status="active",
+        )
+        assert (
+            session2.is_completed()
+        ), "Should be completed due to current_step >= max_steps"
+
+        # Case 3: status=active, current_step < max_steps (truly active)
+        session3 = CollaborationSession(
+            session_id="test3",
+            objective="test",
+            models=["model1"],
+            messages=[],
+            current_step=5,
+            mode="round_robin",
+            max_steps=10,
+            status="active",
+        )
+        assert not session3.is_completed(), "Should NOT be completed"
+
     def test_session_serialization(self):
         """Test session can be converted to/from dict."""
         msg = CollaborationMessage(

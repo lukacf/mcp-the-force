@@ -136,12 +136,17 @@ class TokenBudgetOptimizer:
         )
         logger.info(f"[OPTIMIZER] Available budget: {available_budget:,} tokens")
 
-        # STEP 1: Gather all files from context paths
+        # STEP 1: Gather all files from context paths AND priority paths
         from ..utils.fs import gather_file_paths_async
+
+        # Combine context_paths and priority_paths for file gathering
+        # Priority paths must be included to ensure they're in all_file_paths
+        # (otherwise they get filtered out in the candidate_inline_list step)
+        all_paths_to_gather = list(self.context_paths) + list(self.priority_paths)
 
         # For context paths, we should allow files outside the project root
         all_file_paths = await gather_file_paths_async(
-            self.context_paths, skip_safety_check=True
+            all_paths_to_gather, skip_safety_check=True
         )
         logger.info(f"[OPTIMIZER] Found {len(all_file_paths)} total files")
 

@@ -1,0 +1,119 @@
+"""Regression tests for model capability definitions.
+
+These tests verify that model capability configurations are correct,
+especially after encountering production errors with specific models.
+"""
+
+import pytest
+from unittest.mock import patch
+from mcp_the_force.config import Settings, ProviderConfig
+
+
+@pytest.fixture(autouse=True)
+def mock_settings():
+    """Auto-mock settings for all tests."""
+    mock_settings = Settings(
+        vertex=ProviderConfig(project="test-project", location="us-central1"),
+        gemini=ProviderConfig(api_key=None),
+        xai=ProviderConfig(api_key="test-key"),
+        openai=ProviderConfig(api_key="test-key"),
+    )
+    with patch("mcp_the_force.config.get_settings") as mock_get:
+        mock_get.return_value = mock_settings
+        yield mock_settings
+
+
+class TestGPT51CodexCapabilities:
+    """Tests for GPT-5.1 Codex model capabilities."""
+
+    def test_gpt51_codex_has_no_native_vector_store_provider(self):
+        """GPT-5.1 Codex should NOT have native_vector_store_provider.
+
+        Regression test: GPT-5.1 Codex doesn't support the file_search tool,
+        unlike regular GPT-5.1. This caused errors like:
+        "Tool 'file_search' is not supported with gpt-5.1-codex"
+        """
+        from mcp_the_force.adapters.openai.definitions import GPT51CodexCapabilities
+
+        capabilities = GPT51CodexCapabilities()
+        assert capabilities.native_vector_store_provider is None
+
+    def test_gpt51_codex_still_supports_tools(self):
+        """GPT-5.1 Codex should still support regular tools."""
+        from mcp_the_force.adapters.openai.definitions import GPT51CodexCapabilities
+
+        capabilities = GPT51CodexCapabilities()
+        assert capabilities.supports_tools is True
+
+    def test_gpt51_codex_has_correct_context_window(self):
+        """GPT-5.1 Codex should have 400k context window."""
+        from mcp_the_force.adapters.openai.definitions import GPT51CodexCapabilities
+
+        capabilities = GPT51CodexCapabilities()
+        assert capabilities.max_context_window == 400_000
+
+
+class TestCodexMiniCapabilities:
+    """Tests for Codex Mini model capabilities."""
+
+    def test_codex_mini_has_no_native_vector_store_provider(self):
+        """Codex Mini should NOT have native_vector_store_provider.
+
+        Codex Mini also doesn't support file_search tool.
+        """
+        from mcp_the_force.adapters.openai.definitions import CodexMiniCapabilities
+
+        capabilities = CodexMiniCapabilities()
+        assert capabilities.native_vector_store_provider is None
+
+
+class TestOSeriesCapabilities:
+    """Tests for O-series model capabilities."""
+
+    def test_o_series_has_native_vector_store_provider(self):
+        """O-series models (o3, o3-pro, o4-mini) SHOULD have native vector store."""
+        from mcp_the_force.adapters.openai.definitions import OSeriesCapabilities
+
+        capabilities = OSeriesCapabilities()
+        assert capabilities.native_vector_store_provider == "openai"
+
+
+class TestGPT41Capabilities:
+    """Tests for GPT-4.1 model capabilities."""
+
+    def test_gpt41_has_native_vector_store_provider(self):
+        """GPT-4.1 SHOULD have native vector store support."""
+        from mcp_the_force.adapters.openai.definitions import GPT41Capabilities
+
+        capabilities = GPT41Capabilities()
+        assert capabilities.native_vector_store_provider == "openai"
+
+
+class TestGeminiTimeouts:
+    """Tests for Gemini model timeout configurations."""
+
+    def test_gemini_pro_timeout_sufficient_for_large_context(self):
+        """Gemini Pro should have sufficient timeout for large context + tool use.
+
+        Regression test: 503 UNAVAILABLE errors occurred when timeout was too short
+        for Gemini Pro processing large contexts with tool use.
+        """
+        from mcp_the_force.adapters.google.definitions import _calculate_timeout
+
+        # Pro models need longer timeouts
+        timeout = _calculate_timeout("gemini-3-pro-preview")
+        assert timeout >= 1800  # At least 30 minutes
+
+    def test_gemini_flash_timeout_reasonable(self):
+        """Gemini Flash should have reasonable timeout."""
+        from mcp_the_force.adapters.google.definitions import _calculate_timeout
+
+        timeout = _calculate_timeout("gemini-2.5-flash")
+        assert timeout >= 600  # At least 10 minutes
+
+    def test_default_timeout_reasonable(self):
+        """Default timeout should be reasonable."""
+        from mcp_the_force.adapters.google.definitions import _calculate_timeout
+
+        timeout = _calculate_timeout("unknown-model")
+        assert timeout >= 600  # At least 10 minutes

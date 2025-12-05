@@ -234,6 +234,9 @@ class GPT51CodexCapabilities(OSeriesCapabilities):
     web_search_tool: str = "web_search"
     parallel_function_calls: int = -1  # Unlimited parallel tool use
     default_reasoning_effort: str = "high"
+    native_vector_store_provider: Optional[str] = (
+        None  # GPT-5.1 Codex doesn't support file_search tool
+    )
     description: str = (
         "Latest Codex-grade successor with 400k context and strong parallel tools. "
         "Use for complex refactors, multi-file synthesis, and long-horizon agents."

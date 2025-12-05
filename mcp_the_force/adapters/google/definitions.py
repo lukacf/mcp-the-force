@@ -154,11 +154,11 @@ GEMINI_MODEL_CAPABILITIES = {
 def _calculate_timeout(model_name: str) -> int:
     """Calculate appropriate timeout for a model."""
     if "flash" in model_name:
-        return 300  # 5 minutes for flash
+        return 600  # 10 minutes for flash
     elif "pro" in model_name:
-        return 480  # 8 minutes for pro
+        return 1800  # 30 minutes for pro (needed for large context + tool use)
     else:
-        return 300  # Default 5 minutes
+        return 600  # Default 10 minutes
 
 
 def _get_friendly_name(model_name: str) -> str:
