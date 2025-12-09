@@ -60,6 +60,7 @@ def _ensure_populated() -> None:
         "chat_with_gemini3_pro_preview",
         "chat_with_gemini25_flash",
         "chat_with_gpt51_codex",
+        "chat_with_gpt51_codex_max",
         "chat_with_grok41",
     ]
 
