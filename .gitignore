@@ -49,7 +49,7 @@ ehthumbs.db
 Thumbs.db
 
 # Project specific
-uv.lock
+# uv.lock is now tracked for reproducible CI builds
 *.log
 .pytest_cache/
 .coverage
