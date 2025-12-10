@@ -33,7 +33,7 @@ jobs:
       
       - name: Install dependencies
         run: |
-          uv pip install -e .
+          uv pip install --system -e .
       
       - name: Extract version from tag
         id: version
