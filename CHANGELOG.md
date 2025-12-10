@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.2.1
+### New Features
+- **GPT-5.1-Codex-Max**: Added OpenAI's new long-horizon agentic coding model with `xhigh` reasoning effort, 400k context, 90-minute timeout, and automatic compaction for 24+ hour tasks. 77.9% on SWE-bench Verified.
+- **Group Think Reliability**: Added retry with model fallback for synthesis and validation phases to prevent wasting multi-turn discussions on transient API failures.
+- **Direct Context Injection**: Added `direct_context` parameter to group_think for reliable multi-turn collaboration without vector store dependency.
+- **Force Guide Tools**: Added `list_guides` and `read_guide` tools with robust fallbacks for accessing documentation.
+- **Async Job Improvements**: Jobs now respect `max_runtime_s` instead of tool timeout; increased default tool timeouts to 30 min for heavyweight models.
+
+### Bug Fixes
+- **Security**: Removed API key values from debug log output, now logs only boolean presence indicators.
+- **Reasoning Effort Defaults**: Fixed issue where models with non-medium defaults (xhigh, high) weren't getting their intended reasoning effort. User-explicit values are always respected.
+- **Google Adapter**: Fixed Gemini API key priority over Vertex AI; explicitly override Vertex AI env vars when using Gemini API key.
+- **Group Think**: Fixed continuation bugs, empty response validation, conversation_input sanitization, and session reactivation.
+- **LiteLLM**: Fixed content type bug and call_id sync between function_call and function_call_output pairs; handle overlapping function_calls with same call_id.
+- **Instructions Tool**: Robust fallback to package docs or inline guide.
+
+### Test & CI
+- Added Claude Code GitHub Workflow for automated testing.
+- Added 13 new regression tests for GPT-5.1-Codex-Max capabilities and reasoning_effort defaults.
+- Fixed integration tests for timeout and flaky multiprocess issues.
+
 ## 1.2.0
 - Added OpenAI `gpt-5-pro` model (400k context, high reasoning/tooling) with full blueprint/capability support and docs.
 - Replaced Anthropic Claude Opus 4.1 with Opus 4.5 (`claude-opus-4-5-20251101`), updating adapters, blueprints, docs, and tests.
