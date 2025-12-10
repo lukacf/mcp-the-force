@@ -566,13 +566,7 @@ class FlowOrchestrator:
         model = data.get("model", "")
         capability = get_model_capability(model)
         if capability and capability.supports_reasoning_effort:
-            # Apply capability default if:
-            # 1. reasoning_effort not provided, OR
-            # 2. reasoning_effort is the generic "medium" default but capability has a different default
-            current_effort = data.get("reasoning_effort")
-            if capability.default_reasoning_effort:
-                if current_effort is None or (
-                    current_effort == "medium"
-                    and capability.default_reasoning_effort != "medium"
-                ):
-                    data["reasoning_effort"] = capability.default_reasoning_effort
+            # Only apply capability default when reasoning_effort is not provided.
+            # If user explicitly provides any value (including "medium"), respect it.
+            if "reasoning_effort" not in data and capability.default_reasoning_effort:
+                data["reasoning_effort"] = capability.default_reasoning_effort

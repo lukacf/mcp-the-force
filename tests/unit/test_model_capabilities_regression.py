@@ -53,6 +53,52 @@ class TestGPT51CodexCapabilities:
         assert capabilities.max_context_window == 400_000
 
 
+class TestGPT51CodexMaxCapabilities:
+    """Tests for GPT-5.1 Codex Max model capabilities."""
+
+    def test_gpt51_codex_max_has_xhigh_default_reasoning(self):
+        """GPT-5.1 Codex Max should default to xhigh reasoning effort."""
+        from mcp_the_force.adapters.openai.definitions import GPT51CodexMaxCapabilities
+
+        capabilities = GPT51CodexMaxCapabilities()
+        assert capabilities.default_reasoning_effort == "xhigh"
+
+    def test_gpt51_codex_max_has_no_native_vector_store(self):
+        """GPT-5.1 Codex Max doesn't support file_search tool."""
+        from mcp_the_force.adapters.openai.definitions import GPT51CodexMaxCapabilities
+
+        capabilities = GPT51CodexMaxCapabilities()
+        assert capabilities.native_vector_store_provider is None
+
+    def test_gpt51_codex_max_has_correct_context_window(self):
+        """GPT-5.1 Codex Max should have 400k context window."""
+        from mcp_the_force.adapters.openai.definitions import GPT51CodexMaxCapabilities
+
+        capabilities = GPT51CodexMaxCapabilities()
+        assert capabilities.max_context_window == 400_000
+
+    def test_gpt51_codex_max_timeout(self):
+        """GPT-5.1 Codex Max should have 90-minute timeout."""
+        from mcp_the_force.adapters.openai.definitions import _calculate_timeout
+
+        timeout = _calculate_timeout("gpt-5.1-codex-max")
+        assert timeout == 5400  # 90 minutes
+
+    def test_gpt51_codex_max_supports_reasoning_effort(self):
+        """GPT-5.1 Codex Max should support reasoning_effort parameter."""
+        from mcp_the_force.adapters.openai.definitions import GPT51CodexMaxCapabilities
+
+        capabilities = GPT51CodexMaxCapabilities()
+        assert capabilities.supports_reasoning_effort is True
+
+    def test_gpt51_codex_max_no_temperature(self):
+        """GPT-5.1 Codex Max should NOT support temperature parameter."""
+        from mcp_the_force.adapters.openai.definitions import GPT51CodexMaxCapabilities
+
+        capabilities = GPT51CodexMaxCapabilities()
+        assert capabilities.supports_temperature is False
+
+
 class TestCodexMiniCapabilities:
     """Tests for Codex Mini model capabilities."""
 
@@ -117,3 +163,65 @@ class TestGeminiTimeouts:
 
         timeout = _calculate_timeout("unknown-model")
         assert timeout >= 600  # At least 10 minutes
+
+
+class TestReasoningEffortDefaults:
+    """Tests for reasoning_effort default application in _preprocess_request."""
+
+    def _preprocess_request(self, data):
+        """Simulates FlowOrchestrator._preprocess_request logic for testing."""
+        from mcp_the_force.adapters.openai.definitions import get_model_capability
+
+        model = data.get("model", "")
+        capability = get_model_capability(model)
+        if capability and capability.supports_reasoning_effort:
+            # Only apply capability default when reasoning_effort is not provided.
+            # If user explicitly provides any value (including "medium"), respect it.
+            if "reasoning_effort" not in data and capability.default_reasoning_effort:
+                data["reasoning_effort"] = capability.default_reasoning_effort
+
+    def test_codex_max_gets_xhigh_when_not_provided(self):
+        """GPT-5.1 Codex Max should get xhigh when reasoning_effort not provided."""
+        data = {"model": "gpt-5.1-codex-max"}
+        self._preprocess_request(data)
+        assert data.get("reasoning_effort") == "xhigh"
+
+    def test_codex_gets_high_when_not_provided(self):
+        """GPT-5.1 Codex should get high when reasoning_effort not provided."""
+        data = {"model": "gpt-5.1-codex"}
+        self._preprocess_request(data)
+        assert data.get("reasoning_effort") == "high"
+
+    def test_o3_pro_gets_high_when_not_provided(self):
+        """o3-pro should get high when reasoning_effort not provided."""
+        data = {"model": "o3-pro"}
+        self._preprocess_request(data)
+        assert data.get("reasoning_effort") == "high"
+
+    def test_user_explicit_medium_is_respected(self):
+        """User-provided 'medium' should be respected, not overridden.
+
+        Regression test: Previously, explicit 'medium' was overridden to the
+        capability default. Users should be able to request medium for cost/latency.
+        """
+        data = {"model": "gpt-5.1-codex-max", "reasoning_effort": "medium"}
+        self._preprocess_request(data)
+        assert data.get("reasoning_effort") == "medium"
+
+    def test_user_explicit_low_is_respected(self):
+        """User-provided 'low' should be respected."""
+        data = {"model": "gpt-5.1-codex-max", "reasoning_effort": "low"}
+        self._preprocess_request(data)
+        assert data.get("reasoning_effort") == "low"
+
+    def test_user_explicit_high_is_respected(self):
+        """User-provided 'high' should be respected (not upgraded to xhigh)."""
+        data = {"model": "gpt-5.1-codex-max", "reasoning_effort": "high"}
+        self._preprocess_request(data)
+        assert data.get("reasoning_effort") == "high"
+
+    def test_gpt41_does_not_get_reasoning_effort(self):
+        """GPT-4.1 doesn't support reasoning_effort, should not be added."""
+        data = {"model": "gpt-4.1"}
+        self._preprocess_request(data)
+        assert "reasoning_effort" not in data
