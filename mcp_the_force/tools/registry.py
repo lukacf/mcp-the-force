@@ -42,7 +42,7 @@ def _ensure_populated() -> None:
             logger.debug(f"[REGISTRY] Failed to clear cached settings: {exc}")
         logger.debug(
             "[REGISTRY] ensure_populated env OPENAI_API_KEY=%s, MCP_ADAPTER_MOCK=%s, PYTEST_CURRENT_TEST=%s",
-            os.getenv("OPENAI_API_KEY"),
+            bool(os.getenv("OPENAI_API_KEY")),
             os.getenv("MCP_ADAPTER_MOCK"),
             os.getenv("PYTEST_CURRENT_TEST"),
         )
@@ -60,6 +60,7 @@ def _ensure_populated() -> None:
         "chat_with_gemini3_pro_preview",
         "chat_with_gemini25_flash",
         "chat_with_gpt51_codex",
+        "chat_with_gpt51_codex_max",
         "chat_with_grok41",
     ]
 

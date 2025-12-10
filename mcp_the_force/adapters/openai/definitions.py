@@ -42,10 +42,10 @@ class OpenAIToolParams(BaseToolParams):  # type: ignore[misc]
             "(Optional) Controls the amount of internal 'thinking' the model does before providing an answer. "
             "Higher effort results in more thorough and accurate reasoning but may increase latency. "
             "'low' is faster but may be less accurate for complex problems. "
-            "Supported by o-series models (o3, o3-pro, o4-mini) and GPT-5.1 Codex. Not supported by GPT-4 models. "
-            "Syntax: A string, one of 'low', 'medium', or 'high'. "
-            "Default: 'medium' ('high' for o3-pro and gpt-5.1-codex). "
-            "Examples: reasoning_effort='high' (for gpt-5.1-codex)"
+            "Supported by o-series models (o3, o3-pro, o4-mini), GPT-5.1 Codex, and GPT-5.1 Codex Max. Not supported by GPT-4 models. "
+            "Syntax: A string, one of 'low', 'medium', 'high', or 'xhigh' (extra high - only for GPT-5.1 Codex Max). "
+            "Default: 'medium' ('high' for o3-pro and gpt-5.1-codex, 'xhigh' for gpt-5.1-codex-max). "
+            "Examples: reasoning_effort='high' (for gpt-5.1-codex), reasoning_effort='xhigh' (for gpt-5.1-codex-max)"
         ),
         requires_capability=lambda c: c.supports_reasoning_effort,
     )
@@ -244,6 +244,33 @@ class GPT51CodexCapabilities(OSeriesCapabilities):
 
 
 @dataclass
+class GPT51CodexMaxCapabilities(OSeriesCapabilities):
+    """GPT-5.1 Codex Max capabilities - long-horizon agentic coding with compaction."""
+
+    model_family: str = "gpt-5.1-codex-max"
+    model_name: str = "gpt-5.1-codex-max"
+    max_context_window: int = 400_000  # 400k total context per OpenAI pricing page
+    supports_reasoning_effort: bool = True
+    supports_temperature: bool = (
+        False  # Responses API forbids temperature for gpt-5.1-codex-max
+    )
+    supports_web_search: bool = True
+    supports_live_search: bool = True
+    web_search_tool: str = "web_search"
+    parallel_function_calls: int = -1  # Unlimited parallel tool use
+    default_reasoning_effort: str = "xhigh"
+    native_vector_store_provider: Optional[str] = (
+        None  # GPT-5.1 Codex Max doesn't support file_search tool
+    )
+    description: str = (
+        "Long-horizon agentic coding model with automatic compaction for 24+ hour tasks. "
+        "77.9% on SWE-bench Verified at xhigh reasoning effort. "
+        "30% fewer thinking tokens than GPT-5.1 Codex at same performance. "
+        "Use for autonomous multi-day refactors, complex architectural changes, and sustained debugging sessions."
+    )
+
+
+@dataclass
 class GPT5ProCapabilities(OSeriesCapabilities):
     """GPT-5 Pro capabilities — parity with GPT-5.1 Codex."""
 
@@ -277,6 +304,7 @@ def get_openai_model_capabilities():
         "o3-deep-research": O3DeepResearchCapabilities(),
         "o4-mini-deep-research": O4MiniDeepResearchCapabilities(),
         "gpt-5.1-codex": GPT51CodexCapabilities(),
+        "gpt-5.1-codex-max": GPT51CodexMaxCapabilities(),
         "gpt-5-pro": GPT5ProCapabilities(),
     }
 
@@ -300,6 +328,10 @@ def _calculate_timeout(model_name: str) -> int:
     """Calculate appropriate timeout for a model."""
     if "deep-research" in model_name:
         return 3600  # 1 hour for deep research
+    elif model_name == "gpt-5.1-codex-max":
+        return (
+            5400  # 90 minutes for GPT-5.1 Codex Max (ultra long reasoning with xhigh)
+        )
     elif model_name in {"gpt-5.1-codex", "gpt-5-pro"}:
         return 3000  # 50 minutes for GPT-5.1 Codex / GPT-5 Pro (long reasoning)
     elif model_name == "o3-pro":
@@ -324,7 +356,9 @@ def _generate_and_register_blueprints():
 
     settings = get_settings()
     api_key = settings.openai_api_key
-    logger.debug(f"[OPENAI_DEFINITIONS] Raw api_key: {type(api_key)} = {api_key}")
+    logger.debug(
+        f"[OPENAI_DEFINITIONS] Raw api_key: {type(api_key)}, present={bool(api_key)}"
+    )
 
     if isinstance(api_key, SecretStr):
         api_key = api_key.get_secret_value()
@@ -333,11 +367,13 @@ def _generate_and_register_blueprints():
     env_key1 = os.getenv("OPENAI_API_KEY")
     env_key2 = os.getenv("MCP_OPENAI_API_KEY")
     logger.debug(
-        f"[OPENAI_DEFINITIONS] Env vars: OPENAI_API_KEY={env_key1}, MCP_OPENAI_API_KEY={env_key2}"
+        f"[OPENAI_DEFINITIONS] Env vars: OPENAI_API_KEY={bool(env_key1)}, MCP_OPENAI_API_KEY={bool(env_key2)}"
     )
 
     api_key = api_key or env_key1 or env_key2
-    logger.debug(f"[OPENAI_DEFINITIONS] Final api_key: {repr(api_key)}")
+    logger.debug(
+        f"[OPENAI_DEFINITIONS] Final api_key present: {bool(api_key and str(api_key).strip())}"
+    )
 
     # Check if we're in mock mode - if so, allow registration without API key for test discoverability
     mock_mode = settings.adapter_mock  # Use config system instead of direct env var
@@ -396,6 +432,7 @@ def _generate_and_register_blueprints():
         "o3-deep-research",
         "o4-mini-deep-research",
         "gpt-5.1-codex",
+        "gpt-5.1-codex-max",
     ]
 
     for model_name, capabilities in OPENAI_MODEL_CAPABILITIES.items():
@@ -415,6 +452,9 @@ def _generate_and_register_blueprints():
         elif model_name == "gpt-5.1-codex":
             # Preserve legacy tool id without extra underscore for 5.1
             tool_name = "gpt51_codex"
+        elif model_name == "gpt-5.1-codex-max":
+            # Consistent naming with gpt51_codex
+            tool_name = "gpt51_codex_max"
 
         # Format capabilities and append to description
         capability_info = format_capabilities(capabilities)
