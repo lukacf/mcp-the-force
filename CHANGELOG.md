@@ -1,5 +1,33 @@
 # Changelog
 
+## [Unreleased]
+### Changed
+- **Model Consolidation**: Streamlined model offerings from 18 to 11 tools by removing deprecated models
+  - Removed: `o3`, `o3-pro`, `codex-mini`, `gpt-5.1-codex`, `grok-3-fast`, `claude-sonnet-4-20250514`
+  - Added: `gpt-5-pro` as the new flagship reasoning model (400k context)
+  - Replaced `chat_with_claude4_sonnet` references with `chat_with_claude45_sonnet` (newer 1M context model)
+- **Documentation Updates**: Updated all documentation files to reflect current 11-model roster
+  - Updated model counts, examples, and references in docs/INSTRUCTIONS.md, docs/ADVANCED.md, README.md, CLAUDE.md
+  - Refreshed GroupThink synthesis model recommendations and fallback lists
+  - Updated "Complete List of AI Models" section with accurate context windows and capabilities
+
+### Fixed
+- **Model Registry**: Fixed `chat_with_claude4_sonnet` tool registration by replacing all references with `chat_with_claude45_sonnet`
+  - Updated group_think synthesis model descriptions and fallback models
+  - Fixed collaboration service fallback model list
+  - Updated LiteLLM model cost patches and Anthropic 1M context beta headers
+- **Test Suite**: Updated all unit and integration tests to use current model names
+  - Fixed 29 unit test assertions for new model counts and names
+  - Fixed 18 integration test references to removed models
+  - Updated test metadata and comments to reflect current model roster
+
+### Technical Details
+**Final Model List (11 tools):**
+- OpenAI: `gpt5_pro`, `gpt41`, `gpt51_codex_max`, `o3_deep_research`, `o4_mini_deep_research`
+- Google: `gemini3_pro_preview`, `gemini25_flash`
+- Anthropic: `claude45_opus`, `claude45_sonnet`, `claude3_opus`
+- xAI: `grok41`
+
 ## 1.2.1
 ### New Features
 - **GPT-5.1-Codex-Max**: Added OpenAI's new long-horizon agentic coding model with `xhigh` reasoning effort, 400k context, 90-minute timeout, and automatic compaction for 24+ hour tasks. 77.9% on SWE-bench Verified.
