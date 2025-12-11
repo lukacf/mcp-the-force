@@ -26,7 +26,7 @@ class TestCollaborationMessage:
 
     def test_message_with_metadata(self):
         """Test message with custom metadata."""
-        metadata = {"model": "gpt-5.1-codex", "turn": 1}
+        metadata = {"model": "gpt-5-pro", "turn": 1}
         msg = CollaborationMessage(
             speaker="chat_with_gpt5_pro",
             content="AI response",
@@ -35,7 +35,7 @@ class TestCollaborationMessage:
         )
 
         assert msg.metadata == metadata
-        assert msg.metadata["model"] == "gpt-5.1-codex"
+        assert msg.metadata["model"] == "gpt-5-pro"
 
     def test_message_serialization(self):
         """Test message can be converted to/from dict."""
