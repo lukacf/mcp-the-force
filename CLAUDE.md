@@ -31,9 +31,9 @@ They are your task force, your work force, your close collaborators.
    - Remember that different perspectives from The Force are valuable inputs, not directives; you are responsible for synthesizing and implementing solutions
 
 5. **Understand and Utilize Each Force Member's Unique Strengths**:
-   - The Force provides access to 18 cutting-edge AI models through `chat_with_*` tools
-   - **For 90% of your work, use these two key models:**
-     - **`chat_with_gpt51_codex`**: The smartest model available (400k context). Best at search and complex reasoning.
+   - The Force provides access to 11 cutting-edge AI models through `chat_with_*` tools
+   - **For 90% of your work, use these key models:**
+     - **`chat_with_gpt5_pro`**: Flagship GPT-5 Pro (400k context). Strong reasoning, excellent tool use, and agentic performance.
      - **`chat_with_gemini3_pro_preview`**: Smart, fast, and reliable (1M context). Excellent for code analysis and long documents.
    - **Fast large-context alternatives:**
      - **`chat_with_gemini25_flash`**: Ultra-fast with 1M context. Perfect for quick summaries.
@@ -77,9 +77,9 @@ MCP The-Force Server - A Model Context Protocol (MCP) server that provides acces
 
 1. **Adapters** (`mcp_the_force/adapters/`)
    - Protocol-based architecture with `MCPAdapter` protocol
-   - `openai/`: OpenAI models integration (o3, o3-pro, o4-mini, gpt-4.1) via Responses API
-   - `google/`: Google Vertex AI integration (Gemini 2.5 pro/flash) via google-genai SDK
-   - `xai/`: xAI integration (Grok 3 Beta, Grok 4)
+   - `openai/`: OpenAI models integration (GPT-5 Pro, GPT-4.1, GPT-5.1 Codex Max, o3/o4-mini deep research) via Responses API
+   - `google/`: Google Vertex AI integration (Gemini 3 Pro preview, Gemini 2.5 flash) via google-genai SDK
+   - `xai/`: xAI integration (Grok 4.1)
    - `registry.py`: Central adapter registry
 
 2. **Tool System** (`mcp_the_force/tools/`)
@@ -111,12 +111,12 @@ MCP The-Force Server - A Model Context Protocol (MCP) server that provides acces
 
 ### Available Tools
 
-The Force provides access to 18 cutting-edge AI models through `chat_with_*` tools, each with dynamically-generated descriptions showing their capabilities, context limits, and best use cases.
+The Force provides access to 11 cutting-edge AI models through `chat_with_*` tools, each with dynamically-generated descriptions showing their capabilities, context limits, and best use cases.
 
 **Key models for most tasks:**
-- For 90% of your work, use **`chat_with_gpt51_codex`** (smartest, 400k context) or **`chat_with_gemini3_pro_preview`** (smart, 1M context, fast)
+- For 90% of your work, use **`chat_with_gpt5_pro`** (flagship, 400k context, strong reasoning) or **`chat_with_gemini3_pro_preview`** (smart, 1M context, fast)
 - For fast large-context work: **`chat_with_gemini25_flash`** or **`chat_with_gpt41`**
-- For search: **`chat_with_gpt51_codex`** is best, but **`chat_with_grok41`** is good and faster
+- For search: **`chat_with_gpt5_pro`** is best, but **`chat_with_grok41`** is good and faster
 - For ultra-long-horizon tasks (24+ hours): **`chat_with_gpt51_codex_max`** with xhigh reasoning effort and automatic compaction
 
 **Utility tools:**
@@ -154,9 +154,9 @@ mcp-config init
 ```
 
 **Key Configuration:**
-- `providers.openai.api_key`: Required for OpenAI models (o3, o3-pro, o4-mini, gpt-4.1)
+- `providers.openai.api_key`: Required for OpenAI models (GPT-5 Pro, GPT-4.1, GPT-5.1 Codex Max, o3/o4-mini deep research)
 - `providers.vertex.project`, `providers.vertex.location`: Required for Google Vertex AI models
-- `providers.xai.api_key`: Required for xAI models (Grok 3 Beta, Grok 4)
+- `providers.xai.api_key`: Required for xAI models (Grok 4.1)
 - `mcp.host`, `mcp.port`: Server configuration
 - `mcp.context_percentage`: Percentage of model context to use (default: 0.85 = 85%)
 - `mcp.default_temperature`: AI model temperature setting

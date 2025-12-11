@@ -28,7 +28,7 @@ class OpenAIToolParams(BaseToolParams):  # type: ignore[misc]
         description=(
             "(Optional) Controls the randomness of the model's output. Higher values result in more "
             "creative and varied responses, while lower values produce more deterministic and focused output. "
-            "Supported by GPT-4 models and GPT-5.1 Codex. O-series models (o3, o3-pro, o4-mini) do not support this parameter. "
+            "Supported by GPT-4.1. GPT-5 series models do not support this parameter. "
             "Syntax: A float between 0.0 and 2.0. "
             "Default: 0.2. "
             "Example: temperature=0.8"
@@ -42,10 +42,10 @@ class OpenAIToolParams(BaseToolParams):  # type: ignore[misc]
             "(Optional) Controls the amount of internal 'thinking' the model does before providing an answer. "
             "Higher effort results in more thorough and accurate reasoning but may increase latency. "
             "'low' is faster but may be less accurate for complex problems. "
-            "Supported by o-series models (o3, o3-pro, o4-mini), GPT-5.1 Codex, and GPT-5.1 Codex Max. Not supported by GPT-4 models. "
+            "Supported by GPT-5 Pro, GPT-5.1 Codex Max, and research models. Not supported by GPT-4 models. "
             "Syntax: A string, one of 'low', 'medium', 'high', or 'xhigh' (extra high - only for GPT-5.1 Codex Max). "
-            "Default: 'medium' ('high' for o3-pro and gpt-5.1-codex, 'xhigh' for gpt-5.1-codex-max). "
-            "Examples: reasoning_effort='high' (for gpt-5.1-codex), reasoning_effort='xhigh' (for gpt-5.1-codex-max)"
+            "Default: 'medium' ('high' for gpt-5-pro, 'xhigh' for gpt-5.1-codex-max). "
+            "Examples: reasoning_effort='high' (for gpt-5-pro), reasoning_effort='xhigh' (for gpt-5.1-codex-max)"
         ),
         requires_capability=lambda c: c.supports_reasoning_effort,
     )
@@ -424,14 +424,12 @@ def _generate_and_register_blueprints():
 
     blueprints = []
 
-    # Only register supported models (excluding o3)
+    # Only register supported models
     supported_models = [
-        "o3-pro",
-        "codex-mini",
+        "gpt-5-pro",
         "gpt-4.1",
         "o3-deep-research",
         "o4-mini-deep-research",
-        "gpt-5.1-codex",
         "gpt-5.1-codex-max",
     ]
 
@@ -445,15 +443,11 @@ def _generate_and_register_blueprints():
         else:
             tool_type = "chat"
 
-        # Use friendly name for codex-mini
+        # Use friendly tool names
         tool_name = None
-        if model_name == "codex-mini":
-            tool_name = "codex_mini"  # Keep the friendly name
-        elif model_name == "gpt-5.1-codex":
-            # Preserve legacy tool id without extra underscore for 5.1
-            tool_name = "gpt51_codex"
+        if model_name == "gpt-5-pro":
+            tool_name = "gpt5_pro"
         elif model_name == "gpt-5.1-codex-max":
-            # Consistent naming with gpt51_codex
             tool_name = "gpt51_codex_max"
 
         # Format capabilities and append to description

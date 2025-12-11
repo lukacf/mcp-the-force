@@ -122,7 +122,7 @@ class TestCollaborationServiceExecution:
         result = await collaboration_service.execute(
             session_id="new-session-123",
             objective="Solve a complex AI problem",
-            models=["chat_with_gpt51_codex", "chat_with_gemini3_pro_preview"],
+            models=["chat_with_gpt5_pro", "chat_with_gemini3_pro_preview"],
             output_format="Test deliverable format",
             user_input="Let's start collaborating!",
             config=CollaborationConfig(max_steps=5),
@@ -146,7 +146,7 @@ class TestCollaborationServiceExecution:
         saved_state = collab_state_call[0][4]  # value (collab_state)
         assert saved_state["objective"] == "Solve a complex AI problem"
         assert saved_state["models"] == [
-            "chat_with_gpt51_codex",
+            "chat_with_gpt5_pro",
             "chat_with_gemini3_pro_preview",
         ]
         assert saved_state["mode"] == "round_robin"  # Default
@@ -173,7 +173,7 @@ class TestCollaborationServiceExecution:
         existing_state = {
             "session_id": "existing-session",
             "objective": "Ongoing project",
-            "models": ["chat_with_gpt51_codex", "chat_with_claude45_opus"],
+            "models": ["chat_with_gpt5_pro", "chat_with_claude45_opus"],
             "messages": [
                 {
                     "speaker": "user",
@@ -198,7 +198,7 @@ class TestCollaborationServiceExecution:
         result = await collaboration_service.execute(
             session_id="existing-session",
             objective="Should be ignored - using existing",
-            models=["chat_with_gpt51_codex"],  # Valid model name
+            models=["chat_with_gpt5_pro"],  # Valid model name
             output_format="Test deliverable format",
             user_input="Continue the conversation",
         )
@@ -345,7 +345,7 @@ class TestCollaborationServiceModelExecution:
         session = CollaborationSession(
             session_id="model-test",
             objective="Test model execution",
-            models=["chat_with_gpt51_codex"],
+            models=["chat_with_gpt5_pro"],
             messages=[],
             current_step=0,
             mode="round_robin",
@@ -371,7 +371,7 @@ class TestCollaborationServiceModelExecution:
         await collaboration_service.execute(
             session_id="model-test",
             objective="",
-            models=["chat_with_gpt51_codex"],
+            models=["chat_with_gpt5_pro"],
             output_format="Test deliverable format",
             user_input="Analyze the situation",
             discussion_turns=1,  # Only discussion phase
@@ -383,7 +383,7 @@ class TestCollaborationServiceModelExecution:
         discussion_call = next(
             call
             for call in collaboration_service.executor.execute.call_args_list
-            if call[1]["session_id"] == "model-test__chat_with_gpt51_codex"
+            if call[1]["session_id"] == "model-test__chat_with_gpt5_pro"
         )
         call_kwargs = discussion_call[1]
 
@@ -397,7 +397,7 @@ class TestCollaborationServiceModelExecution:
         assert call_kwargs["vector_store_ids"] == ["vs_model_test"]
 
         # Should have unique sub-session ID
-        assert call_kwargs["session_id"] == "model-test__chat_with_gpt51_codex"
+        assert call_kwargs["session_id"] == "model-test__chat_with_gpt5_pro"
 
         # Should have instructions with context (direct injection is default)
         # With direct_context=True, instructions show "Previous Discussion"
@@ -610,7 +610,7 @@ class TestCollaborationServiceSummarization:
         session = CollaborationSession(
             session_id="summarize-test",
             objective="Long conversation",
-            models=["chat_with_gpt51_codex"],
+            models=["chat_with_gpt5_pro"],
             messages=messages,
             current_step=49,  # About to reach threshold
             mode="round_robin",
@@ -660,7 +660,7 @@ class TestCollaborationServiceOrchestrator:
         session = CollaborationSession(
             session_id="orchestrator-test",
             objective="Test orchestrator mode",
-            models=["chat_with_gpt51_codex", "chat_with_claude45_opus"],
+            models=["chat_with_gpt5_pro", "chat_with_claude45_opus"],
             messages=[],
             current_step=0,
             mode="orchestrator",  # Different mode

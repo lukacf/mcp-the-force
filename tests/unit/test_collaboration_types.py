@@ -28,7 +28,7 @@ class TestCollaborationMessage:
         """Test message with custom metadata."""
         metadata = {"model": "gpt-5.1-codex", "turn": 1}
         msg = CollaborationMessage(
-            speaker="chat_with_gpt51_codex",
+            speaker="chat_with_gpt5_pro",
             content="AI response",
             timestamp=datetime.now(),
             metadata=metadata,
@@ -68,7 +68,7 @@ class TestCollaborationSession:
         session = CollaborationSession(
             session_id="test-session-123",
             objective="Solve a complex problem",
-            models=["chat_with_gpt51_codex", "chat_with_gemini3_pro_preview"],
+            models=["chat_with_gpt5_pro", "chat_with_gemini3_pro_preview"],
             messages=[],
             current_step=0,
             mode="round_robin",

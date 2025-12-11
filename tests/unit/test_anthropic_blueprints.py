@@ -13,8 +13,8 @@ class TestAnthropicBlueprints:
     def test_blueprint_count(self):
         """Test that correct number of blueprints are generated."""
         blueprints = get_anthropic_blueprints()
-        assert len(blueprints) == 4
-        assert len(BLUEPRINTS) == 4
+        assert len(blueprints) == 3
+        assert len(BLUEPRINTS) == 3
 
     def test_blueprint_names(self):
         """Test that blueprints have correct generated names."""
@@ -22,14 +22,12 @@ class TestAnthropicBlueprints:
         # Check model names
         model_names = [bp.model_name for bp in blueprints]
         assert "claude-opus-4-5-20251101" in model_names
-        assert "claude-sonnet-4-20250514" in model_names
         assert "claude-sonnet-4-5" in model_names
         assert "claude-3-opus-20240229" in model_names
 
         # Check friendly tool names
         tool_names = [bp.tool_name for bp in blueprints]
         assert "chat_with_claude45_opus" in tool_names
-        assert "chat_with_claude4_sonnet" in tool_names
         assert "chat_with_claude45_sonnet" in tool_names
         assert "chat_with_claude3_opus" in tool_names
 
@@ -39,7 +37,6 @@ class TestAnthropicBlueprints:
         model_names = [bp.model_name for bp in blueprints]
 
         assert "claude-opus-4-5-20251101" in model_names
-        assert "claude-sonnet-4-20250514" in model_names
         assert "claude-sonnet-4-5" in model_names
         assert "claude-3-opus-20240229" in model_names
 
@@ -71,11 +68,11 @@ class TestAnthropicBlueprints:
             "max output: 64k tokens" in opus4_bp.description
         )  # From capability formatter
 
-        sonnet4_bp = next(
-            bp for bp in blueprints if bp.model_name == "claude-sonnet-4-20250514"
+        sonnet45_bp = next(
+            bp for bp in blueprints if bp.model_name == "claude-sonnet-4-5"
         )
         assert (
-            "max output: 64k tokens" in sonnet4_bp.description
+            "max output: 64k tokens" in sonnet45_bp.description
         )  # From capability formatter
 
         opus3_bp = next(

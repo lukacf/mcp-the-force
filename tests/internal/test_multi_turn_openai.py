@@ -17,7 +17,7 @@ class TestOpenAIMultiTurn:
         self, clean_session_caches, session_id_generator
     ):
         """Test that o3 maintains conversation across turns."""
-        metadata = get_tool("chat_with_o3_pro")
+        metadata = get_tool("chat_with_gpt5_pro")
         session_id = session_id_generator()
 
         # First turn
@@ -58,7 +58,7 @@ class TestOpenAIMultiTurn:
     @pytest.mark.asyncio
     async def test_o3_pro_multi_turn(self, clean_session_caches, session_id_generator):
         """Test o3-pro multi-turn with deep reasoning."""
-        metadata = get_tool("chat_with_o3_pro")
+        metadata = get_tool("chat_with_gpt5_pro")
         session_id = session_id_generator()
 
         # First turn: Complex problem
@@ -123,7 +123,7 @@ class TestOpenAIMultiTurn:
         self, clean_session_caches, session_id_generator
     ):
         """Test that OpenAI models get the updated priority instructions."""
-        metadata = get_tool("chat_with_o3_pro")
+        metadata = get_tool("chat_with_gpt5_pro")
         session_id = session_id_generator()
 
         result = await executor.execute(

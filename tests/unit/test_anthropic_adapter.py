@@ -6,7 +6,6 @@ import pytest
 from mcp_the_force.adapters.anthropic.adapter import AnthropicAdapter
 from mcp_the_force.adapters.anthropic.capabilities import (
     Claude45OpusCapabilities,
-    Claude4SonnetCapabilities,
     Claude45SonnetCapabilities,
     Claude3OpusCapabilities,
 )
@@ -20,10 +19,9 @@ class TestAnthropicAdapter:
         """Test that all expected models are supported."""
         models = AnthropicAdapter.get_supported_models()
         assert "claude-opus-4-5-20251101" in models
-        assert "claude-sonnet-4-20250514" in models
         assert "claude-3-opus-20240229" in models
         assert "claude-sonnet-4-5" in models
-        assert len(models) == 4
+        assert len(models) == 3
 
     def test_model_string_format(self):
         """Test model string formatting for LiteLLM."""
@@ -76,14 +74,6 @@ class TestAnthropicAdapter:
         assert caps.supports_tools is True
         assert caps.parallel_function_calls is None
 
-    def test_claude4_sonnet_capabilities(self):
-        """Test Claude 4 Sonnet capabilities."""
-        caps = Claude4SonnetCapabilities()
-        assert caps.model_name == "claude-sonnet-4-20250514"
-        assert caps.max_context_window == 1_000_000
-        assert caps.max_output_tokens == 64_000
-        assert caps.supports_reasoning_effort is True
-
     def test_claude45_sonnet_capabilities(self):
         """Test Claude 4.5 Sonnet capabilities."""
         caps = Claude45SonnetCapabilities()
@@ -101,10 +91,10 @@ class TestAnthropicAdapter:
         assert caps.supports_reasoning_effort is False  # No extended thinking
 
     def test_sonnet_1m_context_header(self):
-        """Test that Sonnet 4 includes 1M context beta header."""
+        """Test that Sonnet 4.5 includes 1M context beta header."""
         from unittest.mock import Mock
 
-        adapter = AnthropicAdapter("claude-sonnet-4-20250514")
+        adapter = AnthropicAdapter("claude-sonnet-4-5")
 
         # Mock params without thinking budget
         params = Mock()
@@ -149,10 +139,10 @@ class TestAnthropicAdapter:
         )
 
     def test_sonnet_1m_context_header_with_thinking(self):
-        """Test that Sonnet 4 combines 1M context and thinking beta headers."""
+        """Test that Sonnet 4.5 combines 1M context and thinking beta headers."""
         from unittest.mock import Mock
 
-        adapter = AnthropicAdapter("claude-sonnet-4-20250514")
+        adapter = AnthropicAdapter("claude-sonnet-4-5")
 
         # Mock params with thinking budget
         params = Mock()

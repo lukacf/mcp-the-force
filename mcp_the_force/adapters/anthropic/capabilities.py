@@ -78,7 +78,6 @@ class Claude3OpusCapabilities(AnthropicBaseCapabilities):
 # Map of model names to their capability instances
 ANTHROPIC_MODEL_CAPABILITIES: Dict[str, AnthropicBaseCapabilities] = {
     "claude-opus-4-5-20251101": Claude45OpusCapabilities(),
-    "claude-sonnet-4-20250514": Claude4SonnetCapabilities(),
     "claude-sonnet-4-5": Claude45SonnetCapabilities(),
     "claude-3-opus-20240229": Claude3OpusCapabilities(),
 }
