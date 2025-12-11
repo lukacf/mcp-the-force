@@ -14,8 +14,6 @@ def _get_friendly_name(model_name: str) -> str:
 
     Examples:
     - 'claude-3-opus' -> 'chat_with_claude3_opus'
-    - 'claude-opus-4-0' -> 'chat_with_claude4_opus'
-    - 'claude-sonnet-4-0' -> 'chat_with_claude4_sonnet'
     - 'claude-opus-4-5-20251101' -> 'chat_with_claude45_opus'
     - 'claude-sonnet-4-5' -> 'chat_with_claude45_sonnet'
     """

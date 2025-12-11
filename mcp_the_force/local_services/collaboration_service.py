@@ -64,7 +64,7 @@ class CollaborationService:
         # Fallback models for retry logic (large context models suitable for synthesis)
         self._synthesis_fallback_models = [
             "chat_with_gpt41",  # 1M context, strong tool use
-            "chat_with_claude4_sonnet",  # 1M context, reliable
+            "chat_with_claude45_sonnet",  # 1M context, reliable
             "chat_with_gemini25_flash",  # 1M context, fast
         ]
 

@@ -167,8 +167,8 @@ class GroupThink(ToolSpec):
         description=(
             "(Optional) Large context model to use for synthesis phase. This model reviews the "
             "entire discussion and creates the final deliverable. Should have large context window. "
-            "Available large context models: chat_with_gemini3_pro_preview (2M), chat_with_gpt41 (1M), "
-            "chat_with_claude4_sonnet (1M). "
+            "Available large context models: chat_with_gemini3_pro_preview (1M), chat_with_gpt41 (1M), "
+            "chat_with_claude45_sonnet (1M). "
             "Syntax: A model tool name. "
             "Default: 'chat_with_gemini3_pro_preview'. "
             "Example: synthesis_model='chat_with_gpt41'"

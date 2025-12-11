@@ -196,7 +196,7 @@ class TestGroupThinkMultiPhaseWorkflow:
                 models=["chat_with_gpt5_pro"],
                 output_format="Test deliverable",
                 discussion_turns=1,
-                synthesis_model="chat_with_claude4_sonnet",  # Custom synthesis model
+                synthesis_model="chat_with_claude45_sonnet",  # Custom synthesis model
                 validation_rounds=0,
             )
 
