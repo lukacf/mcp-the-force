@@ -26,16 +26,16 @@ class TestCollaborationMessage:
 
     def test_message_with_metadata(self):
         """Test message with custom metadata."""
-        metadata = {"model": "gpt-5-pro", "turn": 1}
+        metadata = {"model": "gpt-5.2-pro", "turn": 1}
         msg = CollaborationMessage(
-            speaker="chat_with_gpt5_pro",
+            speaker="chat_with_gpt52_pro",
             content="AI response",
             timestamp=datetime.now(),
             metadata=metadata,
         )
 
         assert msg.metadata == metadata
-        assert msg.metadata["model"] == "gpt-5-pro"
+        assert msg.metadata["model"] == "gpt-5.2-pro"
 
     def test_message_serialization(self):
         """Test message can be converted to/from dict."""
@@ -68,7 +68,7 @@ class TestCollaborationSession:
         session = CollaborationSession(
             session_id="test-session-123",
             objective="Solve a complex problem",
-            models=["chat_with_gpt5_pro", "chat_with_gemini3_pro_preview"],
+            models=["chat_with_gpt52_pro", "chat_with_gemini3_pro_preview"],
             messages=[],
             current_step=0,
             mode="round_robin",

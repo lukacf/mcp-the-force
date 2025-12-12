@@ -178,7 +178,7 @@ for model in response:
 group_think(
     session_id="refactor-auth-2025-11-21",
     objective="Redesign auth service for zero-downtime rotations",
-    models=["chat_with_gpt5_pro", "chat_with_gemini3_pro_preview", "chat_with_claude45_opus", "chat_with_grok41"],
+    models=["chat_with_gpt52_pro", "chat_with_gemini3_pro_preview", "chat_with_claude45_opus", "chat_with_grok41"],
     output_format="Design doc + migration steps + rollback plan",
     discussion_turns=6,
     validation_rounds=2,
@@ -223,7 +223,7 @@ best_practices = await research_with_o4_mini_deep_research(
 )
 
 # 2. Apply to current codebase
-implementation = await chat_with_gpt5_pro(
+implementation = await chat_with_gpt52_pro(
     f"Apply these practices to our code: {best_practices}",
     context=["/src"],
     session_id="implementation-session"
@@ -242,7 +242,7 @@ validation = await chat_with_gemini3_pro_preview(
 max_iterations = 3
 for iteration in range(max_iterations):
     # Generate hypothesis
-    hypothesis = await chat_with_gpt5_pro(
+    hypothesis = await chat_with_gpt52_pro(
         f"Iteration {iteration}: Generate testable hypothesis for bug",
         session_id=f"debug-iteration-{iteration}"
     )

@@ -29,7 +29,7 @@ class TestErrorHandlingIntegration:
                 # Try to use OpenAI tool without key
                 # With mock adapter, missing API key won't raise an error
                 # The mock adapter doesn't check for API keys
-                tool_metadata = get_tool("chat_with_gpt5_pro")
+                tool_metadata = get_tool("chat_with_gpt52_pro")
                 if not tool_metadata:
                     raise ValueError("Tool chat_with_o3 not found")
                 result = await executor.execute(
@@ -52,7 +52,7 @@ class TestErrorHandlingIntegration:
         # Use mock_adapter_error to simulate model validation error
         with mock_adapter_error(Exception("The model `invalid-model` does not exist")):
             with pytest.raises(Exception, match="model.*does not exist|invalid.*model"):
-                tool_metadata = get_tool("chat_with_gpt5_pro")
+                tool_metadata = get_tool("chat_with_gpt52_pro")
                 if not tool_metadata:
                     raise ValueError("Tool chat_with_o3 not found")
                 await executor.execute(
@@ -71,7 +71,7 @@ class TestErrorHandlingIntegration:
             with pytest.raises(
                 fastmcp.exceptions.ToolError, match="Tool execution timed out"
             ):
-                tool_metadata = get_tool("chat_with_gpt5_pro")
+                tool_metadata = get_tool("chat_with_gpt52_pro")
                 if not tool_metadata:
                     raise ValueError("Tool chat_with_o3 not found")
                 await executor.execute(
@@ -91,7 +91,7 @@ class TestErrorHandlingIntegration:
 
         with mock_adapter_error(error):
             with pytest.raises(Exception, match="Rate limit"):
-                tool_metadata = get_tool("chat_with_gpt5_pro")
+                tool_metadata = get_tool("chat_with_gpt52_pro")
                 if not tool_metadata:
                     raise ValueError("Tool chat_with_o3 not found")
                 await executor.execute(
@@ -166,7 +166,7 @@ class TestErrorHandlingIntegration:
         huge_file.write_text("x" * 10_000_000)  # 10MB file
 
         # MockAdapter should handle this gracefully
-        tool_metadata = get_tool("chat_with_gpt5_pro")
+        tool_metadata = get_tool("chat_with_gpt52_pro")
         if not tool_metadata:
             raise ValueError("Tool chat_with_o3 not found")
 
@@ -182,7 +182,7 @@ class TestErrorHandlingIntegration:
         # MockAdapter will return JSON showing it processed the request
         data = parse_adapter_response(result)
         assert data["mock"] is True
-        assert data["model"] == "gpt-5-pro"
+        assert data["model"] == "gpt-5.2-pro"
         # Vector store creation is handled by the mock_openai_client fixture
         # The MockAdapter itself doesn't handle vector stores
         # Just verify the request went through successfully
@@ -200,7 +200,7 @@ class TestErrorHandlingIntegration:
             with pytest.raises(
                 fastmcp.exceptions.ToolError, match="NoneType.*output_text"
             ):
-                tool_metadata = get_tool("chat_with_gpt5_pro")
+                tool_metadata = get_tool("chat_with_gpt52_pro")
                 if not tool_metadata:
                     raise ValueError("Tool chat_with_o3 not found")
                 await executor.execute(
@@ -242,7 +242,7 @@ class TestErrorHandlingIntegration:
         from unittest.mock import patch
 
         # Run both concurrently - one succeeds, one fails
-        o3_metadata = get_tool("chat_with_gpt5_pro")
+        o3_metadata = get_tool("chat_with_gpt52_pro")
         gemini_metadata = get_tool("chat_with_gemini25_flash")
         if not o3_metadata or not gemini_metadata:
             raise ValueError("Required tools not found")
@@ -283,7 +283,7 @@ class TestErrorHandlingIntegration:
             # First should succeed
             data = parse_adapter_response(results[0])
             assert data["mock"] is True
-            assert data["model"] == "gpt-5-pro"
+            assert data["model"] == "gpt-5.2-pro"
 
             # Second should fail
             assert isinstance(results[1], Exception)

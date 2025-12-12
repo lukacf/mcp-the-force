@@ -167,7 +167,7 @@ class TestToolExecutor:
             ):
                 from mcp_the_force.tools.registry import get_tool
 
-                metadata = get_tool("chat_with_gpt5_pro")
+                metadata = get_tool("chat_with_gpt52_pro")
                 await executor.execute(
                     metadata,
                     instructions="Continue our discussion",

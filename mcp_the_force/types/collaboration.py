@@ -41,7 +41,7 @@ class DeliverableContract:
 class CollaborationMessage:
     """A message in a multi-model collaboration."""
 
-    speaker: str  # "user" | model_name (e.g., "chat_with_gpt5_pro")
+    speaker: str  # "user" | model_name (e.g., "chat_with_gpt52_pro")
     content: str
     timestamp: datetime
     metadata: Dict[str, Any] = field(default_factory=dict)

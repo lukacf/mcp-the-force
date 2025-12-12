@@ -8,7 +8,7 @@ from mcp_the_force.tools.base import ToolSpec
 
 # Tool names as they appear in the registry
 OPENAI_TOOL_NAMES = [
-    "chat_with_gpt5_pro",
+    "chat_with_gpt52_pro",
     "chat_with_gpt41",
     "chat_with_gpt51_codex_max",
 ]

@@ -42,10 +42,10 @@ class OpenAIToolParams(BaseToolParams):  # type: ignore[misc]
             "(Optional) Controls the amount of internal 'thinking' the model does before providing an answer. "
             "Higher effort results in more thorough and accurate reasoning but may increase latency. "
             "'low' is faster but may be less accurate for complex problems. "
-            "Supported by GPT-5 Pro, GPT-5.1 Codex Max, and research models. Not supported by GPT-4 models. "
-            "Syntax: A string, one of 'low', 'medium', 'high', or 'xhigh' (extra high - only for GPT-5.1 Codex Max). "
-            "Default: 'medium' ('high' for gpt-5-pro, 'xhigh' for gpt-5.1-codex-max). "
-            "Examples: reasoning_effort='high' (for gpt-5-pro), reasoning_effort='xhigh' (for gpt-5.1-codex-max)"
+            "Supported by GPT-5.2, GPT-5.2 Pro, GPT-5.1 Codex Max, and research models. Not supported by GPT-4 models. "
+            "Syntax: A string, one of 'low', 'medium', 'high', or 'xhigh' (extra high - supported by GPT-5.2 series and GPT-5.1 Codex Max). "
+            "Default: 'medium' ('high' for gpt-5.2/gpt-5.2-pro, 'xhigh' for gpt-5.1-codex-max). "
+            "Examples: reasoning_effort='high' (for gpt-5.2), reasoning_effort='xhigh' (for gpt-5.1-codex-max)"
         ),
         requires_capability=lambda c: c.supports_reasoning_effort,
     )
@@ -271,22 +271,49 @@ class GPT51CodexMaxCapabilities(OSeriesCapabilities):
 
 
 @dataclass
-class GPT5ProCapabilities(OSeriesCapabilities):
-    """GPT-5 Pro capabilities — parity with GPT-5.1 Codex."""
+class GPT52Capabilities(OSeriesCapabilities):
+    """GPT-5.2 (Thinking) capabilities — advanced reasoning model."""
 
-    model_family: str = "gpt-5-pro"
-    model_name: str = "gpt-5-pro"
+    model_family: str = "gpt-5.2"
+    model_name: str = "gpt-5.2"
     max_context_window: int = 400_000
     supports_reasoning_effort: bool = True
-    supports_temperature: bool = (
-        False  # Responses API forbids temperature for gpt-5 codex/pro
-    )
+    supports_temperature: bool = False  # Reasoning models don't support temperature
     supports_web_search: bool = True
     supports_live_search: bool = True
     web_search_tool: str = "web_search"
     parallel_function_calls: int = -1
     default_reasoning_effort: str = "high"
-    description: str = "GPT-5 Pro: flagship general/agentic model with 400k context, strong tool use, and coding parity with GPT-5.1 Codex."
+    native_vector_store_provider: Optional[str] = (
+        "openai"  # GPT-5.2 supports file search
+    )
+    description: str = (
+        "GPT-5.2 Thinking: advanced reasoning model optimized for complex structured work "
+        "like coding, long document analysis, math, and planning. Supports xhigh reasoning effort."
+    )
+
+
+@dataclass
+class GPT52ProCapabilities(OSeriesCapabilities):
+    """GPT-5.2 Pro capabilities — maximum accuracy flagship model."""
+
+    model_family: str = "gpt-5.2-pro"
+    model_name: str = "gpt-5.2-pro"
+    max_context_window: int = 400_000
+    supports_reasoning_effort: bool = True
+    supports_temperature: bool = False  # Reasoning models don't support temperature
+    supports_web_search: bool = True
+    supports_live_search: bool = True
+    web_search_tool: str = "web_search"
+    parallel_function_calls: int = -1
+    default_reasoning_effort: str = "high"
+    native_vector_store_provider: Optional[str] = (
+        "openai"  # GPT-5.2 Pro supports file search
+    )
+    description: str = (
+        "GPT-5.2 Pro: flagship model delivering maximum accuracy and reliability for difficult problems. "
+        "Best for professional work requiring highest quality. Supports xhigh reasoning effort."
+    )
 
 
 # ====================================================================
@@ -305,7 +332,8 @@ def get_openai_model_capabilities():
         "o4-mini-deep-research": O4MiniDeepResearchCapabilities(),
         "gpt-5.1-codex": GPT51CodexCapabilities(),
         "gpt-5.1-codex-max": GPT51CodexMaxCapabilities(),
-        "gpt-5-pro": GPT5ProCapabilities(),
+        "gpt-5.2": GPT52Capabilities(),
+        "gpt-5.2-pro": GPT52ProCapabilities(),
     }
 
 
@@ -332,8 +360,8 @@ def _calculate_timeout(model_name: str) -> int:
         return (
             5400  # 90 minutes for GPT-5.1 Codex Max (ultra long reasoning with xhigh)
         )
-    elif model_name in {"gpt-5.1-codex", "gpt-5-pro"}:
-        return 3000  # 50 minutes for GPT-5.1 Codex / GPT-5 Pro (long reasoning)
+    elif model_name in {"gpt-5.1-codex", "gpt-5.2", "gpt-5.2-pro"}:
+        return 3000  # 50 minutes for GPT-5.1 Codex / GPT-5.2 models (long reasoning)
     elif model_name == "o3-pro":
         return 2700  # 45 minutes for o3-pro
     elif model_name == "o3":
@@ -426,7 +454,8 @@ def _generate_and_register_blueprints():
 
     # Only register supported models
     supported_models = [
-        "gpt-5-pro",
+        "gpt-5.2",
+        "gpt-5.2-pro",
         "gpt-4.1",
         "o3-deep-research",
         "o4-mini-deep-research",
@@ -445,8 +474,10 @@ def _generate_and_register_blueprints():
 
         # Use friendly tool names
         tool_name = None
-        if model_name == "gpt-5-pro":
-            tool_name = "gpt5_pro"
+        if model_name == "gpt-5.2":
+            tool_name = "gpt52"
+        elif model_name == "gpt-5.2-pro":
+            tool_name = "gpt52_pro"
         elif model_name == "gpt-5.1-codex-max":
             tool_name = "gpt51_codex_max"
 

@@ -1,7 +1,7 @@
 # The Force MCP – Usage Guide for LLM Agents
 
 ## Core Concepts
-- **One interface, many models:** Use `chat_with_*` tools to access OpenAI (GPT-5 Pro, GPT-4.1, o3/o4-mini deep research), Google Gemini, Anthropic Claude, xAI Grok, etc.
+- **One interface, many models:** Use `chat_with_*` tools to access OpenAI (GPT-5.2 Pro, GPT-4.1, o3/o4-mini deep research), Google Gemini, Anthropic Claude, xAI Grok, etc.
 - **Context management:** Pass absolute paths in `context`; small files are inlined, larger ones go to the vector store. Use `priority_context` to force-include must-read files.
 - **Sessions:** Set `session_id` to retain history per model/tool. Stable inline lists prevent prompt drift.
 - **JSON output:** Where supported, pass `structured_output_schema` for strict JSON replies.
@@ -21,7 +21,7 @@
 
 ## GroupThink (multi-model collaboration)
 - Tool: `group_think`
-  Params: `models` (list, e.g., `["chat_with_gpt5_pro","chat_with_gemini3_pro_preview","chat_with_claude45_sonnet","chat_with_grok41"]`), `objective`, `output_format`, `session_id`, optional `discussion_turns`, `max_steps`, `validation_rounds`.
+  Params: `models` (list, e.g., `["chat_with_gpt52_pro","chat_with_gemini3_pro_preview","chat_with_claude45_sonnet","chat_with_grok41"]`), `objective`, `output_format`, `session_id`, optional `discussion_turns`, `max_steps`, `validation_rounds`.
 - Behavior: orchestrates multiple models on a shared “whiteboard”, then synthesizes a final deliverable.
 - Tips: give a clear objective and expected output format; set `discussion_turns` modestly (6–10) to avoid timeouts; reuse `session_id` to continue a prior panel.
 - Long topics: if you risk >60s, launch via `start_job` and poll results.
@@ -41,7 +41,7 @@
 
 ## Examples
 - Analyze auth flow:
-  `chat_with_gpt5_pro {"instructions": "Review auth flow", "context": ["/repo/app"], "priority_context": ["/repo/app/auth.py"], "session_id": "auth-audit"}`
+  `chat_with_gpt52_pro {"instructions": "Review auth flow", "context": ["/repo/app"], "priority_context": ["/repo/app/auth.py"], "session_id": "auth-audit"}`
 - Long task async:  
   `start_job {"target_tool": "count_project_tokens", "args": {"items": ["/repo"], "top_n": 5}}`  
   then `poll_job {"job_id": "<returned_id>"}` until `completed`.
