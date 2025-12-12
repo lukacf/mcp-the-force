@@ -59,7 +59,8 @@ def _ensure_populated() -> None:
     expected_model_tools = [
         "chat_with_gemini3_pro_preview",
         "chat_with_gemini25_flash",
-        "chat_with_gpt51_codex",
+        "chat_with_gpt52",
+        "chat_with_gpt52_pro",
         "chat_with_gpt51_codex_max",
         "chat_with_grok41",
     ]
@@ -100,7 +101,7 @@ def _ensure_populated() -> None:
         _autogen_loaded = True
 
     # If critical OpenAI tools are still missing, force-register their blueprints
-    if "chat_with_gpt51_codex" not in TOOL_REGISTRY:
+    if "chat_with_gpt52" not in TOOL_REGISTRY:
         try:
             logger.warning(
                 "[REGISTRY] OpenAI tools missing after autogen; forcing re-registration"

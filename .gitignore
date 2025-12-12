@@ -37,7 +37,9 @@ venv.bak/
 *.swp
 *.swo
 *~
-.claude/
+# Claude Code local config (ignore agents, settings, etc but not skills)
+.claude/*
+!.claude/skills/
 
 # OS
 .DS_Store

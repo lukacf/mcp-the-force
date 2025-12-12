@@ -17,6 +17,10 @@
   - Updated "Complete List of AI Models" section with accurate context windows and capabilities
 
 ### Fixed
+- **GPT-5.2 Reasoning Effort**: Fixed GPT-5.2 and GPT-5.2 Pro to use `xhigh` as their default reasoning effort (was incorrectly set to `high`)
+  - Changed `reasoning_effort` parameter default from `"medium"` to `None` so model-specific defaults can apply
+  - Fixed OpenAI adapter to only include `reasoning_effort` in request when explicitly provided (prevents None value from blocking model defaults)
+  - GPT-5.2, GPT-5.2 Pro, and GPT-5.1 Codex Max all now correctly default to `xhigh` reasoning effort
 - **Model Registry**: Fixed `chat_with_claude4_sonnet` tool registration by replacing all references with `chat_with_claude45_sonnet`
   - Updated group_think synthesis model descriptions and fallback models
   - Fixed collaboration service fallback model list
@@ -25,6 +29,11 @@
   - Fixed unit test assertions for new model counts and names
   - Fixed integration test references to removed models
   - Updated test metadata and comments to reflect current model roster
+- **Code Cleanup**: Removed all dead code and references to deprecated models
+  - Removed O3Capabilities, O3ProCapabilities, CodexMiniCapabilities, GPT51CodexCapabilities classes
+  - Removed deprecated prompts for o3, o3-pro, gpt-4o, gpt-4.1-mini, gpt-5.1-codex
+  - Updated .claude agent configs to use current model tool names
+  - Updated .claude skill references from gpt5_pro to gpt52_pro
 
 ### Technical Details
 **Final Model List (12 tools):**

@@ -23,7 +23,7 @@ async def populated_test_sessions(isolate_test_databases):
     sessions = [
         UnifiedSession(
             project=project_name,
-            tool="chat_with_o3_pro",
+            tool="chat_with_gpt52_pro",
             session_id="integration-test-1",
             history=[{"role": "user", "content": "Integration test 1"}],
             updated_at=int(time.time()),
@@ -138,7 +138,7 @@ class TestDescribeSessionIntegration:
         # Set a cached summary
         await UnifiedSessionCache.set_summary(
             project_name,
-            "chat_with_o3_pro",
+            "chat_with_gpt52_pro",
             "integration-test-1",
             "This is a cached summary",
         )

@@ -31,7 +31,7 @@ class TestErrorHandlingIntegration:
                 # The mock adapter doesn't check for API keys
                 tool_metadata = get_tool("chat_with_gpt52_pro")
                 if not tool_metadata:
-                    raise ValueError("Tool chat_with_o3 not found")
+                    raise ValueError("Tool chat_with_gpt52 not found")
                 result = await executor.execute(
                     tool_metadata,
                     instructions="Test",
@@ -54,7 +54,7 @@ class TestErrorHandlingIntegration:
             with pytest.raises(Exception, match="model.*does not exist|invalid.*model"):
                 tool_metadata = get_tool("chat_with_gpt52_pro")
                 if not tool_metadata:
-                    raise ValueError("Tool chat_with_o3 not found")
+                    raise ValueError("Tool chat_with_gpt52 not found")
                 await executor.execute(
                     tool_metadata,
                     instructions="Test",
@@ -73,7 +73,7 @@ class TestErrorHandlingIntegration:
             ):
                 tool_metadata = get_tool("chat_with_gpt52_pro")
                 if not tool_metadata:
-                    raise ValueError("Tool chat_with_o3 not found")
+                    raise ValueError("Tool chat_with_gpt52 not found")
                 await executor.execute(
                     tool_metadata,
                     instructions="Test",
@@ -93,7 +93,7 @@ class TestErrorHandlingIntegration:
             with pytest.raises(Exception, match="Rate limit"):
                 tool_metadata = get_tool("chat_with_gpt52_pro")
                 if not tool_metadata:
-                    raise ValueError("Tool chat_with_o3 not found")
+                    raise ValueError("Tool chat_with_gpt52 not found")
                 await executor.execute(
                     tool_metadata,
                     instructions="Test",
@@ -168,7 +168,7 @@ class TestErrorHandlingIntegration:
         # MockAdapter should handle this gracefully
         tool_metadata = get_tool("chat_with_gpt52_pro")
         if not tool_metadata:
-            raise ValueError("Tool chat_with_o3 not found")
+            raise ValueError("Tool chat_with_gpt52 not found")
 
         # With huge files, the system should automatically use vector store
         result = await executor.execute(
@@ -202,7 +202,7 @@ class TestErrorHandlingIntegration:
             ):
                 tool_metadata = get_tool("chat_with_gpt52_pro")
                 if not tool_metadata:
-                    raise ValueError("Tool chat_with_o3 not found")
+                    raise ValueError("Tool chat_with_gpt52 not found")
                 await executor.execute(
                     tool_metadata,
                     instructions="Test",

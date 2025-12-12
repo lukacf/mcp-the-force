@@ -22,7 +22,7 @@ async def populated_session_db(isolate_test_databases):
     # Create a few test sessions with the correct project name
     session1 = UnifiedSession(
         project=project_name,
-        tool="chat_with_o3",
+        tool="chat_with_gpt52",
         session_id="test-session-1",
         history=[{"role": "user", "content": "Hello"}],
         updated_at=int(time.time()),
@@ -135,7 +135,7 @@ class TestListSessionsService:
         project_name = os.path.basename(settings.logging.project_path or os.getcwd())
 
         await UnifiedSessionCache.set_summary(
-            project_name, "chat_with_o3", "test-session-1", "This is a test summary"
+            project_name, "chat_with_gpt52", "test-session-1", "This is a test summary"
         )
 
         service = ListSessionsService()
@@ -207,7 +207,7 @@ class TestDescribeSessionService:
 
         # Verify get_summary was called with correct parameters
         mock_get_summary.assert_called_once_with(
-            project_name, "chat_with_o3", "test-session-1"
+            project_name, "chat_with_gpt52", "test-session-1"
         )
 
         # Verify executor was NOT called
@@ -281,7 +281,7 @@ class TestDescribeSessionService:
         # Verify summary was cached for the original session
         mock_set_summary.assert_called_once_with(
             project_name,
-            "chat_with_o3",
+            "chat_with_gpt52",
             "test-session-1",
             mock_json_summary,
         )
@@ -446,7 +446,7 @@ class TestDescribeSessionService:
         # First, set up a cached summary
         await UnifiedSessionCache.set_summary(
             project_name,
-            "chat_with_o3",
+            "chat_with_gpt52",
             "test-session-1",
             json.dumps(
                 {
@@ -494,5 +494,5 @@ class TestDescribeSessionService:
 
         # Verify new summary was cached
         mock_set_summary.assert_called_with(
-            project_name, "chat_with_o3", "test-session-1", new_summary
+            project_name, "chat_with_gpt52", "test-session-1", new_summary
         )

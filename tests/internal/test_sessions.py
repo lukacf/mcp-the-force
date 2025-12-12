@@ -49,7 +49,7 @@ class TestSessionManagement:
         # First call
         tool_metadata = get_tool("chat_with_gpt52_pro")
         if not tool_metadata:
-            raise ValueError("Tool chat_with_o3 not found")
+            raise ValueError("Tool chat_with_gpt52 not found")
         result1 = await executor.execute(
             tool_metadata,
             instructions="I need help with Python decorators",
@@ -86,7 +86,7 @@ class TestSessionManagement:
         # With MockAdapter, we're testing the session isolation mechanism
         tool_metadata = get_tool("chat_with_gpt52_pro")
         if not tool_metadata:
-            raise ValueError("Tool chat_with_o3 not found")
+            raise ValueError("Tool chat_with_gpt52 not found")
 
         # Two parallel conversations
         results = await asyncio.gather(
@@ -145,7 +145,7 @@ class TestSessionManagement:
         # Start with o3
         o3_metadata = get_tool("chat_with_gpt52_pro")
         if not o3_metadata:
-            raise ValueError("Tool chat_with_o3 not found")
+            raise ValueError("Tool chat_with_gpt52 not found")
         result1 = await executor.execute(
             o3_metadata,
             instructions="Start conversation",
@@ -195,7 +195,7 @@ class TestSessionManagement:
             # First call
             tool_metadata = get_tool("chat_with_gpt52_pro")
             if not tool_metadata:
-                raise ValueError("Tool chat_with_o3 not found")
+                raise ValueError("Tool chat_with_gpt52 not found")
             result1 = await executor.execute(
                 tool_metadata,
                 instructions="Start",
@@ -269,7 +269,7 @@ class TestSessionManagement:
         # Launch three requests concurrently to same session
         tool_metadata = get_tool("chat_with_gpt52_pro")
         if not tool_metadata:
-            raise ValueError("Tool chat_with_o3 not found")
+            raise ValueError("Tool chat_with_gpt52 not found")
         tasks = [
             executor.execute(
                 tool_metadata,
@@ -302,7 +302,7 @@ class TestSessionManagement:
         # First call with initial context
         tool_metadata = get_tool("chat_with_gpt52_pro")
         if not tool_metadata:
-            raise ValueError("Tool chat_with_o3 not found")
+            raise ValueError("Tool chat_with_gpt52 not found")
         result1 = await executor.execute(
             tool_metadata,
             instructions="Analyze this project",

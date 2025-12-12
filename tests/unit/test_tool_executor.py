@@ -63,7 +63,7 @@ class TestToolExecutor:
         )
         adapter.param_class = MagicMock()
         adapter.display_name = "Mock OpenAI Adapter"
-        adapter.model_name = "o3"
+        adapter.model_name = "gpt-5.2"
         return adapter
 
     @pytest.mark.asyncio

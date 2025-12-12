@@ -23,11 +23,11 @@ class OpenAIProtocolAdapter:
     # Protocol requirements
     param_class = OpenAIToolParams
 
-    def __init__(self, model: str = "o3"):
+    def __init__(self, model: str = "gpt-5.2"):
         """Initialize OpenAI adapter.
 
         Args:
-            model: OpenAI model name (e.g., "o3", "o3-pro", "gpt-4.1")
+            model: OpenAI model name (e.g., "gpt-5.2", "gpt-5.2-pro", "gpt-4.1")
 
         Raises:
             ValueError: If model is not supported
@@ -111,8 +111,6 @@ class OpenAIProtocolAdapter:
                 "instructions": instructions,
                 "previous_response_id": previous_response_id,
                 "vector_store_ids": ctx.vector_store_ids,
-                "reasoning_effort": getattr(params, "reasoning_effort", None),
-                "temperature": getattr(params, "temperature", None),
                 "structured_output_schema": structured_output_schema,
                 "disable_history_search": getattr(
                     params, "disable_history_search", False
@@ -123,6 +121,16 @@ class OpenAIProtocolAdapter:
                 "_api_key": self._api_key,
                 **kwargs,  # Pass through any other kwargs like timeout, etc.
             }
+
+            # Only include reasoning_effort/temperature if explicitly provided.
+            # This allows _preprocess_request to apply model-specific defaults.
+            reasoning_effort = getattr(params, "reasoning_effort", None)
+            if reasoning_effort is not None:
+                request_data["reasoning_effort"] = reasoning_effort
+
+            temperature = getattr(params, "temperature", None)
+            if temperature is not None:
+                request_data["temperature"] = temperature
 
             # Debug: Check disable_history_search parameter
             disable_history_search = getattr(params, "disable_history_search", False)

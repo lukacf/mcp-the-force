@@ -360,7 +360,7 @@ class TestForceConversationIntegration:
             "VALUES (?, ?, ?, ?, ?)",
             (
                 "mcp-the-force",
-                "chat_with_o3",
+                "chat_with_gpt52",
                 "debug-session",
                 sample_history,
                 1234567891,
@@ -414,7 +414,7 @@ class TestForceConversationIntegration:
             "mcp-the-force||chat_with_gemini25_flash||memory-vault-diagnostic"
             in store_ids
         )
-        assert "mcp-the-force||chat_with_o3||debug-session" in store_ids
+        assert "mcp-the-force||chat_with_gpt52||debug-session" in store_ids
 
         # Verify all entries are marked as session type
         for store_type, store_id in stores:
@@ -511,7 +511,7 @@ class TestForceConversationIntegration:
                 '["valid"]',
                 True,
             ),
-            ("mcp-the-force", "chat_with_o3", "session2", '{"messages": []}', True),
+            ("mcp-the-force", "chat_with_gpt52", "session2", '{"messages": []}', True),
             (
                 "mcp-the-force",
                 "chat_with_grok41",
@@ -558,7 +558,7 @@ class TestForceConversationIntegration:
         # Verify expected inclusions
         expected_included = [
             "mcp-the-force||chat_with_gemini25_flash||session1",
-            "mcp-the-force||chat_with_o3||session2",
+            "mcp-the-force||chat_with_gpt52||session2",
             "mcp-the-force||chat_with_grok41||session3",
         ]
 

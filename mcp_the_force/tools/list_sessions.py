@@ -39,7 +39,7 @@ class ListSessions(ToolSpec):
             "Case-insensitive partial matching. "
             "Syntax: A string. "
             "Default: None (no filtering). "
-            "Example: search='o3'"
+            "Example: search='gpt52'"
         ),
     )
 

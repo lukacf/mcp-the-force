@@ -52,7 +52,7 @@ def test_missing_openai_api_key_hides_tools(request, monkeypatch):
     available_tools = list_tools()
 
     # Assert that OpenAI tools are not in the registry
-    assert "chat_with_o3" not in available_tools
+    assert "chat_with_gpt52" not in available_tools
 
 
 @pytest.mark.integration
@@ -102,4 +102,4 @@ def test_openai_api_key_enables_tools(request, monkeypatch):
     available_tools = list_tools()
 
     # Assert that OpenAI tools are in the registry
-    assert "chat_with_o3" in available_tools
+    assert "chat_with_gpt52" in available_tools

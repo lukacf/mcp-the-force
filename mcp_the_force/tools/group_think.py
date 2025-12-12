@@ -52,11 +52,11 @@ class GroupThink(ToolSpec):
         description=(
             "(Required) List of AI model tool names to participate in the collaboration. "
             "Models will take turns contributing to the discussion. Use a mix of different models "
-            "for diverse perspectives (e.g., GPT-5 for reasoning, Gemini for code analysis, Claude for writing). "
-            "Available models include: chat_with_gpt51_codex, chat_with_gemini3_pro_preview, chat_with_claude45_opus, "
+            "for diverse perspectives (e.g., GPT-5.2 for reasoning, Gemini for code analysis, Claude for writing). "
+            "Available models include: chat_with_gpt52, chat_with_gpt52_pro, chat_with_gemini3_pro_preview, chat_with_claude45_opus, "
             "chat_with_gemini25_flash, chat_with_grok41, etc. "
             "Syntax: An array of strings (model tool names). "
-            "Example: ['chat_with_gpt51_codex', 'chat_with_gemini3_pro_preview', 'chat_with_claude45_opus']"
+            "Example: ['chat_with_gpt52', 'chat_with_gemini3_pro_preview', 'chat_with_claude45_opus']"
         ),
     )
 

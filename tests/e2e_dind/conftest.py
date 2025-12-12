@@ -589,7 +589,7 @@ def call_claude_tool(claude: Callable[[str], str]) -> Callable[..., str]:
     serialization, preventing common errors.
 
     Args:
-        tool_name (str): The name of the tool to call (e.g., 'chat_with_o3')
+        tool_name (str): The name of the tool to call (e.g., 'chat_with_gpt52')
         **kwargs: Tool parameters as keyword arguments
 
     Returns:
