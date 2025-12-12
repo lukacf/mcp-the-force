@@ -18,7 +18,8 @@
 
 ### Fixed
 - **GPT-5.2 Reasoning Effort**: Fixed GPT-5.2 and GPT-5.2 Pro to use `xhigh` as their default reasoning effort (was incorrectly set to `high`)
-  - Also fixed the `reasoning_effort` parameter to use `None` default so model-specific defaults actually apply
+  - Changed `reasoning_effort` parameter default from `"medium"` to `None` so model-specific defaults can apply
+  - Fixed OpenAI adapter to only include `reasoning_effort` in request when explicitly provided (prevents None value from blocking model defaults)
   - GPT-5.2, GPT-5.2 Pro, and GPT-5.1 Codex Max all now correctly default to `xhigh` reasoning effort
 - **Model Registry**: Fixed `chat_with_claude4_sonnet` tool registration by replacing all references with `chat_with_claude45_sonnet`
   - Updated group_think synthesis model descriptions and fallback models
