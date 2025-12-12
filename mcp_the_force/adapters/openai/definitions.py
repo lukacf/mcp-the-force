@@ -116,51 +116,6 @@ class OSeriesCapabilities(OpenAIBaseCapabilities):
 
 
 @dataclass
-class O3Capabilities(OSeriesCapabilities):
-    """OpenAI o3 model capabilities."""
-
-    model_name: str = "o3"
-    max_context_window: int = (
-        200_000  # Input limit: 200k + reasoning/output: 100k = 300k total
-    )
-    description: str = "Chain-of-thought reasoning with web search (200k input)"
-    parallel_function_calls: int = -1  # Unlimited
-
-
-@dataclass
-class CodexMiniCapabilities(OSeriesCapabilities):
-    """OpenAI codex-mini model capabilities (o4-mini optimized for coding)."""
-
-    model_name: str = "codex-mini-latest"
-    max_context_window: int = (
-        200_000  # Input limit: 200k + reasoning/output: 100k = 300k total
-    )
-    description: str = "Lightweight code generator/completer for quick edits. Speed: very high. Tool use: limited. When to use: Inline edits, small bugs, scaffolding, regex/tests—avoid for multi-file refactors or repo-wide reasoning."
-    parallel_function_calls: int = -1  # Unlimited
-    supports_web_search: bool = False  # Codex-mini doesn't support web search
-    supports_live_search: bool = False  # Codex-mini doesn't support live search
-    web_search_tool: str = ""  # No web search tool for codex-mini
-    native_vector_store_provider: Optional[str] = (
-        None  # Codex-mini doesn't support file search
-    )
-
-
-@dataclass
-class O3ProCapabilities(OSeriesCapabilities):
-    """OpenAI o3-pro model capabilities."""
-
-    model_name: str = "o3-pro"
-    max_context_window: int = (
-        200_000  # Input limit: 200k + reasoning/output: 100k = 300k total
-    )
-    description: str = "Heavyweight formal reasoner for deep, multi-step analysis. Speed: low. Tool use: very strong. When to use: Hard proofs/derivations, long-horizon planning, and safety-critical reviews where depth and rigor trump speed."
-    force_background: bool = True  # Always use background mode
-    supports_streaming: bool = False  # No streaming for o3-pro
-    default_reasoning_effort: str = "high"
-    parallel_function_calls: int = -1  # Unlimited
-
-
-@dataclass
 class GPT4Capabilities(OpenAIBaseCapabilities):
     """GPT-4 series capabilities."""
 
@@ -216,31 +171,6 @@ class O4MiniDeepResearchCapabilities(DeepResearchCapabilities):
     model_name: str = "o4-mini-deep-research"
     max_context_window: int = 200_000
     description: str = "Faster research agent for scoped, cited reconnaissance. Runtime: 2-10 min. Speed: asynchronous. When to use: Quick market scans, initial fact-finding, and follow-ups where time-to-first-brief matters more than depth."
-
-
-@dataclass
-class GPT51CodexCapabilities(OSeriesCapabilities):
-    """GPT-5.1 Codex capabilities - updated superior coding/agent model."""
-
-    model_family: str = "gpt-5.1-codex"
-    model_name: str = "gpt-5.1-codex"
-    max_context_window: int = 400_000  # 400k total context per OpenAI pricing page
-    supports_reasoning_effort: bool = True
-    supports_temperature: bool = (
-        False  # Responses API forbids temperature for gpt-5.1-codex
-    )
-    supports_web_search: bool = True
-    supports_live_search: bool = True
-    web_search_tool: str = "web_search"
-    parallel_function_calls: int = -1  # Unlimited parallel tool use
-    default_reasoning_effort: str = "high"
-    native_vector_store_provider: Optional[str] = (
-        None  # GPT-5.1 Codex doesn't support file_search tool
-    )
-    description: str = (
-        "Latest Codex-grade successor with 400k context and strong parallel tools. "
-        "Use for complex refactors, multi-file synthesis, and long-horizon agents."
-    )
 
 
 @dataclass

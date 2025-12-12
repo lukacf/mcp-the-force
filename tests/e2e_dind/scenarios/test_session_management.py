@@ -238,7 +238,7 @@ class TestSessionManagement:
 
         # Step 1: Store unique information with codex-mini
         response = call_claude_tool(
-            "chat_with_codex_mini",
+            "chat_with_gpt52",
             instructions=f"Remember this network configuration: Protocol {protocol_name} operates on port {port_number}",
             output_format="Acknowledge what you've stored",
             context=[],

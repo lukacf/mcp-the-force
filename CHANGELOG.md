@@ -29,6 +29,11 @@
   - Fixed unit test assertions for new model counts and names
   - Fixed integration test references to removed models
   - Updated test metadata and comments to reflect current model roster
+- **Code Cleanup**: Removed all dead code and references to deprecated models
+  - Removed O3Capabilities, O3ProCapabilities, CodexMiniCapabilities, GPT51CodexCapabilities classes
+  - Removed deprecated prompts for o3, o3-pro, gpt-4o, gpt-4.1-mini, gpt-5.1-codex
+  - Updated .claude agent configs to use current model tool names
+  - Updated .claude skill references from gpt5_pro to gpt52_pro
 
 ### Technical Details
 **Final Model List (12 tools):**

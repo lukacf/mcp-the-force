@@ -23,36 +23,6 @@ def mock_settings():
         yield mock_settings
 
 
-class TestGPT51CodexCapabilities:
-    """Tests for GPT-5.1 Codex model capabilities."""
-
-    def test_gpt51_codex_has_no_native_vector_store_provider(self):
-        """GPT-5.1 Codex should NOT have native_vector_store_provider.
-
-        Regression test: GPT-5.1 Codex doesn't support the file_search tool,
-        unlike regular GPT-5.1. This caused errors like:
-        "Tool 'file_search' is not supported with gpt-5.1-codex"
-        """
-        from mcp_the_force.adapters.openai.definitions import GPT51CodexCapabilities
-
-        capabilities = GPT51CodexCapabilities()
-        assert capabilities.native_vector_store_provider is None
-
-    def test_gpt51_codex_still_supports_tools(self):
-        """GPT-5.1 Codex should still support regular tools."""
-        from mcp_the_force.adapters.openai.definitions import GPT51CodexCapabilities
-
-        capabilities = GPT51CodexCapabilities()
-        assert capabilities.supports_tools is True
-
-    def test_gpt51_codex_has_correct_context_window(self):
-        """GPT-5.1 Codex should have 400k context window."""
-        from mcp_the_force.adapters.openai.definitions import GPT51CodexCapabilities
-
-        capabilities = GPT51CodexCapabilities()
-        assert capabilities.max_context_window == 400_000
-
-
 class TestGPT51CodexMaxCapabilities:
     """Tests for GPT-5.1 Codex Max model capabilities."""
 
@@ -97,20 +67,6 @@ class TestGPT51CodexMaxCapabilities:
 
         capabilities = GPT51CodexMaxCapabilities()
         assert capabilities.supports_temperature is False
-
-
-class TestCodexMiniCapabilities:
-    """Tests for Codex Mini model capabilities."""
-
-    def test_codex_mini_has_no_native_vector_store_provider(self):
-        """Codex Mini should NOT have native_vector_store_provider.
-
-        Codex Mini also doesn't support file_search tool.
-        """
-        from mcp_the_force.adapters.openai.definitions import CodexMiniCapabilities
-
-        capabilities = CodexMiniCapabilities()
-        assert capabilities.native_vector_store_provider is None
 
 
 class TestOSeriesCapabilities:

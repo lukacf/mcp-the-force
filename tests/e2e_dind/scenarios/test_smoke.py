@@ -15,7 +15,7 @@ def test_smoke_all_models(claude, call_claude_tool, parse_response):
     response = claude(
         "Use the-force list_models and return ONLY a JSON array of tool IDs (the 'id' field). "
         'Schema: {"tool_ids": ["string"]}. '
-        'Example: {"tool_ids": ["chat_with_o3", "chat_with_gemini25_flash"]}'
+        'Example: {"tool_ids": ["chat_with_gpt52", "chat_with_gemini25_flash"]}'
     )
 
     # Parse the JSON response
