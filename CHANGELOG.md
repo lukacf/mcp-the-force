@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## 1.2.2
 ### Changed
 - **GPT-5.2 Models**: Added OpenAI's new GPT-5.2 family (released December 11, 2025)
   - Added: `gpt-5.2` (Thinking) - advanced reasoning for coding, math, and planning (400k context, supports xhigh reasoning)
