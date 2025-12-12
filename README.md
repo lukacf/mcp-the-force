@@ -126,11 +126,11 @@ Use the-force chat_with_gpt41 with {"instructions": "Analyze the dependency grap
 
 ### 2. Ensure a critical file is always in context:
 
-> "Ask o3 to propose an implementation, and make sure you pay close attention to our `security_config.py` file."
+> "Ask GPT-5.2 Pro to propose an implementation, and make sure you pay close attention to our `security_config.py` file."
 
 The assistant would call:
 ```
-Use the-force chat_with_o3_pro with {"instructions": "Propose how to implement the new architecture we discussed.", "context": ["/src/api"], "priority_context": ["/src/config/security_config.py"], "session_id": "auth-implementation"}
+Use the-force chat_with_gpt52_pro with {"instructions": "Propose how to implement the new architecture we discussed.", "context": ["/src/api"], "priority_context": ["/src/config/security_config.py"], "session_id": "auth-implementation"}
 ```
 
 *`priority_context` guarantees `security_config.py` is included directly in the prompt.*
@@ -151,8 +151,8 @@ Use the-force search_project_history with {"query": "JWT implementation decision
 The Force provides access to cutting-edge AI models through `chat_with_*` tools, each with dynamically-generated descriptions showing their capabilities, context limits, and best use cases.
 
 ### Recommended Models for Most Tasks
-- **`chat_with_gpt51_codex`**: The smartest model available. 400k context, excellent tool use, and strong reasoning. Your go-to for complex tasks.
-- **`chat_with_gpt5_pro`**: Flagship GPT-5 Pro with 400k context and strong agentic/tooling performance.
+- **`chat_with_gpt52_pro`**: Flagship GPT-5.2 Pro with 400k context. Maximum accuracy for difficult problems.
+- **`chat_with_gpt52`**: GPT-5.2 Thinking with 400k context. Advanced reasoning for coding, math, and planning.
 - **`chat_with_gemini3_pro_preview`**: Powerful multimodal model with 1M context (preview). Fast and reliable for code analysis and long documents.
 
 ### Fast Large-Context Models
@@ -162,25 +162,23 @@ The Force provides access to cutting-edge AI models through `chat_with_*` tools,
 ### Complete List of AI Models
 
 **OpenAI Models:**
-- `chat_with_o3_pro`: Deep analysis and formal reasoning with web search
-- `chat_with_codex_mini`: Fast coding-specialized reasoning model
-- `chat_with_gpt41`: Fast long-context processing with web search
-- `chat_with_gpt51_codex`: World's smartest reasoning model
-- `chat_with_gpt5_pro`: Flagship GPT-5 Pro with 400k context and strong agentic/tooling performance
+- `chat_with_gpt52_pro`: Flagship GPT-5.2 Pro - maximum accuracy for difficult problems (400k context)
+- `chat_with_gpt52`: GPT-5.2 Thinking - advanced reasoning for coding, math, planning (400k context)
+- `chat_with_gpt41`: Fast long-context processing (1M) with web search
+- `chat_with_gpt51_codex_max`: Long-horizon agentic coding with xhigh reasoning effort (400k context)
 - `research_with_o3_deep_research`: Ultra-deep research with extensive web search (10-60 min)
 - `research_with_o4_mini_deep_research`: Fast research with web search (2-10 min)
 
 **Google Models:**
-- `chat_with_gemini3_pro_preview`: Deep multimodal analysis and complex reasoning
-- `chat_with_gemini25_flash`: Fast summarization and quick analysis
+- `chat_with_gemini3_pro_preview`: Deep multimodal analysis with 1M context (preview)
+- `chat_with_gemini25_flash`: Fast summarization and quick analysis with 1M context
 
 **Anthropic Models:**
-- `chat_with_claude45_opus`: Premium long-form reasoning with extended thinking
-- `chat_with_claude45_sonnet`: Fast long-context processing with extended thinking (1M)
-- `chat_with_claude3_opus`: Exceptional theory of mind and deep discussions
+- `chat_with_claude45_opus`: Premium long-form reasoning with extended thinking (200k context)
+- `chat_with_claude45_sonnet`: Fast long-context processing with extended thinking (1M context)
+- `chat_with_claude3_opus`: Exceptional theory of mind and deep discussions (200k context)
 
 **xAI Models:**
-- `chat_with_grok3_fast`: Fast inference with Grok 3
 - `chat_with_grok41`: Advanced assistant with multi-agent reasoning and ~2M context
 
 **Local Models (if Ollama is installed):**
@@ -238,7 +236,7 @@ bash /path/to/mcp-the-force/scripts/install-history-hook.sh
 ### Multi-Model Collaboration (GroupThink)
 
 GroupThink lets multiple models think together on the same objective with shared memory:
-- **Mix models by strength**: e.g., `chat_with_gpt51_codex` (reasoning), `chat_with_gemini3_pro_preview` (1M-context code analysis), `chat_with_claude45_sonnet` (writing).
+- **Mix models by strength**: e.g., `chat_with_gpt52_pro` (reasoning), `chat_with_gemini3_pro_preview` (1M-context code analysis), `chat_with_claude45_sonnet` (writing).
 - **Shared whiteboard**: Every turn writes to a vector-store “whiteboard” so later turns see all prior arguments.
 - **Two phases + validation**: Discussion turns → synthesis by a large-context model → validation rounds by the original panel.
 - **Resume anytime**: Reuse the same `session_id` to continue an ongoing collaboration.
@@ -248,7 +246,7 @@ Quick start:
 {
   "session_id": "design-rag-pipeline-2025-11-21",
   "objective": "Design a production-ready RAG pipeline for our docs service",
-  "models": ["chat_with_gpt51_codex", "chat_with_gemini3_pro_preview", "chat_with_claude45_opus"],
+  "models": ["chat_with_gpt52_pro", "chat_with_gemini3_pro_preview", "chat_with_claude45_opus", "chat_with_grok41"],
   "output_format": "Architecture doc with: Overview, Data Flow, Components, Ops, Risks",
   "discussion_turns": 6,
   "validation_rounds": 2,

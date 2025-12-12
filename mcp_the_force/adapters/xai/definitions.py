@@ -231,7 +231,7 @@ def _generate_and_register_blueprints():
     blueprints = []
 
     # Only register supported models
-    supported_models = ["grok-3-fast", "grok-4-1-fast-reasoning", "grok-4.1"]
+    supported_models = ["grok-4-1-fast-reasoning", "grok-4.1"]
 
     for model_name, capabilities in GROK_MODEL_CAPABILITIES.items():
         if model_name not in supported_models:
@@ -246,8 +246,6 @@ def _generate_and_register_blueprints():
         tool_name = None
         if model_name in ("grok-4-1-fast-reasoning", "grok-4.1"):
             tool_name = "grok41"  # stable friendly id used in tests/e2e
-        elif model_name == "grok-3-fast":
-            tool_name = "grok3_fast"
 
         blueprint = ToolBlueprint(
             model_name=model_name,

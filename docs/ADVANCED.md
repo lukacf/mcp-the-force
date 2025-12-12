@@ -22,8 +22,8 @@ Task 3: gpt4_1 - "Find all related code patterns"
 Based on Phase 1, pursue the most promising angles:
 ```python
 # Pick top 2 insights from Phase 1
-Task 1: gemini25_pro - "Deep dive into [specific issue from Phase 1]"
-Task 2: o3 (new session) - "Trace execution for [hypothesis from Phase 1]"
+Task 1: gemini3_pro_preview - "Deep dive into [specific issue from Phase 1]"
+Task 2: gpt5_pro (new session) - "Trace execution for [hypothesis from Phase 1]"
 ```
 
 #### Phase 3: Synthesis & Arbitration (10s)
@@ -72,10 +72,10 @@ chat_with_gemini3_pro_preview(
 gemini25_flash("What could cause this error?")
 
 # Secondary: Deep reasoning on top hypothesis
-o3("Trace execution of [specific hypothesis]")
+gpt5_pro("Trace execution of [specific hypothesis]")
 
 # Validation: Different perspective
-gemini25_pro("What did we miss in this analysis?")
+gemini3_pro_preview("What did we miss in this analysis?")
 ```
 
 #### For Architecture Review
@@ -84,7 +84,7 @@ gemini25_pro("What did we miss in this analysis?")
 gpt4_1(context=["/entire/codebase"], "Find architectural inconsistencies")
 
 # Deep dive: Specific subsystems
-gemini25_pro("Analyze the data layer for ACID compliance issues")
+gemini3_pro_preview("Analyze the data layer for ACID compliance issues")
 
 # Research: External best practices
 research_with_o3_deep_research("Industry standards for [identified patterns]")
@@ -93,10 +93,10 @@ research_with_o3_deep_research("Industry standards for [identified patterns]")
 #### For Code Generation
 ```python
 # Planning: Structure and approach
-o3("Design API structure for [requirements]")
+gpt5_pro("Design API structure for [requirements]")
 
 # Implementation: Detailed coding
-gemini25_pro("Implement [design] with proper error handling")
+gemini3_pro_preview("Implement [design] with proper error handling")
 
 # Review: Quality assurance
 gpt4_1("Review implementation for security and performance issues")
@@ -109,8 +109,8 @@ gpt4_1("Review implementation for security and performance issues")
 try:
     # Preferred: Multiple models for robustness
     results = await parallel_execution([
-        ("gemini25_pro", analysis_prompt),
-        ("o3", reasoning_prompt),
+        ("gemini3_pro_preview", analysis_prompt),
+        ("gpt5_pro", reasoning_prompt),
         ("gpt4_1", validation_prompt)
     ])
 except TimeoutError:
@@ -178,7 +178,7 @@ for model in response:
 group_think(
     session_id="refactor-auth-2025-11-21",
     objective="Redesign auth service for zero-downtime rotations",
-    models=["chat_with_gpt51_codex", "chat_with_gpt5_pro", "chat_with_gemini3_pro_preview", "chat_with_claude45_opus"],
+    models=["chat_with_gpt52_pro", "chat_with_gemini3_pro_preview", "chat_with_claude45_opus", "chat_with_grok41"],
     output_format="Design doc + migration steps + rollback plan",
     discussion_turns=6,
     validation_rounds=2,
@@ -201,8 +201,8 @@ overview = await chat_with_gemini25_flash(
 
 # 2. Deep analysis (parallel)
 tasks = [
-    ("gemini25_pro", "Detailed security analysis"),
-    ("o3", "Logic flow verification"),
+    ("gemini3_pro_preview", "Detailed security analysis"),
+    ("gpt5_pro", "Logic flow verification"),
     ("gpt4_1", "Performance impact assessment")
 ]
 analyses = await execute_parallel(tasks)
@@ -223,7 +223,7 @@ best_practices = await research_with_o4_mini_deep_research(
 )
 
 # 2. Apply to current codebase
-implementation = await chat_with_o3(
+implementation = await chat_with_gpt52_pro(
     f"Apply these practices to our code: {best_practices}",
     context=["/src"],
     session_id="implementation-session"
@@ -242,7 +242,7 @@ validation = await chat_with_gemini3_pro_preview(
 max_iterations = 3
 for iteration in range(max_iterations):
     # Generate hypothesis
-    hypothesis = await chat_with_o3(
+    hypothesis = await chat_with_gpt52_pro(
         f"Iteration {iteration}: Generate testable hypothesis for bug",
         session_id=f"debug-iteration-{iteration}"
     )
@@ -270,18 +270,18 @@ for iteration in range(max_iterations):
 ```python
 # High-priority, time-sensitive
 if priority == "urgent":
-    primary_model = "gemini25_flash"  # Fastest
-    fallback_model = "gemini25_pro"   # If quality needed
+    primary_model = "gemini25_flash"      # Fastest
+    fallback_model = "gemini3_pro_preview"  # If quality needed
 
 # Deep analysis, quality critical
 elif task_type == "architecture":
-    primary_model = "o3_pro"          # Best reasoning
-    fallback_model = "o3"             # Faster alternative
+    primary_model = "gpt5_pro"           # Best reasoning
+    fallback_model = "gpt51_codex_max"   # Long-horizon alternative
 
 # Large context processing
 elif context_size > 500_kb:
-    primary_model = "gpt4_1"          # Best RAG
-    fallback_model = "gemini25_pro"   # Large context
+    primary_model = "gpt4_1"              # Best RAG
+    fallback_model = "gemini3_pro_preview"  # Large context (1M)
 ```
 
 #### Session Reuse Strategy

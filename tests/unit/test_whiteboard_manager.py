@@ -203,7 +203,7 @@ class TestWhiteboardManagerMessages:
 
         # Add second message
         msg2 = CollaborationMessage(
-            "chat_with_gpt51_codex", "Second message", datetime.now()
+            "chat_with_gpt52_pro", "Second message", datetime.now()
         )
         await whiteboard_manager.append_message("index-test", msg2)
 
@@ -216,7 +216,7 @@ class TestWhiteboardManagerMessages:
 
         # Second call - should be 0002
         second_call_vsfile = mock_store.add_files.call_args_list[1][0][0][0]
-        assert "0002_chat_with_gpt51_codex.txt" in second_call_vsfile.path
+        assert "0002_chat_with_gpt52_pro.txt" in second_call_vsfile.path
 
     @pytest.mark.asyncio
     async def test_append_message_includes_metadata(self, whiteboard_manager):

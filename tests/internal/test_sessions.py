@@ -47,7 +47,7 @@ class TestSessionManagement:
         mock_openai_client.responses.create.side_effect = [response1, response2]
 
         # First call
-        tool_metadata = get_tool("chat_with_o3_pro")
+        tool_metadata = get_tool("chat_with_gpt52_pro")
         if not tool_metadata:
             raise ValueError("Tool chat_with_o3 not found")
         result1 = await executor.execute(
@@ -84,7 +84,7 @@ class TestSessionManagement:
     async def test_multiple_sessions_isolated(self, parse_response, mock_openai_client):
         """Test that different sessions are isolated from each other."""
         # With MockAdapter, we're testing the session isolation mechanism
-        tool_metadata = get_tool("chat_with_o3_pro")
+        tool_metadata = get_tool("chat_with_gpt52_pro")
         if not tool_metadata:
             raise ValueError("Tool chat_with_o3 not found")
 
@@ -143,7 +143,7 @@ class TestSessionManagement:
     ):
         """Test using same session ID across different OpenAI models."""
         # Start with o3
-        o3_metadata = get_tool("chat_with_o3_pro")
+        o3_metadata = get_tool("chat_with_gpt52_pro")
         if not o3_metadata:
             raise ValueError("Tool chat_with_o3 not found")
         result1 = await executor.execute(
@@ -156,7 +156,7 @@ class TestSessionManagement:
 
         data1 = parse_response(result1)
         assert data1["mock"] is True
-        assert data1["model"] == "o3-pro"
+        assert data1["model"] == "gpt-5.2-pro"
 
         # Continue with gpt4
         gpt4_metadata = get_tool("chat_with_gpt41")
@@ -193,7 +193,7 @@ class TestSessionManagement:
             mock_openai_client.responses.create.return_value = response
 
             # First call
-            tool_metadata = get_tool("chat_with_o3_pro")
+            tool_metadata = get_tool("chat_with_gpt52_pro")
             if not tool_metadata:
                 raise ValueError("Tool chat_with_o3 not found")
             result1 = await executor.execute(
@@ -267,7 +267,7 @@ class TestSessionManagement:
     async def test_concurrent_session_updates(self, parse_response):
         """Test that concurrent requests to same session handle properly."""
         # Launch three requests concurrently to same session
-        tool_metadata = get_tool("chat_with_o3_pro")
+        tool_metadata = get_tool("chat_with_gpt52_pro")
         if not tool_metadata:
             raise ValueError("Tool chat_with_o3 not found")
         tasks = [
@@ -289,7 +289,7 @@ class TestSessionManagement:
         # Parse all responses
         parsed = [parse_response(r) for r in results]
         assert all(p["mock"] is True for p in parsed)
-        assert all(p["model"] == "o3-pro" for p in parsed)
+        assert all(p["model"] == "gpt-5.2-pro" for p in parsed)
 
         # All should be using the same model and session is handled at executor level
         # Just verify all calls succeeded with the correct model
@@ -300,7 +300,7 @@ class TestSessionManagement:
     ):
         """Test session continuity when context files change between calls."""
         # First call with initial context
-        tool_metadata = get_tool("chat_with_o3_pro")
+        tool_metadata = get_tool("chat_with_gpt52_pro")
         if not tool_metadata:
             raise ValueError("Tool chat_with_o3 not found")
         result1 = await executor.execute(

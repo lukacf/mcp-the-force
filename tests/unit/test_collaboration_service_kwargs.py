@@ -45,7 +45,7 @@ class TestCollaborationServiceKwargsHandling:
         result = await collaboration_service.execute(
             session_id="kwargs-test",
             objective="Test objective",
-            models=["chat_with_gpt51_codex"],
+            models=["chat_with_gpt52_pro"],
             output_format="Test deliverable format",
             user_input="Test input",
             structured_output_schema={
@@ -68,7 +68,7 @@ class TestCollaborationServiceKwargsHandling:
         result = await collaboration_service.execute(
             session_id="multi-kwargs-test",
             objective="Test objective",
-            models=["chat_with_gpt51_codex"],
+            models=["chat_with_gpt52_pro"],
             output_format="Test deliverable format",
             user_input="Test input",
             structured_output_schema={"type": "object"},
@@ -89,7 +89,7 @@ class TestCollaborationServiceKwargsHandling:
         result = await collaboration_service.execute(
             session_id="flow-test",
             objective="Test flow with kwargs",
-            models=["chat_with_gpt51_codex", "chat_with_gemini3_pro_preview"],
+            models=["chat_with_gpt52_pro", "chat_with_gemini3_pro_preview"],
             output_format="Test deliverable format",
             user_input="Test user input",
             mode="round_robin",
@@ -125,7 +125,7 @@ class TestCollaborationServiceKwargsHandling:
         result = await collaboration_service.execute(
             session_id="config-kwargs-test",
             objective="Test with custom config and kwargs",
-            models=["chat_with_gpt51_codex"],
+            models=["chat_with_gpt52_pro"],
             output_format="JSON response with analysis",
             config=custom_config,
             # MCP framework parameters

@@ -313,8 +313,8 @@ def _update_litellm_model_limits() -> None:
         # Access LiteLLM's model cost table
         model_cost = getattr(litellm, "model_cost", {})
 
-        # Keys to update for Claude 4 Sonnet 1M context
-        sonnet_keys = ["claude-sonnet-4-20250514", "anthropic/claude-sonnet-4-20250514"]
+        # Keys to update for Claude 4.5 Sonnet 1M context
+        sonnet_keys = ["claude-sonnet-4-5", "anthropic/claude-sonnet-4-5"]
 
         for key in sonnet_keys:
             if key in model_cost:

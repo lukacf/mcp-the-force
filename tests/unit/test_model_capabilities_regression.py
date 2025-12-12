@@ -186,15 +186,15 @@ class TestReasoningEffortDefaults:
         self._preprocess_request(data)
         assert data.get("reasoning_effort") == "xhigh"
 
-    def test_codex_gets_high_when_not_provided(self):
-        """GPT-5.1 Codex should get high when reasoning_effort not provided."""
-        data = {"model": "gpt-5.1-codex"}
+    def test_gpt52_gets_high_when_not_provided(self):
+        """GPT-5.2 should get high when reasoning_effort not provided."""
+        data = {"model": "gpt-5.2"}
         self._preprocess_request(data)
         assert data.get("reasoning_effort") == "high"
 
-    def test_o3_pro_gets_high_when_not_provided(self):
-        """o3-pro should get high when reasoning_effort not provided."""
-        data = {"model": "o3-pro"}
+    def test_gpt52_pro_gets_high_when_not_provided(self):
+        """GPT-5.2 Pro should get high when reasoning_effort not provided."""
+        data = {"model": "gpt-5.2-pro"}
         self._preprocess_request(data)
         assert data.get("reasoning_effort") == "high"
 

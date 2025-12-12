@@ -129,8 +129,8 @@ class AnthropicAdapter(LiteLLMBaseAdapter):
                     f"Enabled extended thinking with budget: {thinking_budget} tokens"
                 )
 
-        # Enable 1M context beta header for Claude Sonnet 4.x (4.0/4.5)
-        if self.model_name in {"claude-sonnet-4-20250514", "claude-sonnet-4-5"}:
+        # Enable 1M context beta header for Claude Sonnet 4.5
+        if self.model_name == "claude-sonnet-4-5":
             if "extra_headers" not in request_params:
                 request_params["extra_headers"] = {}
 

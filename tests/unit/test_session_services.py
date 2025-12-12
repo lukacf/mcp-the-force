@@ -379,13 +379,13 @@ class TestDescribeSessionService:
 
         service = DescribeSessionService()
 
-        # Test with OpenAI model (use o3-pro which exists)
+        # Test with OpenAI model (use gpt-5.2-pro which exists)
         result = await service.execute(
-            session_id="test-session-1", summarization_model="chat_with_o3_pro"
+            session_id="test-session-1", summarization_model="chat_with_gpt52_pro"
         )
         assert (
             result
-            == "Error: Only Gemini models are supported for summarization. Got 'chat_with_o3_pro'"
+            == "Error: Only Gemini models are supported for summarization. Got 'chat_with_gpt52_pro'"
         )
 
         # Test with GPT model

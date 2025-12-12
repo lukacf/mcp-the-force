@@ -46,7 +46,7 @@ class TestGroupThinkSimple:
                     result = await service.execute(
                         session_id="simple-test",
                         objective="Simple test objective",
-                        models=["chat_with_gpt51_codex"],
+                        models=["chat_with_gpt52_pro"],
                         output_format="Simple test result",
                         discussion_turns=1,
                         validation_rounds=0,  # Skip validation for simplicity
