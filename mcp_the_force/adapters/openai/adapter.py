@@ -23,11 +23,11 @@ class OpenAIProtocolAdapter:
     # Protocol requirements
     param_class = OpenAIToolParams
 
-    def __init__(self, model: str = "o3"):
+    def __init__(self, model: str = "gpt-5.2"):
         """Initialize OpenAI adapter.
 
         Args:
-            model: OpenAI model name (e.g., "o3", "o3-pro", "gpt-4.1")
+            model: OpenAI model name (e.g., "gpt-5.2", "gpt-5.2-pro", "gpt-4.1")
 
         Raises:
             ValueError: If model is not supported
