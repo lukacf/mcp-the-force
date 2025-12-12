@@ -268,7 +268,7 @@ class ChatterCollaborate(ToolSpec):
         description="The main task or problem for models to solve collaboratively"
     )
     models: List[str] = Route.adapter(
-        description="List of model tools to participate (e.g., ['chat_with_gpt51_codex', 'chat_with_gemini3_pro_preview'])"
+        description="List of model tools to participate (e.g., ['chat_with_gpt52', 'chat_with_gemini3_pro_preview'])"
     )
     user_input: str = Route.adapter(
         default="",
