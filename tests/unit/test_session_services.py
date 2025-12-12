@@ -379,7 +379,7 @@ class TestDescribeSessionService:
 
         service = DescribeSessionService()
 
-        # Test with OpenAI model (use o3-pro which exists)
+        # Test with OpenAI model (use gpt-5.2-pro which exists)
         result = await service.execute(
             session_id="test-session-1", summarization_model="chat_with_gpt52_pro"
         )

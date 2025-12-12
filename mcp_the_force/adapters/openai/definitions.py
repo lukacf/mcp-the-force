@@ -322,15 +322,15 @@ class GPT52ProCapabilities(OSeriesCapabilities):
 
 
 def get_openai_model_capabilities():
-    """Factory function to create fresh capability instances."""
+    """Factory function to create fresh capability instances.
+
+    Only includes actively supported models. Deprecated models removed:
+    - o3, o3-pro, codex-mini, gpt-5.1-codex (superseded by GPT-5.2 family)
+    """
     return {
-        "o3": O3Capabilities(),
-        "o3-pro": O3ProCapabilities(),
-        "codex-mini": CodexMiniCapabilities(),
         "gpt-4.1": GPT41Capabilities(),
         "o3-deep-research": O3DeepResearchCapabilities(),
         "o4-mini-deep-research": O4MiniDeepResearchCapabilities(),
-        "gpt-5.1-codex": GPT51CodexCapabilities(),
         "gpt-5.1-codex-max": GPT51CodexMaxCapabilities(),
         "gpt-5.2": GPT52Capabilities(),
         "gpt-5.2-pro": GPT52ProCapabilities(),
@@ -353,19 +353,18 @@ OPENAI_MODEL_CAPABILITIES = get_openai_model_capabilities()
 
 
 def _calculate_timeout(model_name: str) -> int:
-    """Calculate appropriate timeout for a model."""
+    """Calculate appropriate timeout for a model.
+
+    Timeouts are based on typical response times for each model tier.
+    """
     if "deep-research" in model_name:
         return 3600  # 1 hour for deep research
     elif model_name == "gpt-5.1-codex-max":
         return (
             5400  # 90 minutes for GPT-5.1 Codex Max (ultra long reasoning with xhigh)
         )
-    elif model_name in {"gpt-5.1-codex", "gpt-5.2", "gpt-5.2-pro"}:
-        return 3000  # 50 minutes for GPT-5.1 Codex / GPT-5.2 models (long reasoning)
-    elif model_name == "o3-pro":
-        return 2700  # 45 minutes for o3-pro
-    elif model_name == "o3":
-        return 1200  # 20 minutes for o3
+    elif model_name in {"gpt-5.2", "gpt-5.2-pro"}:
+        return 3000  # 50 minutes for GPT-5.2 models (long reasoning)
     elif model_name == "gpt-4.1":
         return 300  # 5 minutes for gpt-4.1
     else:

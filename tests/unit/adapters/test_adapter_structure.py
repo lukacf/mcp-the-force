@@ -62,7 +62,7 @@ def test_openai_adapter_protocol_compliance():
     from mcp_the_force.adapters.openai import OpenAIProtocolAdapter
 
     # Create an instance to check protocol compliance
-    adapter = OpenAIProtocolAdapter("o3")
+    adapter = OpenAIProtocolAdapter("gpt-5.2")
 
     # Verify required attributes
     assert hasattr(adapter, "model_name")
@@ -73,7 +73,7 @@ def test_openai_adapter_protocol_compliance():
     assert callable(adapter.generate)
 
     # Check that it has the right structure
-    assert adapter.model_name == "o3"
+    assert adapter.model_name == "gpt-5.2"
     assert adapter.display_name
     assert adapter.capabilities is not None
     assert adapter.param_class is not None
@@ -112,7 +112,7 @@ def test_all_adapters_follow_mcp_protocol():
     # Create instances with sample models
     adapters = [
         GrokAdapter("grok-3-beta"),
-        OpenAIProtocolAdapter("o3"),
+        OpenAIProtocolAdapter("gpt-5.2"),
         GeminiAdapter("gemini-3-pro-preview"),
     ]
 
@@ -156,8 +156,8 @@ def test_adapter_registry_integration():
     assert xai_class is not None
 
     # Verify they can be instantiated
-    openai_adapter = openai_class("o3")
-    assert openai_adapter.model_name == "o3"
+    openai_adapter = openai_class("gpt-5.2")
+    assert openai_adapter.model_name == "gpt-5.2"
 
     google_adapter = google_class("gemini-3-pro-preview")
     assert google_adapter.model_name == "gemini-3-pro-preview"
