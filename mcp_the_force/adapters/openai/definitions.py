@@ -36,16 +36,16 @@ class OpenAIToolParams(BaseToolParams):  # type: ignore[misc]
         requires_capability=lambda c: c.supports_temperature,
     )
 
-    reasoning_effort: str = Route.adapter(  # type: ignore[assignment]
-        default="medium",
+    reasoning_effort: Optional[str] = Route.adapter(  # type: ignore[assignment]
+        default=None,
         description=(
             "(Optional) Controls the amount of internal 'thinking' the model does before providing an answer. "
             "Higher effort results in more thorough and accurate reasoning but may increase latency. "
             "'low' is faster but may be less accurate for complex problems. "
             "Supported by GPT-5.2, GPT-5.2 Pro, GPT-5.1 Codex Max, and research models. Not supported by GPT-4 models. "
             "Syntax: A string, one of 'low', 'medium', 'high', or 'xhigh' (extra high - supported by GPT-5.2 series and GPT-5.1 Codex Max). "
-            "Default: 'medium' ('high' for gpt-5.2/gpt-5.2-pro, 'xhigh' for gpt-5.1-codex-max). "
-            "Examples: reasoning_effort='high' (for gpt-5.2), reasoning_effort='xhigh' (for gpt-5.1-codex-max)"
+            "Default: Uses model's optimal default (xhigh for GPT-5.2/GPT-5.2 Pro/GPT-5.1 Codex Max, medium for others). "
+            "Examples: reasoning_effort='xhigh' (for maximum quality), reasoning_effort='medium' (for faster responses)"
         ),
         requires_capability=lambda c: c.supports_reasoning_effort,
     )
@@ -283,7 +283,7 @@ class GPT52Capabilities(OSeriesCapabilities):
     supports_live_search: bool = True
     web_search_tool: str = "web_search"
     parallel_function_calls: int = -1
-    default_reasoning_effort: str = "high"
+    default_reasoning_effort: str = "xhigh"
     native_vector_store_provider: Optional[str] = (
         "openai"  # GPT-5.2 supports file search
     )
@@ -306,7 +306,7 @@ class GPT52ProCapabilities(OSeriesCapabilities):
     supports_live_search: bool = True
     web_search_tool: str = "web_search"
     parallel_function_calls: int = -1
-    default_reasoning_effort: str = "high"
+    default_reasoning_effort: str = "xhigh"
     native_vector_store_provider: Optional[str] = (
         "openai"  # GPT-5.2 Pro supports file search
     )

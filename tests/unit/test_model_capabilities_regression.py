@@ -186,17 +186,17 @@ class TestReasoningEffortDefaults:
         self._preprocess_request(data)
         assert data.get("reasoning_effort") == "xhigh"
 
-    def test_gpt52_gets_high_when_not_provided(self):
-        """GPT-5.2 should get high when reasoning_effort not provided."""
+    def test_gpt52_gets_xhigh_when_not_provided(self):
+        """GPT-5.2 should get xhigh when reasoning_effort not provided."""
         data = {"model": "gpt-5.2"}
         self._preprocess_request(data)
-        assert data.get("reasoning_effort") == "high"
+        assert data.get("reasoning_effort") == "xhigh"
 
-    def test_gpt52_pro_gets_high_when_not_provided(self):
-        """GPT-5.2 Pro should get high when reasoning_effort not provided."""
+    def test_gpt52_pro_gets_xhigh_when_not_provided(self):
+        """GPT-5.2 Pro should get xhigh when reasoning_effort not provided."""
         data = {"model": "gpt-5.2-pro"}
         self._preprocess_request(data)
-        assert data.get("reasoning_effort") == "high"
+        assert data.get("reasoning_effort") == "xhigh"
 
     def test_user_explicit_medium_is_respected(self):
         """User-provided 'medium' should be respected, not overridden.
