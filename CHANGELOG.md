@@ -1,10 +1,18 @@
 # Changelog
 
+## [Unreleased]
+### Fixed
+- **Context Window Overflow**: Fixed context window exceeded errors on large codebases
+  - Corrected GPT-5.x context windows to use INPUT limit (272k) not total (400k = 272k input + 128k output)
+  - Increased `TOKEN_ENCODE_CHAR_CAP` from 250k to 5M chars to enable accurate tiktoken counting for large files
+  - Added pathological content detection to prevent tiktoken hangs on repetitive content
+  - Token estimation fallback (chars/4) was significantly undercounting for code-heavy content
+
 ## 1.2.2
 ### Changed
 - **GPT-5.2 Models**: Added OpenAI's new GPT-5.2 family (released December 11, 2025)
-  - Added: `gpt-5.2` (Thinking) - advanced reasoning for coding, math, and planning (400k context, supports xhigh reasoning)
-  - Added: `gpt-5.2-pro` - maximum accuracy flagship for difficult problems (400k context, supports xhigh reasoning)
+  - Added: `gpt-5.2` (Thinking) - advanced reasoning for coding, math, and planning (272k input context, supports xhigh reasoning)
+  - Added: `gpt-5.2-pro` - maximum accuracy flagship for difficult problems (272k input context, supports xhigh reasoning)
   - Removed: `gpt-5-pro` (superseded by GPT-5.2 Pro)
   - Both GPT-5.2 models support native file search (vector store) unlike GPT-5.1 Codex
 - **Model Consolidation**: Streamlined model offerings from 18 to 12 tools by removing deprecated models

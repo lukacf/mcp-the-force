@@ -10,8 +10,10 @@ try:
 except Exception:
     _enc = None
 
-# Max characters to pass to tiktoken encoder (prevents hangs on large repetitive content)
-TOKEN_ENCODE_CHAR_CAP = 250_000
+# Max characters to pass to tiktoken encoder (prevents hangs on pathological content)
+# Increased from 250k to 5M to enable accurate token counting for large codebases
+# The looks_pathological() check prevents hangs on repetitive content
+TOKEN_ENCODE_CHAR_CAP = 5_000_000
 
 
 def looks_pathological(text: str, threshold: float = 0.15) -> bool:
@@ -43,9 +45,14 @@ def count_tokens(texts: Sequence[str]) -> int:
 
     total_tokens = 0
     for text in texts:
-        # Only apply safeguards for very large texts that could cause tiktoken hangs
-        if len(text) > TOKEN_ENCODE_CHAR_CAP:
-            logger.debug(f"Using estimation for large content: {len(text)} chars")
+        # Use estimation for very large texts or pathological (repetitive) content
+        if len(text) > TOKEN_ENCODE_CHAR_CAP or looks_pathological(text):
+            if len(text) > TOKEN_ENCODE_CHAR_CAP:
+                logger.debug(f"Using estimation for large content: {len(text)} chars")
+            else:
+                logger.debug(
+                    f"Using estimation for pathological content: {len(text)} chars"
+                )
             total_tokens += safe_estimate_tokens(text)
         else:
             try:

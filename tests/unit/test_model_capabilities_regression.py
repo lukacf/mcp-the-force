@@ -41,11 +41,11 @@ class TestGPT51CodexMaxCapabilities:
         assert capabilities.native_vector_store_provider is None
 
     def test_gpt51_codex_max_has_correct_context_window(self):
-        """GPT-5.1 Codex Max should have 400k context window."""
+        """GPT-5.1 Codex Max should have 272k input context (400k total = 272k input + 128k output)."""
         from mcp_the_force.adapters.openai.definitions import GPT51CodexMaxCapabilities
 
         capabilities = GPT51CodexMaxCapabilities()
-        assert capabilities.max_context_window == 400_000
+        assert capabilities.max_context_window == 272_000
 
     def test_gpt51_codex_max_timeout(self):
         """GPT-5.1 Codex Max should have 90-minute timeout."""

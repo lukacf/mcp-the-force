@@ -179,7 +179,9 @@ class GPT51CodexMaxCapabilities(OSeriesCapabilities):
 
     model_family: str = "gpt-5.1-codex-max"
     model_name: str = "gpt-5.1-codex-max"
-    max_context_window: int = 400_000  # 400k total context per OpenAI pricing page
+    max_context_window: int = (
+        272_000  # 272k input (400k total = 272k input + 128k output)
+    )
     supports_reasoning_effort: bool = True
     supports_temperature: bool = (
         False  # Responses API forbids temperature for gpt-5.1-codex-max
@@ -206,7 +208,9 @@ class GPT52Capabilities(OSeriesCapabilities):
 
     model_family: str = "gpt-5.2"
     model_name: str = "gpt-5.2"
-    max_context_window: int = 400_000
+    max_context_window: int = (
+        272_000  # 272k input (400k total = 272k input + 128k output)
+    )
     supports_reasoning_effort: bool = True
     supports_temperature: bool = False  # Reasoning models don't support temperature
     supports_web_search: bool = True
@@ -229,7 +233,9 @@ class GPT52ProCapabilities(OSeriesCapabilities):
 
     model_family: str = "gpt-5.2-pro"
     model_name: str = "gpt-5.2-pro"
-    max_context_window: int = 400_000
+    max_context_window: int = (
+        272_000  # 272k input (400k total = 272k input + 128k output)
+    )
     supports_reasoning_effort: bool = True
     supports_temperature: bool = False  # Reasoning models don't support temperature
     supports_web_search: bool = True
