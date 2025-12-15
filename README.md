@@ -320,21 +320,6 @@ search_mcp_debug_logs(query='_time:10m error {app="mcp-the-force"}')
 
 VictoriaLogs UI is available at http://localhost:9428/vmui/
 
-### Known Issues
-
-#### MCP Server Crashes on Tool Cancellation (Claude Code 1.0.64+)
-
-**Issue**: When cancelling long-running tool calls (pressing Escape) in Claude Code version 1.0.64 or later, the MCP server crashes with an "AssertionError: Request already responded to" error and becomes unresponsive.
-
-**Cause**: Claude Code 1.0.64 changed the cancellation mechanism from regular asyncio cancellation to AnyIO cancel scopes, which kills the entire MCP server process instead of just the individual tool operation.
-
-**Workaround**: 
-- Avoid cancelling long-running operations
-- If the server crashes, restart Claude Code to restore MCP functionality
-- Consider downgrading to Claude Code 1.0.63 if cancellation is critical to your workflow
-
-**Status**: A fix has been implemented in the MCP Python SDK ([PR #1153](https://github.com/modelcontextprotocol/python-sdk/pull/1153)), but the client-side changes in Claude Code 1.0.64+ bypass this fix. The issue has been reported to the Claude Code team.
-
 ### Contributing
 See [CONTRIBUTING.md](CONTRIBUTING.md) for architecture details and development guidelines.
 
