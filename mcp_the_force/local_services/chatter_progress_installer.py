@@ -413,7 +413,7 @@ if [[ -f "$progress_file" ]]; then
     # Format model name (short)
     model_short=""
     if [[ -n "$current_model" ]]; then
-        model_short=$(echo "$current_model" | sed 's/chat_with_//' | sed 's/gpt/GPT-/' | sed 's/gemini25/Gemini/' | sed 's/claude41/Claude/' | sed 's/claude45/Claude/')
+        model_short=$(echo "$current_model" | sed 's/chat_with_//' | sed 's/gpt/GPT-/' | sed 's/gemini3/Gemini/' | sed 's/claude41/Claude/' | sed 's/claude45/Claude/')
     fi
     
     # Build Chatter status

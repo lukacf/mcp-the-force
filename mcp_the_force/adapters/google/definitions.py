@@ -122,7 +122,11 @@ class Gemini3ProPreviewCapabilities(GeminiBaseCapabilities):
 
 @dataclass
 class Gemini3FlashPreviewCapabilities(GeminiBaseCapabilities):
-    """Gemini 3 Flash Preview model capabilities."""
+    """Gemini 3 Flash Preview model capabilities.
+
+    Added: December 2025 (replaced gemini-2.5-flash)
+    Google's fast frontier-class model with upgraded visual/spatial reasoning.
+    """
 
     model_name: str = "gemini-3-flash-preview"
     max_context_window: int = 1_000_000

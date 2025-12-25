@@ -11,7 +11,7 @@ The Force is a Model Context Protocol (MCP) server that unifies the world's most
 - **Unified Multi-Model Access**: Work with premier models from OpenAI, Google, Anthropic, and xAI through one consistent set of tools. Leverage the best model for every task without switching contexts.
 - **Infinite Context**: Provide entire codebases as context, regardless of size. The Force intelligently includes critical files directly in the prompt and makes the rest available via high-performance vector search, effectively breaking through model context window limitations. It intelligently handles context updates when files change.
 - **Self-Building Project History**: Automatically captures and indexes every AI conversation and git commit. This creates a searchable, long-term history of your project's design decisions, debates, and evolution.
-- **Multi-Model Collaboration (GroupThink)**: Orchestrate GPT‑5, Gemini 2.5 Pro/Flash, Claude, Grok, and others to co-create multi-turn solutions with shared context, automatic summaries, and validation passes.
+- **Multi-Model Collaboration (GroupThink)**: Orchestrate GPT‑5, Gemini 3 Pro/Flash Preview, Claude, Grok, and others to co-create multi-turn solutions with shared context, automatic summaries, and validation passes.
 
 ## Quick Start
 

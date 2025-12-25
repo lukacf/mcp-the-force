@@ -5,6 +5,8 @@
 - **Gemini 3 Flash Preview**: Replaced `gemini-2.5-flash` with `gemini-3-flash-preview` as Google's fast frontier model
   - Updated tool name from `chat_with_gemini25_flash` to `chat_with_gemini3_flash_preview`
   - Fast frontier-class model with upgraded visual/spatial reasoning and agentic coding (1M context)
+  - **Rationale**: Gemini 3 Flash Preview offers improved performance over 2.5 Flash while maintaining speed
+  - **Breaking Change**: Users with `chat_with_gemini25_flash` in config files must update to `chat_with_gemini3_flash_preview`
 
 ### Fixed
 - **Context Window Overflow**: Fixed context window exceeded errors on large codebases

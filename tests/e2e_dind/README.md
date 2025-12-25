@@ -84,7 +84,7 @@ All tests run concurrently with 100% pass rate. Each test validates a complete u
 
 ### 6. Session Management and Isolation (`test_session_management.py`)
 - **Purpose**: Comprehensive session state management across models (consolidated from test_history.py and test_cross_model.py)
-- **Models Used**: Gemini 2.5 Pro, o3, GPT-4.1 (testing cross-model behavior)
+- **Models Used**: Gemini 3 Pro Preview, GPT-5.2, GPT-4.1 (testing cross-model behavior)
 - **Tests**:
   - Session persistence within same session_id
   - Session isolation between different session_ids
