@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## 1.3.0
 ### Changed
 - **Gemini 3 Flash Preview**: Replaced `gemini-2.5-flash` with `gemini-3-flash-preview` as Google's fast frontier model
   - Updated tool name from `chat_with_gemini25_flash` to `chat_with_gemini3_flash_preview`
