@@ -12,7 +12,7 @@ OPENAI_TOOL_NAMES = [
     "chat_with_gpt41",
     "chat_with_gpt51_codex_max",
 ]
-GEMINI_TOOL_NAMES = ["chat_with_gemini3_pro_preview", "chat_with_gemini25_flash"]
+GEMINI_TOOL_NAMES = ["chat_with_gemini3_pro_preview", "chat_with_gemini3_flash_preview"]
 GROK_TOOL_NAMES = ["chat_with_grok41"]
 ALL_CHAT_TOOL_NAMES = OPENAI_TOOL_NAMES + GEMINI_TOOL_NAMES + GROK_TOOL_NAMES
 

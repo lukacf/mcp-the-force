@@ -597,7 +597,7 @@ def call_claude_tool(claude: Callable[[str], str]) -> Callable[..., str]:
 
     Example:
         response = call_claude_tool(
-            "chat_with_gemini25_flash",
+            "chat_with_gemini3_flash_preview",
             instructions="Summarize this file",
             output_format="Brief summary",
             context=["/path/to/file.py"],

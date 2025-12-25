@@ -16,7 +16,7 @@ class TestToolExecutionIntegration:
         """Test Gemini tool execution with real file loading."""
         # Execute tool with real file context
         result = await run_tool(
-            "chat_with_gemini25_flash",
+            "chat_with_gemini3_flash_preview",
             instructions="Analyze the Python files in this project",
             output_format="bullet points",
             context=[str(temp_project)],
@@ -27,7 +27,7 @@ class TestToolExecutionIntegration:
         data = json.loads(result)
 
         # Verify correct model was used
-        assert data["model"] == "gemini-2.5-flash"
+        assert data["model"] == "gemini-3-flash-preview"
 
         # Verify prompt was built correctly
         prompt = data["prompt_preview"]
@@ -191,7 +191,7 @@ class TestToolExecutionIntegration:
             fastmcp.exceptions.ToolError, match="Missing required parameter"
         ):
             await run_tool(
-                "chat_with_gemini25_flash",
+                "chat_with_gemini3_flash_preview",
                 instructions="Test",
                 # Missing output_format and context
             )
@@ -223,7 +223,7 @@ class TestToolExecutionIntegration:
             for i in range(3)
         ] + [
             run_tool(
-                "chat_with_gemini25_flash",
+                "chat_with_gemini3_flash_preview",
                 instructions=f"Task {i}",
                 output_format="text",
                 context=[],
@@ -240,7 +240,9 @@ class TestToolExecutionIntegration:
         # Parse results and verify mix of models
         parsed_results = [parse_adapter_response(r) for r in results]
         openai_results = [r for r in parsed_results if r["model"] == "gpt-5.2-pro"]
-        vertex_results = [r for r in parsed_results if r["model"] == "gemini-2.5-flash"]
+        vertex_results = [
+            r for r in parsed_results if r["model"] == "gemini-3-flash-preview"
+        ]
 
         assert len(openai_results) == 3
         assert len(vertex_results) == 3

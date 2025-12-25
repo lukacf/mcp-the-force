@@ -37,7 +37,7 @@ They are your task force, your work force, your close collaborators.
      - **`chat_with_gpt52`**: GPT-5.2 Thinking (400k context). Advanced reasoning for coding, math, and planning.
      - **`chat_with_gemini3_pro_preview`**: Smart, fast, and reliable (1M context). Excellent for code analysis and long documents.
    - **Fast large-context alternatives:**
-     - **`chat_with_gemini25_flash`**: Ultra-fast with 1M context. Perfect for quick summaries.
+     - **`chat_with_gemini3_flash_preview`**: Ultra-fast with 1M context. Perfect for quick summaries.
      - **`chat_with_gpt41`**: Fast processing with 1M context and dependable tool use.
    - **For ultra-long-horizon tasks (24+ hours):**
      - **`chat_with_gpt51_codex_max`**: Long-horizon agentic coding with xhigh reasoning effort and automatic compaction. 77.9% on SWE-bench Verified.
@@ -63,7 +63,7 @@ They are your task force, your work force, your close collaborators.
 
 ## Project Overview
 
-MCP The-Force Server - A Model Context Protocol (MCP) server that provides access to multiple AI models (OpenAI o-series, Google Gemini 2.5, and xAI Grok) with intelligent context management for large codebases. Built with a sophisticated descriptor-based tool system using Python descriptors for parameter routing. Uses FastMCP framework with smart file inlining and vector store integration for RAG. Supports multi-turn conversations for all models via UnifiedSessionCache.
+MCP The-Force Server - A Model Context Protocol (MCP) server that provides access to multiple AI models (OpenAI o-series, Google Gemini 3, and xAI Grok) with intelligent context management for large codebases. Built with a sophisticated descriptor-based tool system using Python descriptors for parameter routing. Uses FastMCP framework with smart file inlining and vector store integration for RAG. Supports multi-turn conversations for all models via UnifiedSessionCache.
 
 ## Commands
 
@@ -79,7 +79,7 @@ MCP The-Force Server - A Model Context Protocol (MCP) server that provides acces
 1. **Adapters** (`mcp_the_force/adapters/`)
    - Protocol-based architecture with `MCPAdapter` protocol
    - `openai/`: OpenAI models integration (GPT-5.2, GPT-5.2 Pro, GPT-4.1, GPT-5.1 Codex Max, o3/o4-mini deep research) via Responses API
-   - `google/`: Google Vertex AI integration (Gemini 3 Pro preview, Gemini 2.5 flash) via google-genai SDK
+   - `google/`: Google Vertex AI integration (Gemini 3 Pro preview, Gemini 3 Flash preview) via google-genai SDK
    - `xai/`: xAI integration (Grok 4.1)
    - `registry.py`: Central adapter registry
 
@@ -117,7 +117,7 @@ The Force provides access to 12 cutting-edge AI models through `chat_with_*` too
 **Key models for most tasks:**
 - For 90% of your work, use **`chat_with_gpt52_pro`** (flagship, 400k context, maximum accuracy) or **`chat_with_gpt52`** (400k context, advanced reasoning)
 - For long documents: **`chat_with_gemini3_pro_preview`** (smart, 1M context, fast)
-- For fast large-context work: **`chat_with_gemini25_flash`** or **`chat_with_gpt41`**
+- For fast large-context work: **`chat_with_gemini3_flash_preview`** or **`chat_with_gpt41`**
 - For search: GPT-5.2 models are best, but **`chat_with_grok41`** is a good and faster alternative
 - For ultra-long-horizon tasks (24+ hours): **`chat_with_gpt51_codex_max`** with xhigh reasoning effort and automatic compaction
 

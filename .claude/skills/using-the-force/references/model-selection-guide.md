@@ -8,7 +8,7 @@ Quick decision tree for choosing the right model.
 What do you need?
 │
 ├─► Speed is critical
-│   └─► chat_with_gemini25_flash (1M, very fast)
+│   └─► chat_with_gemini3_flash_preview (1M, very fast)
 │
 ├─► Quality is critical
 │   ├─► Extended reasoning needed? → chat_with_gpt52_pro (400k, best reasoning)
@@ -16,7 +16,7 @@ What do you need?
 │   └─► Premium writing? → chat_with_claude45_opus (200k, extended thinking)
 │
 ├─► Large context (>400k tokens)
-│   ├─► Need speed? → chat_with_gemini25_flash (1M)
+│   ├─► Need speed? → chat_with_gemini3_flash_preview (1M)
 │   ├─► Need quality? → chat_with_gemini3_pro_preview (1M)
 │   ├─► Need reliability? → chat_with_gpt41 (1M, low hallucination)
 │   └─► Massive (>1M)? → chat_with_grok41 (~2M)
@@ -38,7 +38,7 @@ What do you need?
 | **gpt51_codex_max** | 400k | Slow | ★★★★★+ | ★★★★★ | ★★★★ | $$$$$ |
 | **gpt41** | 1M | Fast | ★★★★ | ★★★★ | ★★★★ | $$$ |
 | **gemini3_pro** | 1M | Medium | ★★★★ | ★★★★★ | ★★★★ | $$$ |
-| **gemini25_flash** | 1M | Very Fast | ★★★ | ★★★ | ★★★ | $ |
+| **gemini3_flash_preview** | 1M | Very Fast | ★★★ | ★★★ | ★★★ | $ |
 | **claude45_opus** | 200k | Slow | ★★★★★ | ★★★★ | ★★★★★ | $$$$$ |
 | **claude45_sonnet** | 1M | Fast | ★★★★ | ★★★★ | ★★★★★ | $$$ |
 | **claude3_opus** | 200k | Slow | ★★★★ | ★★★ | ★★★★★ | $$$$ |
@@ -62,7 +62,7 @@ What do you need?
 3. `chat_with_gemini3_pro_preview` - Large context summaries
 
 ### Debugging
-1. `chat_with_gemini25_flash` - Quick hypothesis (Phase 1)
+1. `chat_with_gemini3_flash_preview` - Quick hypothesis (Phase 1)
 2. `chat_with_gpt52_pro` - Deep trace analysis (Phase 2)
 3. `chat_with_gpt41` - Cross-reference validation
 
@@ -93,7 +93,7 @@ What do you need?
 ```
 Start cheap, escalate as needed:
 
-1. gemini25_flash ($)     → Quick scan, hypothesis
+1. gemini3_flash_preview ($)     → Quick scan, hypothesis
 2. gpt41 ($$$)            → If more depth needed
 3. gpt52_pro ($$$$)        → If reasoning quality matters
 4. gpt51_codex_max ($$$$$) → Only for long-horizon tasks

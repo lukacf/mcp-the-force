@@ -13,7 +13,7 @@ class GroupThink(ToolSpec):
 
     model_name = "group_think"
     description = (
-        "Orchestrate group thinking sessions where multiple AI models (GPT-5, Gemini 2.5 Pro, Claude, etc.) "
+        "Orchestrate group thinking sessions where multiple AI models (GPT-5, Gemini 3 Pro, Claude, etc.) "
         "collaborate on complex problems through structured conversations. Models share a whiteboard vector store "
         "and can build on each other's ideas across multiple turns. Provides comprehensive final reports. "
         "Supports both round-robin and orchestrated modes."
@@ -54,7 +54,7 @@ class GroupThink(ToolSpec):
             "Models will take turns contributing to the discussion. Use a mix of different models "
             "for diverse perspectives (e.g., GPT-5.2 for reasoning, Gemini for code analysis, Claude for writing). "
             "Available models include: chat_with_gpt52, chat_with_gpt52_pro, chat_with_gemini3_pro_preview, chat_with_claude45_opus, "
-            "chat_with_gemini25_flash, chat_with_grok41, etc. "
+            "chat_with_gemini3_flash_preview, chat_with_grok41, etc."
             "Syntax: An array of strings (model tool names). "
             "Example: ['chat_with_gpt52', 'chat_with_gemini3_pro_preview', 'chat_with_claude45_opus']"
         ),

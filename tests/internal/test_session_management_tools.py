@@ -107,13 +107,14 @@ class TestDescribeSessionIntegration:
         result = await executor.execute(
             metadata,
             session_id="integration-test-1",
-            summarization_model="chat_with_gemini25_flash",
+            summarization_model="chat_with_gemini3_flash_preview",
         )
 
         # Should return error message since we mocked get_tool to return None
         assert isinstance(result, str)
         assert (
-            "Error: Summarization model 'chat_with_gemini25_flash' not found." in result
+            "Error: Summarization model 'chat_with_gemini3_flash_preview' not found."
+            in result
         )
 
     async def test_describe_session_non_existent(self, populated_test_sessions):
@@ -174,7 +175,7 @@ class TestDescribeSessionIntegration:
         # In mock mode, this should work if history is passed correctly
         result = await service.execute(
             session_id="integration-test-1",
-            summarization_model="chat_with_gemini25_flash",
+            summarization_model="chat_with_gemini3_flash_preview",
         )
 
         # The result should be a proper summary from MockAdapter

@@ -77,7 +77,7 @@ class TestPriorityContextAndFileTree:
 
         # Call with priority_context
         response = call_claude_tool(
-            "chat_with_gemini25_flash",
+            "chat_with_gemini3_flash_preview",
             instructions=f"Find the marker {marker} and confirm you can see the large file content directly without using search_task_files",
             output_format="Report: 1) The marker value 2) First 100 chars of large file 3) Confirm if you saw it directly inline",
             context=[marker_file_path],
@@ -194,7 +194,7 @@ class TestPriorityContextAndFileTree:
 
         # Call with mixed context
         response = call_claude_tool(
-            "chat_with_gemini25_flash",
+            "chat_with_gemini3_flash_preview",
             instructions=f"Report on the file organization. Find marker {marker} and describe which files you can see directly vs need to search for",
             output_format="List each file and whether you can see its content directly or would need to search",
             context=[small1_path, small2_path, large_path],
@@ -302,7 +302,7 @@ class TestPriorityContextAndFileTree:
 
         # First call with small files only
         response1 = call_claude_tool(
-            "chat_with_gemini25_flash",
+            "chat_with_gemini3_flash_preview",
             instructions=f"Find all markers starting with {marker_base} and list them",
             output_format="List all markers you can see directly",
             context=[small1_path, small2_path],
@@ -331,7 +331,7 @@ class TestPriorityContextAndFileTree:
 
         # Second call with additional large file
         response2 = call_claude_tool(
-            "chat_with_gemini25_flash",
+            "chat_with_gemini3_flash_preview",
             instructions=f"Find all markers starting with {marker_base}, including any new or modified ones. Report which files you need to search vs see directly",
             output_format="List: 1) Markers visible directly 2) Files that would need search 3) Any changes from previous context",
             context=[small1_path, small2_path, large_path],

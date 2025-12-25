@@ -1,6 +1,13 @@
 # Changelog
 
 ## [Unreleased]
+### Changed
+- **Gemini 3 Flash Preview**: Replaced `gemini-2.5-flash` with `gemini-3-flash-preview` as Google's fast frontier model
+  - Updated tool name from `chat_with_gemini25_flash` to `chat_with_gemini3_flash_preview`
+  - Fast frontier-class model with upgraded visual/spatial reasoning and agentic coding (1M context)
+  - **Rationale**: Gemini 3 Flash Preview offers improved performance over 2.5 Flash while maintaining speed
+  - **Breaking Change**: Users with `chat_with_gemini25_flash` in config files must update to `chat_with_gemini3_flash_preview`
+
 ### Fixed
 - **Context Window Overflow**: Fixed context window exceeded errors on large codebases
   - Corrected GPT-5.x context windows to use INPUT limit (272k) not total (400k = 272k input + 128k output)
@@ -46,7 +53,7 @@
 ### Technical Details
 **Final Model List (12 tools):**
 - OpenAI: `gpt52_pro`, `gpt52`, `gpt41`, `gpt51_codex_max`, `o3_deep_research`, `o4_mini_deep_research`
-- Google: `gemini3_pro_preview`, `gemini25_flash`
+- Google: `gemini3_pro_preview`, `gemini3_flash_preview`
 - Anthropic: `claude45_opus`, `claude45_sonnet`, `claude3_opus`
 - xAI: `grok41`
 

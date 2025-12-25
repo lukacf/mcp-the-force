@@ -126,7 +126,7 @@ class GeminiAdapter:
         """Initialize the Gemini adapter.
 
         Args:
-            model: Gemini model name (e.g., "gemini-3-pro-preview", "gemini-2.5-flash").
+            model: Gemini model name (e.g., "gemini-3-pro-preview", "gemini-3-flash-preview").
         """
         self.model_name = model
         self.display_name = f"Gemini {model}"

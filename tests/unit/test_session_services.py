@@ -255,7 +255,7 @@ class TestDescribeSessionService:
         service = DescribeSessionService()
         result = await service.execute(
             session_id="test-session-1",
-            summarization_model="chat_with_gemini25_flash",
+            summarization_model="chat_with_gemini3_flash_preview",
             extra_instructions="Be concise",
         )
 
@@ -268,14 +268,14 @@ class TestDescribeSessionService:
         assert temp_session.session_id.startswith("temp-summary-")
         assert temp_session.project == project_name
         assert (
-            temp_session.tool == "chat_with_gemini25_flash"
+            temp_session.tool == "chat_with_gemini3_flash_preview"
         )  # Should use summarization model
 
         # Verify executor was called with the temp session and model
         mock_executor.assert_called_once()
         metadata = mock_executor.call_args[0][0]
         kwargs = mock_executor.call_args[1]
-        assert metadata.id == "chat_with_gemini25_flash"
+        assert metadata.id == "chat_with_gemini3_flash_preview"
         assert kwargs["session_id"].startswith("temp-summary-")
 
         # Verify summary was cached for the original session

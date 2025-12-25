@@ -269,7 +269,7 @@ class TestSessionManagement:
 
         for attempt in range(search_attempts):
             response = call_claude_tool(
-                "chat_with_gemini25_flash",
+                "chat_with_gemini3_flash_preview",
                 instructions=f"Use the search_project_history function to search for information about Protocol {protocol_name} and its port number",
                 output_format="JSON with search results based on what you find",
                 context=[],

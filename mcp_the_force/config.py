@@ -222,7 +222,7 @@ class ToolsConfig(BaseModel):
     """Configuration for built-in local service tools."""
 
     default_summarization_model: str = Field(
-        "chat_with_gemini25_flash",
+        "chat_with_gemini3_flash_preview",
         description="The default model used by describe_session for summarization.",
     )
 

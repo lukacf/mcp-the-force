@@ -46,7 +46,7 @@ class TestToolExecutor:
         )
         adapter.param_class = MagicMock()
         adapter.display_name = "Mock Gemini Adapter"
-        adapter.model_name = "gemini-2.5-flash"
+        adapter.model_name = "gemini-3-flash-preview"
         return adapter
 
     @pytest.fixture
@@ -93,7 +93,7 @@ class TestToolExecutor:
             # Import get_tool after patching
             from mcp_the_force.tools.registry import get_tool
 
-            metadata = get_tool("chat_with_gemini25_flash")
+            metadata = get_tool("chat_with_gemini3_flash_preview")
             result = await executor.execute(
                 metadata,
                 instructions="Explain this code",
@@ -190,7 +190,7 @@ class TestToolExecutor:
         with pytest.raises(fastmcp.exceptions.ToolError, match="Tool execution failed"):
             from mcp_the_force.tools.registry import get_tool
 
-            metadata = get_tool("chat_with_gemini25_flash")
+            metadata = get_tool("chat_with_gemini3_flash_preview")
             await executor.execute(
                 metadata,
                 instructions="Test",
@@ -225,7 +225,7 @@ class TestToolExecutor:
 
             from mcp_the_force.tools.registry import get_tool
 
-            metadata = get_tool("chat_with_gemini25_flash")
+            metadata = get_tool("chat_with_gemini3_flash_preview")
             with pytest.raises(
                 fastmcp.exceptions.ToolError, match="Failed to initialize adapter"
             ):

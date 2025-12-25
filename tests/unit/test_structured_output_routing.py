@@ -148,7 +148,7 @@ class TestStructuredOutputRouting:
 
         @tool
         class Tool2(ToolSpec):
-            model_name = "gemini-2.5-flash"
+            model_name = "gemini-3-flash-preview"
             adapter_class = "vertex"
             structured_output_schema: Dict[str, Any] = Route.structured_output()
 

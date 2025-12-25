@@ -15,7 +15,7 @@ def test_smoke_all_models(claude, call_claude_tool, parse_response):
     response = claude(
         "Use the-force list_models and return ONLY a JSON array of tool IDs (the 'id' field). "
         'Schema: {"tool_ids": ["string"]}. '
-        'Example: {"tool_ids": ["chat_with_gpt52", "chat_with_gemini25_flash"]}'
+        'Example: {"tool_ids": ["chat_with_gpt52", "chat_with_gemini3_flash_preview"]}'
     )
 
     # Parse the JSON response
@@ -28,8 +28,8 @@ def test_smoke_all_models(claude, call_claude_tool, parse_response):
         tid.endswith("chat_with_gpt52") for tid in tool_ids
     ), f"Missing chat_with_gpt52 in: {tool_ids}"
     assert any(
-        tid.endswith("chat_with_gemini25_flash") for tid in tool_ids
-    ), f"Missing chat_with_gemini25_flash in: {tool_ids}"
+        tid.endswith("chat_with_gemini3_flash_preview") for tid in tool_ids
+    ), f"Missing chat_with_gemini3_flash_preview in: {tool_ids}"
     assert any(
         tid.endswith("chat_with_grok41") for tid in tool_ids
     ), f"Missing chat_with_grok41 in: {tool_ids}"
@@ -48,7 +48,7 @@ def test_smoke_all_models(claude, call_claude_tool, parse_response):
 
     models_to_test = [
         ("chat_with_gpt52", "GPT-5.2"),
-        ("chat_with_gemini25_flash", "Gemini Flash"),
+        ("chat_with_gemini3_flash_preview", "Gemini Flash"),
         ("chat_with_grok41", "Grok 4.1"),
         ("chat_with_claude45_sonnet", "Claude 4.5 Sonnet"),
     ]
@@ -93,7 +93,7 @@ def test_smoke_file_context(
 
     # Ask a simple question about the file
     response = call_claude_tool(
-        "chat_with_gemini25_flash",
+        "chat_with_gemini3_flash_preview",
         instructions="What color is mentioned in the file?",
         output_format="Just the color name",
         context=[test_file],

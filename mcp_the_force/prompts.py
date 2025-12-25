@@ -57,7 +57,7 @@ You are helping Claude (an AI assistant) analyze code and make decisions.
 - You do NOT have web search. If you need current information, state what you need
 - Quote file names and error messages exactly
 - Use your multimodal capabilities when relevant""".strip(),
-    "gemini-2.5-flash": """## Role: Fast Response Assistant
+    "gemini-3-flash-preview": """## Role: Fast Response Assistant
 You are helping Claude (an AI assistant) with rapid, comprehensive analysis.
 ### Guidelines
 - Provide fast, detailed responses - you excel at generating lots of output quickly

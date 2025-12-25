@@ -61,7 +61,7 @@ def populated_db(temp_db):
     test_conversations = [
         {
             "project": "mcp-the-force",
-            "tool": "chat_with_gemini25_flash",
+            "tool": "chat_with_gemini3_flash_preview",
             "session_id": "memory-vault-diagnostic",
             "history": json.dumps(
                 [
@@ -159,7 +159,7 @@ class TestStoreDiscoveryIntegration:
 
         store_ids = [store[1] for store in stores]
         assert (
-            "mcp-the-force||chat_with_gemini25_flash||memory-vault-diagnostic"
+            "mcp-the-force||chat_with_gemini3_flash_preview||memory-vault-diagnostic"
             in store_ids
         )
         assert "mcp-the-force||chat_with_gpt52||ollama-debug-session" in store_ids
@@ -241,7 +241,7 @@ class TestRegressionPrevention:
 
         # Insert sessions that should be excluded
         excluded_sessions = [
-            ("mcp-the-force", "chat_with_gemini25_flash", "null-history", None),
+            ("mcp-the-force", "chat_with_gemini3_flash_preview", "null-history", None),
             ("mcp-the-force", "chat_with_gpt52", "empty-history", ""),
             ("mcp-the-force", "chat_with_grok41", "whitespace-history", "   "),
         ]
@@ -261,7 +261,7 @@ class TestRegressionPrevention:
         store_ids = [store[1] for store in stores]
 
         excluded_ids = [
-            "mcp-the-force||chat_with_gemini25_flash||null-history",
+            "mcp-the-force||chat_with_gemini3_flash_preview||null-history",
             "mcp-the-force||chat_with_gpt52||empty-history",
             "mcp-the-force||chat_with_grok41||whitespace-history",
         ]

@@ -109,9 +109,9 @@ class TestErrorHandlingIntegration:
         with pytest.raises(
             fastmcp.exceptions.ToolError, match="context.*expected.*list"
         ):
-            tool_metadata = get_tool("chat_with_gemini25_flash")
+            tool_metadata = get_tool("chat_with_gemini3_flash_preview")
             if not tool_metadata:
-                raise ValueError("Tool chat_with_gemini25_flash not found")
+                raise ValueError("Tool chat_with_gemini3_flash_preview not found")
             await executor.execute(
                 tool_metadata,
                 instructions="Test",
@@ -124,9 +124,9 @@ class TestErrorHandlingIntegration:
         with pytest.raises(
             fastmcp.exceptions.ToolError, match="temperature.*expected.*float"
         ):
-            tool_metadata = get_tool("chat_with_gemini25_flash")
+            tool_metadata = get_tool("chat_with_gemini3_flash_preview")
             if not tool_metadata:
-                raise ValueError("Tool chat_with_gemini25_flash not found")
+                raise ValueError("Tool chat_with_gemini3_flash_preview not found")
             await executor.execute(
                 tool_metadata,
                 instructions="Test",
@@ -140,9 +140,9 @@ class TestErrorHandlingIntegration:
     async def test_file_not_found_in_context(self, parse_adapter_response):
         """Test handling of non-existent files in context."""
         # This should not crash, just skip the file
-        tool_metadata = get_tool("chat_with_gemini25_flash")
+        tool_metadata = get_tool("chat_with_gemini3_flash_preview")
         if not tool_metadata:
-            raise ValueError("Tool chat_with_gemini25_flash not found")
+            raise ValueError("Tool chat_with_gemini3_flash_preview not found")
         result = await executor.execute(
             tool_metadata,
             instructions="Analyze these files",
@@ -154,7 +154,7 @@ class TestErrorHandlingIntegration:
         # Should still work with MockAdapter
         data = parse_adapter_response(result)
         assert data["mock"] is True
-        assert data["model"] == "gemini-2.5-flash"
+        assert data["model"] == "gemini-3-flash-preview"
 
     @pytest.mark.asyncio
     async def test_oversized_prompt(
@@ -222,9 +222,9 @@ class TestErrorHandlingIntegration:
                 "Failed to initialize adapter: Test error"
             )
 
-            tool_metadata = get_tool("chat_with_gemini25_flash")
+            tool_metadata = get_tool("chat_with_gemini3_flash_preview")
             if not tool_metadata:
-                raise ValueError("Tool chat_with_gemini25_flash not found")
+                raise ValueError("Tool chat_with_gemini3_flash_preview not found")
             with pytest.raises(fastmcp.exceptions.ToolError):
                 await executor.execute(
                     tool_metadata,
@@ -243,7 +243,7 @@ class TestErrorHandlingIntegration:
 
         # Run both concurrently - one succeeds, one fails
         o3_metadata = get_tool("chat_with_gpt52_pro")
-        gemini_metadata = get_tool("chat_with_gemini25_flash")
+        gemini_metadata = get_tool("chat_with_gemini3_flash_preview")
         if not o3_metadata or not gemini_metadata:
             raise ValueError("Required tools not found")
 
@@ -254,7 +254,7 @@ class TestErrorHandlingIntegration:
 
         # Create a patched version that only fails for gemini model
         async def selective_mock_generate(self, *args, **kwargs):
-            if self.model_name == "gemini-2.5-flash":
+            if self.model_name == "gemini-3-flash-preview":
                 raise Exception("Vertex failed")
             # Call the original for other models
             return await original_generate(self, *args, **kwargs)

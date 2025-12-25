@@ -73,7 +73,7 @@ class TestGeminiMultiTurn:
         self, clean_session_caches, session_id_generator
     ):
         """Test multi-turn with Gemini Flash model."""
-        metadata = get_tool("chat_with_gemini25_flash")
+        metadata = get_tool("chat_with_gemini3_flash_preview")
         session_id = session_id_generator()
 
         # First turn

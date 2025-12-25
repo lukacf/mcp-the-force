@@ -90,7 +90,7 @@ history:
 
 # Built-in tools configuration
 tools:
-  default_summarization_model: chat_with_gemini25_flash
+  default_summarization_model: chat_with_gemini3_flash_preview
 
 # Feature flags (currently none)
 features: {}
