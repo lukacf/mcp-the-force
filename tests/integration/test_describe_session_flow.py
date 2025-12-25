@@ -36,7 +36,7 @@ async def test_describe_session_passes_full_history_to_model(isolate_test_databa
     service = DescribeSessionService()
     summary_result = await service.execute(
         session_id="session-to-summarize",
-        summarization_model="chat_with_gemini25_flash",  # This tool uses MockAdapter in tests
+        summarization_model="chat_with_gemini3_flash_preview",  # This tool uses MockAdapter in tests
     )
 
     # 3. Assert: Check the data received by the MockAdapter

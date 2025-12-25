@@ -29,7 +29,7 @@ All tests run concurrently with 100% pass rate. Each test validates a complete u
 
 ### 1. Smoke Test (`test_smoke.py`)
 - **Purpose**: Basic health check and core functionality validation
-- **Models Used**: Gemini 2.5 Flash (fast response validation)
+- **Models Used**: Gemini 3 Flash Preview (fast response validation)
 - **Tests**: 
   - MCP server health check and process validation
   - Model listing and availability verification

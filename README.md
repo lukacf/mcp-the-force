@@ -156,7 +156,7 @@ The Force provides access to cutting-edge AI models through `chat_with_*` tools,
 - **`chat_with_gemini3_pro_preview`**: Powerful multimodal model with 1M context (preview). Fast and reliable for code analysis and long documents.
 
 ### Fast Large-Context Models
-- **`chat_with_gemini25_flash`**: Ultra-fast with 1M context. Perfect for quick summaries and initial analysis.
+- **`chat_with_gemini3_flash_preview`**: Ultra-fast with 1M context. Perfect for quick summaries and initial analysis.
 - **`chat_with_gpt41`**: Fast processing with 1M context and dependable tool use.
 
 ### Complete List of AI Models
@@ -171,7 +171,7 @@ The Force provides access to cutting-edge AI models through `chat_with_*` tools,
 
 **Google Models:**
 - `chat_with_gemini3_pro_preview`: Deep multimodal analysis with 1M context (preview)
-- `chat_with_gemini25_flash`: Fast summarization and quick analysis with 1M context
+- `chat_with_gemini3_flash_preview`: Fast summarization and quick analysis with 1M context
 
 **Anthropic Models:**
 - `chat_with_claude45_opus`: Premium long-form reasoning with extended thinking (200k context)

@@ -20,7 +20,7 @@ class TestToolRegistration:
         # We expect at least 5 model tools
         expected_tools = [
             "chat_with_gemini3_pro_preview",
-            "chat_with_gemini25_flash",
+            "chat_with_gemini3_flash_preview",
             "chat_with_gpt52_pro",
             "chat_with_gpt41",
             "chat_with_gpt51_codex_max",

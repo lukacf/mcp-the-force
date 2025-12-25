@@ -228,9 +228,9 @@ class TestSessionManagement:
     @pytest.mark.asyncio
     async def test_gemini_session_continuity(self, parse_response):
         """Test multi-turn sessions with Gemini models."""
-        tool_metadata = get_tool("chat_with_gemini25_flash")
+        tool_metadata = get_tool("chat_with_gemini3_flash_preview")
         if not tool_metadata:
-            raise ValueError("Tool chat_with_gemini25_flash not found")
+            raise ValueError("Tool chat_with_gemini3_flash_preview not found")
         result1 = await executor.execute(
             tool_metadata,
             instructions="Hello",

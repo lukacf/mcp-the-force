@@ -76,7 +76,7 @@ class TestGroupThinkMultiPhaseWorkflow:
             result = await service.execute(
                 session_id="test-workflow",
                 objective="Test multi-phase collaboration",
-                models=["chat_with_gpt52_pro", "chat_with_gemini25_flash"],
+                models=["chat_with_gpt52_pro", "chat_with_gemini3_flash_preview"],
                 output_format="Test deliverable with sections: Summary, Details",
                 discussion_turns=1,  # Reduce complexity for this test
                 validation_rounds=1,
@@ -139,7 +139,7 @@ class TestGroupThinkMultiPhaseWorkflow:
                 objective="Test round-robin pattern",
                 models=[
                     "chat_with_gpt52_pro",
-                    "chat_with_gemini25_flash",
+                    "chat_with_gemini3_flash_preview",
                     "chat_with_grok41",
                 ],
                 output_format="Test result",
@@ -154,7 +154,7 @@ class TestGroupThinkMultiPhaseWorkflow:
         # but we can verify all original models participated
         discussion_models = set(discussion_calls)
         assert "chat_with_gpt52_pro" in discussion_models
-        assert "chat_with_gemini25_flash" in discussion_models
+        assert "chat_with_gemini3_flash_preview" in discussion_models
         assert "chat_with_grok41" in discussion_models
 
     @pytest.mark.asyncio
@@ -247,7 +247,7 @@ class TestGroupThinkMultiPhaseWorkflow:
             await service.execute(
                 session_id="validation-test",
                 objective="Test validation rounds",
-                models=["chat_with_gpt52_pro", "chat_with_gemini25_flash"],
+                models=["chat_with_gpt52_pro", "chat_with_gemini3_flash_preview"],
                 output_format="Test deliverable",
                 discussion_turns=1,
                 validation_rounds=2,

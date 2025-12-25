@@ -46,8 +46,8 @@ class GeminiToolParams(BaseToolParams):  # type: ignore[misc]
         description=(
             "(Optional) Controls the 'thinking budget' allocated to the model for reasoning. Maps to "
             "a specific token budget for the model's internal reasoning process, affecting the depth "
-            "of analysis. For Gemini 2.5 Pro: 'low'=13107 tokens, 'medium'=19660 tokens, 'high'=32768 tokens. "
-            "For Gemini 2.5 Flash: 'low'=9830 tokens, 'medium'=14745 tokens, 'high'=24576 tokens. "
+            "of analysis. For Gemini 3 Pro Preview: 'low'=13107 tokens, 'medium'=19660 tokens, 'high'=32768 tokens. "
+            "For Gemini 3 Flash Preview: 'low'=9830 tokens, 'medium'=14745 tokens, 'high'=24576 tokens. "
             "Syntax: A string, one of 'low', 'medium', or 'high'. "
             "Default: 'medium'. "
             "Example: reasoning_effort='high'"
@@ -121,12 +121,12 @@ class Gemini3ProPreviewCapabilities(GeminiBaseCapabilities):
 
 
 @dataclass
-class Gemini25FlashCapabilities(GeminiBaseCapabilities):
-    """Gemini 2.5 Flash model capabilities."""
+class Gemini3FlashPreviewCapabilities(GeminiBaseCapabilities):
+    """Gemini 3 Flash Preview model capabilities."""
 
-    model_name: str = "gemini-2.5-flash"
+    model_name: str = "gemini-3-flash-preview"
     max_context_window: int = 1_000_000
-    description: str = "High-throughput variant for rapid summaries and extraction. Speed: very high. Tool use: good. When to use: Meeting notes, table/JSON extraction, first-pass briefs—escalate to Pro for complex reasoning."
+    description: str = "Fast frontier-class model with upgraded visual/spatial reasoning and agentic coding. Speed: very high. When to use: Rapid summaries, extraction, first-pass analysis—escalate to Pro for complex reasoning."
     reasoning_effort_map: Dict[str, int] = field(
         default_factory=lambda: {
             "low": int(_MAX_BUDGET_FLASH * 0.40),  # 9830
@@ -142,7 +142,7 @@ class Gemini25FlashCapabilities(GeminiBaseCapabilities):
 
 GEMINI_MODEL_CAPABILITIES = {
     "gemini-3-pro-preview": Gemini3ProPreviewCapabilities(),
-    "gemini-2.5-flash": Gemini25FlashCapabilities(),
+    "gemini-3-flash-preview": Gemini3FlashPreviewCapabilities(),
 }
 
 
@@ -166,7 +166,7 @@ def _get_friendly_name(model_name: str) -> str:
 
     Examples:
     - 'gemini-3-pro-preview' -> 'chat_with_gemini3_pro_preview'
-    - 'gemini-2.5-flash' -> 'chat_with_gemini25_flash'
+    - 'gemini-3-flash-preview' -> 'chat_with_gemini3_flash_preview'
     """
     # Replace dots and hyphens with underscores
     clean_name = model_name.replace(".", "").replace("-", "_")

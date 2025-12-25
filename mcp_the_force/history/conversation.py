@@ -292,7 +292,7 @@ Conversation to summarize:
         # Use the central adapter factory instead of direct instantiation
         try:
             adapter_cls = get_adapter_class("google")
-            adapter = adapter_cls("gemini-2.5-flash")
+            adapter = adapter_cls("gemini-3-flash-preview")
         except Exception as e:
             logger.warning(f"Failed to get Vertex adapter for summarization: {e}")
             # Fall back to structured summary
@@ -315,7 +315,7 @@ Conversation to summarize:
         ctx = CallContext(
             session_id=unique_session_id,
             project="history-system",
-            tool="gemini25_flash",
+            tool="gemini3_flash_preview",
             vector_store_ids=None,
         )
         tool_dispatcher = ToolDispatcher(vector_store_ids=None)
@@ -335,7 +335,7 @@ Conversation to summarize:
 
         await UnifiedSessionCache.delete_session(
             project="history-system",
-            tool="gemini25_flash",
+            tool="gemini3_flash_preview",
             session_id=unique_session_id,
         )
         logger.debug(f"Cleaned up temporary summarization session: {unique_session_id}")

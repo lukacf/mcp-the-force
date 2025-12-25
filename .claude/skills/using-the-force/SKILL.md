@@ -33,7 +33,7 @@ For 90% of work, use these two models:
 | `research_with_o4_mini_deep_research` | 200k | 2-10 min | Quick research reconnaissance |
 | **Google** |
 | `chat_with_gemini3_pro_preview` | 1M | Medium | Giant code synthesis, design reviews |
-| `chat_with_gemini25_flash` | 1M | Very fast | Quick summaries, extraction, triage |
+| `chat_with_gemini3_flash_preview` | 1M | Very fast | Quick summaries, extraction, triage |
 | **Anthropic** |
 | `chat_with_claude45_opus` | 200k | Slow | Deep extended thinking, premium quality |
 | `chat_with_claude45_sonnet` | 1M | Fast | Latest Claude, strong coding |
@@ -255,13 +255,13 @@ Optimal pattern for complex analysis:
 ### Phase 1: Broad Surface Scan (5-10s)
 ```
 # Launch 2-3 fast queries in parallel
-chat_with_gemini25_flash(
+chat_with_gemini3_flash_preview(
     instructions="What are the main issues here?",
     context=["/src"],
     session_id="analysis-phase1-issues"
 )
 
-chat_with_gemini25_flash(
+chat_with_gemini3_flash_preview(
     instructions="What patterns exist in this codebase?",
     context=["/src"],
     session_id="analysis-phase1-patterns"
@@ -281,7 +281,7 @@ chat_with_gpt52_pro(
 ### Phase 3: Synthesis (10s)
 ```
 # Reconcile findings
-chat_with_gemini25_flash(
+chat_with_gemini3_flash_preview(
     instructions="Synthesize these findings: [Phase 1 + Phase 2 results]",
     session_id="analysis-phase3-synthesis"
 )
@@ -292,7 +292,7 @@ chat_with_gemini25_flash(
 ### For Debugging
 ```
 # Fast hypothesis generation
-chat_with_gemini25_flash("What could cause this error?", context=[...])
+chat_with_gemini3_flash_preview("What could cause this error?", context=[...])
 
 # Deep reasoning on top hypothesis
 chat_with_gpt52_pro("Trace execution of [hypothesis]", context=[...])
@@ -370,7 +370,7 @@ history:
 
 ## Best Practices Summary
 
-1. **Start Fast, Go Deep**: Use gemini25_flash for exploration, then targeted deep models
+1. **Start Fast, Go Deep**: Use gemini3_flash_preview for exploration, then targeted deep models
 2. **Parallel Everything**: Launch multiple models simultaneously when possible
 3. **Session Hygiene**: One session per logical thread of reasoning
 4. **Smart Fallbacks**: Always have a faster/cheaper model as backup

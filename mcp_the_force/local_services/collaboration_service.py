@@ -65,7 +65,7 @@ class CollaborationService:
         self._synthesis_fallback_models = [
             "chat_with_gpt41",  # 1M context, strong tool use
             "chat_with_claude45_sonnet",  # 1M context, reliable
-            "chat_with_gemini25_flash",  # 1M context, fast
+            "chat_with_gemini3_flash_preview",  # 1M context, fast
         ]
 
     async def _execute_with_retry(

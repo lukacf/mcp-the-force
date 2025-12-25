@@ -25,7 +25,7 @@ def test_minimal_debug_step2_simple_call(claude, parse_response):
     logger.info("=== STEP 2: Testing simple tool call ===")
 
     response = claude(
-        'Use the-force chat_with_gemini25_flash with instructions: "Just say hello", output_format: "plain text", context: [], session_id: "debug-test-001"'
+        'Use the-force chat_with_gemini3_flash_preview with instructions: "Just say hello", output_format: "plain text", context: [], session_id: "debug-test-001"'
     )
 
     logger.info(f"✅ Simple tool call completed: {len(response)} chars")
@@ -38,7 +38,7 @@ def test_minimal_debug_step3_structured_output(claude, parse_response):
     logger.info("=== STEP 3: Testing structured output ===")
 
     response = claude(
-        'Use the-force chat_with_gemini25_flash with instructions: "Return a test result", output_format: "JSON with test_result field", context: [], session_id: "debug-test-002", structured_output_schema: {"type": "object", "properties": {"test_result": {"type": "string"}}, "required": ["test_result"]}'
+        'Use the-force chat_with_gemini3_flash_preview with instructions: "Return a test result", output_format: "JSON with test_result field", context: [], session_id: "debug-test-002", structured_output_schema: {"type": "object", "properties": {"test_result": {"type": "string"}}, "required": ["test_result"]}'
     )
 
     logger.info(f"✅ Structured output completed: {len(response)} chars")
@@ -53,7 +53,7 @@ def test_minimal_debug_step4_with_context(claude, parse_response):
     logger.info("=== STEP 4: Testing with context files ===")
 
     response = claude(
-        'Use the-force chat_with_gemini25_flash with instructions: "Summarize the README", output_format: "brief summary", context: ["/host-project/README.md"], session_id: "debug-test-003"'
+        'Use the-force chat_with_gemini3_flash_preview with instructions: "Summarize the README", output_format: "brief summary", context: ["/host-project/README.md"], session_id: "debug-test-003"'
     )
 
     logger.info(f"✅ Context file test completed: {len(response)} chars")

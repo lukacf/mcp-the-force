@@ -25,7 +25,7 @@ chat_with_gemini3_pro_preview(
 
 ### Quick Question
 ```
-chat_with_gemini25_flash(
+chat_with_gemini3_flash_preview(
     instructions="What does this function do?",
     context=["/absolute/path/to/module.py"],
     session_id="quick-q-YYYY-MM-DD",
@@ -114,19 +114,19 @@ chat_with_gpt41(
 ### Phase 1: Surface Scan (parallel)
 ```
 # Launch in parallel
-chat_with_gemini25_flash(
+chat_with_gemini3_flash_preview(
     instructions="What are the main architectural patterns?",
     context=["/src"],
     session_id="arch-scan-patterns"
 )
 
-chat_with_gemini25_flash(
+chat_with_gemini3_flash_preview(
     instructions="What are potential performance bottlenecks?",
     context=["/src"],
     session_id="arch-scan-perf"
 )
 
-chat_with_gemini25_flash(
+chat_with_gemini3_flash_preview(
     instructions="What security concerns do you see?",
     context=["/src"],
     session_id="arch-scan-security"
@@ -145,7 +145,7 @@ chat_with_gpt52_pro(
 
 ### Phase 3: Synthesis
 ```
-chat_with_gemini25_flash(
+chat_with_gemini3_flash_preview(
     instructions="Synthesize these findings into a cohesive report: [Phase 1 + Phase 2 results]",
     session_id="arch-synthesis",
     output_format="Executive summary with key findings and recommendations"
@@ -288,7 +288,7 @@ chat_with_gemini3_pro_preview(
 ### Hypothesis Testing
 ```
 # Generate hypotheses
-chat_with_gemini25_flash(
+chat_with_gemini3_flash_preview(
     instructions="What could cause this error: [error message]?",
     context=["/src"],
     session_id="debug-hypothesis"

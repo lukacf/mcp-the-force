@@ -196,7 +196,7 @@ Settings for built-in tools.
 
 | YAML Path | Environment Variable | Type | Default Value | Description |
 | :--- | :--- | :--- | :--- | :--- |
-| `tools.default_summarization_model` | `MCP__TOOLS__DEFAULT_SUMMARIZATION_MODEL` | `string` | `"chat_with_gemini25_flash"` | The default model used by the `describe_session` tool for summarization tasks. |
+| `tools.default_summarization_model` | `MCP__TOOLS__DEFAULT_SUMMARIZATION_MODEL` | `string` | `"chat_with_gemini3_flash_preview"` | The default model used by the `describe_session` tool for summarization tasks. |
 
 ---
 

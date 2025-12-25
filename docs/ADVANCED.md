@@ -13,8 +13,8 @@ When The Force MCP is available, Claude operates as an orchestrator of specializ
 #### Phase 1: Broad Surface Scan (5-10s)
 Launch 2-3 cheap, fast queries to map the problem space:
 ```python
-Task 1: gemini25_flash - "What are the main issues here?"
-Task 2: gemini25_flash - "What solutions have worked for similar problems?"
+Task 1: gemini3_flash_preview - "What are the main issues here?"
+Task 2: gemini3_flash_preview - "What solutions have worked for similar problems?"
 Task 3: gpt4_1 - "Find all related code patterns"
 ```
 
@@ -29,7 +29,7 @@ Task 2: gpt5_pro (new session) - "Trace execution for [hypothesis from Phase 1]"
 #### Phase 3: Synthesis & Arbitration (10s)
 Reconcile findings:
 ```python
-gemini25_flash - "Reconcile these analyses: [all findings]. Highlight conflicts, suggest resolution."
+gemini3_flash_preview - "Reconcile these analyses: [all findings]. Highlight conflicts, suggest resolution."
 ```
 
 ### Parallel Execution Rules
@@ -69,7 +69,7 @@ chat_with_gemini3_pro_preview(
 #### For Debugging
 ```python
 # Primary: Fast hypothesis generation
-gemini25_flash("What could cause this error?")
+gemini3_flash_preview("What could cause this error?")
 
 # Secondary: Deep reasoning on top hypothesis
 gpt5_pro("Trace execution of [specific hypothesis]")
@@ -115,7 +115,7 @@ try:
     ])
 except TimeoutError:
     # Fallback: Single fast model
-    result = await chat_with_gemini25_flash(fallback_prompt)
+    result = await chat_with_gemini3_flash_preview(fallback_prompt)
 ```
 
 #### Rate Limit Management
@@ -194,7 +194,7 @@ group_think(
 #### Multi-Model Code Review
 ```python
 # 1. Overview (fast)
-overview = await chat_with_gemini25_flash(
+overview = await chat_with_gemini3_flash_preview(
     "Quick security scan of this PR",
     context=pr_files
 )
@@ -208,7 +208,7 @@ tasks = [
 analyses = await execute_parallel(tasks)
 
 # 3. Synthesis
-final_review = await chat_with_gemini25_flash(
+final_review = await chat_with_gemini3_flash_preview(
     f"Synthesize these reviews: {analyses}",
     structured_output_schema=review_schema
 )
@@ -258,7 +258,7 @@ for iteration in range(max_iterations):
         break
     
     # Refine for next iteration
-    await chat_with_gemini25_flash(
+    await chat_with_gemini3_flash_preview(
         f"Refine hypothesis based on: {test_result}",
         session_id=f"refine-iteration-{iteration}"
     )
@@ -270,7 +270,7 @@ for iteration in range(max_iterations):
 ```python
 # High-priority, time-sensitive
 if priority == "urgent":
-    primary_model = "gemini25_flash"      # Fastest
+    primary_model = "gemini3_flash_preview"      # Fastest
     fallback_model = "gemini3_pro_preview"  # If quality needed
 
 # Deep analysis, quality critical
@@ -334,7 +334,7 @@ def diagnose_error(error_msg):
 
 ### Best Practices Summary
 
-1. **Start Fast, Go Deep**: Use gemini25_flash for initial exploration, then targeted deep models
+1. **Start Fast, Go Deep**: Use gemini3_flash_preview for initial exploration, then targeted deep models
 2. **Parallel Everything**: Launch multiple models simultaneously when possible
 3. **Session Hygiene**: One session per logical thread of reasoning
 4. **Smart Fallbacks**: Always have a faster/cheaper model as backup

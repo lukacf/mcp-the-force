@@ -348,7 +348,7 @@ class TestForceConversationIntegration:
             "VALUES (?, ?, ?, ?, ?)",
             (
                 "mcp-the-force",
-                "chat_with_gemini25_flash",
+                "chat_with_gemini3_flash_preview",
                 "memory-vault-diagnostic",
                 sample_history,
                 1234567890,
@@ -411,7 +411,7 @@ class TestForceConversationIntegration:
 
         # Check Force conversation sessions are included with correct format
         assert (
-            "mcp-the-force||chat_with_gemini25_flash||memory-vault-diagnostic"
+            "mcp-the-force||chat_with_gemini3_flash_preview||memory-vault-diagnostic"
             in store_ids
         )
         assert "mcp-the-force||chat_with_gpt52||debug-session" in store_ids
@@ -506,7 +506,7 @@ class TestForceConversationIntegration:
             # Should be included
             (
                 "mcp-the-force",
-                "chat_with_gemini25_flash",
+                "chat_with_gemini3_flash_preview",
                 "session1",
                 '["valid"]',
                 True,
@@ -557,7 +557,7 @@ class TestForceConversationIntegration:
 
         # Verify expected inclusions
         expected_included = [
-            "mcp-the-force||chat_with_gemini25_flash||session1",
+            "mcp-the-force||chat_with_gemini3_flash_preview||session1",
             "mcp-the-force||chat_with_gpt52||session2",
             "mcp-the-force||chat_with_grok41||session3",
         ]

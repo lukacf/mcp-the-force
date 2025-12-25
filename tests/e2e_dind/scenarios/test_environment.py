@@ -263,7 +263,9 @@ def test_victoria_logs_integration(claude, stack):
         "disable_history_search": "true",
         "disable_history_record": "true",
     }
-    response = claude(f"Use the-force chat_with_gemini25_flash with {json.dumps(args)}")
+    response = claude(
+        f"Use the-force chat_with_gemini3_flash_preview with {json.dumps(args)}"
+    )
     print(f"   Response received: {len(response)} chars")
     print(f"   Response content: {response[:200]}...")
 

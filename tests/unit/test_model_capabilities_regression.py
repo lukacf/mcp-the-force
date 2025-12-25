@@ -110,7 +110,7 @@ class TestGeminiTimeouts:
         """Gemini Flash should have reasonable timeout."""
         from mcp_the_force.adapters.google.definitions import _calculate_timeout
 
-        timeout = _calculate_timeout("gemini-2.5-flash")
+        timeout = _calculate_timeout("gemini-3-flash-preview")
         assert timeout >= 600  # At least 10 minutes
 
     def test_default_timeout_reasonable(self):
