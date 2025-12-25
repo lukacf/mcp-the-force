@@ -37,9 +37,11 @@ venv.bak/
 *.swp
 *.swo
 *~
-# Claude Code local config (ignore agents, settings, etc but not skills)
+# Claude Code local config (ignore agents, settings, etc but keep using-the-force skill)
 .claude/*
 !.claude/skills/
+.claude/skills/*
+!.claude/skills/using-the-force/
 
 # OS
 .DS_Store
