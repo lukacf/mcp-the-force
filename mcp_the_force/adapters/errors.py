@@ -153,3 +153,20 @@ class RateLimitException(AdapterException):
             ErrorCategory.RATE_LIMIT, message, status_code=429, provider=provider
         )
         self.retry_after = retry_after
+
+
+class RetryWithReducedContextException(Exception):
+    """Signal to retry the request with reduced context.
+
+    This exception is raised when the model returns 'max_output_tokens' as the
+    incomplete reason, indicating that the input context was too large and left
+    insufficient room for output tokens.
+
+    The executor should catch this and retry with a reduced token budget
+    (configured via settings.retry.context_reduction_factor), moving some
+    inlined files to vector store overflow.
+    """
+
+    def __init__(self, reason: str):
+        self.reason = reason
+        super().__init__(f"Retry with reduced context suggested: {reason}")

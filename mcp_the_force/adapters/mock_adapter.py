@@ -73,6 +73,13 @@ class MockAdapter:
 
             if model_name in GROK_MODEL_CAPABILITIES:
                 return GROK_MODEL_CAPABILITIES[model_name], GrokToolParams
+
+            # Check Anthropic models
+            from .anthropic.capabilities import ANTHROPIC_MODEL_CAPABILITIES
+            from .anthropic.params import AnthropicToolParams
+
+            if model_name in ANTHROPIC_MODEL_CAPABILITIES:
+                return ANTHROPIC_MODEL_CAPABILITIES[model_name], AnthropicToolParams
         except ImportError:
             pass
 

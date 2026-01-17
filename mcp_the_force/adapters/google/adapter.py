@@ -26,6 +26,8 @@ from .converters import (
 from ...config import get_settings
 from ...unified_session_cache import UnifiedSessionCache
 from ...prompts import get_developer_prompt
+from ...utils.image_loader import load_images, ImageLoadError
+from ...utils.history_sanitizer import strip_images_from_history
 
 logger = logging.getLogger(__name__)
 
@@ -336,13 +338,59 @@ class GeminiAdapter:
             # Convert history to google-genai format
             contents = responses_to_contents(original_history)
 
-            # Add current user message
+            # Add current user message with optional images
+            user_parts: List[types.Part] = [types.Part(text=prompt)]
+            user_content_items: List[Dict[str, Any]] = [
+                {"type": "text", "text": prompt}
+            ]
+
+            # Handle images if provided
+            images_param = getattr(params, "images", None)
+            if images_param:
+                # Check vision capability BEFORE loading images
+                if not self.capabilities.supports_vision:
+                    raise ValueError(
+                        f"Model '{self.capabilities.model_name}' does not support vision/image inputs. "
+                        f"Remove the 'images' parameter or use a vision-capable model."
+                    )
+                logger.info(
+                    f"[GEMINI] Loading {len(images_param)} images for vision request"
+                )
+                try:
+                    loaded_images = await load_images(images_param)
+                except ImageLoadError as e:
+                    # Re-raise with clearer context for users
+                    raise ValueError(
+                        f"Failed to load images for vision request: {e}"
+                    ) from e
+                except Exception as e:
+                    logger.error(f"[GEMINI] Unexpected error loading images: {e}")
+                    raise ValueError(
+                        f"Failed to load images: {type(e).__name__}: {e}"
+                    ) from e
+                for img in loaded_images:
+                    # Add image as Part for API
+                    user_parts.append(
+                        types.Part.from_bytes(data=img.data, mime_type=img.mime_type)
+                    )
+                    # Add to content items for session history
+
+                    user_content_items.append(
+                        {
+                            "type": "image",
+                            "mime_type": img.mime_type,
+                            "source": img.source,
+                            "original_path": img.original_path,
+                        }
+                    )
+                logger.info(f"[GEMINI] Added {len(loaded_images)} images to request")
+
             user_message = {
                 "type": "message",
                 "role": "user",
-                "content": [{"type": "text", "text": prompt}],
+                "content": user_content_items,
             }
-            contents.append(types.Content(role="user", parts=[types.Part(text=prompt)]))
+            contents.append(types.Content(role="user", parts=user_parts))
 
             # Get tool declarations
             disable_history_search = getattr(params, "disable_history_search", False)
@@ -577,8 +625,11 @@ class GeminiAdapter:
             }
         )
 
+        # Strip image data before saving to prevent context explosion on subsequent turns
+        sanitized_history = strip_images_from_history(updated_history)
+
         await UnifiedSessionCache.set_history(
-            ctx.project, ctx.tool, ctx.session_id, updated_history
+            ctx.project, ctx.tool, ctx.session_id, sanitized_history
         )
         logger.debug(
             f"[GEMINI] Saved {len(updated_history)} history items for session {ctx.session_id}"

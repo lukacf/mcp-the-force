@@ -23,6 +23,19 @@ from ...utils.capability_formatter import format_capabilities
 class GrokToolParams(BaseToolParams):  # type: ignore[misc]
     """Grok-specific parameters with capability requirements."""
 
+    # Vision parameters (Grok 4.1+ supports vision)
+    images: Optional[list[str]] = Route.adapter(  # type: ignore[assignment]
+        default=None,
+        description=(
+            "(Optional) A list of image file paths or URLs to include in the request. "
+            "Grok 4.1+ models can analyze images as part of their response. "
+            "Supports JPEG, PNG, GIF, and WebP formats. Each image is limited to 20MB. "
+            "Syntax: An array of strings (file paths or URLs). "
+            "Example: images=['/path/to/image.png', 'https://example.com/photo.jpg']"
+        ),
+        requires_capability=lambda c: c.supports_vision,
+    )
+
     # Live Search parameters
     search_mode: str = Route.adapter(  # type: ignore[assignment]
         default="auto",
@@ -162,12 +175,13 @@ class Grok3FastCapabilities(Grok3Capabilities):
 
 @dataclass
 class Grok41Capabilities(GrokBaseCapabilities):
-    """Grok 4.1 models with expanded context."""
+    """Grok 4.1 models with expanded context and vision support."""
 
     # Latest public model id (Nov 2025): grok-4-1-fast-reasoning
     model_name: str = "grok-4-1-fast-reasoning"
     max_context_window: int = 2_000_000
     supports_reasoning_effort: bool = False
+    supports_vision: bool = True  # Grok 4.1 supports image analysis
     description: str = "xAI Grok 4.1 with ~2M context and improved safety/latency. Best for massive long-form synthesis and code review across very large corpora."
 
 

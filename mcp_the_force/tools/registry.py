@@ -140,6 +140,13 @@ class ParameterInfo:
     required: bool
     description: str | None
     requires_capability: Callable[[Any], bool] | None = None
+    default_factory: Callable[[], Any] | None = None
+
+    def get_default_value(self) -> Any:
+        """Get the default value, calling default_factory if needed."""
+        if self.default_factory is not None:
+            return self.default_factory()
+        return self.default
 
 
 @dataclass
@@ -213,6 +220,7 @@ def tool(
                 required=param_info["required"],
                 description=param_info["description"],
                 requires_capability=param_info.get("requires_capability"),
+                default_factory=param_info.get("default_factory"),
             )
 
         # Create metadata

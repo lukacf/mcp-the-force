@@ -103,3 +103,17 @@ class BaseToolParams(ParamModel):
             "Default: false"
         ),
     )
+    images: Optional[List[str]] = Route.adapter(  # type: ignore[assignment]
+        description=(
+            "(Optional) List of image paths or URLs to include in the request for visual analysis. "
+            "Supports local file paths (absolute) and HTTP/HTTPS URLs. Images are sent to the model "
+            "for vision tasks like describing, analyzing, or extracting information from images. "
+            "Supported formats: JPEG, PNG, GIF, WebP. "
+            "Syntax: An array of strings (not a JSON string). Do not wrap the array in quotes. "
+            "Each string must be an absolute path or a valid URL. "
+            'PREFERRED FORMAT: ["/path/to/image.png", "https://example.com/photo.jpg"] '
+            'NOT: "["/path/to/image.png", "https://example.com/photo.jpg"]"'
+        ),
+        default_factory=list,
+        requires_capability=lambda c: c.supports_vision,
+    )

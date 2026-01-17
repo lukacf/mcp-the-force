@@ -20,6 +20,7 @@ from ..errors import (
     ErrorCategory,
     TimeoutException,
     GatewayTimeoutException,
+    RetryWithReducedContextException,
 )
 from .constants import (
     INITIAL_POLL_DELAY_SEC,
@@ -370,6 +371,35 @@ class BackgroundFlowStrategy(BaseFlowStrategy):
                             error_message = error.get("message", "Unknown error")
                         else:
                             error_message = str(error)
+
+                    # Check for incomplete_details when status is "incomplete"
+                    incomplete_details = getattr(job, "incomplete_details", None)
+                    if incomplete_details:
+                        reason = None
+                        if hasattr(incomplete_details, "reason"):
+                            reason = incomplete_details.reason
+                        elif isinstance(incomplete_details, dict):
+                            reason = incomplete_details.get("reason")
+
+                        if reason:
+                            logger.warning(
+                                f"[INCOMPLETE_RESPONSE] Job {response_id} incomplete. "
+                                f"Reason: {reason}. "
+                                f"Session: {self.context.session_id}"
+                            )
+                            error_message = f"{reason}"
+
+                            # For max_output_tokens, signal retry with reduced context
+                            if reason == "max_output_tokens":
+                                raise RetryWithReducedContextException(
+                                    reason=reason,
+                                )
+                            else:
+                                logger.info(
+                                    f"[INCOMPLETE_RESPONSE] Context retry not applicable for "
+                                    f"incomplete reason: {reason}"
+                                )
+
                     raise AdapterException(
                         ErrorCategory.TRANSIENT_API,
                         f"Run failed with status {job.status}: {error_message}",
@@ -456,6 +486,40 @@ class StreamingFlowStrategy(BaseFlowStrategy):
 
         if final_response_obj:
             function_calls = self._extract_function_calls(final_response_obj)
+
+            # Check for incomplete status in streaming response
+            if getattr(final_response_obj, "status", None) == "incomplete":
+                incomplete_details = getattr(
+                    final_response_obj, "incomplete_details", None
+                )
+                reason = "Unknown reason"
+                if incomplete_details:
+                    if hasattr(incomplete_details, "reason"):
+                        reason = incomplete_details.reason
+                    elif isinstance(incomplete_details, dict):
+                        reason = incomplete_details.get("reason", "Unknown reason")
+
+                logger.warning(
+                    f"[INCOMPLETE_RESPONSE] Streaming response incomplete. "
+                    f"Reason: {reason}. "
+                    f"Session: {self.context.session_id}"
+                )
+
+                # For max_output_tokens, signal retry with reduced context
+                if reason == "max_output_tokens":
+                    raise RetryWithReducedContextException(
+                        reason=reason,
+                    )
+                else:
+                    logger.info(
+                        f"[INCOMPLETE_RESPONSE] Context retry not applicable for "
+                        f"incomplete reason: {reason}"
+                    )
+
+                raise AdapterException(
+                    ErrorCategory.TRANSIENT_API,
+                    f"Streaming response incomplete: {reason}",
+                )
 
         if function_calls:
             # The full response object is needed to get complete tool call details

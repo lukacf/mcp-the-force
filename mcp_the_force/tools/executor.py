@@ -7,6 +7,7 @@ import uuid
 from typing import Optional, List, Any, Union, Dict
 import fastmcp.exceptions
 from mcp_the_force.adapters.registry import get_adapter_class
+from mcp_the_force.adapters.errors import RetryWithReducedContextException
 from .registry import ToolMetadata
 from ..vectorstores.manager import vector_store_manager
 from .prompt_engine import prompt_engine
@@ -122,6 +123,15 @@ class ToolExecutor:
         if timeout_override is not None:
             logger.debug(f"[EXECUTOR] Extracted timeout override: {timeout_override}s")
 
+        # RETRY: Extract model limit override and retry attempt tracking
+        # Used when retrying after max_output_tokens error with reduced context
+        model_limit_override = kwargs.pop("_model_limit_override", None)
+        retry_attempt = kwargs.pop("_retry_attempt", 0)
+        if model_limit_override is not None:
+            logger.info(
+                f"[EXECUTOR] Retry attempt {retry_attempt} with reduced model_limit: {model_limit_override:,}"
+            )
+
         # CHATTER: Extract FastMCP Context for progress reporting
         ctx = kwargs.pop("ctx", None)
         if ctx is not None:
@@ -219,15 +229,26 @@ class ToolExecutor:
             )
             tool_name = metadata.id
 
-            # Use TokenBudgetOptimizer for all prompt building
-            if session_id:
+            # Retry state for max_output_tokens errors
+            # Use override if provided (from previous retry attempt), otherwise use metadata limit
+            current_model_limit = (
+                model_limit_override
+                if model_limit_override is not None
+                else model_limit
+            )
+            max_retry_attempts = settings.retry.max_attempts
+
+            # Helper function to run optimization with given model limit
+            async def run_optimization(limit: int):
+                """Run token budget optimization with the given context limit."""
                 from ..optimization.token_budget_optimizer import TokenBudgetOptimizer
 
-                # Fixed reserve for response generation and system overhead
                 FIXED_TOKEN_RESERVE = 30_000
+                # session_id is guaranteed to be set when this function is called
+                assert isinstance(session_id, str), "session_id must be a string"
 
                 optimizer = TokenBudgetOptimizer(
-                    model_limit=model_limit,
+                    model_limit=limit,
                     fixed_reserve=FIXED_TOKEN_RESERVE,
                     session_id=session_id,
                     context_paths=context_paths,
@@ -239,12 +260,17 @@ class ToolExecutor:
                     tool_name=tool_name,
                 )
 
+                plan = await optimizer.optimize()
+                logger.info(
+                    f"[EXECUTOR] Optimization complete: {plan.total_prompt_tokens:,} tokens "
+                    f"in {plan.iterations} iterations (model_limit={limit:,})"
+                )
+                return plan
+
+            # Use TokenBudgetOptimizer for all prompt building
+            if session_id:
                 try:
-                    plan = await optimizer.optimize()
-                    logger.info(
-                        f"[EXECUTOR] Optimization complete: {plan.total_prompt_tokens:,} tokens "
-                        f"in {plan.iterations} iterations"
-                    )
+                    plan = await run_optimization(current_model_limit)
 
                     # Use the optimized prompt and messages from the plan
                     final_prompt = plan.optimized_prompt
@@ -784,6 +810,44 @@ class ToolExecutor:
                 logger.debug(f"[CANCEL] Adapter was: {adapter}")
                 logger.debug("[CANCEL] Re-raising CancelledError from executor")
                 raise  # Important: do NOT convert or return
+            except RetryWithReducedContextException as retry_exc:
+                # Handle max_output_tokens by retrying with reduced context
+                next_attempt = retry_attempt + 1
+                if next_attempt >= max_retry_attempts:
+                    logger.error(
+                        f"[{operation_id}] [RETRY_EXHAUSTED] Max retry attempts ({max_retry_attempts}) "
+                        f"reached for {tool_id}. Reason: {retry_exc.reason}"
+                    )
+                    raise fastmcp.exceptions.ToolError(
+                        f"Model returned incomplete response ({retry_exc.reason}) after "
+                        f"{max_retry_attempts} attempts with reduced context. "
+                        f"Try reducing context size or using a model with larger output capacity."
+                    )
+
+                # Calculate reduced model limit using config factor
+                reduction_factor = settings.retry.context_reduction_factor
+                reduced_limit = int(current_model_limit * reduction_factor)
+                logger.warning(
+                    f"[{operation_id}] [RETRY] Retrying {tool_id} with reduced context. "
+                    f"Attempt {next_attempt}/{max_retry_attempts}. "
+                    f"Model limit: {current_model_limit:,} -> {reduced_limit:,} tokens "
+                    f"(reduction factor: {reduction_factor})"
+                )
+
+                # Recursively call execute with reduced model limit
+                # Pass through all original kwargs plus retry state
+                retry_kwargs = kwargs.copy()
+                retry_kwargs["_model_limit_override"] = reduced_limit
+                retry_kwargs["_retry_attempt"] = next_attempt
+                # Re-add extracted overrides
+                if vector_store_ids_override:
+                    retry_kwargs["vector_store_ids"] = vector_store_ids_override
+                if timeout_override:
+                    retry_kwargs["timeout"] = timeout_override
+                if ctx:
+                    retry_kwargs["ctx"] = ctx
+
+                return await self.execute(metadata, **retry_kwargs)
             except Exception as e:
                 logger.error(
                     f"[{operation_id}] [CRITICAL] Adapter generate failed for {tool_id}: {e}"

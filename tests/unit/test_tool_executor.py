@@ -227,7 +227,7 @@ class TestToolExecutor:
 
             metadata = get_tool("chat_with_gemini3_flash_preview")
             with pytest.raises(
-                fastmcp.exceptions.ToolError, match="Failed to initialize adapter"
+                fastmcp.exceptions.ToolError, match="Tool execution failed"
             ):
                 await executor.execute(
                     metadata,

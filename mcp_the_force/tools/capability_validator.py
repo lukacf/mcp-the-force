@@ -1,7 +1,7 @@
 """Capability validation for tool parameters."""
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 from ..adapters.capabilities import AdapterCapabilities
 from .registry import ToolMetadata
 
@@ -41,11 +41,32 @@ class CapabilityValidator:
             if param_name not in kwargs:
                 continue
 
+            param_value = kwargs[param_name]
+
+            # Skip if value is None - universally means "no value provided"
+            # This handles cases where default_factory=list but user passes None
+            if param_value is None:
+                logger.debug(
+                    f"Skipping capability check for {param_name} - value is None"
+                )
+                continue
+
+            # Skip if parameter value equals the parameter's default value.
+            # This correctly handles all cases:
+            # - default=None, default_factory=list, value=[] → skip ([] == [])
+            # - default=None, default_factory=None, value=[] → validate ([] != None)
+            # - default=0.5, default_factory=None, value=0.5 → skip
+            param_default = param_info.get_default_value()
+            if param_value == param_default:
+                logger.debug(
+                    f"Skipping capability check for {param_name} - value equals default {param_default!r}"
+                )
+                continue
+
             # Execute the capability check lambda
             try:
                 if not param_info.requires_capability(capabilities):
                     # Find which capability attribute returned False
-                    # This is a bit of introspection to provide better error messages
                     capability_name = self._infer_capability_name(
                         param_info.requires_capability, capabilities
                     )
@@ -65,58 +86,53 @@ class CapabilityValidator:
                 )
 
     def _infer_capability_name(
-        self, capability_check: Any, capabilities: AdapterCapabilities
+        self, capability_check: Callable[[Any], bool], capabilities: AdapterCapabilities
     ) -> str:
-        """Try to infer the capability name from the lambda.
+        """Infer the capability name from the lambda.
 
-        This is a best-effort approach to provide meaningful error messages.
+        Uses code object inspection to extract attribute names accessed by the lambda.
+        This is more reliable than bytecode disassembly as it uses stable Python APIs.
+
+        Args:
+            capability_check: Lambda like `lambda c: c.supports_vision`
+            capabilities: The capabilities object to check against
+
+        Returns:
+            The capability name, or "required capability" if unable to determine
         """
-        # Try to extract the attribute name from the lambda
-        # This works for simple lambdas like: lambda c: c.supports_temperature
         try:
-            import dis
-            import io
-            from contextlib import redirect_stdout
+            # Method 1: Extract attribute names from lambda's code object
+            # For `lambda c: c.supports_vision`, co_names contains ('supports_vision',)
+            code = getattr(capability_check, "__code__", None)
+            if code is not None:
+                names: tuple[str, ...] = code.co_names
+                # Check each name to see if it's a False capability
+                for attr_name in names:
+                    if hasattr(capabilities, attr_name):
+                        value = getattr(capabilities, attr_name)
+                        if value is False:
+                            return attr_name
 
-            # Capture disassembly output
-            output = io.StringIO()
-            with redirect_stdout(output):
-                dis.dis(capability_check)
-
-            disasm = output.getvalue()
-
-            # Look for LOAD_ATTR instructions which indicate attribute access
-            for line in disasm.split("\n"):
-                if "LOAD_ATTR" in line:
-                    # Extract the attribute name (it's usually in parentheses)
-                    parts = line.split("(")
-                    if len(parts) > 1:
-                        attr_name = parts[1].split(")")[0]
-                        # Verify this attribute exists and is False
-                        if hasattr(capabilities, attr_name):
-                            if getattr(capabilities, attr_name) is False:
-                                return attr_name
-
-            # Fallback: check all False boolean attributes
+            # Method 2: Check all False boolean capabilities
+            # This handles complex lambdas that access multiple attributes
+            false_capabilities = []
             for attr_name in dir(capabilities):
-                if not attr_name.startswith("_"):
+                if attr_name.startswith("_"):
+                    continue
+                try:
                     value = getattr(capabilities, attr_name)
                     if isinstance(value, bool) and value is False:
-                        # Try executing the lambda to see if this is the one
-                        try:
-                            # Create a test object with this attribute True
-                            test_caps = type(capabilities)()
-                            for a in dir(capabilities):
-                                if not a.startswith("_"):
-                                    setattr(test_caps, a, getattr(capabilities, a))
-                            setattr(test_caps, attr_name, True)
+                        false_capabilities.append(attr_name)
+                except Exception:
+                    continue
 
-                            # If the lambda returns True with this change,
-                            # this is likely the capability
-                            if capability_check(test_caps):
-                                return attr_name
-                        except Exception:
-                            pass
+            # If there's only one False capability, it's likely the one
+            if len(false_capabilities) == 1:
+                return false_capabilities[0]
+
+            # If multiple False capabilities, return a descriptive list
+            if false_capabilities:
+                return " or ".join(false_capabilities)
 
         except Exception as e:
             logger.debug(f"Could not infer capability name: {e}")

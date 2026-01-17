@@ -86,6 +86,7 @@ class ToolSpec:
                     "route": value.route,
                     "position": value.position,
                     "default": None if value.default is _NO_DEFAULT else value.default,
+                    "default_factory": value.default_factory,
                     "description": value.description,
                     "type": hints.get(name, Any),
                     "requires_capability": value.requires_capability,
