@@ -2,10 +2,12 @@
 
 import logging
 import json
-from typing import Any, Dict
+from typing import Any, Dict, List, Union
 
 from ..protocol import CallContext, ToolDispatcher
 from ...unified_session_cache import UnifiedSessionCache
+from ...utils.image_loader import load_images, ImageLoadError
+from ...utils.image_formatter import format_for_openai
 from .flow import FlowOrchestrator
 from .definitions import OpenAIToolParams, OPENAI_MODEL_CAPABILITIES
 
@@ -104,10 +106,40 @@ class OpenAIProtocolAdapter:
                     )
                     structured_output_schema = None
 
+            # Handle images if provided - convert prompt to content array
+            images_param = getattr(params, "images", None)
+            input_content: Union[str, List[Dict[str, Any]]] = prompt
+            if images_param:
+                # Check vision capability BEFORE loading images
+                if not self.capabilities.supports_vision:
+                    raise ValueError(
+                        f"Model '{self.model_name}' does not support vision/image inputs. "
+                        f"Remove the 'images' parameter or use a vision-capable model."
+                    )
+                logger.info(
+                    f"[OPENAI] Loading {len(images_param)} images for vision request"
+                )
+                try:
+                    loaded_images = await load_images(images_param)
+                except ImageLoadError as e:
+                    # Re-raise with clearer context for users
+                    raise ValueError(
+                        f"Failed to load images for vision request: {e}"
+                    ) from e
+                except Exception as e:
+                    logger.error(f"[OPENAI] Unexpected error loading images: {e}")
+                    raise ValueError(
+                        f"Failed to load images: {type(e).__name__}: {e}"
+                    ) from e
+                # Build content array with text + images
+                input_content = [{"type": "text", "text": prompt}]
+                input_content.extend(format_for_openai(loaded_images))
+                logger.info(f"[OPENAI] Added {len(loaded_images)} images to request")
+
             # Build request data for FlowOrchestrator using Responses API format
             request_data = {
                 "model": self.capabilities.model_name,  # Use the actual model name from capabilities
-                "input": prompt,
+                "input": input_content,
                 "instructions": instructions,
                 "previous_response_id": previous_response_id,
                 "vector_store_ids": ctx.vector_store_ids,

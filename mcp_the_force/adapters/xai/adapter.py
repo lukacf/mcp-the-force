@@ -5,7 +5,7 @@ following the architectural design in docs/litellm-refactor.md.
 """
 
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import litellm
 
@@ -13,6 +13,8 @@ from ..errors import InvalidModelException
 from ..litellm_base import LiteLLMBaseAdapter
 from ..protocol import CallContext, ToolDispatcher
 from .definitions import GrokToolParams, GROK_MODEL_CAPABILITIES
+from ...utils.image_loader import load_images, LoadedImage
+from ...utils.image_formatter import format_for_openai
 
 logger = logging.getLogger(__name__)
 
@@ -126,6 +128,7 @@ class GrokAdapter(LiteLLMBaseAdapter):
         conversation_input: List[Dict[str, Any]],
         params: GrokToolParams,
         tools: List[Dict[str, Any]],
+        images: Optional[List[LoadedImage]] = None,
         **kwargs: Any,
     ) -> Dict[str, Any]:
         """Build Grok-specific request parameters."""
@@ -138,9 +141,24 @@ class GrokAdapter(LiteLLMBaseAdapter):
                     for c in entry.get("content", [])
                     if c.get("type") == "text"
                 ]
-                messages.append(
-                    {"role": entry.get("role", "user"), "content": "".join(text_chunks)}
-                )
+                text_content = "".join(text_chunks)
+
+                # Check if this is a user message that should include images
+                # Images are only added to the last user message (the current prompt)
+                if (
+                    entry.get("role") == "user"
+                    and images
+                    and entry == conversation_input[-1]
+                ):
+                    # Build multimodal content array for vision
+                    content_array = [{"type": "text", "text": text_content}]
+                    content_array.extend(format_for_openai(images))
+                    messages.append({"role": "user", "content": content_array})
+                    logger.info(f"[GROK] Added {len(images)} images to user message")
+                else:
+                    messages.append(
+                        {"role": entry.get("role", "user"), "content": text_content}
+                    )
 
         request_params = {
             "model": f"{self._get_model_prefix()}/{self.model_name}",
@@ -239,8 +257,25 @@ class GrokAdapter(LiteLLMBaseAdapter):
     ) -> Dict[str, Any]:
         """Generate response using LiteLLM's Responses API.
 
-        Uses the base implementation from LiteLLMBaseAdapter.
+        Handles image loading for vision-capable Grok models before
+        calling the base implementation.
         """
+        # Load images if provided and model supports vision
+        loaded_images: Optional[List[LoadedImage]] = None
+        images_param = getattr(params, "images", None)
+        if images_param:
+            if not self.capabilities.supports_vision:
+                raise ValueError(
+                    f"Model '{self.capabilities.model_name}' does not support vision/image inputs. "
+                    f"Remove the 'images' parameter or use a vision-capable model like grok-4.1."
+                )
+            logger.info(f"[GROK] Loading {len(images_param)} images for vision request")
+            loaded_images = await load_images(images_param)
+            logger.info(f"[GROK] Successfully loaded {len(loaded_images)} images")
+
+        # Pass images to kwargs so _build_request_params can use them
+        kwargs["images"] = loaded_images
+
         return await super().generate(
             prompt=prompt,
             params=params,

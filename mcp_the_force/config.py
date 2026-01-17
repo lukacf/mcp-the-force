@@ -168,6 +168,24 @@ class MCPConfig(BaseModel):
     )
 
 
+class RetryConfig(BaseModel):
+    """Retry configuration for handling model errors."""
+
+    context_reduction_factor: float = Field(
+        0.75,
+        description="Factor to reduce context budget when retrying after max_output_tokens error. "
+        "E.g., 0.75 means reduce to 75% of original budget.",
+        ge=0.3,
+        le=0.95,
+    )
+    max_attempts: int = Field(
+        2,
+        description="Maximum number of retry attempts for max_output_tokens errors.",
+        ge=1,
+        le=5,
+    )
+
+
 class SessionConfig(BaseModel):
     """Session management configuration."""
 
@@ -319,6 +337,7 @@ class Settings(BaseSettings):
 
     # Feature configs
     session: SessionConfig = Field(default_factory=SessionConfig)
+    retry: RetryConfig = Field(default_factory=RetryConfig)
     vector_stores: VectorStoreConfig = Field(default_factory=VectorStoreConfig)
     history: HistoryStorageConfig = Field(default_factory=HistoryStorageConfig)
     tools: ToolsConfig = Field(default_factory=ToolsConfig)

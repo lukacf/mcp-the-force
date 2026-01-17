@@ -12,6 +12,9 @@ from .protocol import CallContext, ToolDispatcher
 from .capabilities import AdapterCapabilities
 from .errors import ToolExecutionException
 from ..unified_session_cache import UnifiedSessionCache
+from ..utils.image_loader import LoadedImage, load_images, ImageLoadError
+from ..utils.image_formatter import format_for_anthropic
+from ..utils.history_sanitizer import strip_images_from_history
 
 logger = logging.getLogger(__name__)
 
@@ -407,6 +410,7 @@ class LiteLLMBaseAdapter:
         ctx: CallContext,
         system_instruction: Optional[str] = None,
         structured_output_schema: Optional[str] = None,
+        images: Optional[List[LoadedImage]] = None,
     ) -> List[Dict[str, Any]]:
         """Build conversation input for the current turn.
 
@@ -415,6 +419,7 @@ class LiteLLMBaseAdapter:
             ctx: Call context
             system_instruction: Optional system instruction
             structured_output_schema: Optional JSON schema
+            images: Optional list of loaded images to include
 
         Returns:
             Conversation input in Responses API format
@@ -443,12 +448,23 @@ class LiteLLMBaseAdapter:
             )
             prompt_text = f"{prompt}\n\nRespond ONLY with valid JSON that matches this schema: {schema_text}"
 
+        # Build user message content
+        user_content: List[Dict[str, Any]] = []
+
+        # Add images first for Anthropic (images before text is preferred)
+        if images:
+            user_content.extend(format_for_anthropic(images))
+            logger.info(f"[LITELLM] Added {len(images)} images to user message")
+
+        # Add text content
+        user_content.append({"type": "text", "text": prompt_text})
+
         # Add user message
         conversation_input.append(
             {
                 "type": "message",
                 "role": "user",
-                "content": [{"type": "text", "text": prompt_text}],
+                "content": user_content,
             }
         )
 
@@ -697,12 +713,15 @@ class LiteLLMBaseAdapter:
                 }
                 final_conversation.append(assistant_msg)
 
+            # Strip image data before saving to prevent context explosion on subsequent turns
+            sanitized_conversation = strip_images_from_history(final_conversation)
+
             # Save to cache
             await UnifiedSessionCache.set_history(
                 ctx.project,
                 ctx.tool,
                 ctx.session_id,
-                final_conversation,
+                sanitized_conversation,
             )
 
     def _extract_content(self, response: Any) -> str:
@@ -754,6 +773,44 @@ class LiteLLMBaseAdapter:
         """
         token = None
         try:
+            # Load images if provided (unless already loaded by subclass via kwargs)
+            loaded_images: Optional[List[LoadedImage]] = kwargs.get("images")
+            if loaded_images is None:
+                # No pre-loaded images from subclass, check params
+                images_param = getattr(params, "images", None)
+                if images_param:
+                    # Check if model supports vision before loading images
+                    if not self.capabilities.supports_vision:
+                        raise ValueError(
+                            f"Model '{self.model_name}' does not support vision/image inputs. "
+                            f"Remove the 'images' parameter or use a vision-capable model like "
+                            f"Gemini 3 Pro, Claude 4.5 Sonnet, or GPT-4.1."
+                        )
+                    logger.info(
+                        f"[{self.display_name}] Loading {len(images_param)} images for vision request"
+                    )
+                    try:
+                        loaded_images = await load_images(images_param)
+                    except ImageLoadError as e:
+                        # Re-raise with clearer context for users
+                        raise ValueError(
+                            f"Failed to load images for vision request: {e}"
+                        ) from e
+                    except Exception as e:
+                        logger.error(
+                            f"[{self.display_name}] Unexpected error loading images: {e}"
+                        )
+                        raise ValueError(
+                            f"Failed to load images: {type(e).__name__}: {e}"
+                        ) from e
+                    logger.info(
+                        f"[{self.display_name}] Successfully loaded {len(loaded_images)} images"
+                    )
+            elif loaded_images:
+                logger.debug(
+                    f"[{self.display_name}] Using {len(loaded_images)} pre-loaded images from subclass"
+                )
+
             # Load session history if needed
             conversation_input = []
             if ctx.session_id:
@@ -770,6 +827,7 @@ class LiteLLMBaseAdapter:
                     structured_output_schema=getattr(
                         params, "structured_output_schema", None
                     ),
+                    images=loaded_images,
                 )
             )
 

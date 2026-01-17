@@ -98,6 +98,7 @@ class OpenAIBaseCapabilities(AdapterCapabilities):
     supports_reasoning_effort: bool = False
     supports_structured_output: bool = True
     supports_streaming: bool = True
+    supports_vision: bool = True  # All modern OpenAI models support vision
     force_background: bool = False
     default_reasoning_effort: str = "medium"
     parallel_function_calls: int = 1  # Default to serial
@@ -147,6 +148,7 @@ class DeepResearchCapabilities(OSeriesCapabilities):
     )
     supports_web_search: bool = True  # Enable native web search tool (required)
     supports_live_search: bool = False  # No custom live search tools
+    supports_vision: bool = False  # Deep research models are text-only
     web_search_tool: str = "web_search_preview"  # Use native OpenAI web search tool
     parallel_function_calls: int = 0  # No function calling at all
     native_vector_store_provider: Optional[str] = (
