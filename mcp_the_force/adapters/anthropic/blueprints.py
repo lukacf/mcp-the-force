@@ -69,6 +69,7 @@ def get_anthropic_blueprints() -> List[ToolBlueprint]:
             context_window=capabilities.max_context_window
             or 200_000,  # All Anthropic models have 200k context
             tool_type="chat",  # All Anthropic models are chat tools
+            cli="claude",  # All Anthropic models use Claude CLI
         )
         blueprints.append(blueprint)
 

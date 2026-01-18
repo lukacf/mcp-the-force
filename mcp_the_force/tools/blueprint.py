@@ -16,3 +16,6 @@ class ToolBlueprint:
     context_window: int
     tool_type: str = "chat"  # or "research"
     tool_name: str | None = None  # Optional friendly name for the tool
+    cli: str | None = (
+        None  # CLI name for CLI Agents feature (e.g., "claude", "codex", "gemini")
+    )

@@ -91,6 +91,8 @@ markers = [
     "slow: Tests that take more than 10 seconds",
     "timeout: Tests with custom timeout values",
     "no_virtual_clock: Disable virtual clock for tests that need real timing",
+    "cli_agents: Tests for CLI Agents feature (work_with/consult_with)",
+    "rct: Representation Contract Tests (external boundary validation)",
 ]
 # Note: plugins loading moved to conftest.py for better compatibility
 

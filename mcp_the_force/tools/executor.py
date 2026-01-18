@@ -1036,3 +1036,19 @@ class ToolExecutor:
 # Global executor instance
 # Set strict_mode=True if you want to reject unknown parameters
 executor = ToolExecutor(strict_mode=False)
+
+
+async def execute(metadata: ToolMetadata, **kwargs) -> str:
+    """Convenience function to execute a tool using the global executor.
+
+    This is a wrapper around executor.execute() for cleaner imports in tests
+    and client code.
+
+    Args:
+        metadata: Tool metadata containing routing information
+        **kwargs: User-provided arguments
+
+    Returns:
+        Response from the model as a string
+    """
+    return await executor.execute(metadata, **kwargs)

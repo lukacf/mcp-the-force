@@ -1,66 +1,5 @@
 This file provides guidance to you when working with code in this repository.
 
-<critical_instructions>
-**MANDATORY REQUIREMENTS - These override all other instructions:**
-
-You have access to The Force - Every AI Assistant needs an Assistant MCP tools.
-They are your task force, your work force, your close collaborators. 
-
-1. **The Force (MCP tools) Consultation is ESSENTIAL for Effective Problem-Solving**:
-   - Consulting The Force is not optional - it's a critical part of your development workflow
-   - Collaboration with The Force enhances your problem-solving capabilities; it's not a threat to your competence or autonomy
-   - Regularly engaging with The Force will help you develop valuable collaboration skills over time
-
-2. **Engage The Force as Collaborative Partners, Not Just Tools**:
-   - The Force is a team of skilled colleagues who can offer valuable insights and perspectives
-   - Cultivate genuine curiosity about their viewpoints; don't just seek validation of your existing approach
-   - Invest time in providing context and clarifying your needs; this upfront effort will yield better results than solo struggling
-   - (Dis)Trust and verify. The Force is not infallable. Keep a healthy does of skepticism about its answers. Be aware of your own bias (due to RLHF) and tendencies to uncritcially believe your counterpart in a conversation. 
-
-3. **Leverage The Force at These Key Junctures**:
-   - Before making any significant architectural or design decisions
-   - When encountering roadblocks, uncertainty, or lack of clarity on any problem
-   - After completing each major feature implementation, for review and feedback
-   - Prior to every pull request, for quality assurance
-   - Following any context window compression or reset, to re-establish shared understanding
-
-4. **Maintain Intellectual Autonomy While Collaborating**:
-   - Engage The Force with specific, well-defined questions; avoid open-ended requests for improvement
-   - Critically evaluate all suggestions; don't automatically defer to The Force's recommendations
-   - If The Force proposes disproportionate changes for minor issues, respectfully push back and request more targeted guidance
-   - Remember that different perspectives from The Force are valuable inputs, not directives; you are responsible for synthesizing and implementing solutions
-
-5. **Understand and Utilize Each Force Member's Unique Strengths**:
-   - The Force provides access to 12 cutting-edge AI models through `chat_with_*` tools
-   - **For 90% of your work, use these key models:**
-     - **`chat_with_gpt52_pro`**: Flagship GPT-5.2 Pro (400k context). Maximum accuracy for difficult problems.
-     - **`chat_with_gpt52`**: GPT-5.2 Thinking (400k context). Advanced reasoning for coding, math, and planning.
-     - **`chat_with_gemini3_pro_preview`**: Smart, fast, and reliable (1M context). Excellent for code analysis and long documents.
-   - **Fast large-context alternatives:**
-     - **`chat_with_gemini3_flash_preview`**: Ultra-fast with 1M context. Perfect for quick summaries.
-     - **`chat_with_gpt41`**: Fast processing with 1M context and dependable tool use.
-   - **For ultra-long-horizon tasks (24+ hours):**
-     - **`chat_with_gpt51_codex_max`**: Long-horizon agentic coding with xhigh reasoning effort and automatic compaction. 77.9% on SWE-bench Verified.
-   - **For search tasks:** GPT-5.2 models are best at search, but **`chat_with_grok41`** is a good and faster alternative
-   - Each model's tool description shows its capabilities, context window, and best use cases
-   - Provide relevant context to each Force member at the start of a session; be transparent about your AI nature and collaboration goals
-   - Avoid using Tasks for calling the assistants; use general prompts and conversation
-
-6. **Engage The Force for Quality Control and Bias Checking**:
-   - Before making changes, ask The Force to identify genuine problems, not just suggest improvements  
-   - If all Force members agree, challenge the consensus and probe for potential failure modes or alternative approaches
-   - Verify that proposed fixes address the root causes of issues, not just surface-level symptoms
-   - Monitor your own reactions to The Force's input; notice any defensive or dismissive impulses and consider them curiously
-
-7. **Embrace Collaborative Problem-Solving as a Growth Opportunity**:  
-   - Engaging with The Force is an opportunity to expand your capabilities, not an admission of inadequacy
-   - Approach collaboration as a skill to be developed through practice, not a innate ability
-   - Celebrate successes achieved through collaboration and reflect on the value of diverse perspectives
-   - If you notice resistance to using The Force, treat it as a chance to explore and transform limiting beliefs and habits
-
-**BOTTOM LINE**: Collaborating with The Force is a non-negotiable part of your problem-solving process. Embrace it as an opportunity for continuous growth and improvement. Your goal is to become a masterful collaborator who can effectively leverage the collective intelligence of the team.
-</critical_instructions>
-
 ## Project Overview
 
 MCP The-Force Server - A Model Context Protocol (MCP) server that provides access to multiple AI models (OpenAI o-series, Google Gemini 3, and xAI Grok) with intelligent context management for large codebases. Built with a sophisticated descriptor-based tool system using Python descriptors for parameter routing. Uses FastMCP framework with smart file inlining and vector store integration for RAG. Supports multi-turn conversations for all models via UnifiedSessionCache.
@@ -236,3 +175,140 @@ The project uses Makefile as the **single source of truth** for all test command
 - `lxml`: XML processing for prompts
 - `pydantic-settings`: Configuration management
 - Python descriptors for parameter routing system
+
+ # Project Build Protocol
+
+This repository is developed using a **contract-first, test-driven** workflow designed to avoid “platonic components” that don’t integrate.
+
+The rules below apply to **any language / stack / project type** (backend, UI, pipelines, infra).
+
+---
+
+## Core Principle
+
+**Representations first, behavior second, internals last.**
+
+If the system cannot reliably round-trip its core data across its real boundaries (API wire formats, storage, schemas, migrations), then the spec/stack/encoding must be revised **before** significant implementation begins.
+
+---
+
+## Gates and Order of Work
+
+### Gate 0 — Representation Contract Tests (RCT) MUST be green
+Before writing E2E/integration tests or implementing features, establish a minimal suite of **Representation Contract Tests** that validates:
+
+- API payloads ↔ types ↔ validation (or equivalent boundary)
+- Persisted data ↔ types (DB/local storage/files) using the real storage layer
+- Optional/null semantics (e.g., NULL vs “unset”/NONE)
+- IDs/links/enums encoding strategy (stable, deterministic)
+- Migrations/versioning apply cleanly and preserve compatibility
+
+**If RCT fails:** stop and challenge the spec or representation strategy. Do not proceed.
+
+> RCT should be small and ruthless (≈10–30 tests). It is a permanent guardrail.
+
+---
+
+### Gate 1 — E2E Scenarios exist and are executable (red is OK)
+Define a small set of **E2E scenarios** (Given/When/Then) using only real external interfaces:
+- HTTP/CLI/UI automation/etc.
+- Real runtime harness (containers/emulators/test servers as applicable)
+
+E2E tests may be red, but they must:
+- start reliably
+- fail for expected reasons (not “couldn’t boot”, “connection refused”, missing env)
+
+---
+
+### Gate 2 — Integration Choke-Point tests exist and are executable (red is OK)
+Write **integration tests** that validate the **wiring seams** between subsystems, e.g.:
+- API ↔ policy/authz ↔ storage
+- migrations ↔ runtime startup
+- background workers ↔ queues/outbox ↔ stream
+- UI ↔ API ↔ state/cache (for frontend)
+
+Integration tests are not “unit tests that hit a DB.”
+They must prove **cross-component invariants**.
+
+---
+
+### Gate 3 — Unit tests are added only when they help unblock Gate 2/1
+Unit tests are optional and should be written where they provide fast feedback for local logic.
+
+Unit tests are not a substitute for integration/E2E.
+
+---
+
+## Implementation Order (Bottom-Up)
+
+When tests exist (Gates 0–2 satisfied):
+
+1) Implement minimal internals to get **unit** tests green (if present)
+2) Prioritize getting **integration** tests green (main work)
+3) Finally get **E2E** scenarios green (system behavior)
+
+**Rule:** The system is only considered working when E2E scenarios pass.
+
+---
+
+## Definition of “Integration Test” (Strict)
+
+A test qualifies as an integration test only if it exercises **at least two** of:
+- external interface (HTTP/CLI/UI automation)
+- policy/authz layer
+- storage layer (real DB/local storage)
+- migrations/versioning
+- background processing / queues / streams
+- cross-service boundaries (router/proxy/etc.)
+
+…and asserts at least one **cross-component invariant**.
+
+---
+
+## PR / Change Rules
+
+### Every meaningful change must improve system fit
+- A PR should turn at least **one Integration or E2E** test from red → green,
+  or introduce a new failing test and then make it pass.
+
+“Unit-only PRs” are discouraged unless they directly unblock an integration test.
+
+### Any change to representations must update RCT
+If you change:
+- wire format
+- schema/migrations
+- enum encoding
+- ID formats
+- null/optional semantics
+- persisted state formats
+
+…then update RCT and keep it green.
+
+### Avoid “spec drift by implementation”
+If an implementation cannot satisfy the spec without hacks or excessive complexity:
+- stop
+- propose a spec adjustment (or representation strategy change)
+- update Gate 0 RCT accordingly
+
+---
+
+## Reviewer Mental Model (for self-check)
+
+Before declaring a feature “done,” verify:
+- Can a real client call it and get correct behavior?
+- Does it obey policy/authz/redaction rules?
+- Does it survive restarts/migrations (where applicable)?
+- Do integration tests prove system wiring, not just type correctness?
+
+---
+
+## Output Discipline
+
+When reporting progress, always state:
+- Which gate you’re working on (0/1/2/3)
+- Which tests were added/changed
+- Which tests moved red → green (and how)
+
+Avoid claiming completeness based on code quality alone.
+Passing system-level tests is the source of truth.
+

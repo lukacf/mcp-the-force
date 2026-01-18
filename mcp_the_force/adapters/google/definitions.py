@@ -197,6 +197,7 @@ def _generate_and_register_blueprints():
             timeout=_calculate_timeout(model_name),
             context_window=capabilities.max_context_window,
             tool_type="chat",  # All Gemini models are chat tools
+            cli="gemini",  # All Gemini models use Gemini CLI
         )
         blueprints.append(blueprint)
 
