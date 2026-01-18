@@ -1,27 +1,26 @@
 """
-CodexParser: Parse Codex CLI JSONL output.
+Codex CLI Parser Implementation.
 
-Codex outputs JSONL (multiple JSON lines):
-{"thread_id": "...", "type": "thread.started"}
-{"type": "turn.started"}
-{"type": "item.completed", "content": "..."}
-{"type": "turn.completed"}
-
-Note: Codex uses thread_id, NOT session_id.
+Parses output from OpenAI Codex CLI.
 """
 
 import json
-from typing import List
+from typing import Any, List
 
-from mcp_the_force.cli_agents.parsers.base import ParsedCLIResponse
+from mcp_the_force.cli_plugins.base import ParsedCLIResponse
 
 
 class CodexParser:
     """
     Parses Codex CLI output format.
 
-    Expected format: JSONL with thread_id in thread.started event
-    and content aggregated from item.completed events.
+    Expected format: JSONL (multiple JSON lines)
+    - {"thread_id": "...", "type": "thread.started"}
+    - {"type": "turn.started"}
+    - {"type": "item.completed", "content": "..."}
+    - {"type": "turn.completed"}
+
+    Note: Codex uses thread_id, NOT session_id.
     """
 
     def parse(self, output: str) -> ParsedCLIResponse:
@@ -46,7 +45,7 @@ class CodexParser:
                 continue
 
             try:
-                event = json.loads(line)
+                event: Any = json.loads(line)
             except json.JSONDecodeError:
                 continue
 

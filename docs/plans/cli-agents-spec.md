@@ -382,11 +382,11 @@ python -m pytest tests/integration/cli_agents/test_cli_plugin.py -v --tb=short 2
 
 **Note**: Infrastructure goes under `mcp_the_force/cli_agents/` (new module), used by LocalService.
 
-- [ ] **2.1** Implement CLI parsers (`mcp_the_force/cli_agents/parsers/`)
-  - `base.py`: BaseParser protocol, content extraction
-  - `claude.py`: Claude JSON parsing, session_id + result/message extraction
-  - `gemini.py`: Gemini JSON parsing (field names from RCT)
-  - `codex.py`: Codex JSONL parsing, threadId extraction
+- [x] **2.1** Implement CLI parsers (in `mcp_the_force/cli_plugins/{name}/parser.py`)
+  - Each CLI plugin folder contains its own parser
+  - `cli_plugins/claude/parser.py`: Claude JSON array parsing
+  - `cli_plugins/gemini/parser.py`: Gemini JSON object parsing
+  - `cli_plugins/codex/parser.py`: Codex JSONL parsing, thread_id extraction
   - **Unit tests green**
 
 - [ ] **2.1.1** Implement output summarizer (`mcp_the_force/cli_agents/summarizer.py`)
@@ -499,11 +499,21 @@ CLI plugins define invocation mechanics (pure infrastructure, no model logic):
 
 ```
 mcp_the_force/cli_plugins/
-├── __init__.py           # Plugin registry
-├── base.py               # CLIPlugin protocol
-├── claude.py             # Claude Code mechanics
-├── gemini.py             # Gemini CLI mechanics
-└── codex.py              # Codex CLI mechanics
+├── __init__.py           # Package init, re-exports
+├── registry.py           # CLI_PLUGIN_REGISTRY, @cli_plugin, get_cli_plugin
+├── base.py               # CLIPlugin protocol, ParsedCLIResponse
+├── claude/
+│   ├── __init__.py
+│   ├── plugin.py         # ClaudePlugin (command building)
+│   └── parser.py         # ClaudeParser (output parsing)
+├── gemini/
+│   ├── __init__.py
+│   ├── plugin.py         # GeminiPlugin
+│   └── parser.py         # GeminiParser
+└── codex/
+    ├── __init__.py
+    ├── plugin.py         # CodexPlugin
+    └── parser.py         # CodexParser (thread_id → session_id)
 ```
 
 ```python
@@ -1005,7 +1015,7 @@ python -m pytest tests/ -k "cli_agents" -v 2>&1 | tail -100
 | `tests/unit/cli_agents/*.py` | 1 | Unit tests |
 | `docs/choke-points-cli-agents.yaml` | 1 | Choke point matrix |
 | `mcp_the_force/cli_agents/__init__.py` | 2 | Module init |
-| `mcp_the_force/cli_agents/parsers/*.py` | 2 | CLI parsers |
+| `mcp_the_force/cli_plugins/{name}/parser.py` | 2 | CLI parsers (per-plugin) |
 | `mcp_the_force/cli_agents/summarizer.py` | 2 | Output summarization (Gemini Flash) |
 | `mcp_the_force/cli_agents/executor.py` | 2 | Subprocess executor |
 | `mcp_the_force/cli_agents/session_bridge.py` | 2 | Session mapping |

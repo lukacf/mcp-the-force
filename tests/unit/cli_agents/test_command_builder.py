@@ -1,117 +1,215 @@
 """
-Unit Tests: CommandBuilder.
+Unit Tests: CLI Plugin Command Building.
 
-Tests command construction logic in isolation.
+Tests command construction logic via plugin methods.
 """
 
 
-class TestCommandBuilder:
-    """Unit tests for CommandBuilder."""
+class TestClaudePluginCommandBuilding:
+    """Unit tests for Claude plugin command building."""
 
-    def test_build_claude_command_basic(self):
-        """Builder creates basic Claude command."""
-        from mcp_the_force.cli_agents.environment import CommandBuilder
+    def test_build_new_session_basic(self):
+        """Plugin creates basic Claude command for new session."""
+        from mcp_the_force.cli_plugins.claude import ClaudePlugin
 
-        builder = CommandBuilder()
-        command = builder.build_claude_command(
+        plugin = ClaudePlugin()
+        args = plugin.build_new_session_args(
             task="Write a test",
-            role="default",
-            resume_id=None,
-            project_dir="/tmp/project",
+            context_dirs=[],
+            role=None,
         )
 
-        assert "claude" in command
-        assert "--print" in command  # JSON output mode
-        assert "Write a test" in " ".join(command)
+        assert "--print" in args  # JSON output mode
+        assert "-p" in args
+        assert "Write a test" in args
 
-    def test_build_claude_command_with_resume(self):
-        """Builder adds --resume flag when resume_id provided."""
-        from mcp_the_force.cli_agents.environment import CommandBuilder
+    def test_build_new_session_with_context_dirs(self):
+        """Plugin adds --add-dir for context directories."""
+        from mcp_the_force.cli_plugins.claude import ClaudePlugin
 
-        builder = CommandBuilder()
-        command = builder.build_claude_command(
-            task="Continue",
-            role="default",
-            resume_id="abc-123-def",
-            project_dir="/tmp/project",
-        )
-
-        assert "--resume" in command
-        assert "abc-123-def" in command
-
-    def test_build_claude_command_with_add_dir(self):
-        """Builder adds --add-dir for context directories."""
-        from mcp_the_force.cli_agents.environment import CommandBuilder
-
-        builder = CommandBuilder()
-        command = builder.build_claude_command(
+        plugin = ClaudePlugin()
+        args = plugin.build_new_session_args(
             task="Analyze code",
-            role="default",
-            resume_id=None,
-            project_dir="/tmp/project",
             context_dirs=["/path/to/context"],
+            role=None,
         )
 
-        assert "--add-dir" in command
-        assert "/path/to/context" in command
+        assert "--add-dir" in args
+        assert "/path/to/context" in args
 
-    def test_build_gemini_command_basic(self):
-        """Builder creates basic Gemini CLI command."""
-        from mcp_the_force.cli_agents.environment import CommandBuilder
+    def test_build_new_session_with_role(self):
+        """Plugin adds --system-prompt for role."""
+        from mcp_the_force.cli_plugins.claude import ClaudePlugin
 
-        builder = CommandBuilder()
-        command = builder.build_gemini_command(
+        plugin = ClaudePlugin()
+        args = plugin.build_new_session_args(
+            task="Do something",
+            context_dirs=[],
+            role="You are a helpful assistant",
+        )
+
+        assert "--system-prompt" in args
+        assert "You are a helpful assistant" in args
+
+    def test_build_resume_args(self):
+        """Plugin creates resume command with --resume flag."""
+        from mcp_the_force.cli_plugins.claude import ClaudePlugin
+
+        plugin = ClaudePlugin()
+        args = plugin.build_resume_args(
+            session_id="abc-123-def",
+            task="Continue",
+        )
+
+        assert "--print" in args
+        assert "--resume" in args
+        assert "abc-123-def" in args
+        assert "-p" in args
+        assert "Continue" in args
+
+    def test_executable_name(self):
+        """Plugin reports correct executable name."""
+        from mcp_the_force.cli_plugins.claude import ClaudePlugin
+
+        plugin = ClaudePlugin()
+        assert plugin.executable == "claude"
+
+
+class TestGeminiPluginCommandBuilding:
+    """Unit tests for Gemini plugin command building."""
+
+    def test_build_new_session_basic(self):
+        """Plugin creates basic Gemini command."""
+        from mcp_the_force.cli_plugins.gemini import GeminiPlugin
+
+        plugin = GeminiPlugin()
+        args = plugin.build_new_session_args(
             task="Explain this",
-            resume_id=None,
-            project_dir="/tmp/project",
+            context_dirs=[],
+            role=None,
         )
 
-        assert "gemini" in command
-        assert "Explain this" in " ".join(command)
+        assert "--output-format" in args
+        assert "json" in args
+        assert "Explain this" in args
 
-    def test_build_gemini_command_with_resume(self):
-        """Builder adds resume flag for Gemini."""
-        from mcp_the_force.cli_agents.environment import CommandBuilder
+    def test_build_new_session_with_context(self):
+        """Plugin adds --context for context directories."""
+        from mcp_the_force.cli_plugins.gemini import GeminiPlugin
 
-        builder = CommandBuilder()
-        command = builder.build_gemini_command(
+        plugin = GeminiPlugin()
+        args = plugin.build_new_session_args(
+            task="Analyze",
+            context_dirs=["/path/to/code"],
+            role=None,
+        )
+
+        assert "--context" in args
+        assert "/path/to/code" in args
+
+    def test_build_new_session_with_role(self):
+        """Plugin adds --system-instruction for role."""
+        from mcp_the_force.cli_plugins.gemini import GeminiPlugin
+
+        plugin = GeminiPlugin()
+        args = plugin.build_new_session_args(
+            task="Do task",
+            context_dirs=[],
+            role="Expert coder",
+        )
+
+        assert "--system-instruction" in args
+        assert "Expert coder" in args
+
+    def test_build_resume_args(self):
+        """Plugin creates resume command with --session flag."""
+        from mcp_the_force.cli_plugins.gemini import GeminiPlugin
+
+        plugin = GeminiPlugin()
+        args = plugin.build_resume_args(
+            session_id="gemini-session-456",
             task="Continue",
-            resume_id="gemini-session-456",
-            project_dir="/tmp/project",
         )
 
-        assert "--resume" in command
-        assert "gemini-session-456" in command
+        assert "--session" in args
+        assert "gemini-session-456" in args
+        assert "--output-format" in args
 
-    def test_build_codex_command_basic(self):
-        """Builder creates basic Codex CLI command."""
-        from mcp_the_force.cli_agents.environment import CommandBuilder
+    def test_executable_name(self):
+        """Plugin reports correct executable name."""
+        from mcp_the_force.cli_plugins.gemini import GeminiPlugin
 
-        builder = CommandBuilder()
-        command = builder.build_codex_command(
+        plugin = GeminiPlugin()
+        assert plugin.executable == "gemini"
+
+
+class TestCodexPluginCommandBuilding:
+    """Unit tests for Codex plugin command building."""
+
+    def test_build_new_session_basic(self):
+        """Plugin creates basic Codex command."""
+        from mcp_the_force.cli_plugins.codex import CodexPlugin
+
+        plugin = CodexPlugin()
+        args = plugin.build_new_session_args(
             task="Fix the bug",
-            resume_id=None,
-            project_dir="/tmp/project",
+            context_dirs=[],
+            role=None,
         )
 
-        assert "codex" in command
-        assert "Fix the bug" in " ".join(command)
+        assert "exec" in args
+        assert "--json" in args
+        assert "Fix the bug" in args
 
-    def test_build_codex_command_with_resume(self):
-        """Builder uses 'exec resume' subcommand for Codex resume."""
-        from mcp_the_force.cli_agents.environment import CommandBuilder
+    def test_build_new_session_with_context(self):
+        """Plugin adds --context for context directories."""
+        from mcp_the_force.cli_plugins.codex import CodexPlugin
 
-        builder = CommandBuilder()
-        command = builder.build_codex_command(
+        plugin = CodexPlugin()
+        args = plugin.build_new_session_args(
+            task="Review",
+            context_dirs=["/src"],
+            role=None,
+        )
+
+        assert "--context" in args
+        assert "/src" in args
+
+    def test_build_new_session_with_role(self):
+        """Plugin adds --role for role."""
+        from mcp_the_force.cli_plugins.codex import CodexPlugin
+
+        plugin = CodexPlugin()
+        args = plugin.build_new_session_args(
+            task="Help",
+            context_dirs=[],
+            role="senior-dev",
+        )
+
+        assert "--role" in args
+        assert "senior-dev" in args
+
+    def test_build_resume_args(self):
+        """Plugin uses 'exec resume' subcommand for Codex resume."""
+        from mcp_the_force.cli_plugins.codex import CodexPlugin
+
+        plugin = CodexPlugin()
+        args = plugin.build_resume_args(
+            session_id="thread-789",
             task="Continue",
-            resume_id="thread-789",
-            project_dir="/tmp/project",
         )
 
         # Codex uses different resume syntax: exec resume <thread_id>
-        assert "exec" in command
-        assert "resume" in command
-        assert "thread-789" in command
+        assert "exec" in args
+        assert "resume" in args
+        assert "thread-789" in args
+
+    def test_executable_name(self):
+        """Plugin reports correct executable name."""
+        from mcp_the_force.cli_plugins.codex import CodexPlugin
+
+        plugin = CodexPlugin()
+        assert plugin.executable == "codex"
 
 
 class TestEnvironmentBuilder:

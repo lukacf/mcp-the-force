@@ -141,19 +141,19 @@ class TestParserPipeline:
     @pytest.mark.asyncio
     async def test_claude_output_parsed_correctly(self):
         """
-        Pipeline: Claude JSON → ClaudeParser → ParsedCLIResponse.
+        Pipeline: Claude JSON → ClaudePlugin.parse_output → ParsedCLIResponse.
 
         Given: Real Claude CLI JSON output format
-        When: Passed through ClaudeParser
+        When: Passed through plugin's parse_output
         Then: session_id and content extracted correctly
         """
-        from mcp_the_force.cli_agents.parsers.claude import ClaudeParser
+        from mcp_the_force.cli_plugins.claude import ClaudePlugin
 
         # Sample Claude output (from RCT findings)
         claude_output = """[{"type":"system","subtype":"init","session_id":"abc-123-def","tools":["Read","Write"]},{"type":"result","subtype":"success","result":"Hello!","session_id":"abc-123-def"}]"""
 
-        parser = ClaudeParser()
-        result = parser.parse(claude_output)
+        plugin = ClaudePlugin()
+        result = plugin.parse_output(claude_output)
 
         assert result.session_id == "abc-123-def"
         assert "Hello" in result.content
@@ -161,19 +161,19 @@ class TestParserPipeline:
     @pytest.mark.asyncio
     async def test_gemini_output_parsed_correctly(self):
         """
-        Pipeline: Gemini JSON → GeminiParser → ParsedCLIResponse.
+        Pipeline: Gemini JSON → GeminiPlugin.parse_output → ParsedCLIResponse.
 
         Given: Real Gemini CLI JSON output format
-        When: Passed through GeminiParser
+        When: Passed through plugin's parse_output
         Then: session_id and response extracted correctly
         """
-        from mcp_the_force.cli_agents.parsers.gemini import GeminiParser
+        from mcp_the_force.cli_plugins.gemini import GeminiPlugin
 
         # Sample Gemini output (from RCT findings)
         gemini_output = """{"session_id":"gemini-456-xyz","response":"The answer is 4","stats":{}}"""
 
-        parser = GeminiParser()
-        result = parser.parse(gemini_output)
+        plugin = GeminiPlugin()
+        result = plugin.parse_output(gemini_output)
 
         assert result.session_id == "gemini-456-xyz"
         assert "4" in result.content
@@ -181,13 +181,13 @@ class TestParserPipeline:
     @pytest.mark.asyncio
     async def test_codex_jsonl_parsed_correctly(self):
         """
-        Pipeline: Codex JSONL → CodexParser → ParsedCLIResponse.
+        Pipeline: Codex JSONL → CodexPlugin.parse_output → ParsedCLIResponse.
 
         Given: Real Codex CLI JSONL output (multiple lines)
-        When: Passed through CodexParser
+        When: Passed through plugin's parse_output
         Then: thread_id extracted from thread.started event
         """
-        from mcp_the_force.cli_agents.parsers.codex import CodexParser
+        from mcp_the_force.cli_plugins.codex import CodexPlugin
 
         # Sample Codex JSONL output (from RCT findings)
         # Note: Codex uses thread_id, not session_id!
@@ -196,8 +196,8 @@ class TestParserPipeline:
 {"type":"item.completed","content":"Done!"}
 {"type":"turn.completed"}"""
 
-        parser = CodexParser()
-        result = parser.parse(codex_output)
+        plugin = CodexPlugin()
+        result = plugin.parse_output(codex_output)
 
         assert result.session_id == "codex-789-thread"  # thread_id mapped to session_id
         assert "Done" in result.content
@@ -215,7 +215,7 @@ async def test_resume_flag_added_when_mapping_exists(isolate_test_databases):
     Then: --resume <id> is included in the command
     """
     from mcp_the_force.cli_agents.session_bridge import SessionBridge
-    from mcp_the_force.cli_agents.environment import CommandBuilder
+    from mcp_the_force.cli_plugins.claude import ClaudePlugin
 
     # Pre-populate session mapping
     bridge = SessionBridge()
@@ -224,14 +224,12 @@ async def test_resume_flag_added_when_mapping_exists(isolate_test_databases):
     )
 
     # Build command - should include resume flag
-    builder = CommandBuilder()
+    plugin = ClaudePlugin()
     cli_session_id = await bridge.get_cli_session_id("proj", "resume-test", "claude")
 
-    command = builder.build_claude_command(
+    command = plugin.build_resume_args(
+        session_id=cli_session_id,
         task="Continue working",
-        role="default",
-        resume_id=cli_session_id,
-        project_dir="/tmp/project",
     )
 
     assert "--resume" in command

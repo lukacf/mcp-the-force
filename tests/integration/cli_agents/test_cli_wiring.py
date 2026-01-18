@@ -177,7 +177,7 @@ class TestExecutorParserWiring:
         When: Output flows through parser pipeline
         Then: session_id is extracted and available
         """
-        from mcp_the_force.cli_agents.parsers.claude import ClaudeParser
+        from mcp_the_force.cli_plugins.claude import ClaudePlugin
         from mcp_the_force.cli_agents.executor import CLIExecutor, CLIResult
 
         # Mock the subprocess call
@@ -199,8 +199,8 @@ class TestExecutorParserWiring:
             )
 
             # Parse the output
-            parser = ClaudeParser()
-            parsed = parser.parse(result.stdout)
+            plugin = ClaudePlugin()
+            parsed = plugin.parse_output(result.stdout)
 
             # Invariant: session_id extracted
             assert parsed.session_id == "claude-session-abc123"
@@ -213,10 +213,10 @@ class TestExecutorParserWiring:
         When: Output flows through parser pipeline
         Then: thread_id is extracted and mapped to session_id
         """
-        from mcp_the_force.cli_agents.parsers.codex import CodexParser
+        from mcp_the_force.cli_plugins.codex import CodexPlugin
 
-        parser = CodexParser()
-        parsed = parser.parse(MOCK_CODEX_OUTPUT)
+        plugin = CodexPlugin()
+        parsed = plugin.parse_output(MOCK_CODEX_OUTPUT)
 
         # Invariant: thread_id becomes session_id
         assert parsed.session_id == "codex-thread-def456"

@@ -1,38 +1,38 @@
 """
-Unit Tests: CLI output parsers.
+Unit Tests: CLI output parsing.
 
-Tests parser logic in isolation - no subprocess, no I/O.
+Tests parsing logic in isolation via plugin's parse_output() method.
 """
 
 
-class TestClaudeParser:
-    """Unit tests for ClaudeParser."""
+class TestClaudePluginParsing:
+    """Unit tests for Claude plugin parsing."""
 
     def test_extracts_session_id_from_init_event(self):
         """Parser extracts session_id from the init event."""
-        from mcp_the_force.cli_agents.parsers.claude import ClaudeParser
+        from mcp_the_force.cli_plugins.claude import ClaudePlugin
 
         output = '[{"type":"system","subtype":"init","session_id":"test-123"}]'
 
-        parser = ClaudeParser()
-        result = parser.parse(output)
+        plugin = ClaudePlugin()
+        result = plugin.parse_output(output)
 
         assert result.session_id == "test-123"
 
     def test_extracts_content_from_result_event(self):
         """Parser extracts content from the result event."""
-        from mcp_the_force.cli_agents.parsers.claude import ClaudeParser
+        from mcp_the_force.cli_plugins.claude import ClaudePlugin
 
         output = '[{"type":"result","subtype":"success","result":"Hello world"}]'
 
-        parser = ClaudeParser()
-        result = parser.parse(output)
+        plugin = ClaudePlugin()
+        result = plugin.parse_output(output)
 
         assert result.content == "Hello world"
 
     def test_handles_multiple_events(self):
         """Parser handles array with multiple events."""
-        from mcp_the_force.cli_agents.parsers.claude import ClaudeParser
+        from mcp_the_force.cli_plugins.claude import ClaudePlugin
 
         output = """[
             {"type":"system","subtype":"init","session_id":"abc-123"},
@@ -40,109 +40,109 @@ class TestClaudeParser:
             {"type":"result","subtype":"success","result":"Done!"}
         ]"""
 
-        parser = ClaudeParser()
-        result = parser.parse(output)
+        plugin = ClaudePlugin()
+        result = plugin.parse_output(output)
 
         assert result.session_id == "abc-123"
         assert "Done" in result.content
 
     def test_handles_empty_output(self):
         """Parser handles empty/invalid output gracefully."""
-        from mcp_the_force.cli_agents.parsers.claude import ClaudeParser
+        from mcp_the_force.cli_plugins.claude import ClaudePlugin
 
-        parser = ClaudeParser()
-        result = parser.parse("")
+        plugin = ClaudePlugin()
+        result = plugin.parse_output("")
 
         assert result.session_id is None
         assert result.content == ""
 
     def test_handles_malformed_json(self):
         """Parser handles malformed JSON without crashing."""
-        from mcp_the_force.cli_agents.parsers.claude import ClaudeParser
+        from mcp_the_force.cli_plugins.claude import ClaudePlugin
 
-        parser = ClaudeParser()
-        result = parser.parse("not valid json {{{")
+        plugin = ClaudePlugin()
+        result = plugin.parse_output("not valid json {{{")
 
         assert result.session_id is None
 
 
-class TestGeminiParser:
-    """Unit tests for GeminiParser."""
+class TestGeminiPluginParsing:
+    """Unit tests for Gemini plugin parsing."""
 
     def test_extracts_session_id(self):
         """Parser extracts session_id from JSON object."""
-        from mcp_the_force.cli_agents.parsers.gemini import GeminiParser
+        from mcp_the_force.cli_plugins.gemini import GeminiPlugin
 
         output = '{"session_id":"gemini-456","response":"Hello"}'
 
-        parser = GeminiParser()
-        result = parser.parse(output)
+        plugin = GeminiPlugin()
+        result = plugin.parse_output(output)
 
         assert result.session_id == "gemini-456"
 
     def test_extracts_response_as_content(self):
         """Parser extracts response field as content."""
-        from mcp_the_force.cli_agents.parsers.gemini import GeminiParser
+        from mcp_the_force.cli_plugins.gemini import GeminiPlugin
 
         output = '{"session_id":"gemini-456","response":"The answer is 42"}'
 
-        parser = GeminiParser()
-        result = parser.parse(output)
+        plugin = GeminiPlugin()
+        result = plugin.parse_output(output)
 
         assert result.content == "The answer is 42"
 
     def test_handles_missing_fields(self):
         """Parser handles missing optional fields."""
-        from mcp_the_force.cli_agents.parsers.gemini import GeminiParser
+        from mcp_the_force.cli_plugins.gemini import GeminiPlugin
 
         output = '{"response":"Just content"}'
 
-        parser = GeminiParser()
-        result = parser.parse(output)
+        plugin = GeminiPlugin()
+        result = plugin.parse_output(output)
 
         assert result.session_id is None
         assert result.content == "Just content"
 
 
-class TestCodexParser:
-    """Unit tests for CodexParser."""
+class TestCodexPluginParsing:
+    """Unit tests for Codex plugin parsing."""
 
     def test_extracts_thread_id_as_session_id(self):
         """Parser extracts thread_id and maps to session_id."""
-        from mcp_the_force.cli_agents.parsers.codex import CodexParser
+        from mcp_the_force.cli_plugins.codex import CodexPlugin
 
         output = '{"thread_id":"thread-789","type":"thread.started"}'
 
-        parser = CodexParser()
-        result = parser.parse(output)
+        plugin = CodexPlugin()
+        result = plugin.parse_output(output)
 
         assert result.session_id == "thread-789"
 
     def test_handles_jsonl_multiline(self):
         """Parser handles JSONL (multiple JSON lines)."""
-        from mcp_the_force.cli_agents.parsers.codex import CodexParser
+        from mcp_the_force.cli_plugins.codex import CodexPlugin
 
         output = """{"thread_id":"thread-789","type":"thread.started"}
 {"type":"turn.started"}
 {"type":"item.completed","content":"Result here"}
 {"type":"turn.completed"}"""
 
-        parser = CodexParser()
-        result = parser.parse(output)
+        plugin = CodexPlugin()
+        result = plugin.parse_output(output)
 
         assert result.session_id == "thread-789"
         assert "Result" in result.content
 
     def test_aggregates_content_from_multiple_items(self):
         """Parser aggregates content from item.completed events."""
-        from mcp_the_force.cli_agents.parsers.codex import CodexParser
+        from mcp_the_force.cli_plugins.codex import CodexPlugin
 
         output = """{"thread_id":"t1","type":"thread.started"}
 {"type":"item.completed","content":"Part 1"}
 {"type":"item.completed","content":"Part 2"}"""
 
-        parser = CodexParser()
-        result = parser.parse(output)
+        plugin = CodexPlugin()
+        result = plugin.parse_output(output)
 
         assert "Part 1" in result.content
         assert "Part 2" in result.content
@@ -153,7 +153,7 @@ class TestParsedCLIResponse:
 
     def test_dataclass_creation(self):
         """ParsedCLIResponse can be created with required fields."""
-        from mcp_the_force.cli_agents.parsers.base import ParsedCLIResponse
+        from mcp_the_force.cli_plugins.base import ParsedCLIResponse
 
         response = ParsedCLIResponse(
             session_id="test-id",
@@ -165,7 +165,7 @@ class TestParsedCLIResponse:
 
     def test_optional_metadata(self):
         """ParsedCLIResponse supports optional metadata."""
-        from mcp_the_force.cli_agents.parsers.base import ParsedCLIResponse
+        from mcp_the_force.cli_plugins.base import ParsedCLIResponse
 
         response = ParsedCLIResponse(
             session_id="test-id",

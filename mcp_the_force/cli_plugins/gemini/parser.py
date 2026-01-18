@@ -1,20 +1,20 @@
 """
-GeminiParser: Parse Gemini CLI JSON object output.
+Gemini CLI Parser Implementation.
 
-Gemini outputs a JSON object:
-{"session_id": "...", "response": "...", "stats": {...}}
+Parses output from Google Gemini CLI.
 """
 
 import json
 
-from mcp_the_force.cli_agents.parsers.base import ParsedCLIResponse
+from mcp_the_force.cli_plugins.base import ParsedCLIResponse
 
 
 class GeminiParser:
     """
     Parses Gemini CLI output format.
 
-    Expected format: JSON object with session_id and response fields.
+    Expected format: JSON object
+    - {"session_id": "...", "response": "...", "stats": {...}}
     """
 
     def parse(self, output: str) -> ParsedCLIResponse:

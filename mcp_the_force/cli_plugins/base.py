@@ -1,14 +1,39 @@
 """
-Base CLI Plugin Protocol.
+Base CLI Plugin Protocol and Types.
 
-Defines the interface that all CLI plugins must implement.
+Defines the interface that all CLI plugins must implement,
+plus shared types like ParsedCLIResponse.
 """
 
-from typing import List, Optional, Protocol
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional, Protocol
+
+
+@dataclass
+class ParsedCLIResponse:
+    """
+    Unified response type from all CLI parsers.
+
+    Normalizes differences between CLI output formats into a common structure.
+    """
+
+    session_id: Optional[str]
+    """CLI-native session identifier (session_id for Claude/Gemini, thread_id for Codex)"""
+
+    content: str
+    """Extracted response content"""
+
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    """Optional metadata from the CLI output"""
 
 
 class CLIPlugin(Protocol):
-    """Protocol for CLI plugins that handle command building and output parsing."""
+    """
+    Protocol for CLI plugins that handle command building and output parsing.
+
+    Each CLI (Claude, Gemini, Codex) has its own plugin implementation
+    in a dedicated subfolder (e.g., cli_plugins/claude/).
+    """
 
     @property
     def executable(self) -> str:
@@ -52,5 +77,17 @@ class CLIPlugin(Protocol):
 
         Returns:
             List of command arguments (not including executable)
+        """
+        ...
+
+    def parse_output(self, output: str) -> ParsedCLIResponse:
+        """
+        Parse CLI output into a structured response.
+
+        Args:
+            output: Raw CLI output (JSON, JSONL, etc.)
+
+        Returns:
+            ParsedCLIResponse with session_id and content
         """
         ...

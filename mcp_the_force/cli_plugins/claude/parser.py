@@ -1,23 +1,22 @@
 """
-ClaudeParser: Parse Claude CLI JSON array output.
+Claude CLI Parser Implementation.
 
-Claude outputs a JSON array with events:
-- {"type": "system", "subtype": "init", "session_id": "..."}
-- {"type": "result", "subtype": "success", "result": "..."}
+Parses output from Anthropic Claude Code CLI.
 """
 
 import json
 from typing import Any, List
 
-from mcp_the_force.cli_agents.parsers.base import ParsedCLIResponse
+from mcp_the_force.cli_plugins.base import ParsedCLIResponse
 
 
 class ClaudeParser:
     """
     Parses Claude CLI output format.
 
-    Expected format: JSON array with init event containing session_id
-    and result event containing the response.
+    Expected format: JSON array with events
+    - {"type": "system", "subtype": "init", "session_id": "..."}
+    - {"type": "result", "subtype": "success", "result": "..."}
     """
 
     def parse(self, output: str) -> ParsedCLIResponse:

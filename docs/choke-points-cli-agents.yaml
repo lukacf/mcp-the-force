@@ -16,8 +16,7 @@ choke_points:
     components:
       - SessionBridge (SQLite persistence)
       - CLIExecutor (subprocess management)
-      - Parsers (Claude/Gemini/Codex output parsing)
-      - CommandBuilder (resume flag injection)
+      - CLI Plugins (command building + output parsing via plugin.parse_output())
 
     invariants:
       - "Same Force session_id + CLI → same CLI session (resume works)"
@@ -196,6 +195,7 @@ choke_points:
         - tests/rct/test_cli_plugin_registration.py::test_cli_plugin_decorator_registers_plugin
         - tests/rct/test_cli_plugin_registration.py::test_cli_plugin_registry_roundtrip
         - tests/rct/test_cli_plugin_registration.py::test_unknown_cli_returns_none
+        - tests/rct/test_cli_plugin_registration.py::test_production_plugins_registered_on_package_import
 
       integration:
         - tests/integration/cli_agents/test_model_cli_map.py::test_all_cli_mappings_are_valid_plugins
@@ -204,6 +204,7 @@ choke_points:
         - tests/integration/cli_agents/test_cli_plugin.py::test_codex_plugin_registered
         - tests/integration/cli_agents/test_cli_plugin.py::test_plugin_implements_protocol
         - tests/integration/cli_agents/test_cli_plugin.py::test_all_blueprints_with_cli_have_valid_plugins
+        - tests/integration/cli_agents/test_cli_plugin.py::test_plugin_parse_output_delegates_to_parser
 
     rct_findings:
       - "Decorator pattern ensures import-time registration"
@@ -251,14 +252,13 @@ summary:
   coverage_by_component:
     SessionBridge: 6 tests
     CLIExecutor: 5 tests
-    Parsers: 13 tests (unit)
+    CLI_Plugins: 23 tests (13 parser unit + 10 command builder unit)
     Compactor: 5 tests (integration) + 7 tests (unit)
-    CommandBuilder: 10 tests (unit)
     Summarizer: 8 tests (unit)
     Environment: 9 tests (unit)
     CLIAgentService: 4 tests
     ConsultationService: 2 tests
     TOOL_REGISTRY: 4 tests
     UnifiedSessionCache: 3 tests
-    CLI_PLUGIN_REGISTRY: 9 tests (3 RCT + 6 integration)
+    CLI_PLUGIN_REGISTRY: 10 tests (4 RCT + 6 integration)
     ModelCLIResolver: 6 tests (integration)

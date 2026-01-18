@@ -138,6 +138,36 @@ def test_list_cli_plugins_returns_all_registered():
     assert "rct_list_test_b" in plugins
 
 
+@pytest.mark.rct
+def test_production_plugins_registered_on_package_import():
+    """
+    RCT: Importing cli_plugins package auto-registers production plugins.
+
+    Given: The cli_plugins package __init__.py imports plugin submodules
+    When: We import the package
+    Then: Claude, Gemini, and Codex plugins are registered in CLI_PLUGIN_REGISTRY
+
+    This validates the import-time registration mechanism that triggers
+    @cli_plugin decorators when the package is imported.
+    """
+    # Import the package (this triggers __init__.py which imports plugin submodules)
+    from mcp_the_force.cli_plugins import get_cli_plugin
+
+    # These must be registered via __init__.py imports
+    claude = get_cli_plugin("claude")
+    gemini = get_cli_plugin("gemini")
+    codex = get_cli_plugin("codex")
+
+    assert claude is not None, "Claude plugin not auto-registered on package import"
+    assert gemini is not None, "Gemini plugin not auto-registered on package import"
+    assert codex is not None, "Codex plugin not auto-registered on package import"
+
+    # Verify they have the expected executables
+    assert claude.executable == "claude"
+    assert gemini.executable == "gemini"
+    assert codex.executable == "codex"
+
+
 def test_cli_plugin_registration_rct_loads():
     """Meta-test: Verify RCT test file loads correctly."""
     assert True

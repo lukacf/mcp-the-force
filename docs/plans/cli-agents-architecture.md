@@ -143,27 +143,31 @@ mcp_the_force/
 │   ├── cli_agent_service.py  # CLIAgentService.execute()
 │   └── consultation_service.py # ConsultationService.execute()
 │
-├── cli_plugins/              # NEW: CLI-specific plugins
-│   ├── __init__.py
-│   ├── base.py               # CLIPlugin protocol
-│   ├── registry.py           # get_cli_plugin() registry
-│   ├── claude.py             # Claude Code CLI plugin
-│   ├── gemini.py             # Gemini CLI plugin
-│   └── codex.py              # Codex CLI plugin
+├── cli_plugins/              # Self-contained CLI plugins
+│   ├── __init__.py           # Exports and plugin auto-registration
+│   ├── base.py               # CLIPlugin protocol + ParsedCLIResponse
+│   ├── registry.py           # @cli_plugin decorator, get_cli_plugin()
+│   ├── claude/               # Claude Code CLI plugin
+│   │   ├── __init__.py
+│   │   ├── plugin.py         # Command building, executable
+│   │   └── parser.py         # Output parsing
+│   ├── gemini/               # Gemini CLI plugin
+│   │   ├── __init__.py
+│   │   ├── plugin.py         # Command building, executable
+│   │   └── parser.py         # Output parsing
+│   └── codex/                # Codex CLI plugin
+│       ├── __init__.py
+│       ├── plugin.py         # Command building, executable
+│       └── parser.py         # Output parsing
 │
-└── cli_agents/               # NEW MODULE
+└── cli_agents/               # CLI subprocess orchestration
     ├── __init__.py
     ├── model_cli_resolver.py # Model name → CLI name resolution
     ├── executor.py           # CLIExecutor - subprocess management
     ├── session_bridge.py     # CLI session ID mapping
-    ├── environment.py        # HOME isolation, config generation
+    ├── environment.py        # HOME isolation (EnvironmentBuilder)
     ├── compactor.py          # History summarization for handoffs
     ├── summarizer.py         # Output summarization
-    ├── parsers/
-    │   ├── base.py           # BaseParser, <SUMMARY> extraction
-    │   ├── claude.py         # Claude JSON parsing
-    │   ├── gemini.py         # Gemini JSON parsing
-    │   └── codex.py          # Codex JSONL parsing
     └── roles/
         ├── default.txt       # General assistant prompt
         ├── planner.txt       # Design/architecture prompt
@@ -360,18 +364,31 @@ def list_cli_plugins() -> List[str]:
 ```
 
 ```python
-# In cli_plugins/codex.py
+# In cli_plugins/codex/plugin.py
 @cli_plugin("codex")
 class CodexPlugin:
-    name = "codex"
-    executable = "codex"
+    """CLI plugin for OpenAI Codex CLI."""
 
-    def build_new_session_args(self, task, context_dirs):
-        return ["exec", "--json", task]
+    def __init__(self) -> None:
+        self._parser = CodexParser()
 
-    def build_resume_args(self, session_id, task):
+    @property
+    def executable(self) -> str:
+        return "codex"
+
+    def build_new_session_args(self, task, context_dirs, role=None, cli_flags=None):
+        args = ["exec", "--json"]
+        for dir_path in context_dirs:
+            args.extend(["--context", dir_path])
+        args.append(task)
+        return args
+
+    def build_resume_args(self, session_id, task, cli_flags=None):
         # Codex uses subcommand, NOT flag!
-        return ["exec", "resume", session_id, "--json"]
+        return ["exec", "resume", session_id, "--json", task]
+
+    def parse_output(self, output: str) -> ParsedCLIResponse:
+        return self._parser.parse(output)
 ```
 
 **Critical difference in resume patterns**:
@@ -855,20 +872,44 @@ These behaviors were discovered during Phase 0 RCT validation:
 
 ### Adding a New CLI Agent
 
-1. **Create parser** in `cli_agents/parsers/{name}.py`:
+1. **Create plugin folder** in `cli_plugins/{name}/`:
+   ```
+   cli_plugins/{name}/
+   ├── __init__.py
+   ├── plugin.py   # @cli_plugin("{name}") decorated class
+   └── parser.py   # {Name}Parser class
+   ```
+
+2. **Implement plugin** in `cli_plugins/{name}/plugin.py`:
    ```python
-   class NewCLIParser(BaseParser):
+   @cli_plugin("{name}")
+   class NewCLIPlugin:
+       def __init__(self) -> None:
+           self._parser = NewCLIParser()
+
+       @property
+       def executable(self) -> str:
+           return "{name}"
+
+       def build_new_session_args(self, task, context_dirs, role=None, cli_flags=None):
+           ...
+
+       def build_resume_args(self, session_id, task, cli_flags=None):
+           ...
+
+       def parse_output(self, output: str) -> ParsedCLIResponse:
+           return self._parser.parse(output)
+   ```
+
+3. **Implement parser** in `cli_plugins/{name}/parser.py`:
+   ```python
+   class NewCLIParser:
        def parse(self, stdout: str) -> ParsedCLIResponse: ...
    ```
 
-2. **Add to CommandBuilder** in `cli_agents/environment.py`:
-   ```python
-   def _build_newcli_command(self, task, role, resume_id, context): ...
-   ```
+4. **Add to capabilities matrix** in spec (Phase 0 RCT)
 
-3. **Add to capabilities matrix** in spec (Phase 0 RCT)
-
-4. **Add to CLIAgentService** dispatcher
+5. **Add to CLIAgentService** dispatcher
 
 ### Adding a New Role
 

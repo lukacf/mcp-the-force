@@ -91,6 +91,7 @@ def test_plugin_implements_protocol():
         assert hasattr(
             plugin, "build_resume_args"
         ), f"{name} plugin missing build_resume_args"
+        assert hasattr(plugin, "parse_output"), f"{name} plugin missing parse_output"
 
         # Check executable is a string
         assert isinstance(
@@ -153,6 +154,46 @@ def test_plugin_builds_valid_commands():
     assert "exec" in codex_resume  # Codex uses 'exec resume', NOT --resume
     assert "resume" in codex_resume
     assert "--resume" not in codex_resume  # This would be wrong for Codex!
+
+
+@pytest.mark.integration
+@pytest.mark.cli_agents
+def test_plugin_parse_output_delegates_to_parser():
+    """
+    CP-CLI-PLUGIN + CP-PARSER: Plugin.parse_output() delegates to its internal parser.
+
+    Given: A CLI plugin with its internal parser
+    When: parse_output is called with valid CLI output
+    Then: It correctly extracts session_id and content via the parser
+    """
+    from mcp_the_force.cli_plugins.claude import ClaudePlugin
+    from mcp_the_force.cli_plugins.gemini import GeminiPlugin
+    from mcp_the_force.cli_plugins.codex import CodexPlugin
+
+    # Claude: JSON array format
+    claude_output = '[{"type":"system","subtype":"init","session_id":"claude-test-123","tools":[]},{"type":"result","subtype":"success","result":"Hello from Claude"}]'
+    claude_plugin = ClaudePlugin()
+    claude_result = claude_plugin.parse_output(claude_output)
+    assert claude_result.session_id == "claude-test-123"
+    assert "Hello" in claude_result.content
+
+    # Gemini: JSON object format
+    gemini_output = (
+        '{"session_id":"gemini-test-456","response":"Hello from Gemini","stats":{}}'
+    )
+    gemini_plugin = GeminiPlugin()
+    gemini_result = gemini_plugin.parse_output(gemini_output)
+    assert gemini_result.session_id == "gemini-test-456"
+    assert "Hello" in gemini_result.content
+
+    # Codex: JSONL format with thread_id (NOT session_id)
+    codex_output = '{"type":"thread.started","thread_id":"codex-thread-789"}\n{"type":"item.completed","content":"Hello from Codex"}'
+    codex_plugin = CodexPlugin()
+    codex_result = codex_plugin.parse_output(codex_output)
+    assert (
+        codex_result.session_id == "codex-thread-789"
+    )  # thread_id mapped to session_id
+    assert "Hello" in codex_result.content
 
 
 def test_cli_plugin_integration_tests_load():
