@@ -4,8 +4,15 @@ CLIExecutor: Subprocess management for CLI agent execution.
 Handles spawning, environment isolation, output capture, and timeout.
 """
 
+import asyncio
+import logging
 from dataclasses import dataclass
 from typing import Dict, List, Optional
+
+logger = logging.getLogger(__name__)
+
+# Maximum output capture size (10MB)
+MAX_OUTPUT_SIZE = 10 * 1024 * 1024
 
 
 @dataclass
@@ -47,4 +54,86 @@ class CLIExecutor:
         Returns:
             CLIResult with stdout, stderr, return_code, and timed_out flag
         """
-        raise NotImplementedError("CLIExecutor.execute not implemented")
+        logger.debug(f"Executing command: {' '.join(command[:3])}...")
+
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *command,
+                env=env,
+                cwd=cwd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+
+            try:
+                stdout_bytes, stderr_bytes = await asyncio.wait_for(
+                    process.communicate(),
+                    timeout=timeout,
+                )
+
+                # Limit output size
+                stdout = stdout_bytes.decode("utf-8", errors="replace")[
+                    :MAX_OUTPUT_SIZE
+                ]
+                stderr = stderr_bytes.decode("utf-8", errors="replace")[
+                    :MAX_OUTPUT_SIZE
+                ]
+
+                return CLIResult(
+                    stdout=stdout,
+                    stderr=stderr,
+                    return_code=process.returncode or 0,
+                    timed_out=False,
+                )
+
+            except asyncio.TimeoutError:
+                logger.warning(f"Command timed out after {timeout}s, killing process")
+                process.kill()
+                await process.wait()
+
+                # Capture any partial output
+                stdout = ""
+                stderr = ""
+                if process.stdout:
+                    try:
+                        partial = await asyncio.wait_for(
+                            process.stdout.read(MAX_OUTPUT_SIZE),
+                            timeout=1,
+                        )
+                        stdout = partial.decode("utf-8", errors="replace")
+                    except (asyncio.TimeoutError, Exception):
+                        pass
+
+                if process.stderr:
+                    try:
+                        partial = await asyncio.wait_for(
+                            process.stderr.read(MAX_OUTPUT_SIZE),
+                            timeout=1,
+                        )
+                        stderr = partial.decode("utf-8", errors="replace")
+                    except (asyncio.TimeoutError, Exception):
+                        pass
+
+                return CLIResult(
+                    stdout=stdout,
+                    stderr=stderr,
+                    return_code=-1,
+                    timed_out=True,
+                )
+
+        except FileNotFoundError:
+            logger.error(f"Command not found: {command[0]}")
+            return CLIResult(
+                stdout="",
+                stderr=f"Command not found: {command[0]}",
+                return_code=127,
+                timed_out=False,
+            )
+        except Exception as e:
+            logger.error(f"Execution error: {e}")
+            return CLIResult(
+                stdout="",
+                stderr=str(e),
+                return_code=-1,
+                timed_out=False,
+            )

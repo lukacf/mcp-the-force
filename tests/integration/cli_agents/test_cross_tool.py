@@ -41,7 +41,7 @@ async def test_compactor_formats_history_when_fits(isolate_test_databases):
 @pytest.mark.integration
 @pytest.mark.cli_agents
 @pytest.mark.asyncio
-async def test_compactor_summarizes_when_exceeds_limit(isolate_test_databases):
+async def test_compactor_summarizes_when_exceeds_limit(isolate_test_databases, mocker):
     """
     CP-CROSS-TOOL: History summarization.
 
@@ -50,6 +50,14 @@ async def test_compactor_summarizes_when_exceeds_limit(isolate_test_databases):
     Then: History is summarized via API model
     """
     from mcp_the_force.cli_agents.compactor import Compactor
+
+    # Mock the summarizer to return a short summary
+    # (MockAdapter echoes full prompt, defeating the test)
+    mock_summary = "Summary: 100 messages about repeated x patterns."
+    mocker.patch(
+        "mcp_the_force.cli_agents.compactor.Compactor._call_summarizer",
+        return_value=mock_summary,
+    )
 
     # Create large history that would exceed limits
     large_history = [
@@ -66,6 +74,7 @@ async def test_compactor_summarizes_when_exceeds_limit(isolate_test_databases):
     # Result should be shorter than original (summarized)
     original_length = sum(len(m["content"]) for m in large_history)
     assert len(result) < original_length
+    assert mock_summary in result
 
 
 @pytest.mark.integration
