@@ -410,8 +410,8 @@ python -m pytest tests/integration/cli_agents/test_cli_plugin.py -v --tb=short 2
 - [ ] **2.4** Implement environment isolation (`mcp_the_force/cli_agents/environment.py`)
   - Session directory creation (`~/.mcp-the-force/cli_sessions/{session_id}/{cli}/`)
   - HOME redirection
-  - Minimal CLI config generation
-  - Command builder per CLI (include `--add-dir` for project root)
+  - Minimal CLI config generation (no MCPs, safe defaults)
+  - **Note**: Command building is in CLI plugins (`cli_plugins/*.py`), not here
   - **Unit tests green**
 
 - [ ] **2.4.1** Implement CLI availability checker (`mcp_the_force/cli_agents/availability.py`)
