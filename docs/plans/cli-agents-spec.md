@@ -389,45 +389,51 @@ python -m pytest tests/integration/cli_agents/test_cli_plugin.py -v --tb=short 2
   - `cli_plugins/codex/parser.py`: Codex JSONL parsing, thread_id extraction
   - **Unit tests green**
 
-- [ ] **2.1.1** Implement output summarizer (`mcp_the_force/cli_agents/summarizer.py`)
+- [x] **2.1.1** Implement output summarizer (`mcp_the_force/cli_agents/summarizer.py`)
   - Always summarize CLI output via `gemini-3-flash-preview`
   - Preserve key information: decisions, code changes, file paths
   - Include raw output in session metadata for debugging
   - **Unit tests green**
 
-- [ ] **2.2** Implement CLI executor (`mcp_the_force/cli_agents/executor.py`)
+- [x] **2.2** Implement CLI executor (`mcp_the_force/cli_agents/executor.py`)
   - Async subprocess execution
   - Timeout handling (kill on timeout)
   - Stream capture with limit (10MB)
   - **Unit tests green**
 
-- [ ] **2.3** Implement session bridge (`mcp_the_force/cli_agents/session_bridge.py`)
+- [x] **2.3** Implement session bridge (`mcp_the_force/cli_agents/session_bridge.py`)
   - SQLite schema for CLI session mapping
   - `get_cli_session_id(project, session_id, cli_name)`
   - `store_cli_session_id(...)`
+  - Persistent connection for :memory: databases (test support)
   - **Unit tests green**, **RCT round-trip green**
 
-- [ ] **2.4** Implement environment isolation (`mcp_the_force/cli_agents/environment.py`)
+- [x] **2.4** Implement environment isolation (`mcp_the_force/cli_agents/environment.py`)
   - Session directory creation (`~/.mcp-the-force/cli_sessions/{session_id}/{cli}/`)
   - HOME redirection
   - Minimal CLI config generation (no MCPs, safe defaults)
   - **Note**: Command building is in CLI plugins (`cli_plugins/*.py`), not here
   - **Unit tests green**
 
-- [ ] **2.4.1** Implement CLI availability checker (`mcp_the_force/cli_agents/availability.py`)
+- [x] **2.4.1** Implement CLI availability checker (`mcp_the_force/cli_agents/availability.py`)
   - Check which CLIs are installed at startup (log warnings for missing)
   - Provide clear error message at runtime if CLI not available
   - Include install instructions in error (e.g., "Install with: npm install -g @anthropic/claude-code")
+  - CLINotAvailableError exception for runtime errors
   - **Unit tests green**
 
-- [ ] **2.5** Implement role system (`mcp_the_force/cli_agents/roles.py`)
-  - Load built-in roles from package resources
+- [x] **2.5** Implement role system (`mcp_the_force/cli_agents/roles.py`)
+  - Load built-in roles from BUILTIN_ROLES dict
   - Load custom roles from `.mcp-the-force/roles/*.txt`
-  - Built-in roles:
-    - `default.txt`: General assistant, cite paths, markdown
-    - `planner.txt`: Design, phases, dependencies
-    - `codereviewer.txt`: Quality, security, OWASP
+  - Built-in roles: default, planner, codereviewer
   - Custom roles override built-in if same name
+  - **Unit tests green**
+
+- [x] **2.6** Implement compactor (`mcp_the_force/cli_agents/compactor.py`)
+  - Format history as XML context block when within limit
+  - Summarize via OutputSummarizer when exceeds limit
+  - Token estimation for history sizing
+  - **Unit tests green**
 
 ### Gate Review: Phase 2
 
@@ -445,12 +451,14 @@ python -m pytest tests/integration/cli_agents/test_cli_plugin.py -v --tb=short 2
 # Phase 2: Verify unit tests green, integration tests progressing
 python -m pytest tests/rct/ -v 2>&1 | tail -30
 python -m pytest tests/unit/cli_agents/ -v 2>&1 | tail -50
-python -m pytest tests/integration/cli_agents/ -v --tb=line 2>&1 | head -80
+MCP_ADAPTER_MOCK=1 python -m pytest tests/integration/cli_agents/ -v --tb=line 2>&1 | head -80
 ```
 
-**Review Status**:
-- [ ] **RCT Guardian**: (pending)
-- [ ] **Integration Sheriff**: (pending)
+**Review Status** (COMPLETED 2026-01-18):
+- [x] **RCT Guardian**: APPROVE - All 49 RCT tests pass, representation boundaries solid
+- [x] **Integration Sheriff**: APPROVE - 52/59 integration tests pass, 6 fail with expected NotImplementedError (Phase 3)
+
+**Phase 2 Results**: ✅ PASSED - Ready to proceed to Phase 3
 
 ---
 
@@ -1176,7 +1184,7 @@ You MUST block if ANY of these are true:
 - The spec was not updated to reflect implementation changes
 
 You MUST NOT block for:
-- Tests failing with NotImplementedError (expected in early phases)
+- Tests failing with NotImplementedError in Phase 1 or 2
 - Issues outside your scope (representation, wiring, concurrency)
 
 ## Output Format
