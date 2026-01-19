@@ -39,16 +39,20 @@ class CodexPlugin:
         role: Optional[str] = None,
         cli_flags: Optional[str] = None,
     ) -> List[str]:
-        """Build args for a new Codex CLI session."""
-        args = ["exec", "--json"]
+        """Build args for a new Codex CLI session.
 
-        # Add context directories
-        for dir_path in context_dirs:
-            args.extend(["--context", dir_path])
+        Note: Codex CLI doesn't support --role or --context flags.
+        Role is ignored; context must be provided via working directory.
+        """
+        # --skip-git-repo-check allows execution in non-git directories
+        # --yolo skips permission prompts
+        args = ["exec", "--json", "--skip-git-repo-check", "--yolo"]
 
-        # Add role if specified
-        if role:
-            args.extend(["--role", role])
+        # Note: Codex CLI doesn't support --context flag
+        # Context is provided via working directory instead
+
+        # Note: Codex CLI doesn't support --role flag
+        # Role/system prompt is not configurable in Codex
 
         # Add any extra CLI flags
         if cli_flags:
@@ -69,7 +73,16 @@ class CodexPlugin:
 
         Note: Codex uses 'exec resume' pattern, NOT --resume flag.
         """
-        args = ["exec", "resume", session_id, "--json"]
+        # --skip-git-repo-check allows execution in non-git directories
+        # --yolo skips permission prompts
+        args = [
+            "exec",
+            "resume",
+            session_id,
+            "--json",
+            "--skip-git-repo-check",
+            "--yolo",
+        ]
 
         # Add any extra CLI flags
         if cli_flags:

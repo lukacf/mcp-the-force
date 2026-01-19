@@ -20,9 +20,9 @@ async def populated_session_db(isolate_test_databases):
     project_name = os.path.basename(project_path)
 
     # Create a few test sessions with the correct project name
+    # Note: Session key is (project, session_id) - tool info is per-turn in history
     session1 = UnifiedSession(
         project=project_name,
-        tool="chat_with_gpt52",
         session_id="test-session-1",
         history=[{"role": "user", "content": "Hello"}],
         updated_at=int(time.time()),
@@ -31,7 +31,6 @@ async def populated_session_db(isolate_test_databases):
 
     session2 = UnifiedSession(
         project=project_name,
-        tool="chat_with_gemini3_pro_preview",
         session_id="test-session-2",
         history=[{"role": "user", "content": "Test query"}],
         updated_at=int(time.time()),
@@ -41,7 +40,6 @@ async def populated_session_db(isolate_test_databases):
     # Create a session with a summary for testing JOIN
     summary_session = UnifiedSession(
         project=project_name,
-        tool="chat_with_gpt41",
         session_id="test-session-with-summary",
         history=[{"role": "user", "content": "Long conversation"}],
         updated_at=int(time.time()),
@@ -51,7 +49,6 @@ async def populated_session_db(isolate_test_databases):
     # This will be added later when we implement summary caching
     # await UnifiedSessionCache.set_summary(
     #     summary_session.project,
-    #     summary_session.tool,
     #     summary_session.session_id,
     #     "This is a cached summary."
     # )
@@ -75,12 +72,10 @@ class TestListSessionsService:
         # Should return all 3 sessions
         assert len(result) == 3
 
-        # Each session should have session_id and tool_name
+        # Each session should have session_id
         for session in result:
             assert "session_id" in session
-            assert "tool_name" in session
             assert isinstance(session["session_id"], str)
-            assert isinstance(session["tool_name"], str)
 
         # Check specific sessions are present
         session_ids = [s["session_id"] for s in result]
@@ -113,11 +108,6 @@ class TestListSessionsService:
         assert len(result) == 1
         assert result[0]["session_id"] == "test-session-1"
 
-        # Search by tool name substring
-        result = await service.execute(search="gemini")
-        assert len(result) == 1
-        assert result[0]["tool_name"] == "chat_with_gemini3_pro_preview"
-
         # Search that matches multiple sessions
         result = await service.execute(search="test-session")
         assert len(result) == 3
@@ -135,7 +125,7 @@ class TestListSessionsService:
         project_name = os.path.basename(settings.logging.project_path or os.getcwd())
 
         await UnifiedSessionCache.set_summary(
-            project_name, "chat_with_gpt52", "test-session-1", "This is a test summary"
+            project_name, "test-session-1", "This is a test summary"
         )
 
         service = ListSessionsService()
@@ -206,9 +196,7 @@ class TestDescribeSessionService:
         assert result == "Cached summary from database"
 
         # Verify get_summary was called with correct parameters
-        mock_get_summary.assert_called_once_with(
-            project_name, "chat_with_gpt52", "test-session-1"
-        )
+        mock_get_summary.assert_called_once_with(project_name, "test-session-1")
 
         # Verify executor was NOT called
         mock_executor.assert_not_called()
@@ -267,9 +255,7 @@ class TestDescribeSessionService:
         temp_session = mock_set_session.call_args[0][0]
         assert temp_session.session_id.startswith("temp-summary-")
         assert temp_session.project == project_name
-        assert (
-            temp_session.tool == "chat_with_gemini3_flash_preview"
-        )  # Should use summarization model
+        # Note: tool is no longer stored at session level, it's verified via executor metadata below
 
         # Verify executor was called with the temp session and model
         mock_executor.assert_called_once()
@@ -281,7 +267,6 @@ class TestDescribeSessionService:
         # Verify summary was cached for the original session
         mock_set_summary.assert_called_once_with(
             project_name,
-            "chat_with_gpt52",
             "test-session-1",
             mock_json_summary,
         )
@@ -446,7 +431,6 @@ class TestDescribeSessionService:
         # First, set up a cached summary
         await UnifiedSessionCache.set_summary(
             project_name,
-            "chat_with_gpt52",
             "test-session-1",
             json.dumps(
                 {
@@ -493,6 +477,4 @@ class TestDescribeSessionService:
         mock_executor.assert_called_once()
 
         # Verify new summary was cached
-        mock_set_summary.assert_called_with(
-            project_name, "chat_with_gpt52", "test-session-1", new_summary
-        )
+        mock_set_summary.assert_called_with(project_name, "test-session-1", new_summary)

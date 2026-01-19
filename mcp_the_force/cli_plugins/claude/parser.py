@@ -24,18 +24,32 @@ class ClaudeParser:
         Parse Claude CLI output.
 
         Args:
-            output: Raw Claude CLI output (JSON array)
+            output: Raw Claude CLI output (JSON from --output-format=json)
 
         Returns:
             ParsedCLIResponse with session_id and content
+
+        Handles two formats:
+        - Single JSON object: {"type": "result", "result": "...", "session_id": "..."}
+        - JSON array: [{"type": "system", ...}, {"type": "result", ...}]
         """
         if not output or not output.strip():
             return ParsedCLIResponse(session_id=None, content="")
 
         try:
-            events: List[Any] = json.loads(output)
+            parsed = json.loads(output)
         except json.JSONDecodeError:
-            return ParsedCLIResponse(session_id=None, content="")
+            # Fallback: treat as plain text if JSON parsing fails
+            return ParsedCLIResponse(session_id=None, content=output.strip())
+
+        # Handle single object vs array
+        if isinstance(parsed, dict):
+            events: List[Any] = [parsed]
+        elif isinstance(parsed, list):
+            events = parsed
+        else:
+            # Unexpected type, treat as plain text
+            return ParsedCLIResponse(session_id=None, content=output.strip())
 
         session_id = None
         content = ""
@@ -44,8 +58,11 @@ class ClaudeParser:
             if not isinstance(event, dict):
                 continue
 
-            # Extract session_id from init event
+            # Extract session_id from init event OR result event
             if event.get("type") == "system" and event.get("subtype") == "init":
+                session_id = event.get("session_id")
+            elif event.get("type") == "result" and event.get("session_id"):
+                # Result events also include session_id
                 session_id = event.get("session_id")
 
             # Extract content from result event

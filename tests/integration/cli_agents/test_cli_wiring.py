@@ -48,7 +48,7 @@ MOCK_GEMINI_OUTPUT = json.dumps(
 
 MOCK_CODEX_OUTPUT = """{"type":"thread.started","thread_id":"codex-thread-def456"}
 {"type":"turn.started"}
-{"type":"item.completed","content":"Task completed successfully"}
+{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"Task completed successfully"}}
 {"type":"turn.completed"}"""
 
 
@@ -92,9 +92,12 @@ class TestModelToCLICommandWiring:
         )
 
         # Invariant: Command has required structure
-        assert "--print" in command, "Claude needs --print for JSON output"
-        assert "-p" in command, "Claude needs -p for prompt"
-        assert "Test task" in command
+        assert "--print" in command, "Claude needs --print for non-interactive mode"
+        assert (
+            "--output-format" in command
+        ), "Claude needs --output-format for JSON output"
+        assert "json" in command, "Output format should be json"
+        assert "Test task" in command, "Task should be positional argument"
 
     def test_google_model_builds_gemini_command(self):
         """

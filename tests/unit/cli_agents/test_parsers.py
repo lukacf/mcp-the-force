@@ -122,9 +122,10 @@ class TestCodexPluginParsing:
         """Parser handles JSONL (multiple JSON lines)."""
         from mcp_the_force.cli_plugins.codex import CodexPlugin
 
+        # Codex output format: content is in item.text for agent_message type
         output = """{"thread_id":"thread-789","type":"thread.started"}
 {"type":"turn.started"}
-{"type":"item.completed","content":"Result here"}
+{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"Result here"}}
 {"type":"turn.completed"}"""
 
         plugin = CodexPlugin()
@@ -137,9 +138,10 @@ class TestCodexPluginParsing:
         """Parser aggregates content from item.completed events."""
         from mcp_the_force.cli_plugins.codex import CodexPlugin
 
+        # Codex output format: content is in item.text for agent_message type
         output = """{"thread_id":"t1","type":"thread.started"}
-{"type":"item.completed","content":"Part 1"}
-{"type":"item.completed","content":"Part 2"}"""
+{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"Part 1"}}
+{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"Part 2"}}"""
 
         plugin = CodexPlugin()
         result = plugin.parse_output(output)

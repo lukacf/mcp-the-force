@@ -1,33 +1,31 @@
 """
-Unit Tests: Output Summarizer (REQ-4.3.2).
+Unit Tests: Output Summarizer.
 
-Tests for the always-summarize behavior using gemini-3-flash-preview.
+Tests for threshold-based summarization using gemini-3-flash-preview.
 """
 
 import pytest
 from unittest.mock import AsyncMock, patch
 
 
-@pytest.mark.xfail(
-    reason="Phase 2: OutputSummarizer not yet implemented", raises=NotImplementedError
-)
 class TestOutputSummarizer:
     """Unit tests for output summarization."""
 
     @pytest.mark.asyncio
-    async def test_always_summarizes_cli_output(self):
+    async def test_summarizes_large_cli_output(self):
         """
-        REQ-4.3.2: CLI output is always summarized via API model.
+        CLI output is summarized when it exceeds size threshold.
 
-        Given: Raw CLI output (potentially large)
+        Given: Raw CLI output that exceeds the size threshold
         When: Output is processed for return to MCP client
-        Then: Summarization is always applied via gemini-3-flash-preview
+        Then: Summarization is applied via gemini-3-flash-preview
         """
         from mcp_the_force.cli_agents.summarizer import OutputSummarizer
 
-        raw_output = "A very long CLI output..." * 100
-
         summarizer = OutputSummarizer()
+
+        # Create output that exceeds the actual threshold
+        raw_output = "A" * (summarizer.size_threshold + 1000)
 
         with patch.object(
             summarizer, "_call_gemini_flash", new_callable=AsyncMock
@@ -36,9 +34,33 @@ class TestOutputSummarizer:
 
             result = await summarizer.summarize(raw_output)
 
-            # Should ALWAYS call the summarizer, regardless of output size
+            # Should call the summarizer when output exceeds threshold
             mock_summarize.assert_called_once()
             assert "Summary" in result
+
+    @pytest.mark.asyncio
+    async def test_returns_small_output_verbatim(self):
+        """
+        CLI output under threshold is returned verbatim (not summarized).
+
+        Given: Small CLI output (under 4000 chars)
+        When: Output is processed for return to MCP client
+        Then: Output is returned as-is without summarization
+        """
+        from mcp_the_force.cli_agents.summarizer import OutputSummarizer
+
+        raw_output = "A short CLI output message"
+
+        summarizer = OutputSummarizer()
+
+        with patch.object(
+            summarizer, "_call_gemini_flash", new_callable=AsyncMock
+        ) as mock_summarize:
+            result = await summarizer.summarize(raw_output)
+
+            # Should NOT call the summarizer for small outputs
+            mock_summarize.assert_not_called()
+            assert result == raw_output
 
     @pytest.mark.asyncio
     async def test_uses_gemini_flash_for_speed(self):
@@ -60,26 +82,29 @@ class TestOutputSummarizer:
         """
         Summarization preserves critical information.
 
-        Given: CLI output with session ID and key content
+        Given: Large CLI output with session ID and key content
         When: Summarized
         Then: Session ID and key findings are preserved in summary
         """
         from mcp_the_force.cli_agents.summarizer import OutputSummarizer
 
-        raw_output = """
+        summarizer = OutputSummarizer()
+
+        # Create large output that exceeds the actual threshold
+        critical_info = """
         Session ID: abc-123-def
         Result: Successfully created 5 new files
         Errors: None
         """
-
-        summarizer = OutputSummarizer()
+        padding = "A" * (summarizer.size_threshold + 1000)
+        raw_output = critical_info + padding
 
         with patch.object(
             summarizer, "_call_gemini_flash", new_callable=AsyncMock
         ) as mock_summarize:
             mock_summarize.return_value = "Created 5 files, session abc-123-def"
 
-            _result = await summarizer.summarize(raw_output)
+            await summarizer.summarize(raw_output)
 
             # Verify call was made with the raw output
             call_args = mock_summarize.call_args[0][0]
@@ -109,7 +134,7 @@ class TestOutputSummarizer:
         """
         Summarizer includes task metadata in summarization context.
 
-        Given: CLI output and task context
+        Given: Large CLI output and task context
         When: Summarization is requested
         Then: Task context is provided to model for better summarization
         """
@@ -117,13 +142,16 @@ class TestOutputSummarizer:
 
         summarizer = OutputSummarizer()
 
+        # Create large output that exceeds the actual threshold
+        large_output = "A" * (summarizer.size_threshold + 1000)
+
         with patch.object(
             summarizer, "_call_gemini_flash", new_callable=AsyncMock
         ) as mock_summarize:
             mock_summarize.return_value = "Summary with context"
 
             await summarizer.summarize(
-                output="Raw output here",
+                output=large_output,
                 task_context="User asked to fix the authentication bug",
             )
 

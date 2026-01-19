@@ -46,7 +46,6 @@ class TestBasicMCP:
                 # Each session should have required fields
                 for session_data in sessions:
                     assert "session_id" in session_data
-                    assert "tool_name" in session_data
 
     async def test_gemini_tool_callable(self, mcp_server):
         """Test that a model tool can be called."""

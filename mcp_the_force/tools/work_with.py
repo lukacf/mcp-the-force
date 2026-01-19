@@ -3,12 +3,41 @@
 Executes tasks via CLI agents (Claude, Gemini, Codex) with session management.
 """
 
-from typing import List, Optional
-
 from .base import ToolSpec
 from .descriptors import Route
 from .registry import tool
 from ..local_services.cli_agent_service import CLIAgentService
+
+
+def _generate_agent_description() -> str:
+    """Generate agent parameter description from blueprint registry."""
+    from ..cli_agents.model_cli_resolver import get_all_cli_models
+    from .registry import list_tools
+
+    # Ensure blueprints are loaded
+    list_tools()
+
+    cli_models = get_all_cli_models()
+    if not cli_models:
+        return (
+            "(Required) The model to use for the task. "
+            "Use any model registered with CLI support."
+        )
+
+    # Group by CLI type
+    by_cli: dict[str, list[str]] = {}
+    for model_name, cli_name in sorted(cli_models.items()):
+        by_cli.setdefault(cli_name, []).append(model_name)
+
+    # Build description
+    parts = [
+        "(Required) The model to use for the task. Available models with CLI support:"
+    ]
+    for cli_name in sorted(by_cli.keys()):
+        models = by_cli[cli_name]
+        parts.append(f"  {cli_name.upper()}: {', '.join(repr(m) for m in models)}")
+
+    return " ".join(parts)
 
 
 @tool
@@ -29,17 +58,14 @@ class WorkWith(ToolSpec):
 
     # Parameters
     agent: str = Route.prompt(  # type: ignore[assignment]
-        description=(
-            "(Required) The CLI agent to use for the task. "
-            "Options: 'claude', 'gemini', 'codex'. "
-            "Each agent has different capabilities and context limits."
-        )
+        description=_generate_agent_description()
     )
 
     task: str = Route.prompt(  # type: ignore[assignment]
         description=(
             "(Required) The task or prompt for the agent. "
-            "Be specific about what you want the agent to accomplish."
+            "Be specific about what you want the agent to accomplish. "
+            "Note: The agent will automatically work from the current project directory."
         )
     )
 
@@ -57,12 +83,4 @@ class WorkWith(ToolSpec):
             "Default: 'default'"
         ),
         default="default",
-    )
-
-    context: Optional[List[str]] = Route.prompt(  # type: ignore[assignment]
-        description=(
-            "(Optional) List of file or directory paths to include as context. "
-            "Paths are passed to the CLI agent via --add-dir flags."
-        ),
-        default=None,
     )

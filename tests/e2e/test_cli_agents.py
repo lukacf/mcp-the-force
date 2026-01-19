@@ -24,6 +24,7 @@ import pytest
 @pytest.mark.e2e
 @pytest.mark.cli_agents
 @pytest.mark.asyncio
+@pytest.mark.timeout(30)
 async def test_work_with_anthropic_model_returns_response():
     """
     REQ-1.1.1, REQ-1.1.2, REQ-1.1.3
@@ -54,6 +55,7 @@ async def test_work_with_anthropic_model_returns_response():
 @pytest.mark.e2e
 @pytest.mark.cli_agents
 @pytest.mark.asyncio
+@pytest.mark.timeout(30)
 async def test_work_with_google_model_returns_response():
     """
     REQ-1.1.1, REQ-1.1.2, REQ-1.1.3
@@ -83,6 +85,7 @@ async def test_work_with_google_model_returns_response():
 @pytest.mark.e2e
 @pytest.mark.cli_agents
 @pytest.mark.asyncio
+@pytest.mark.timeout(30)
 async def test_work_with_anthropic_model_stores_session_mapping(isolate_test_databases):
     """
     REQ-3.1.1
@@ -125,6 +128,7 @@ async def test_work_with_anthropic_model_stores_session_mapping(isolate_test_dat
 @pytest.mark.e2e
 @pytest.mark.cli_agents
 @pytest.mark.asyncio
+@pytest.mark.timeout(30)
 async def test_resume_same_cli_uses_resume_flag(isolate_test_databases):
     """
     REQ-3.3.1
@@ -169,6 +173,7 @@ async def test_resume_same_cli_uses_resume_flag(isolate_test_databases):
 @pytest.mark.e2e
 @pytest.mark.cli_agents
 @pytest.mark.asyncio
+@pytest.mark.timeout(30)
 async def test_cross_cli_handoff_injects_context(isolate_test_databases):
     """
     REQ-3.3.2
@@ -213,6 +218,7 @@ async def test_cross_cli_handoff_injects_context(isolate_test_databases):
 @pytest.mark.e2e
 @pytest.mark.cli_agents
 @pytest.mark.asyncio
+@pytest.mark.timeout(30)
 async def test_api_to_cli_handoff_compacts_history(isolate_test_databases):
     """
     REQ-3.2.1
@@ -258,6 +264,7 @@ async def test_api_to_cli_handoff_compacts_history(isolate_test_databases):
 @pytest.mark.e2e
 @pytest.mark.cli_agents
 @pytest.mark.asyncio
+@pytest.mark.timeout(30)
 async def test_consult_with_routes_to_model(isolate_test_databases):
     """
     REQ-1.2.1, REQ-1.2.2
@@ -287,6 +294,7 @@ async def test_consult_with_routes_to_model(isolate_test_databases):
 @pytest.mark.e2e
 @pytest.mark.cli_agents
 @pytest.mark.asyncio
+@pytest.mark.timeout(30)
 async def test_consult_with_multi_turn_preserves_session(isolate_test_databases):
     """
     REQ-1.2.1
@@ -330,6 +338,7 @@ async def test_consult_with_multi_turn_preserves_session(isolate_test_databases)
 @pytest.mark.e2e
 @pytest.mark.cli_agents
 @pytest.mark.asyncio
+@pytest.mark.timeout(30)
 async def test_work_with_openai_model_returns_response():
     """
     REQ-1.1.1, REQ-1.1.2, REQ-1.1.3
@@ -359,6 +368,7 @@ async def test_work_with_openai_model_returns_response():
 @pytest.mark.e2e
 @pytest.mark.cli_agents
 @pytest.mark.asyncio
+@pytest.mark.timeout(30)
 async def test_work_with_openai_model_stores_thread_mapping(isolate_test_databases):
     """
     REQ-3.1.1
@@ -396,6 +406,7 @@ async def test_work_with_openai_model_stores_thread_mapping(isolate_test_databas
 @pytest.mark.e2e
 @pytest.mark.cli_agents
 @pytest.mark.asyncio
+@pytest.mark.timeout(30)
 async def test_codex_resume_uses_exec_resume_command(isolate_test_databases):
     """
     REQ-3.3.1 (Codex variant)
@@ -442,3 +453,50 @@ async def test_codex_resume_uses_exec_resume_command(isolate_test_databases):
 def test_e2e_tests_load():
     """This test passes to confirm the test file loads without import errors."""
     assert True
+
+
+@pytest.mark.e2e
+@pytest.mark.cli_agents
+@pytest.mark.asyncio
+@pytest.mark.timeout(60)
+async def test_work_with_can_access_project_files():
+    """
+    E2E validation that CLI agents can actually access files in project directory.
+
+    CRITICAL: This tests the REAL behavior, not just command format.
+    If this fails, --add-dir is not working in practice.
+
+    Given: A project directory with a test file
+    When: work_with is called with that project
+    Then: The CLI agent can read and report the file contents
+    """
+    import tempfile
+    import os
+    from pathlib import Path
+    from mcp_the_force.tools.registry import get_tool
+    from mcp_the_force.tools.executor import executor
+
+    # Create temp directory with test file
+    with tempfile.TemporaryDirectory() as tmpdir:
+        test_file = Path(tmpdir) / "test_readme.txt"
+        test_content = "This is a test file for E2E validation. Magic string: XYZ123ABC"
+        test_file.write_text(test_content)
+
+        metadata = get_tool("work_with")
+        assert metadata is not None
+
+        # Call work_with, asking agent to read the file
+        result = await executor.execute(
+            metadata,
+            agent="claude-sonnet-4-5",
+            task="Read the file test_readme.txt in this directory and tell me what magic string it contains. Just output the magic string, nothing else.",
+            session_id=f"e2e-file-access-test-{os.getpid()}",
+            project_dir=tmpdir,  # This should be passed to CLIAgentService
+        )
+
+        # Verify the agent could access and read the file
+        assert result is not None, "Should get response from agent"
+        assert "XYZ123ABC" in result, (
+            f"Agent should have read the magic string from the file. "
+            f"Got response: {result[:500]}"
+        )

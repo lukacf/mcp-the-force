@@ -71,6 +71,9 @@ def make_chat_tool(bp: ToolBlueprint) -> Type[ToolSpec]:
         "context_window": bp.context_window,
         "timeout": bp.timeout,
         "description": bp.description,  # Add explicit description attribute
+        # chat_with_* tools are internal-only: available in TOOL_REGISTRY
+        # for consult_with routing, but not exposed via MCP
+        "internal_only": True,
     }
 
     # Copy Route descriptors AND type annotations from param class and all parent classes

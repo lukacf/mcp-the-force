@@ -7,6 +7,7 @@ Handles spawning, environment isolation, output capture, and timeout.
 import asyncio
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -54,13 +55,15 @@ class CLIExecutor:
         Returns:
             CLIResult with stdout, stderr, return_code, and timed_out flag
         """
-        logger.debug(f"Executing command: {' '.join(command[:3])}...")
+        logger.debug(f"Executing: {' '.join(command)}")
+        logger.debug(f"CWD: {cwd}, timeout: {timeout}s")
 
         try:
             process = await asyncio.create_subprocess_exec(
                 *command,
                 env=env,
                 cwd=cwd,
+                stdin=asyncio.subprocess.DEVNULL,  # Don't inherit MCP's stdin
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
@@ -122,13 +125,23 @@ class CLIExecutor:
                 )
 
         except FileNotFoundError:
-            logger.error(f"Command not found: {command[0]}")
-            return CLIResult(
-                stdout="",
-                stderr=f"Command not found: {command[0]}",
-                return_code=127,
-                timed_out=False,
-            )
+            # Could be command not found OR cwd not found
+            if cwd and not Path(cwd).exists():
+                logger.error(f"Working directory not found: {cwd}")
+                return CLIResult(
+                    stdout="",
+                    stderr=f"Working directory not found: {cwd}",
+                    return_code=127,
+                    timed_out=False,
+                )
+            else:
+                logger.error(f"Command not found: {command[0]}")
+                return CLIResult(
+                    stdout="",
+                    stderr=f"Command not found: {command[0]}",
+                    return_code=127,
+                    timed_out=False,
+                )
         except Exception as e:
             logger.error(f"Execution error: {e}")
             return CLIResult(

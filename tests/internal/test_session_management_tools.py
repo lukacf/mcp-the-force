@@ -20,17 +20,16 @@ async def populated_test_sessions(isolate_test_databases):
     project_name = os.path.basename(project_path)
 
     # Create test sessions
+    # Note: Session key is (project, session_id) - tool info is per-turn in history
     sessions = [
         UnifiedSession(
             project=project_name,
-            tool="chat_with_gpt52_pro",
             session_id="integration-test-1",
             history=[{"role": "user", "content": "Integration test 1"}],
             updated_at=int(time.time()),
         ),
         UnifiedSession(
             project=project_name,
-            tool="chat_with_gemini3_pro_preview",
             session_id="integration-test-2",
             history=[{"role": "user", "content": "Integration test 2"}],
             updated_at=int(time.time()) - 10,  # Older session
@@ -66,7 +65,6 @@ class TestListSessionsIntegration:
         # Verify structure
         for session in sessions:
             assert "session_id" in session
-            assert "tool_name" in session
 
     async def test_list_sessions_with_parameters(self, populated_test_sessions):
         """Test list_sessions with parameters through executor."""
@@ -139,7 +137,6 @@ class TestDescribeSessionIntegration:
         # Set a cached summary
         await UnifiedSessionCache.set_summary(
             project_name,
-            "chat_with_gpt52_pro",
             "integration-test-1",
             "This is a cached summary",
         )

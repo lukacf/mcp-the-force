@@ -15,10 +15,15 @@ class OutputSummarizer:
     Summarizes CLI output for return to MCP client.
 
     Uses gemini-3-flash-preview for speed.
+    Only summarizes if output exceeds size threshold.
     """
 
     model_name: str = "gemini-3-flash-preview"
     tool_name: str = "chat_with_gemini3_flash_preview"
+    # Size threshold in characters - only summarize if output is larger
+    # Set very high to avoid losing important information from CLI output
+    # Summarization is lossy and should only be used for massive outputs
+    size_threshold: int = 100_000  # 100KB before summarizing
 
     prompt_template: str = """Summarize the following CLI output concisely.
 Preserve key information: session IDs, results, errors, and important findings.
@@ -37,17 +42,30 @@ Provide a clear, concise summary:"""
         task_context: Optional[str] = None,
     ) -> str:
         """
-        Summarize CLI output.
+        Summarize CLI output if it exceeds size threshold.
 
         Args:
             output: Raw CLI output to summarize
             task_context: Optional context about the task
 
         Returns:
-            Summarized output string
+            Summarized output string (or original if under threshold)
         """
         if not output or not output.strip():
             return ""
+
+        # Only summarize if output exceeds threshold
+        if len(output) <= self.size_threshold:
+            logger.debug(
+                f"Output size {len(output)} chars under threshold {self.size_threshold}, "
+                "returning verbatim"
+            )
+            return output
+
+        logger.debug(
+            f"Output size {len(output)} chars exceeds threshold {self.size_threshold}, "
+            "summarizing via Gemini Flash"
+        )
 
         prompt = self.prompt_template.format(
             output=output,

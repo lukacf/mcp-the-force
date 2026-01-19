@@ -329,7 +329,7 @@ class GeminiAdapter:
             original_history: List[Dict[str, Any]] = []
             if ctx.session_id:
                 original_history = await UnifiedSessionCache.get_history(
-                    ctx.project, ctx.tool, ctx.session_id
+                    ctx.project, ctx.session_id
                 )
                 logger.debug(
                     f"[GEMINI] Loaded {len(original_history)} history items for session {ctx.session_id}"
@@ -629,7 +629,7 @@ class GeminiAdapter:
         sanitized_history = strip_images_from_history(updated_history)
 
         await UnifiedSessionCache.set_history(
-            ctx.project, ctx.tool, ctx.session_id, sanitized_history
+            ctx.project, ctx.session_id, sanitized_history
         )
         logger.debug(
             f"[GEMINI] Saved {len(updated_history)} history items for session {ctx.session_id}"

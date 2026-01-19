@@ -2,15 +2,32 @@
 SessionBridge: Maps Force session_id to CLI-native session identifiers.
 
 Stores mappings in SQLite for persistence across process restarts.
+Uses BaseSQLiteCache for consistency with the rest of the codebase.
 """
 
-import aiosqlite
 import logging
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+from mcp_the_force.sqlite_base_cache import BaseSQLiteCache
+
 logger = logging.getLogger(__name__)
+
+# 6 months TTL for session mappings
+SESSION_MAPPING_TTL = 86400 * 180
+
+CREATE_TABLE_SQL = """
+    CREATE TABLE IF NOT EXISTS cli_session_mappings (
+        project TEXT NOT NULL,
+        session_id TEXT NOT NULL,
+        cli_name TEXT NOT NULL,
+        cli_session_id TEXT NOT NULL,
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (project, session_id, cli_name)
+    )
+"""
 
 
 @dataclass
@@ -23,7 +40,7 @@ class SessionMapping:
     cli_session_id: str
 
 
-class SessionBridge:
+class SessionBridge(BaseSQLiteCache):
     """
     Manages session ID mappings between Force and CLI agents.
 
@@ -31,60 +48,25 @@ class SessionBridge:
     - Claude: session_id in JSON output
     - Gemini: session_id in JSON output
     - Codex: thread_id (NOT session_id) in JSONL output
+
+    Inherits from BaseSQLiteCache for consistent async-safe SQLite access.
     """
 
     def __init__(self, db_path: Optional[str] = None):
         """Initialize SessionBridge with optional custom database path."""
-        if db_path == ":memory:":
-            self._db_path = ":memory:"
-        elif db_path:
-            self._db_path = db_path
-        else:
+        if db_path is None:
             # Default: use project-local storage
             default_dir = Path.home() / ".mcp-the-force"
             default_dir.mkdir(parents=True, exist_ok=True)
-            self._db_path = str(default_dir / "cli_sessions.db")
+            db_path = str(default_dir / "cli_sessions.db")
 
-        self._initialized = False
-        # Persistent connection for :memory: databases (each connect() creates new db)
-        self._persistent_conn: Optional[aiosqlite.Connection] = None
-
-    async def _get_connection(self) -> aiosqlite.Connection:
-        """Get a database connection, reusing persistent connection for :memory:."""
-        if self._db_path == ":memory:":
-            if self._persistent_conn is None:
-                self._persistent_conn = await aiosqlite.connect(self._db_path)
-            return self._persistent_conn
-        return await aiosqlite.connect(self._db_path)
-
-    async def _release_connection(self, conn: aiosqlite.Connection) -> None:
-        """Release a connection (close it unless it's the persistent one)."""
-        if self._db_path != ":memory:":
-            await conn.close()
-
-    async def _ensure_initialized(self) -> None:
-        """Ensure the database schema exists."""
-        if self._initialized:
-            return
-
-        conn = await self._get_connection()
-        try:
-            await conn.execute("""
-                CREATE TABLE IF NOT EXISTS cli_session_mappings (
-                    project TEXT NOT NULL,
-                    session_id TEXT NOT NULL,
-                    cli_name TEXT NOT NULL,
-                    cli_session_id TEXT NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    PRIMARY KEY (project, session_id, cli_name)
-                )
-            """)
-            await conn.commit()
-        finally:
-            await self._release_connection(conn)
-
-        self._initialized = True
+        super().__init__(
+            db_path=db_path,
+            ttl=SESSION_MAPPING_TTL,
+            table_name="cli_session_mappings",
+            create_table_sql=CREATE_TABLE_SQL,
+            purge_probability=0.01,
+        )
 
     async def store_cli_session_id(
         self,
@@ -102,23 +84,20 @@ class SessionBridge:
             cli_name: CLI name (claude, gemini, codex)
             cli_session_id: Native CLI session ID
         """
-        await self._ensure_initialized()
+        await self._execute_async(
+            """
+            INSERT INTO cli_session_mappings (project, session_id, cli_name, cli_session_id, updated_at)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT (project, session_id, cli_name)
+            DO UPDATE SET cli_session_id = excluded.cli_session_id,
+                          updated_at = excluded.updated_at
+            """,
+            (project, session_id, cli_name, cli_session_id, int(time.time())),
+            fetch=False,
+        )
 
-        conn = await self._get_connection()
-        try:
-            await conn.execute(
-                """
-                INSERT INTO cli_session_mappings (project, session_id, cli_name, cli_session_id, updated_at)
-                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-                ON CONFLICT (project, session_id, cli_name)
-                DO UPDATE SET cli_session_id = excluded.cli_session_id,
-                              updated_at = CURRENT_TIMESTAMP
-                """,
-                (project, session_id, cli_name, cli_session_id),
-            )
-            await conn.commit()
-        finally:
-            await self._release_connection(conn)
+        # Probabilistic cleanup of old entries
+        await self._probabilistic_cleanup()
 
         logger.debug(
             f"Stored CLI session mapping: {project}/{session_id}/{cli_name} -> {cli_session_id}"
@@ -141,23 +120,16 @@ class SessionBridge:
         Returns:
             The CLI session ID if found, None otherwise.
         """
-        await self._ensure_initialized()
+        rows = await self._execute_async(
+            """
+            SELECT cli_session_id FROM cli_session_mappings
+            WHERE project = ? AND session_id = ? AND cli_name = ?
+            """,
+            (project, session_id, cli_name),
+        )
 
-        conn = await self._get_connection()
-        try:
-            cursor = await conn.execute(
-                """
-                SELECT cli_session_id FROM cli_session_mappings
-                WHERE project = ? AND session_id = ? AND cli_name = ?
-                """,
-                (project, session_id, cli_name),
-            )
-            row = await cursor.fetchone()
-        finally:
-            await self._release_connection(conn)
-
-        if row:
-            cli_session_id: str = row[0]
+        if rows and len(rows) > 0:
+            cli_session_id: str = rows[0][0]
             logger.debug(
                 f"Found CLI session mapping: {project}/{session_id}/{cli_name} -> {cli_session_id}"
             )
@@ -165,9 +137,3 @@ class SessionBridge:
 
         logger.debug(f"No CLI session mapping found: {project}/{session_id}/{cli_name}")
         return None
-
-    async def close(self) -> None:
-        """Close any persistent connections."""
-        if self._persistent_conn is not None:
-            await self._persistent_conn.close()
-            self._persistent_conn = None

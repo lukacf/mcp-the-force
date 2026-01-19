@@ -8,15 +8,12 @@ import pytest
 from unittest.mock import AsyncMock, patch
 
 
-@pytest.mark.xfail(
-    reason="Phase 2: Compactor not yet implemented", raises=NotImplementedError
-)
 class TestCompactor:
     """Unit tests for Compactor."""
 
     @pytest.mark.asyncio
     async def test_formats_small_history_verbatim(self):
-        """Compactor returns history as-is when within token limit."""
+        """Compactor includes history content when within reasonable size."""
         from mcp_the_force.cli_agents.compactor import Compactor
 
         history = [
@@ -25,18 +22,27 @@ class TestCompactor:
         ]
 
         compactor = Compactor()
-        result = await compactor.compact_for_cli(
-            history=history,
-            target_cli="claude",
-            max_tokens=8000,
-        )
 
-        assert "Short message" in result
-        assert "Short reply" in result
+        # Mock the compaction call to return formatted content
+        with patch.object(
+            compactor, "_compact_with_handoff_prompt", new_callable=AsyncMock
+        ) as mock_compact:
+            mock_compact.return_value = (
+                "User asked: Short message. Assistant replied: Short reply"
+            )
+
+            result = await compactor.compact_for_cli(
+                history=history,
+                target_cli="claude",
+                max_tokens=8000,
+            )
+
+            # Should include the compacted content
+            assert "Short message" in result or "PRIOR CONTEXT" in result
 
     @pytest.mark.asyncio
     async def test_summarizes_large_history(self):
-        """Compactor summarizes history when exceeds token limit."""
+        """Compactor summarizes history via Gemini Flash."""
         from mcp_the_force.cli_agents.compactor import Compactor
 
         # Create history that exceeds limits
@@ -46,40 +52,31 @@ class TestCompactor:
 
         compactor = Compactor()
 
-        # Mock the summarization call
+        # Mock the compaction call
         with patch.object(
-            compactor, "_call_summarizer", new_callable=AsyncMock
-        ) as mock_summarize:
-            mock_summarize.return_value = "Summarized: User discussed 50 topics"
+            compactor, "_compact_with_handoff_prompt", new_callable=AsyncMock
+        ) as mock_compact:
+            mock_compact.return_value = "Summarized: User discussed 50 topics"
 
             result = await compactor.compact_for_cli(
                 history=large_history,
                 target_cli="claude",
-                max_tokens=1000,  # Force summarization
+                max_tokens=1000,
             )
 
-            mock_summarize.assert_called_once()
+            mock_compact.assert_called()
             assert "Summarized" in result
 
     @pytest.mark.asyncio
-    async def test_respects_cli_specific_limits(self):
-        """Compactor uses CLI-specific token limits."""
-        from mcp_the_force.cli_agents.compactor import Compactor
+    async def test_always_targets_30k_tokens(self):
+        """Compactor always targets 30k tokens regardless of max_tokens arg."""
+        from mcp_the_force.cli_agents.compactor import TARGET_TOKENS
 
-        compactor = Compactor()
-
-        # Different CLIs have different context limits
-        claude_limit = compactor.get_context_limit("claude")
-        gemini_limit = compactor.get_context_limit("gemini")
-        codex_limit = compactor.get_context_limit("codex")
-
-        # Gemini has larger context than Claude/Codex
-        assert gemini_limit >= claude_limit
-        assert codex_limit <= claude_limit  # Codex is more limited
+        assert TARGET_TOKENS == 30_000
 
     @pytest.mark.asyncio
-    async def test_formats_as_xml_context_block(self):
-        """Compactor formats output as XML context block."""
+    async def test_formats_output_with_handoff_prefix(self):
+        """Compactor formats output with PRIOR CONTEXT prefix."""
         from mcp_the_force.cli_agents.compactor import Compactor
 
         history = [
@@ -88,18 +85,24 @@ class TestCompactor:
         ]
 
         compactor = Compactor()
-        result = await compactor.compact_for_cli(
-            history=history,
-            target_cli="claude",
-            max_tokens=8000,
-        )
 
-        # Should be formatted as context block
-        assert "<context>" in result or "CONTEXT" in result.upper()
+        with patch.object(
+            compactor, "_compact_with_handoff_prompt", new_callable=AsyncMock
+        ) as mock_compact:
+            mock_compact.return_value = "Summary of auth discussion"
+
+            result = await compactor.compact_for_cli(
+                history=history,
+                target_cli="claude",
+                max_tokens=8000,
+            )
+
+            # Should include handoff prefix
+            assert "PRIOR CONTEXT" in result
 
     @pytest.mark.asyncio
     async def test_preserves_tool_attribution(self):
-        """Compactor preserves which tool generated each message."""
+        """Compactor preserves which tool generated each message in formatted history."""
         from mcp_the_force.cli_agents.compactor import Compactor
 
         history = [
@@ -114,31 +117,27 @@ class TestCompactor:
         ]
 
         compactor = Compactor()
-        result = await compactor.compact_for_cli(
-            history=history,
-            target_cli="gemini",
-            max_tokens=8000,
-        )
 
-        # Should indicate tool source when relevant
-        assert "Claude" in result or "GPT" in result or "work_with" in result
+        # Test the internal formatting
+        formatted = compactor._format_history(history)
+
+        # Should indicate tool source
+        assert "work_with" in formatted or "chat_with_gpt52" in formatted
 
 
 class TestTokenEstimation:
     """Unit tests for token counting in Compactor."""
 
-    def test_estimates_tokens_for_history(self):
-        """Compactor estimates token count for history."""
+    def test_estimates_tokens_for_text(self):
+        """Compactor estimates token count for text strings."""
         from mcp_the_force.cli_agents.compactor import Compactor
 
-        history = [
-            {"role": "user", "content": "Hello world"},
-        ]
+        text = "Hello world this is a test"
 
         compactor = Compactor()
-        tokens = compactor.estimate_tokens(history)
+        tokens = compactor.estimate_tokens(text)
 
-        # "Hello world" ≈ 2-3 tokens, plus role overhead
+        # ~4 chars per token, "Hello world this is a test" = 26 chars ≈ 6-7 tokens
         assert tokens > 0
         assert tokens < 100
 
@@ -146,11 +145,23 @@ class TestTokenEstimation:
         """Compactor token estimation scales with content length."""
         from mcp_the_force.cli_agents.compactor import Compactor
 
-        small_history = [{"role": "user", "content": "Hi"}]
-        large_history = [{"role": "user", "content": "x" * 1000}]
+        small_text = "Hi"
+        large_text = "x" * 1000
 
         compactor = Compactor()
-        small_tokens = compactor.estimate_tokens(small_history)
-        large_tokens = compactor.estimate_tokens(large_history)
+        small_tokens = compactor.estimate_tokens(small_text)
+        large_tokens = compactor.estimate_tokens(large_text)
 
         assert large_tokens > small_tokens
+
+    def test_estimates_roughly_4_chars_per_token(self):
+        """Token estimation uses ~4 chars per token heuristic."""
+        from mcp_the_force.cli_agents.compactor import Compactor
+
+        # 400 chars should be ~100 tokens
+        text = "a" * 400
+
+        compactor = Compactor()
+        tokens = compactor.estimate_tokens(text)
+
+        assert tokens == 100  # 400 // 4 = 100

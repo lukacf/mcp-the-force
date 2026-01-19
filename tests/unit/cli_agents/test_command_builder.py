@@ -20,7 +20,8 @@ class TestClaudePluginCommandBuilding:
         )
 
         assert "--print" in args  # JSON output mode
-        assert "-p" in args
+        assert "--output-format" in args
+        assert "json" in args
         assert "Write a test" in args
 
     def test_build_new_session_with_context_dirs(self):
@@ -62,9 +63,10 @@ class TestClaudePluginCommandBuilding:
         )
 
         assert "--print" in args
+        assert "--output-format" in args
+        assert "json" in args
         assert "--resume" in args
         assert "abc-123-def" in args
-        assert "-p" in args
         assert "Continue" in args
 
     def test_executable_name(self):
@@ -94,7 +96,7 @@ class TestGeminiPluginCommandBuilding:
         assert "Explain this" in args
 
     def test_build_new_session_with_context(self):
-        """Plugin adds --context for context directories."""
+        """Plugin adds --include-directories for context directories."""
         from mcp_the_force.cli_plugins.gemini import GeminiPlugin
 
         plugin = GeminiPlugin()
@@ -104,11 +106,11 @@ class TestGeminiPluginCommandBuilding:
             role=None,
         )
 
-        assert "--context" in args
+        assert "--include-directories" in args
         assert "/path/to/code" in args
 
     def test_build_new_session_with_role(self):
-        """Plugin adds --system-instruction for role."""
+        """Plugin prepends role to task (Gemini CLI has no --system-instruction)."""
         from mcp_the_force.cli_plugins.gemini import GeminiPlugin
 
         plugin = GeminiPlugin()
@@ -118,11 +120,13 @@ class TestGeminiPluginCommandBuilding:
             role="Expert coder",
         )
 
-        assert "--system-instruction" in args
-        assert "Expert coder" in args
+        # Role is prepended to task, not a separate flag
+        task_arg = args[-1]  # Task is always last
+        assert "Role: Expert coder" in task_arg
+        assert "Do task" in task_arg
 
     def test_build_resume_args(self):
-        """Plugin creates resume command with --session flag."""
+        """Plugin creates resume command with --resume flag."""
         from mcp_the_force.cli_plugins.gemini import GeminiPlugin
 
         plugin = GeminiPlugin()
@@ -131,7 +135,7 @@ class TestGeminiPluginCommandBuilding:
             task="Continue",
         )
 
-        assert "--session" in args
+        assert "--resume" in args
         assert "gemini-session-456" in args
         assert "--output-format" in args
 
@@ -162,32 +166,38 @@ class TestCodexPluginCommandBuilding:
         assert "Fix the bug" in args
 
     def test_build_new_session_with_context(self):
-        """Plugin adds --context for context directories."""
+        """Codex CLI ignores context_dirs (no --context flag support)."""
         from mcp_the_force.cli_plugins.codex import CodexPlugin
 
         plugin = CodexPlugin()
         args = plugin.build_new_session_args(
             task="Review",
-            context_dirs=["/src"],
+            context_dirs=["/src"],  # Ignored - Codex uses working directory
             role=None,
         )
 
-        assert "--context" in args
-        assert "/src" in args
+        # Codex doesn't support --context flag; context is via working directory
+        assert "--context" not in args
+        # But task should still be included
+        assert "Review" in args
+        assert "exec" in args
 
     def test_build_new_session_with_role(self):
-        """Plugin adds --role for role."""
+        """Codex CLI ignores role (no --role flag support)."""
         from mcp_the_force.cli_plugins.codex import CodexPlugin
 
         plugin = CodexPlugin()
         args = plugin.build_new_session_args(
             task="Help",
             context_dirs=[],
-            role="senior-dev",
+            role="senior-dev",  # Ignored - Codex doesn't support roles
         )
 
-        assert "--role" in args
-        assert "senior-dev" in args
+        # Codex doesn't support --role flag
+        assert "--role" not in args
+        # But task should still be included
+        assert "Help" in args
+        assert "exec" in args
 
     def test_build_resume_args(self):
         """Plugin uses 'exec resume' subcommand for Codex resume."""

@@ -261,6 +261,12 @@ def register_all_tools(mcp: FastMCP) -> None:
             if tool_id != metadata.id:
                 continue
 
+            # Skip internal-only tools (they're in TOOL_REGISTRY for internal routing
+            # but not exposed via MCP - e.g., chat_with_* tools routed by consult_with)
+            if metadata.model_config.get("internal_only", False):
+                logger.debug(f"Skipping internal-only tool: {tool_id}")
+                continue
+
             # Create function with proper signature
             tool_func = create_tool_function(metadata)
 

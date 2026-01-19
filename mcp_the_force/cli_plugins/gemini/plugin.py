@@ -18,8 +18,8 @@ class GeminiPlugin:
     CLI plugin for Google Gemini CLI.
 
     Command formats:
-    - New session: gemini --output-format json --context <dir> "<task>"
-    - Resume: gemini --session <session_id> --output-format json "<task>"
+    - New session: gemini --output-format json --include-directories <dir> "<task>"
+    - Resume: gemini --resume <session_id> --output-format json "<task>"
 
     Output format: JSON object (see parser.py)
     """
@@ -39,15 +39,15 @@ class GeminiPlugin:
         cli_flags: Optional[str] = None,
     ) -> List[str]:
         """Build args for a new Gemini CLI session."""
-        args = ["--output-format", "json"]
+        args = ["--output-format", "json", "--yolo"]
 
         # Add context directories
         for dir_path in context_dirs:
-            args.extend(["--context", dir_path])
+            args.extend(["--include-directories", dir_path])
 
-        # Add role if specified
+        # Gemini CLI doesn't support --system-instruction, prepend role to task
         if role:
-            args.extend(["--system-instruction", role])
+            task = f"Role: {role}\n\n{task}"
 
         # Add any extra CLI flags
         if cli_flags:
@@ -65,7 +65,7 @@ class GeminiPlugin:
         cli_flags: Optional[str] = None,
     ) -> List[str]:
         """Build args for resuming a Gemini CLI session."""
-        args = ["--session", session_id, "--output-format", "json"]
+        args = ["--resume", session_id, "--output-format", "json", "--yolo"]
 
         # Add any extra CLI flags
         if cli_flags:

@@ -2,8 +2,10 @@
 
 import asyncio
 import logging
+import os
 import time
 import uuid
+from pathlib import Path
 from typing import Optional, List, Any, Union, Dict
 import fastmcp.exceptions
 from mcp_the_force.adapters.registry import get_adapter_class
@@ -219,14 +221,24 @@ class ToolExecutor:
             output_format = prompt_params.get("output_format", "")
 
             # Get project name and tool name for all code paths
-            import os
-
-            project_path = settings.logging.project_path
-            project_name = (
-                os.path.basename(project_path)
-                if project_path
-                else os.path.basename(os.getcwd())
-            )
+            # project_path is the user's project directory
+            # Derive from MCP_CONFIG_FILE which was set at startup from the user's CWD
+            # MCP_CONFIG_FILE can be:
+            #   /project/.mcp-the-force/config.yaml (2 levels up)
+            #   /project/.claude/.mcp-the-force/config.yaml (3 levels up, via Claude Code)
+            config_file = os.environ.get("MCP_CONFIG_FILE")
+            if config_file:
+                config_path = Path(config_file)
+                # Check if .claude is in the path (Claude Code managed MCP)
+                if ".claude" in config_path.parts:
+                    # .claude/.mcp-the-force/config.yaml -> need 3 parents
+                    project_path = str(config_path.parent.parent.parent)
+                else:
+                    # .mcp-the-force/config.yaml -> need 2 parents
+                    project_path = str(config_path.parent.parent)
+            else:
+                project_path = settings.logging.project_path or os.getcwd()
+            project_name = os.path.basename(project_path)
             tool_name = metadata.id
 
             # Retry state for max_output_tokens errors
@@ -367,7 +379,12 @@ class ToolExecutor:
                 # This is a local utility service
                 logger.debug(f"[DEBUG] Using local service: {service_cls}")
                 # Service class is already the actual class, not a string
-                service = service_cls()
+                # Pass project_dir from settings if the service accepts it
+                try:
+                    service = service_cls(project_dir=project_path)
+                except TypeError:
+                    # Service doesn't accept project_dir parameter
+                    service = service_cls()
 
                 # For local services, still do full parameter validation
                 # but skip capability checks (pass None for capabilities)

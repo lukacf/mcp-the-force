@@ -57,10 +57,15 @@ class CodexParser:
                 thread_id = event.get("thread_id")
 
             # Aggregate content from item.completed events
+            # Codex output format: {"type":"item.completed","item":{"id":"...","type":"agent_message","text":"..."}}
             if event.get("type") == "item.completed":
-                item_content = event.get("content", "")
-                if item_content:
-                    content_parts.append(item_content)
+                item = event.get("item", {})
+                item_type = item.get("type", "")
+                # Only include agent_message content, not reasoning/thinking
+                if item_type == "agent_message":
+                    item_content = item.get("text", "")
+                    if item_content:
+                        content_parts.append(item_content)
 
         # Join all content parts
         content = "\n".join(content_parts)

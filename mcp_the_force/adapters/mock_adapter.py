@@ -253,9 +253,7 @@ class MockAdapter:
             from ..unified_session_cache import UnifiedSessionCache
 
             # Save the conversation history to the unified cache
-            await UnifiedSessionCache.set_history(
-                ctx.project, ctx.tool, session_id, history
-            )
+            await UnifiedSessionCache.set_history(ctx.project, session_id, history)
 
         # Return the metadata dict directly in content field
         # Integration tests expect to parse this as JSON

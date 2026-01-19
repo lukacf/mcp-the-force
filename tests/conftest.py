@@ -31,6 +31,8 @@ PRODUCTION_DBS = {
     "jobs.sqlite3",
     # Deduplication cache
     "vdb_cache.db",
+    # CLI agents session bridge
+    "cli_sessions.db",
 }
 
 # Note: Adapter mocking is controlled by MCP_ADAPTER_MOCK environment variable
@@ -58,9 +60,23 @@ def isolate_test_databases(tmp_path, monkeypatch):
     - No global state is modified
     - Monkeypatch automatically cleans up on test failure
     - Only specific database paths are redirected
+
+    Also sets MCP_PROJECT_PATH to a predictable value for CLI agent tests.
     """
     import sqlite3
     import shutil
+
+    # Set predictable project path for CLI agent tests
+    # This ensures session bridge uses "mcp-the-force" as project name
+    # Use tmp_path to create a real directory that exists
+    test_project_path = tmp_path / "mcp-the-force"
+    test_project_path.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("MCP_PROJECT_PATH", str(test_project_path))
+
+    # Clear settings cache to pick up the new env var
+    from mcp_the_force.config import get_settings
+
+    get_settings.cache_clear()
 
     # Use the module-level PRODUCTION_DBS set defined at top of file
 

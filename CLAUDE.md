@@ -51,14 +51,21 @@ MCP The-Force Server - A Model Context Protocol (MCP) server that provides acces
 
 ### Available Tools
 
-The Force provides access to 12 cutting-edge AI models through `chat_with_*` tools, each with dynamically-generated descriptions showing their capabilities, context limits, and best use cases.
+The Force provides two primary tools for AI collaboration:
 
-**Key models for most tasks:**
-- For 90% of your work, use **`chat_with_gpt52_pro`** (flagship, 400k context, maximum accuracy) or **`chat_with_gpt52`** (400k context, advanced reasoning)
-- For long documents: **`chat_with_gemini3_pro_preview`** (smart, 1M context, fast)
-- For fast large-context work: **`chat_with_gemini3_flash_preview`** or **`chat_with_gpt41`**
-- For search: GPT-5.2 models are best, but **`chat_with_grok41`** is a good and faster alternative
-- For ultra-long-horizon tasks (24+ hours): **`chat_with_gpt51_codex_max`** with xhigh reasoning effort and automatic compaction
+**Primary Tools:**
+- **`work_with(agent, task)`** — Agentic tool that spawns CLI agents (Claude Code, Gemini CLI, Codex CLI). The agent can read files, run commands, and take autonomous action. Use model names like `claude-sonnet-4-5`, `gemini-3-pro-preview`, or `gpt-5.2`.
+- **`consult_with(model, question)`** — Advisory tool for quick opinions and analysis. Routes to API models internally. Same model names, but no tool use or file access.
+
+**When to use which:**
+- Use `work_with` when you need the AI to explore code, make changes, or take action
+- Use `consult_with` for quick questions, analysis, or second opinions without file access
+
+**Key models:**
+- **`gpt-5.2-pro`** / **`gpt-5.2`**: Flagship OpenAI models (272k context, advanced reasoning)
+- **`gemini-3-pro-preview`**: Google's multimodal model (1M context, strong tools)
+- **`claude-sonnet-4-5`**: Anthropic's latest (1M context beta, strong coding)
+- **`grok-4.1`**: xAI's model with 2M context and live search
 
 **Utility tools:**
 - `list_sessions`: List existing AI conversation sessions for the current project
@@ -66,19 +73,22 @@ The Force provides access to 12 cutting-edge AI models through `chat_with_*` too
 - `search_project_history`: Search past conversations and git commits from the project's long-term history
 - `count_project_tokens`: Count tokens for specified files or directories
 - `search_mcp_debug_logs`: (Developer mode only) Run a raw LogsQL query against VictoriaLogs debug logs
+- `group_think`: Orchestrate multi-model collaboration sessions
 
-Use `search_project_history` whenever you need to recall prior AI decisions or code history. 
+Use `search_project_history` whenever you need to recall prior AI decisions or code history.
+
+> **Note**: The individual `chat_with_*` tools are now internal-only. Use `consult_with` to access them. 
 
 ### Conversation Support
 
-All AI chat and research tools support multi-turn conversations via the `session_id` parameter.
+All AI tools support multi-turn conversations via the `session_id` parameter.
 
-- **Unified Session Caching**: The server now uses a persistent SQLite database (`.mcp-the-force/sessions.sqlite3`) to manage conversation history for **all** models (OpenAI, Gemini, and Grok).
-- **Session Continuity**:
-  - **OpenAI/Grok**: The server caches the `response_id` (for OpenAI) or the full history (for Grok) to continue the conversation.
-  - **Gemini**: The server stores the full conversation history locally in the SQLite database.
+- **Unified Session Caching**: The server uses a persistent SQLite database (`.mcp-the-force/sessions.sqlite3`) to manage conversation history for all tools.
+- **Global Sessions**: Session IDs are global — the same `session_id` works across all tools. You can start a conversation with `work_with`, continue with `consult_with`, and switch back seamlessly.
+- **Cross-Tool Handoff**: When switching tools within a session, history from previous tools is automatically compacted and injected as context.
+- **CLI Session Resume**: When using the same CLI tool (e.g., Claude Code) multiple times in a session, native `--resume` flags are used for optimal performance.
 - **Session TTL**: The default Time-To-Live for all sessions is 6 months (configurable via `session.ttl_seconds`).
-- **Session IDs**: Session IDs are global. Use unique names for different tasks (e.g., "refactor-auth-logic-2024-07-15"). 
+- **Session IDs**: Use unique, descriptive names for different tasks (e.g., "refactor-auth-logic-2024-07-15"). 
 
 ### Configuration
 

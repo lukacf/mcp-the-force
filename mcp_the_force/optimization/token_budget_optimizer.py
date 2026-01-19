@@ -86,7 +86,7 @@ class TokenBudgetOptimizer:
                 from ..unified_session_cache import unified_session_cache
 
                 history = await unified_session_cache.get_history(
-                    self.project_name, self.tool_name, self.session_id
+                    self.project_name, self.session_id
                 )
 
                 # Fallback for temp sessions: try to find under different project names
@@ -99,11 +99,11 @@ class TokenBudgetOptimizer:
 
                     cache_instance = _get_instance()
                     rows = await cache_instance._execute_async(
-                        "SELECT project, tool, history FROM unified_sessions WHERE session_id = ? AND tool = ? LIMIT 1",
-                        (self.session_id, self.tool_name),
+                        "SELECT project, history FROM unified_sessions WHERE session_id = ? LIMIT 1",
+                        (self.session_id,),
                     )
                     if rows:
-                        actual_project, actual_tool, history_json = rows[0]
+                        actual_project, history_json = rows[0]
                         logger.debug(
                             f"[OPTIMIZER] Found temp session under project={actual_project}"
                         )

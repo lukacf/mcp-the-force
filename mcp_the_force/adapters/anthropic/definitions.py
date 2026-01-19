@@ -8,9 +8,8 @@ with other adapters that expect a definitions.py module.
 from .capabilities import (
     ANTHROPIC_MODEL_CAPABILITIES,
     AnthropicBaseCapabilities,
-    Claude3OpusCapabilities,
-    Claude41OpusCapabilities,
-    Claude4SonnetCapabilities,
+    Claude45SonnetCapabilities,
+    Claude45OpusCapabilities,
 )
 
 # Re-export params for consistency
@@ -19,8 +18,7 @@ from .params import AnthropicToolParams
 __all__ = [
     "ANTHROPIC_MODEL_CAPABILITIES",
     "AnthropicBaseCapabilities",
-    "Claude3OpusCapabilities",
-    "Claude41OpusCapabilities",
-    "Claude4SonnetCapabilities",
+    "Claude45SonnetCapabilities",
+    "Claude45OpusCapabilities",
     "AnthropicToolParams",
 ]

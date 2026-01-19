@@ -40,6 +40,11 @@ def resolve_model_to_cli(model_name: str) -> str:
         ModelNotFoundError: If the model is not in the registry
         NoCLIAvailableError: If the model exists but has no CLI mapping
     """
+    # Ensure blueprints are registered (triggers lazy loading)
+    from mcp_the_force.tools.registry import list_tools
+
+    list_tools()
+
     blueprints = get_blueprints()
 
     # Find blueprint by model name

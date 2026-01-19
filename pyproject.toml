@@ -44,6 +44,7 @@ dependencies = [
     "hnswlib>=0.8.0",
     "sentence-transformers>=2.6.0",
     "requests>=2.28.0",
+    "aiosqlite>=0.22.1",
 ]
 
 [project.scripts]
@@ -93,6 +94,7 @@ markers = [
     "no_virtual_clock: Disable virtual clock for tests that need real timing",
     "cli_agents: Tests for CLI Agents feature (work_with/consult_with)",
     "rct: Representation Contract Tests (external boundary validation)",
+    "requires_real_cli: Tests that require real CLI tools (claude, gemini, codex) installed",
 ]
 # Note: plugins loading moved to conftest.py for better compatibility
 

@@ -53,7 +53,7 @@ class Claude45SonnetCapabilities(AnthropicBaseCapabilities):
 class Claude45OpusCapabilities(AnthropicBaseCapabilities):
     """Capabilities for Claude 4.5 Opus."""
 
-    model_name: str = "claude-opus-4-5-20251101"
+    model_name: str = "claude-opus-4-5"
     max_context_window: int = 200_000  # 1M beta not announced for Opus 4.5
     max_output_tokens: int = 64_000
     supports_reasoning_effort: bool = True
@@ -62,22 +62,8 @@ class Claude45OpusCapabilities(AnthropicBaseCapabilities):
     )
 
 
-@dataclass
-class Claude3OpusCapabilities(AnthropicBaseCapabilities):
-    """Capabilities for Claude 3 Opus."""
-
-    model_name: str = "claude-3-opus-20240229"
-    max_context_window: int = 200_000
-    max_output_tokens: int = 8_000
-    supports_reasoning_effort: bool = (
-        False  # Claude 3 doesn't support extended thinking
-    )
-    description: str = "Prior flagship known for thoughtful, low-hallucination writing. Speed: low/medium. Tool use: good. When to use: Well-structured reports and literature summaries—prefer newer Sonnet/Opus 4-series or GPT-5 for tool-heavy tasks."
-
-
 # Map of model names to their capability instances
 ANTHROPIC_MODEL_CAPABILITIES: Dict[str, AnthropicBaseCapabilities] = {
-    "claude-opus-4-5-20251101": Claude45OpusCapabilities(),
+    "claude-opus-4-5": Claude45OpusCapabilities(),
     "claude-sonnet-4-5": Claude45SonnetCapabilities(),
-    "claude-3-opus-20240229": Claude3OpusCapabilities(),
 }

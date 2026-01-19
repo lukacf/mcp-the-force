@@ -7,7 +7,6 @@ from mcp_the_force.adapters.anthropic.adapter import AnthropicAdapter
 from mcp_the_force.adapters.anthropic.capabilities import (
     Claude45OpusCapabilities,
     Claude45SonnetCapabilities,
-    Claude3OpusCapabilities,
 )
 from mcp_the_force.adapters.anthropic.params import AnthropicToolParams
 
@@ -18,29 +17,28 @@ class TestAnthropicAdapter:
     def test_supported_models(self):
         """Test that all expected models are supported."""
         models = AnthropicAdapter.get_supported_models()
-        assert "claude-opus-4-5-20251101" in models
-        assert "claude-3-opus-20240229" in models
+        assert "claude-opus-4-5" in models
         assert "claude-sonnet-4-5" in models
-        assert len(models) == 3
+        assert len(models) == 2
 
     def test_model_string_format(self):
         """Test model string formatting for LiteLLM."""
-        adapter = AnthropicAdapter()
+        adapter = AnthropicAdapter("claude-opus-4-5")
         assert adapter._get_model_prefix() == "anthropic"
-        assert adapter.model_name == "claude-opus-4-5-20251101"  # Default model
+        assert adapter.model_name == "claude-opus-4-5"
 
     @patch("mcp_the_force.config.get_settings")
     def test_api_key_validation(self, mock_settings):
         """Test API key validation during initialization."""
         # Test with valid API key
         mock_settings.return_value.anthropic.api_key = "sk-ant-test-key"
-        adapter = AnthropicAdapter()  # Should not raise
-        assert adapter.model_name == "claude-opus-4-5-20251101"
+        adapter = AnthropicAdapter("claude-opus-4-5")  # Should not raise
+        assert adapter.model_name == "claude-opus-4-5"
 
         # Test without API key
         mock_settings.return_value.anthropic.api_key = None
         with pytest.raises(ValueError, match="Anthropic API key not configured"):
-            AnthropicAdapter()
+            AnthropicAdapter("claude-opus-4-5")
 
     def test_thinking_budget_mapping(self):
         """Test thinking budget mapping from reasoning effort."""
@@ -66,7 +64,7 @@ class TestAnthropicAdapter:
     def test_claude45_opus_capabilities(self):
         """Test Claude 4.5 Opus capabilities."""
         caps = Claude45OpusCapabilities()
-        assert caps.model_name == "claude-opus-4-5-20251101"
+        assert caps.model_name == "claude-opus-4-5"
         assert caps.max_context_window == 200_000
         assert caps.max_output_tokens == 64_000
         assert caps.supports_reasoning_effort is True
@@ -81,14 +79,6 @@ class TestAnthropicAdapter:
         assert caps.max_context_window == 1_000_000
         assert caps.max_output_tokens == 64_000
         assert caps.supports_reasoning_effort is True
-
-    def test_claude3_opus_capabilities(self):
-        """Test Claude 3 Opus capabilities."""
-        caps = Claude3OpusCapabilities()
-        assert caps.model_name == "claude-3-opus-20240229"
-        assert caps.max_context_window == 200_000
-        assert caps.max_output_tokens == 8_000
-        assert caps.supports_reasoning_effort is False  # No extended thinking
 
     def test_sonnet_1m_context_header(self):
         """Test that Sonnet 4.5 includes 1M context beta header."""

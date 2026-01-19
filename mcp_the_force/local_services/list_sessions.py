@@ -21,7 +21,7 @@ class ListSessionsService:
 
         Args:
             limit: Maximum number of sessions to return (default: 5)
-            search: Optional substring search on session_id and tool_name
+            search: Optional substring search on session_id
             include_summary: Whether to include summary in results (default: False)
 
         Returns:
@@ -39,29 +39,30 @@ class ListSessionsService:
         params: List[Any] = [project_name]
 
         # Base query - with optional summary join
+        # Note: Sessions are now keyed by (project, session_id), tool info is per-turn in history
         if include_summary:
             query = """
-                SELECT s.tool as tool_name, s.session_id, ss.summary
+                SELECT s.session_id, ss.summary
                 FROM unified_sessions s
-                LEFT JOIN session_summaries ss 
-                    ON s.project = ss.project AND s.tool = ss.tool AND s.session_id = ss.session_id
+                LEFT JOIN session_summaries ss
+                    ON s.project = ss.project AND s.session_id = ss.session_id
                 WHERE s.project = ?
             """
         else:
             query = """
-                SELECT tool as tool_name, session_id
+                SELECT session_id
                 FROM unified_sessions
                 WHERE project = ?
             """
 
-        # Add search filter if provided
+        # Add search filter if provided (searches session_id only)
         if search:
             if include_summary:
-                query += " AND (s.session_id LIKE ? OR s.tool LIKE ?)"
+                query += " AND s.session_id LIKE ?"
             else:
-                query += " AND (session_id LIKE ? OR tool LIKE ?)"
+                query += " AND session_id LIKE ?"
             like_pattern = f"%{search}%"
-            params.extend([like_pattern, like_pattern])
+            params.append(like_pattern)
 
         # Add ordering and limit
         if include_summary:
@@ -77,10 +78,10 @@ class ListSessionsService:
         results = []
         if rows:
             for row in rows:
-                session_data = {"tool_name": row[0], "session_id": row[1]}
+                session_data = {"session_id": row[0]}
                 if include_summary:
-                    # The summary is the third column (index 2), may be None
-                    summary_raw = row[2]
+                    # The summary is the second column (index 1), may be None
+                    summary_raw = row[1]
                     if summary_raw:
                         try:
                             # Try to parse as JSON and extract one_liner

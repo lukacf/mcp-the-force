@@ -74,12 +74,12 @@ def test_plugin_implements_protocol():
     When: We check their methods
     Then: Each has executable, build_new_session_args, build_resume_args
     """
-    from mcp_the_force.cli_plugins.registry import list_cli_plugins, get_cli_plugin
+    from mcp_the_force.cli_plugins.registry import get_cli_plugin
 
-    plugins = list_cli_plugins()
-    assert len(plugins) >= 3, "At least claude, gemini, codex should be registered"
+    # Only check production plugins, not test plugins from RCT
+    production_plugins = ["claude", "gemini", "codex"]
 
-    for name in plugins:
+    for name in production_plugins:
         plugin = get_cli_plugin(name)
         assert plugin is not None
 
@@ -187,7 +187,8 @@ def test_plugin_parse_output_delegates_to_parser():
     assert "Hello" in gemini_result.content
 
     # Codex: JSONL format with thread_id (NOT session_id)
-    codex_output = '{"type":"thread.started","thread_id":"codex-thread-789"}\n{"type":"item.completed","content":"Hello from Codex"}'
+    # Content is in item.text (agent_message type only)
+    codex_output = '{"type":"thread.started","thread_id":"codex-thread-789"}\n{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"Hello from Codex"}}'
     codex_plugin = CodexPlugin()
     codex_result = codex_plugin.parse_output(codex_output)
     assert (

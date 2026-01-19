@@ -18,8 +18,8 @@ class ClaudePlugin:
     CLI plugin for Anthropic Claude Code CLI.
 
     Command formats:
-    - New session: claude --print --add-dir <dir> -p "<task>"
-    - Resume: claude --print --resume <session_id> -p "<task>"
+    - New session: claude --print --add-dir <dir> "<task>"
+    - Resume: claude --print --resume <session_id> "<task>"
 
     Output format: JSON array with events (see parser.py)
     """
@@ -39,7 +39,7 @@ class ClaudePlugin:
         cli_flags: Optional[str] = None,
     ) -> List[str]:
         """Build args for a new Claude CLI session."""
-        args = ["--print"]
+        args = ["--print", "--output-format", "json", "--dangerously-skip-permissions"]
 
         # Add context directories
         for dir_path in context_dirs:
@@ -53,8 +53,8 @@ class ClaudePlugin:
         if cli_flags:
             args.extend(cli_flags.split())
 
-        # Task with -p flag (required by Claude CLI)
-        args.extend(["-p", task])
+        # Task as positional argument
+        args.append(task)
 
         return args
 
@@ -65,14 +65,21 @@ class ClaudePlugin:
         cli_flags: Optional[str] = None,
     ) -> List[str]:
         """Build args for resuming a Claude CLI session."""
-        args = ["--print", "--resume", session_id]
+        args = [
+            "--print",
+            "--output-format",
+            "json",
+            "--dangerously-skip-permissions",
+            "--resume",
+            session_id,
+        ]
 
         # Add any extra CLI flags
         if cli_flags:
             args.extend(cli_flags.split())
 
-        # Task with -p flag (required by Claude CLI)
-        args.extend(["-p", task])
+        # Task as positional argument
+        args.append(task)
 
         return args
 

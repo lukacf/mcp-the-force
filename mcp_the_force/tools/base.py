@@ -43,6 +43,10 @@ class ToolSpec:
     timeout: int = 600  # Default timeout 10 minutes
     description: str = ""
 
+    # Internal-only tools are in TOOL_REGISTRY but not exposed via MCP
+    # Used for chat_with_* tools that consult_with routes to internally
+    internal_only: bool = False
+
     # LocalService class (optional, for utility tools)
     service_cls: type | None = None
 
@@ -61,6 +65,7 @@ class ToolSpec:
             "context_window": cls.context_window,
             "timeout": cls.timeout,
             "description": cls.description,
+            "internal_only": cls.internal_only,
         }
         # Include service_cls if defined (for LocalService pattern)
         if hasattr(cls, "service_cls") and cls.service_cls is not None:

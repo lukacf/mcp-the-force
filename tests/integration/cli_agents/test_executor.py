@@ -191,9 +191,10 @@ class TestParserPipeline:
 
         # Sample Codex JSONL output (from RCT findings)
         # Note: Codex uses thread_id, not session_id!
+        # Content is in item.text (agent_message type only, not reasoning)
         codex_output = """{"thread_id":"codex-789-thread","type":"thread.started"}
 {"type":"turn.started"}
-{"type":"item.completed","content":"Done!"}
+{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"Done!"}}
 {"type":"turn.completed"}"""
 
         plugin = CodexPlugin()

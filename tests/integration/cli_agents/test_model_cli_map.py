@@ -54,7 +54,7 @@ def test_anthropic_models_resolve_to_claude_cli():
     # NOTE: claude-3-opus is NOT supported (deprecated per RCT 2026-01-18)
     anthropic_models = [
         "claude-sonnet-4-5",
-        "claude-opus-4-5-20251101",
+        "claude-opus-4-5",
     ]
 
     for model_name in anthropic_models:

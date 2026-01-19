@@ -53,6 +53,7 @@ def test_consult_with_registered_in_tool_registry():
 @pytest.mark.integration
 @pytest.mark.cli_agents
 @pytest.mark.asyncio
+@pytest.mark.timeout(30)
 async def test_work_with_dispatches_to_cli_agent_service():
     """
     CP-MCP-WIRING: LocalService dispatch.
@@ -83,6 +84,7 @@ async def test_work_with_dispatches_to_cli_agent_service():
 @pytest.mark.integration
 @pytest.mark.cli_agents
 @pytest.mark.asyncio
+@pytest.mark.timeout(30)
 async def test_consult_with_routes_to_internal_chat_tool():
     """
     CP-MCP-WIRING: Internal routing.
@@ -111,7 +113,6 @@ async def test_consult_with_routes_to_internal_chat_tool():
 
 @pytest.mark.integration
 @pytest.mark.cli_agents
-@pytest.mark.xfail(reason="internal_only attribute not yet implemented - Phase 2 work")
 def test_chat_with_tools_not_exposed_via_mcp():
     """
     CP-MCP-WIRING: MCP visibility.
@@ -163,7 +164,9 @@ def test_chat_with_tools_still_in_registry_for_routing():
 @pytest.mark.integration
 @pytest.mark.cli_agents
 @pytest.mark.asyncio
-async def test_work_with_stores_turn_in_session_cache(isolate_test_databases):
+async def test_work_with_stores_turn_in_session_cache(
+    isolate_test_databases, mocker, tmp_path
+):
     """
     CP-MCP-WIRING: Session persistence.
 
@@ -171,15 +174,37 @@ async def test_work_with_stores_turn_in_session_cache(isolate_test_databases):
     When: The response is returned
     Then: The turn is stored in UnifiedSessionCache
     """
-    from mcp_the_force.tools.registry import get_tool
-    from mcp_the_force.tools.executor import execute
     from mcp_the_force.unified_session_cache import UnifiedSessionCache
+    from mcp_the_force.local_services.cli_agent_service import CLIAgentService
+    from mcp_the_force.cli_agents.executor import CLIResult
 
-    metadata = get_tool("work_with")
-    assert metadata is not None, "work_with not found in TOOL_REGISTRY"
+    # Use tmp_path for consistent project name
+    project_dir = tmp_path / "test-project"
+    project_dir.mkdir()
+    project_name = "test-project"
 
-    await execute(
-        metadata,
+    # Mock CLI availability and execution
+    mocker.patch(
+        "mcp_the_force.cli_agents.availability.CLIAvailabilityChecker.is_available",
+        return_value=True,
+    )
+    mocker.patch(
+        "mcp_the_force.cli_agents.executor.CLIExecutor.execute",
+        return_value=CLIResult(
+            # Claude CLI output format: {"type": "result", "session_id": "...", "result": "..."}
+            stdout='{"type": "result", "session_id": "cli-789", "result": "Done"}',
+            stderr="",
+            return_code=0,
+            timed_out=False,
+        ),
+    )
+    mocker.patch(
+        "mcp_the_force.cli_agents.summarizer.OutputSummarizer.summarize",
+        return_value="Task completed.",
+    )
+
+    service = CLIAgentService(project_dir=str(project_dir))
+    await service.execute(
         agent="claude-sonnet-4-5",
         task="Store this turn",
         session_id="cache-test-session",
@@ -187,13 +212,16 @@ async def test_work_with_stores_turn_in_session_cache(isolate_test_databases):
     )
 
     # Verify turn was stored in session cache
+    # Note: Session key is now (project, session_id) - no tool in key
     session = await UnifiedSessionCache.get_session(
-        project="mcp-the-force",
+        project=project_name,
         session_id="cache-test-session",
     )
 
     assert session is not None
     assert len(session.history) > 0
+    # Verify the turn has work_with tool attribution
+    assert session.history[-1].get("tool") == "work_with"
 
 
 def test_mcp_tool_integration_tests_load():
