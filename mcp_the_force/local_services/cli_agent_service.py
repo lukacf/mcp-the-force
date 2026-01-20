@@ -64,7 +64,7 @@ class CLIAgentService:
         role: str = "default",
         reasoning_effort: str = "medium",
         cli_flags: Optional[List[str]] = None,
-        timeout: int = 300,
+        timeout: int = 14400,
         **_kwargs: Any,
     ) -> str:
         """

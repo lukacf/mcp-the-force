@@ -54,7 +54,7 @@ class WorkWith(ToolSpec):
     # Use local service instead of adapter
     service_cls = CLIAgentService
     adapter_class = None  # Signal to executor that this runs locally
-    timeout = 300  # 5 minute timeout for CLI execution
+    timeout = 14400  # 4 hour default timeout for CLI execution (agentic tasks can run for hours)
 
     # Parameters
     agent: str = Route.prompt(  # type: ignore[assignment]
