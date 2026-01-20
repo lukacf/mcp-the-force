@@ -106,3 +106,4 @@ venv*/
 
 # Claude hooks (local development)
 claude_hooks/
+MagicMock/
