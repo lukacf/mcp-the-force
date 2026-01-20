@@ -5,7 +5,6 @@ import logging
 import os
 import time
 import uuid
-from pathlib import Path
 from typing import Optional, List, Any, Union, Dict
 import fastmcp.exceptions
 from mcp_the_force.adapters.registry import get_adapter_class
@@ -220,24 +219,8 @@ class ToolExecutor:
             instructions = prompt_params.get("instructions", "")
             output_format = prompt_params.get("output_format", "")
 
-            # Get project name and tool name for all code paths
-            # project_path is the user's project directory
-            # Derive from MCP_CONFIG_FILE which was set at startup from the user's CWD
-            # MCP_CONFIG_FILE can be:
-            #   /project/.mcp-the-force/config.yaml (2 levels up)
-            #   /project/.claude/.mcp-the-force/config.yaml (3 levels up, via Claude Code)
-            config_file = os.environ.get("MCP_CONFIG_FILE")
-            if config_file:
-                config_path = Path(config_file)
-                # Check if .claude is in the path (Claude Code managed MCP)
-                if ".claude" in config_path.parts:
-                    # .claude/.mcp-the-force/config.yaml -> need 3 parents
-                    project_path = str(config_path.parent.parent.parent)
-                else:
-                    # .mcp-the-force/config.yaml -> need 2 parents
-                    project_path = str(config_path.parent.parent)
-            else:
-                project_path = settings.logging.project_path or os.getcwd()
+            # Get project path - the MCP server always runs from the project directory
+            project_path = os.getcwd()
             project_name = os.path.basename(project_path)
             tool_name = metadata.id
 

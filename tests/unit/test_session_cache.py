@@ -232,33 +232,74 @@ async def test_proxy_interface():
 async def test_session_metadata():
     """Test provider metadata storage."""
     session_id = "metadata_test"
+    tool = "test_tool"
 
     # Set multiple metadata fields
     # Use metadata methods instead of direct session access
-    # Note: Session key is (project, session_id) - no tool in key
+    # Note: Metadata is namespaced by tool (project, tool, session_id, key)
     await unified_session_cache.set_metadata(
-        "test-project", session_id, "response_id", "resp_123"
+        "test-project", tool, session_id, "response_id", "resp_123"
     )
     await unified_session_cache.set_metadata(
-        "test-project", session_id, "api_format", "responses"
+        "test-project", tool, session_id, "api_format", "responses"
     )
     await unified_session_cache.set_metadata(
-        "test-project", session_id, "deployment_id", "deploy_456"
+        "test-project", tool, session_id, "deployment_id", "deploy_456"
     )
 
     # Get back and verify
     response_id = await unified_session_cache.get_metadata(
-        "test-project", session_id, "response_id"
+        "test-project", tool, session_id, "response_id"
     )
     api_format = await unified_session_cache.get_metadata(
-        "test-project", session_id, "api_format"
+        "test-project", tool, session_id, "api_format"
     )
     deployment_id = await unified_session_cache.get_metadata(
-        "test-project", session_id, "deployment_id"
+        "test-project", tool, session_id, "deployment_id"
     )
     assert response_id == "resp_123"
     assert api_format == "responses"
     assert deployment_id == "deploy_456"
+
+
+@pytest.mark.asyncio
+async def test_metadata_tool_namespacing():
+    """Test that metadata is properly namespaced by tool to prevent collisions.
+
+    Regression test for GroupThink bug where get_metadata/set_metadata
+    signatures were missing the tool parameter, causing metadata collisions.
+    """
+    session_id = "namespacing_test"
+    project = "test-project"
+
+    # Two different tools storing the same key
+    tool_a = "group_think"
+    tool_b = "chat_with_gpt52"
+
+    # Set same key with different values for different tools
+    await unified_session_cache.set_metadata(
+        project, tool_a, session_id, "state", {"phase": "discussion", "step": 3}
+    )
+    await unified_session_cache.set_metadata(
+        project, tool_b, session_id, "state", {"response_id": "resp_abc"}
+    )
+
+    # Verify each tool gets its own isolated value
+    tool_a_state = await unified_session_cache.get_metadata(
+        project, tool_a, session_id, "state"
+    )
+    tool_b_state = await unified_session_cache.get_metadata(
+        project, tool_b, session_id, "state"
+    )
+
+    assert tool_a_state == {"phase": "discussion", "step": 3}
+    assert tool_b_state == {"response_id": "resp_abc"}
+
+    # Verify non-existent tool returns None
+    tool_c_state = await unified_session_cache.get_metadata(
+        project, "non_existent_tool", session_id, "state"
+    )
+    assert tool_c_state is None
 
 
 @pytest.mark.asyncio

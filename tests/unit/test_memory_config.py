@@ -306,7 +306,11 @@ class TestForceConversationIntegration:
         assert store_dict["commit"] == "vs_commit_456"
 
     def test_get_stores_with_types_includes_force_conversations(self, temp_db):
-        """Test that get_stores_with_types includes Force conversation sessions."""
+        """Test that get_stores_with_types includes Force conversation sessions.
+
+        Uses the CURRENT schema where tool is stored per-message in the
+        history JSON, not as a separate column.
+        """
         config = HistoryStorageConfig(db_path=temp_db)
 
         # Add traditional conversation store
@@ -317,72 +321,102 @@ class TestForceConversationIntegration:
             ("vs_traditional_conv", "conversation", 10, "2024-01-01", 1),
         )
 
-        # Add unified_sessions table (same schema as sessions.sqlite3)
+        # Add unified_sessions table with CURRENT schema (no tool column!)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS unified_sessions(
                 project TEXT NOT NULL,
-                tool TEXT NOT NULL, 
                 session_id TEXT NOT NULL,
                 history TEXT,
                 provider_metadata TEXT,
                 updated_at INTEGER NOT NULL,
-                PRIMARY KEY (project, tool, session_id)
+                PRIMARY KEY (project, session_id)
             )
         """)
 
-        # Insert Force conversation sessions
+        # Insert Force conversation sessions with tool stored IN the history JSON
         import json
 
-        sample_history = json.dumps(
+        gemini_history = json.dumps(
             [
                 {
                     "role": "user",
                     "content": "ZEPHYR-NEXUS-QUANTUM-7734: Memory vault test",
+                    "tool": "chat_with_gemini3_flash_preview",
                 },
-                {"role": "assistant", "content": "ECHO-PROTOCOL-OMEGA confirmed"},
+                {
+                    "role": "assistant",
+                    "content": "ECHO-PROTOCOL-OMEGA confirmed",
+                    "tool": "chat_with_gemini3_flash_preview",
+                },
+            ]
+        )
+
+        gpt_history = json.dumps(
+            [
+                {
+                    "role": "user",
+                    "content": "Debug session",
+                    "tool": "chat_with_gpt52",
+                },
+                {
+                    "role": "assistant",
+                    "content": "Debug response",
+                    "tool": "chat_with_gpt52",
+                },
             ]
         )
 
         conn.execute(
-            "INSERT INTO unified_sessions (project, tool, session_id, history, updated_at) "
-            "VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO unified_sessions (project, session_id, history, updated_at) "
+            "VALUES (?, ?, ?, ?)",
             (
                 "mcp-the-force",
-                "chat_with_gemini3_flash_preview",
                 "memory-vault-diagnostic",
-                sample_history,
+                gemini_history,
                 1234567890,
             ),
         )
 
         conn.execute(
-            "INSERT INTO unified_sessions (project, tool, session_id, history, updated_at) "
-            "VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO unified_sessions (project, session_id, history, updated_at) "
+            "VALUES (?, ?, ?, ?)",
             (
                 "mcp-the-force",
-                "chat_with_gpt52",
                 "debug-session",
-                sample_history,
+                gpt_history,
                 1234567891,
             ),
         )
 
         # Insert session with no history (should be excluded)
         conn.execute(
-            "INSERT INTO unified_sessions (project, tool, session_id, history, updated_at) "
-            "VALUES (?, ?, ?, ?, ?)",
-            ("mcp-the-force", "chat_with_gpt41", "empty-session", None, 1234567892),
+            "INSERT INTO unified_sessions (project, session_id, history, updated_at) "
+            "VALUES (?, ?, ?, ?)",
+            ("mcp-the-force", "empty-session", None, 1234567892),
         )
 
-        # Insert non-chat tool (should be excluded)
+        # Insert non-chat tool session (should be excluded)
+        non_chat_history = json.dumps(
+            [
+                {
+                    "role": "user",
+                    "content": "Search query",
+                    "tool": "search_project_history",
+                },
+                {
+                    "role": "assistant",
+                    "content": "Search results",
+                    "tool": "search_project_history",
+                },
+            ]
+        )
         conn.execute(
-            "INSERT INTO unified_sessions (project, tool, session_id, history, updated_at) "
-            "VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO unified_sessions (project, session_id, history, updated_at) "
+            "VALUES (?, ?, ?, ?)",
             (
                 "mcp-the-force",
-                "search_project_history",
                 "search-session",
-                sample_history,
+                non_chat_history,
                 1234567893,
             ),
         )
@@ -410,11 +444,9 @@ class TestForceConversationIntegration:
         store_ids = [store[1] for store in stores]
 
         # Check Force conversation sessions are included with correct format
-        assert (
-            "mcp-the-force||chat_with_gemini3_flash_preview||memory-vault-diagnostic"
-            in store_ids
-        )
-        assert "mcp-the-force||chat_with_gpt52||debug-session" in store_ids
+        # Store ID format is now project||session_id (no tool in ID)
+        assert "mcp-the-force||memory-vault-diagnostic" in store_ids
+        assert "mcp-the-force||debug-session" in store_ids
 
         # Verify all entries are marked as session type
         for store_type, store_id in stores:
@@ -423,7 +455,13 @@ class TestForceConversationIntegration:
     def test_get_stores_with_types_force_conversations_only_when_requested(
         self, temp_db
     ):
-        """Test that Force conversations only appear when conversation type is requested."""
+        """Test that Force conversations only appear when session type is requested.
+
+        Uses the CURRENT schema where tool is stored per-message in the
+        history JSON, not as a separate column.
+        """
+        import json
+
         config = HistoryStorageConfig(db_path=temp_db)
 
         # Add commit store
@@ -434,27 +472,41 @@ class TestForceConversationIntegration:
             ("vs_commit_123", "commit", 5, "2024-01-01", 1),
         )
 
-        # Add unified_sessions
+        # Add unified_sessions with CURRENT schema (no tool column!)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS unified_sessions(
                 project TEXT NOT NULL,
-                tool TEXT NOT NULL,
-                session_id TEXT NOT NULL, 
+                session_id TEXT NOT NULL,
                 history TEXT,
                 provider_metadata TEXT,
                 updated_at INTEGER NOT NULL,
-                PRIMARY KEY (project, tool, session_id)
+                PRIMARY KEY (project, session_id)
             )
         """)
 
+        # Insert session with tool stored IN the history JSON
+        gemini_history = json.dumps(
+            [
+                {
+                    "role": "user",
+                    "content": "Test message",
+                    "tool": "chat_with_gemini3_pro_preview",
+                },
+                {
+                    "role": "assistant",
+                    "content": "Test response",
+                    "tool": "chat_with_gemini3_pro_preview",
+                },
+            ]
+        )
+
         conn.execute(
-            "INSERT INTO unified_sessions (project, tool, session_id, history, updated_at) "
-            "VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO unified_sessions (project, session_id, history, updated_at) "
+            "VALUES (?, ?, ?, ?)",
             (
                 "mcp-the-force",
-                "chat_with_gemini3_pro_preview",
                 "test-session",
-                "[]",
+                gemini_history,
                 1234567890,
             ),
         )
@@ -474,7 +526,8 @@ class TestForceConversationIntegration:
         stores = config.get_stores_with_types(["session"])
         assert len(stores) == 1
         assert stores[0][0] == "session"
-        assert "||chat_with_gemini3_pro_preview||" in stores[0][1]
+        # Store ID format is now project||session_id (no tool in ID)
+        assert stores[0][1] == "mcp-the-force||test-session"
 
     def test_get_stores_with_types_empty_request(self, temp_db):
         """Test get_stores_with_types with empty store_types list."""
@@ -485,62 +538,62 @@ class TestForceConversationIntegration:
         assert stores == []
 
     def test_force_conversation_filtering(self, temp_db):
-        """Test that Force conversation filtering works correctly."""
+        """Test that Force conversation filtering works correctly.
+
+        Uses the CURRENT schema where tool is stored per-message in the
+        history JSON, not as a separate column.
+        """
+        import json
+
         config = HistoryStorageConfig(db_path=temp_db)
 
         conn = sqlite3.connect(temp_db)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS unified_sessions(
                 project TEXT NOT NULL,
-                tool TEXT NOT NULL,
                 session_id TEXT NOT NULL,
                 history TEXT,
-                provider_metadata TEXT, 
+                provider_metadata TEXT,
                 updated_at INTEGER NOT NULL,
-                PRIMARY KEY (project, tool, session_id)
+                PRIMARY KEY (project, session_id)
             )
         """)
 
-        # Test cases for filtering
+        # Helper to create history JSON with tool per-message
+        def make_history(tool_name):
+            return json.dumps(
+                [
+                    {"role": "user", "content": "test", "tool": tool_name},
+                    {"role": "assistant", "content": "response", "tool": tool_name},
+                ]
+            )
+
+        # Test cases for filtering (now tool is in history JSON, not column)
         test_cases = [
-            # Should be included
+            # Should be included - chat_with_* tools with valid history
             (
                 "mcp-the-force",
-                "chat_with_gemini3_flash_preview",
                 "session1",
-                '["valid"]',
+                make_history("chat_with_gemini3_flash_preview"),
                 True,
             ),
-            ("mcp-the-force", "chat_with_gpt52", "session2", '{"messages": []}', True),
-            (
-                "mcp-the-force",
-                "chat_with_grok41",
-                "session3",
-                '[{"role": "user"}]',
-                True,
-            ),
+            ("mcp-the-force", "session2", make_history("chat_with_gpt52"), True),
+            ("mcp-the-force", "session3", make_history("chat_with_grok41"), True),
             # Should be excluded - empty/null history
-            ("mcp-the-force", "chat_with_claude3_opus", "empty1", None, False),
-            ("mcp-the-force", "chat_with_gemini3_pro_preview", "empty2", "", False),
-            # Should be excluded - not chat tools
-            (
-                "mcp-the-force",
-                "search_project_history",
-                "search1",
-                '["content"]',
-                False,
-            ),
-            ("mcp-the-force", "count_project_tokens", "count1", '["content"]', False),
-            ("mcp-the-force", "list_sessions", "list1", '["content"]', False),
+            ("mcp-the-force", "empty1", None, False),
+            ("mcp-the-force", "empty2", "", False),
+            ("mcp-the-force", "empty3", "[]", False),
+            # Should be excluded - non chat_with_* tools
+            ("mcp-the-force", "search1", make_history("search_project_history"), False),
+            ("mcp-the-force", "count1", make_history("count_project_tokens"), False),
+            ("mcp-the-force", "list1", make_history("list_sessions"), False),
         ]
 
-        for i, (project, tool, session_id, history, should_include) in enumerate(
-            test_cases
-        ):
+        for i, (project, session_id, history, _should_include) in enumerate(test_cases):
             conn.execute(
-                "INSERT INTO unified_sessions (project, tool, session_id, history, updated_at) "
-                "VALUES (?, ?, ?, ?, ?)",
-                (project, tool, session_id, history, 1234567890 + i),
+                "INSERT INTO unified_sessions (project, session_id, history, updated_at) "
+                "VALUES (?, ?, ?, ?)",
+                (project, session_id, history, 1234567890 + i),
             )
 
         conn.commit()
@@ -555,24 +608,29 @@ class TestForceConversationIntegration:
         stores = config.get_stores_with_types(["session"])
         store_ids = [store[1] for store in stores]
 
-        # Verify expected inclusions
+        # Verify expected inclusions (store_id format is project||session_id)
         expected_included = [
-            "mcp-the-force||chat_with_gemini3_flash_preview||session1",
-            "mcp-the-force||chat_with_gpt52||session2",
-            "mcp-the-force||chat_with_grok41||session3",
+            "mcp-the-force||session1",
+            "mcp-the-force||session2",
+            "mcp-the-force||session3",
         ]
 
         for expected in expected_included:
-            assert expected in store_ids, f"Expected {expected} to be included"
+            assert (
+                expected in store_ids
+            ), f"Expected {expected} to be included, got: {store_ids}"
 
         # Verify expected exclusions
         expected_excluded = [
-            "mcp-the-force||chat_with_claude3_opus||empty1",
-            "mcp-the-force||chat_with_gemini3_pro_preview||empty2",
-            "mcp-the-force||search_project_history||search1",
-            "mcp-the-force||count_project_tokens||count1",
-            "mcp-the-force||list_sessions||list1",
+            "mcp-the-force||empty1",
+            "mcp-the-force||empty2",
+            "mcp-the-force||empty3",
+            "mcp-the-force||search1",
+            "mcp-the-force||count1",
+            "mcp-the-force||list1",
         ]
 
         for excluded in expected_excluded:
-            assert excluded not in store_ids, f"Expected {excluded} to be excluded"
+            assert (
+                excluded not in store_ids
+            ), f"Expected {excluded} to be excluded, got: {store_ids}"

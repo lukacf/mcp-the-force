@@ -84,3 +84,16 @@ class WorkWith(ToolSpec):
         ),
         default="default",
     )
+
+    reasoning_effort: str = Route.prompt(  # type: ignore[assignment]
+        description=(
+            "(Optional) Controls the depth of the agent's reasoning/thinking. "
+            "Supported levels: 'low', 'medium', 'high', 'xhigh' (extra high). "
+            "Higher effort = better quality but longer execution. "
+            "Support varies by CLI: Codex supports all levels, Claude uses "
+            "MAX_THINKING_TOKENS (low=16k, medium=32k, high=64k), Gemini "
+            "doesn't support this parameter yet. "
+            "Default: 'medium'"
+        ),
+        default="medium",
+    )

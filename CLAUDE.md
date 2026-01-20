@@ -38,7 +38,7 @@ MCP The-Force Server - A Model Context Protocol (MCP) server that provides acces
 
 4. **Context Management** (`mcp_the_force/utils/`)
    - `fs.py`: Intelligent file gathering with gitignore support and filtering
-   - `prompt_builder.py`: Smart context inlining vs vector store routing
+   - `context_builder.py`: Smart context inlining vs vector store routing
    - `vector_store.py`: OpenAI vector store integration for RAG
    - `token_counter.py`: Token counting for context management
 
@@ -66,6 +66,23 @@ The Force provides two primary tools for AI collaboration:
 - **`gemini-3-pro-preview`**: Google's multimodal model (1M context, strong tools)
 - **`claude-sonnet-4-5`**: Anthropic's latest (1M context beta, strong coding)
 - **`grok-4.1`**: xAI's model with 2M context and live search
+
+**work_with parameters:**
+- `agent`: Model name (e.g., `claude-sonnet-4-5`, `gpt-5.2`, `gemini-3-pro-preview`)
+- `task`: The task for the agent to perform
+- `session_id`: Conversation identifier (reuse to continue conversations)
+- `role`: System prompt role — `default`, `planner`, or `codereviewer`
+- `reasoning_effort`: Controls depth of agent reasoning:
+  - `low`: Quick tasks, simple questions
+  - `medium`: Standard tasks (default)
+  - `high`: Complex analysis, difficult bugs
+  - `xhigh`: Maximum depth (GPT-5.2 Pro, GPT-5.1 Codex Max only)
+
+**consult_with parameters:**
+- `model`: Model name (same as work_with)
+- `question`: The question or prompt
+- `output_format`: Response format (e.g., `markdown`, `JSON`, `bullet list`)
+- `session_id`: Conversation identifier
 
 **Utility tools:**
 - `list_sessions`: List existing AI conversation sessions for the current project

@@ -37,9 +37,11 @@ class EnvironmentBuilder:
 
     # Map CLI names to the config directories they need symlinked from real HOME
     # These directories contain auth tokens that can't be injected via env vars
+    # NOTE: .claude is intentionally NOT symlinked - it contains project-specific
+    # settings that would cause Claude Code to use the wrong working directory.
+    # Claude Code authenticates via ANTHROPIC_API_KEY env var instead.
     CLI_CONFIG_DIRS = {
         "codex": [".codex"],  # Codex uses OAuth tokens in ~/.codex/auth.json
-        "claude": [".claude"],  # Claude may use config in ~/.claude/
         "gemini": [".gemini"],  # Gemini may use config in ~/.gemini/
     }
 

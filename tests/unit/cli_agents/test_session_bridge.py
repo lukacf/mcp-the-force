@@ -7,9 +7,6 @@ Tests session mapping logic in isolation (using in-memory SQLite).
 import pytest
 
 
-@pytest.mark.xfail(
-    reason="Phase 2: SessionBridge not yet implemented", raises=NotImplementedError
-)
 class TestSessionBridgeCRUD:
     """Unit tests for SessionBridge CRUD operations."""
 

@@ -29,7 +29,8 @@ class ConsultWith(ToolSpec):
     model: str = Route.prompt(  # type: ignore[assignment]
         description=(
             "(Required) The API model to consult. "
-            "Options: 'gpt52', 'gpt52_pro', 'gemini3_pro', 'gemini3_flash', 'grok41', etc. "
+            "Options: 'gpt-5.2', 'gpt-5.2-pro', 'gemini-3-pro-preview', 'gemini-3-flash-preview', "
+            "'grok-4.1', 'claude-opus-4-5', 'claude-sonnet-4-5', etc. "
             "Routes to the corresponding chat_with_* tool internally."
         )
     )

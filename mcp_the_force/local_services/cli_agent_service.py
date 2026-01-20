@@ -20,6 +20,7 @@ from mcp_the_force.cli_agents.model_cli_resolver import (
     NoCLIAvailableError,
     resolve_model_to_cli,
 )
+from mcp_the_force.cli_agents.output_cleaner import OutputCleaner, OutputFileHandler
 from mcp_the_force.cli_agents.roles import RoleLoader
 from mcp_the_force.cli_agents.session_bridge import SessionBridge
 from mcp_the_force.cli_agents.summarizer import OutputSummarizer
@@ -49,6 +50,8 @@ class CLIAgentService:
         self._compactor = Compactor()
         self._environment_builder = EnvironmentBuilder()
         self._executor = CLIExecutor()
+        self._output_cleaner = OutputCleaner()
+        self._output_file_handler = OutputFileHandler()
         self._session_bridge = SessionBridge()
         self._role_loader = RoleLoader(project_dir=project_dir)
         self._summarizer = OutputSummarizer()
@@ -59,6 +62,7 @@ class CLIAgentService:
         task: str,
         session_id: str,
         role: str = "default",
+        reasoning_effort: str = "medium",
         cli_flags: Optional[List[str]] = None,
         timeout: int = 300,
         **_kwargs: Any,
@@ -71,6 +75,7 @@ class CLIAgentService:
             task: Task/prompt for the agent
             session_id: Force session ID
             role: Role name for system prompt (default, planner, codereviewer)
+            reasoning_effort: Reasoning effort level (low/medium/high/xhigh)
             cli_flags: Optional additional CLI flags for power users
             timeout: Execution timeout in seconds
             **kwargs: Additional parameters
@@ -207,12 +212,13 @@ class CLIAgentService:
         # 6. Load role prompt
         role_prompt = self._role_loader.get_role(role)
 
-        # 7. Build command
+        # 7. Build command (passing reasoning_effort to plugin)
         if use_resume and existing_cli_session:
             # Resume existing session
             command = cli_plugin.build_resume_args(
                 session_id=existing_cli_session,
                 task=task,
+                reasoning_effort=reasoning_effort,
             )
         else:
             # New session - automatically add project directory as context
@@ -225,6 +231,7 @@ class CLIAgentService:
                 task=task,
                 context_dirs=context_dirs,
                 role=role_prompt,
+                reasoning_effort=reasoning_effort,
             )
 
         # Add CLI executable at the front
@@ -239,6 +246,15 @@ class CLIAgentService:
             project_dir=self._project_dir,
             cli_name=cli_name,
         )
+
+        # 7b. Get and merge reasoning effort env vars (e.g., MAX_THINKING_TOKENS for Claude)
+        if hasattr(cli_plugin, "get_reasoning_env_vars"):
+            reasoning_env = cli_plugin.get_reasoning_env_vars(reasoning_effort)
+            if reasoning_env:
+                env.update(reasoning_env)
+                logger.info(
+                    f"[CLI-SERVICE] Added reasoning env vars: {list(reasoning_env.keys())}"
+                )
 
         # 8. Execute via CLIExecutor
         logger.info(f"Executing CLI agent: {cli_name} for session {session_id}")
@@ -262,23 +278,45 @@ class CLIAgentService:
             )
 
         # 11. Build result content
-        # Use full stdout for summarization (includes all CoT, reasoning, etc.)
-        # but fall back to parsed content if stdout is empty
-        full_output = result.stdout or parsed.content or ""
+        # Use parsed.content (already cleaned by parser) as primary source
+        # Fall back to raw stdout only if parsed content is empty
+        raw_output = parsed.content or result.stdout or ""
         if result.timed_out:
-            full_output += "\n\n[CLI execution timed out - partial output shown]"
+            raw_output += "\n\n[CLI execution timed out - partial output shown]"
+        if result.idle_timeout:
+            raw_output += "\n\n[CLI process killed due to idle timeout - may be hung]"
         if result.return_code != 0 and not result.stdout and not parsed.content:
-            full_output = (
-                f"CLI error (exit code {result.return_code}):\n{result.stderr}"
+            raw_output = f"CLI error (exit code {result.return_code}):\n{result.stderr}"
+
+        # 11b. Clean the output (convert JSONL to markdown, count tokens)
+        cleaned = self._output_cleaner.clean(raw_output)
+
+        # 12. Handle large outputs: save to file, summarize, include link
+        if cleaned.exceeds_threshold:
+            # Save full output to file
+            output_file = self._output_file_handler.save_to_file(
+                cleaned.markdown, session_id=session_id
             )
 
-        # 12. Summarize output via Gemini Flash (only if exceeds threshold)
-        # Summarizer now only summarizes large outputs and returns small ones verbatim
-        summarized = await self._summarizer.summarize(
-            output=full_output,
-            task_context=f"Task: {task}",
-        )
-        final_response = summarized or full_output
+            # Summarize the cleaned output
+            summarized = await self._summarizer.summarize(
+                output=cleaned.markdown,
+                task_context=f"Task: {task}",
+            )
+
+            # Format response with summary and file link
+            if summarized and summarized != cleaned.markdown:
+                final_response = self._output_file_handler.format_summary_with_link(
+                    summarized, output_file
+                )
+            else:
+                # Summarization failed or returned same content - return cleaned with file link
+                final_response = self._output_file_handler.format_summary_with_link(
+                    cleaned.markdown[:5000] + "\n\n... (output truncated)", output_file
+                )
+        else:
+            # Small output: return cleaned markdown directly
+            final_response = cleaned.markdown
 
         # 13. Store turn in UnifiedSessionCache with metadata
         turn_metadata: Dict[str, Any] = {

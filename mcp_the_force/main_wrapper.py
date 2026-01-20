@@ -1,6 +1,5 @@
 """Wrapper for uvx execution that handles configuration initialization."""
 
-import os
 import sys
 from pathlib import Path
 import logging
@@ -10,10 +9,6 @@ logger = logging.getLogger(__name__)
 
 def ensure_config_exists():
     """Ensure configuration files exist, creating defaults if needed."""
-    # If config files are already set via env vars, respect them
-    if "MCP_CONFIG_FILE" in os.environ or "MCP_SECRETS_FILE" in os.environ:
-        return
-
     # Safety check: Don't create config in home or root directories
     cwd = Path.cwd()
     if cwd == Path.home() or cwd == Path("/"):
@@ -55,10 +50,6 @@ def ensure_config_exists():
 
     config_file = config_dir / "config.yaml"
     secrets_file = config_dir / "secrets.yaml"
-
-    # Set environment variables so config.py can find them
-    os.environ["MCP_CONFIG_FILE"] = str(config_file)
-    os.environ["MCP_SECRETS_FILE"] = str(secrets_file)
 
     # Create default config.yaml if it doesn't exist
     if not config_file.exists():

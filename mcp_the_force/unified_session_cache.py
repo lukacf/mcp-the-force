@@ -538,16 +538,37 @@ class UnifiedSessionCache:
 
     # Convenience method for provider metadata
     @staticmethod
-    async def get_metadata(project: str, session_id: str, key: str) -> Any:
-        """Get specific metadata value."""
+    async def get_metadata(project: str, tool: str, session_id: str, key: str) -> Any:
+        """Get specific metadata value, namespaced by tool.
+
+        Args:
+            project: Project identifier
+            tool: Tool name (e.g., 'group_think', 'chat_with_gpt52')
+            session_id: Session identifier
+            key: Metadata key within the tool's namespace
+        """
+        # Namespace the key by tool to avoid collisions
+        namespaced_key = f"{tool}:{key}"
         session = await _get_instance().get_session(project, session_id)
         if session:
-            return session.provider_metadata.get(key)
+            return session.provider_metadata.get(namespaced_key)
         return None
 
     @staticmethod
-    async def set_metadata(project: str, session_id: str, key: str, value: Any) -> None:
-        """Set specific metadata value, preserving other data."""
+    async def set_metadata(
+        project: str, tool: str, session_id: str, key: str, value: Any
+    ) -> None:
+        """Set specific metadata value, namespaced by tool.
+
+        Args:
+            project: Project identifier
+            tool: Tool name (e.g., 'group_think', 'chat_with_gpt52')
+            session_id: Session identifier
+            key: Metadata key within the tool's namespace
+            value: Value to store
+        """
+        # Namespace the key by tool to avoid collisions
+        namespaced_key = f"{tool}:{key}"
         session = await _get_instance().get_session(project, session_id)
         if not session:
             session = UnifiedSession(
@@ -556,14 +577,14 @@ class UnifiedSessionCache:
                 updated_at=int(time.time()),
             )
 
-        session.provider_metadata[key] = value
+        session.provider_metadata[namespaced_key] = value
         await _get_instance().set_session(session)
 
     @staticmethod
     async def get_api_format(project: str, session_id: str) -> Optional[str]:
         """Get the API format being used ('chat' or 'responses')."""
         result = await UnifiedSessionCache.get_metadata(
-            project, session_id, "api_format"
+            project, "_session", session_id, "api_format"
         )
         return str(result) if result is not None else None
 
@@ -571,7 +592,7 @@ class UnifiedSessionCache:
     async def set_api_format(project: str, session_id: str, api_format: str) -> None:
         """Set the API format being used."""
         await UnifiedSessionCache.set_metadata(
-            project, session_id, "api_format", api_format
+            project, "_session", session_id, "api_format", api_format
         )
 
     @staticmethod

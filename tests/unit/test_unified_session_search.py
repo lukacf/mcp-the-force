@@ -21,20 +21,23 @@ def temp_db():
 
 @pytest.fixture
 def populated_db(temp_db):
-    """Create a database with unified session data."""
+    """Create a database with unified session data.
+
+    Uses the CURRENT schema where tool is stored per-message in the
+    history JSON, not as a separate column.
+    """
     # Create the tables
     conn = sqlite3.connect(temp_db)
 
-    # Create unified_sessions table
+    # Create unified_sessions table with CURRENT schema (no tool column!)
     conn.execute("""
         CREATE TABLE unified_sessions(
             project TEXT NOT NULL,
-            tool TEXT NOT NULL,
             session_id TEXT NOT NULL,
             history TEXT,
             provider_metadata TEXT,
             updated_at INTEGER NOT NULL,
-            PRIMARY KEY (project, tool, session_id)
+            PRIMARY KEY (project, session_id)
         )
     """)
 
@@ -57,33 +60,41 @@ def populated_db(temp_db):
         )
     """)
 
-    # Insert sample Force conversation sessions
+    # Insert sample Force conversation sessions with tool stored IN the history JSON
     test_conversations = [
         {
             "project": "mcp-the-force",
-            "tool": "chat_with_gemini3_flash_preview",
             "session_id": "memory-vault-diagnostic",
             "history": json.dumps(
                 [
                     {
                         "role": "user",
                         "content": "ZEPHYR-NEXUS-QUANTUM-7734: Memory vault test",
+                        "tool": "chat_with_gemini3_flash_preview",
                     },
-                    {"role": "assistant", "content": "ECHO-PROTOCOL-OMEGA confirmed"},
+                    {
+                        "role": "assistant",
+                        "content": "ECHO-PROTOCOL-OMEGA confirmed",
+                        "tool": "chat_with_gemini3_flash_preview",
+                    },
                 ]
             ),
             "updated_at": 1234567890,
         },
         {
             "project": "mcp-the-force",
-            "tool": "chat_with_gpt52",
             "session_id": "ollama-debug-session",
             "history": json.dumps(
                 [
-                    {"role": "user", "content": "Debug ollama_chat prefix issue"},
+                    {
+                        "role": "user",
+                        "content": "Debug ollama_chat prefix issue",
+                        "tool": "chat_with_gpt52",
+                    },
                     {
                         "role": "assistant",
                         "content": "LiteLLM recommends ollama_chat for better responses",
+                        "tool": "chat_with_gpt52",
                     },
                 ]
             ),
@@ -91,7 +102,6 @@ def populated_db(temp_db):
         },
         {
             "project": "mcp-the-force",
-            "tool": "chat_with_grok41",
             "session_id": "architecture-discussion",
             "history": json.dumps(
                 [
@@ -100,10 +110,12 @@ def populated_db(temp_db):
                         "content": [
                             {"type": "text", "text": "Explain the adapter architecture"}
                         ],
+                        "tool": "chat_with_grok41",
                     },
                     {
                         "role": "assistant",
                         "content": "The adapter system uses protocol-based design",
+                        "tool": "chat_with_grok41",
                     },
                 ]
             ),
@@ -113,11 +125,10 @@ def populated_db(temp_db):
 
     for conv in test_conversations:
         conn.execute(
-            "INSERT INTO unified_sessions (project, tool, session_id, history, updated_at) "
-            "VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO unified_sessions (project, session_id, history, updated_at) "
+            "VALUES (?, ?, ?, ?)",
             (
                 conv["project"],
-                conv["tool"],
                 conv["session_id"],
                 conv["history"],
                 conv["updated_at"],
@@ -157,13 +168,11 @@ class TestStoreDiscoveryIntegration:
         stores = config.get_stores_with_types(["session"])
         assert len(stores) == 3
 
+        # Store ID format is now project||session_id (no tool in ID)
         store_ids = [store[1] for store in stores]
-        assert (
-            "mcp-the-force||chat_with_gemini3_flash_preview||memory-vault-diagnostic"
-            in store_ids
-        )
-        assert "mcp-the-force||chat_with_gpt52||ollama-debug-session" in store_ids
-        assert "mcp-the-force||chat_with_grok41||architecture-discussion" in store_ids
+        assert "mcp-the-force||memory-vault-diagnostic" in store_ids
+        assert "mcp-the-force||ollama-debug-session" in store_ids
+        assert "mcp-the-force||architecture-discussion" in store_ids
 
 
 class TestRegressionPrevention:
@@ -173,40 +182,35 @@ class TestRegressionPrevention:
         """REGRESSION TEST: Ensure unified sessions are only discovered when explicitly searching sessions."""
         config = HistoryStorageConfig(db_path=populated_db)
 
-        # Conversation searches should NOT include Force sessions
+        # Conversation searches should NOT include Force sessions (unified sessions)
         conversation_stores = config.get_stores_with_types(["conversation"])
+        # Unified sessions have "||" in their store_id (project||session_id format)
         unified_session_stores = [
-            store
-            for store in conversation_stores
-            if "||" in store[1] and "chat_with_" in store[1]
+            store for store in conversation_stores if "||" in store[1]
         ]
 
-        # Should find zero Force conversation sessions in conversation search
+        # Should find zero unified sessions in conversation search
         assert len(unified_session_stores) == 0, (
-            f"Expected no Force conversation sessions in conversation search, got {len(unified_session_stores)}. "
-            f"Force sessions should only appear when explicitly requesting 'session' store type."
+            f"Expected no unified sessions in conversation search, got {len(unified_session_stores)}. "
+            f"Unified sessions should only appear when explicitly requesting 'session' store type."
         )
 
-        # Session searches should include Force sessions
+        # Session searches should include unified sessions with chat_with_* tools
         session_stores = config.get_stores_with_types(["session"])
-        unified_session_stores = [
-            store
-            for store in session_stores
-            if "||" in store[1] and "chat_with_" in store[1]
-        ]
 
-        # Must find at least the Force conversation sessions we inserted
-        assert len(unified_session_stores) >= 3, (
-            f"Expected at least 3 Force conversation sessions in session search, got {len(unified_session_stores)}. "
+        # Must find at least the sessions we inserted that have chat_with_* tools
+        assert len(session_stores) >= 3, (
+            f"Expected at least 3 sessions in session search, got {len(session_stores)}. "
             f"This indicates a regression in unified session discovery for session searches."
         )
 
-        # Verify the store IDs have correct format
-        for store_type, store_id in unified_session_stores:
+        # Verify the store IDs have correct format (project||session_id)
+        for store_type, store_id in session_stores:
             assert store_type == "session"
             parts = store_id.split("||")
-            assert len(parts) == 3, f"Invalid store ID format: {store_id}"
-            assert parts[1].startswith("chat_with_"), f"Not a chat tool: {parts[1]}"
+            assert (
+                len(parts) == 2
+            ), f"Invalid store ID format: {store_id}, expected project||session_id"
 
     def test_commit_searches_exclude_unified_sessions(self, populated_db):
         """REGRESSION TEST: Ensure unified sessions only appear for conversation searches."""
@@ -230,40 +234,41 @@ class TestRegressionPrevention:
         conn.execute("""
             CREATE TABLE unified_sessions(
                 project TEXT NOT NULL,
-                tool TEXT NOT NULL,
                 session_id TEXT NOT NULL,
                 history TEXT,
                 provider_metadata TEXT,
                 updated_at INTEGER NOT NULL,
-                PRIMARY KEY (project, tool, session_id)
+                PRIMARY KEY (project, session_id)
             )
         """)
 
-        # Insert sessions that should be excluded
+        # Insert sessions that should be excluded (empty/null history)
         excluded_sessions = [
-            ("mcp-the-force", "chat_with_gemini3_flash_preview", "null-history", None),
-            ("mcp-the-force", "chat_with_gpt52", "empty-history", ""),
-            ("mcp-the-force", "chat_with_grok41", "whitespace-history", "   "),
+            ("mcp-the-force", "null-history", None),
+            ("mcp-the-force", "empty-history", ""),
+            ("mcp-the-force", "whitespace-history", "   "),
+            ("mcp-the-force", "empty-array", "[]"),
         ]
 
-        for i, (project, tool, session_id, history) in enumerate(excluded_sessions):
+        for i, (project, session_id, history) in enumerate(excluded_sessions):
             conn.execute(
-                "INSERT INTO unified_sessions (project, tool, session_id, history, updated_at) "
-                "VALUES (?, ?, ?, ?, ?)",
-                (project, tool, session_id, history, 1234567890 + i),
+                "INSERT INTO unified_sessions (project, session_id, history, updated_at) "
+                "VALUES (?, ?, ?, ?)",
+                (project, session_id, history, 1234567890 + i),
             )
 
         conn.commit()
         conn.close()
 
-        # Get conversation stores - should exclude all empty history sessions
-        stores = config.get_stores_with_types(["conversation"])
+        # Get session stores - should exclude all empty history sessions
+        stores = config.get_stores_with_types(["session"])
         store_ids = [store[1] for store in stores]
 
         excluded_ids = [
-            "mcp-the-force||chat_with_gemini3_flash_preview||null-history",
-            "mcp-the-force||chat_with_gpt52||empty-history",
-            "mcp-the-force||chat_with_grok41||whitespace-history",
+            "mcp-the-force||null-history",
+            "mcp-the-force||empty-history",
+            "mcp-the-force||whitespace-history",
+            "mcp-the-force||empty-array",
         ]
 
         for excluded_id in excluded_ids:
@@ -280,40 +285,46 @@ class TestRegressionPrevention:
         conn.execute("""
             CREATE TABLE unified_sessions(
                 project TEXT NOT NULL,
-                tool TEXT NOT NULL, 
                 session_id TEXT NOT NULL,
                 history TEXT,
                 provider_metadata TEXT,
                 updated_at INTEGER NOT NULL,
-                PRIMARY KEY (project, tool, session_id)
+                PRIMARY KEY (project, session_id)
             )
         """)
 
-        # Insert non-chat tool sessions that should be excluded
+        # Insert sessions with non-chat tools in their history (should be excluded)
         non_chat_tools = [
             "search_project_history",
             "count_project_tokens",
             "list_sessions",
             "describe_session",
+            "work_with",
         ]
 
         for i, tool in enumerate(non_chat_tools):
+            history = json.dumps(
+                [
+                    {"role": "user", "content": "test", "tool": tool},
+                    {"role": "assistant", "content": "response", "tool": tool},
+                ]
+            )
             conn.execute(
-                "INSERT INTO unified_sessions (project, tool, session_id, history, updated_at) "
-                "VALUES (?, ?, ?, ?, ?)",
-                ("mcp-the-force", tool, f"session-{i}", '["content"]', 1234567890 + i),
+                "INSERT INTO unified_sessions (project, session_id, history, updated_at) "
+                "VALUES (?, ?, ?, ?)",
+                ("mcp-the-force", f"session-{tool}", history, 1234567890 + i),
             )
 
         conn.commit()
         conn.close()
 
-        stores = config.get_stores_with_types(["conversation"])
+        # Session search should exclude non-chat_with_* tools
+        stores = config.get_stores_with_types(["session"])
         store_ids = [store[1] for store in stores]
 
         # None of the non-chat tools should appear
-        for tool in non_chat_tools:
-            tool_stores = [sid for sid in store_ids if f"||{tool}||" in sid]
-            assert len(tool_stores) == 0, (
-                f"Non-chat tool {tool} should be excluded from conversation stores. "
-                f"This indicates a regression in tool filtering."
-            )
+        assert len(store_ids) == 0, (
+            f"Non-chat tool sessions should be excluded from session search. "
+            f"Found: {store_ids}. "
+            f"This indicates a regression in tool filtering."
+        )

@@ -2,8 +2,6 @@
 
 import logging
 from typing import Optional, Literal, TYPE_CHECKING, List
-import json
-import time
 import asyncio
 
 if TYPE_CHECKING:
@@ -203,13 +201,6 @@ class CollaborationService:
         )
 
         try:
-            # Auto-install progress components on first use if not already installed
-            await self._ensure_progress_components_installed()
-        except Exception as e:
-            # Don't let installer failures break collaboration
-            logger.warning(f"Failed to install progress components: {e}")
-
-        try:
             # Get project name for UnifiedSessionCache
             from ..config import get_settings
 
@@ -252,8 +243,6 @@ class CollaborationService:
 
             # === MULTI-PHASE GROUP THINK EXECUTION ===
 
-            start_time = time.time()
-
             # PHASE 0: Build deliverable contract (assumption-free)
             contract = await self._build_deliverable_contract(
                 objective, output_format, user_input, session_id
@@ -282,11 +271,6 @@ class CollaborationService:
                     text=user_input[:500],
                 )
 
-            # Calculate total phases for progress tracking
-            total_phases = (
-                discussion_turns + 1 + validation_rounds
-            )  # discussion + synthesis + validation
-
             # PHASE 1: Discussion phase (limited turns)
             await self._run_discussion_phase(
                 session,
@@ -295,11 +279,9 @@ class CollaborationService:
                 discussion_turns,
                 context,
                 priority_context,
-                start_time,
                 ctx,
                 project,
                 config,
-                total_phases,
                 direct_context,
             )
 
@@ -349,9 +331,6 @@ class CollaborationService:
                 "Group think deliverable completed - synthesis agent incorporated feedback as appropriate"
             )
 
-            # Clean up progress file on success
-            self._cleanup_progress_file()
-
             # Mark session as completed
             session.status = "completed"
             await self.session_cache.set_metadata(
@@ -391,9 +370,6 @@ class CollaborationService:
                     )
             except Exception:
                 pass  # Don't let cleanup errors mask the original error
-
-            # Clean up progress file on error
-            self._cleanup_progress_file()
 
             return f"Collaboration error: {str(e)}"
 
@@ -628,119 +604,6 @@ The whiteboard contains the full conversation history. Use file_search to access
 
         return metadata
 
-    def _write_progress_file(
-        self,
-        session: CollaborationSession,
-        current_model: Optional[str] = None,
-        phase: str = "collaborating",
-        start_time: Optional[float] = None,
-        total_phases: Optional[int] = None,
-    ) -> None:
-        """Write progress file for Claude Code status line display."""
-        try:
-            # Get project directory
-            from ..config import get_settings
-
-            settings = get_settings()
-            project_path = Path(settings.logging.project_path or os.getcwd())
-
-            # Create .claude directory if it doesn't exist
-            claude_dir = project_path / ".claude"
-            claude_dir.mkdir(exist_ok=True)
-
-            # Use actual total phases instead of max_steps
-            actual_total = total_phases or session.max_steps
-
-            # Calculate progress percentage
-            if actual_total > 0:
-                percent = int((session.current_step / actual_total) * 100)
-            else:
-                percent = 0
-
-            # Calculate ETA if start_time provided
-            eta_s = None
-            if start_time and session.current_step > 0:
-                elapsed = time.time() - start_time
-                avg_time_per_step = elapsed / session.current_step
-                remaining_steps = actual_total - session.current_step
-                eta_s = int(avg_time_per_step * remaining_steps)
-
-            # Create progress data
-            progress_data = {
-                "owner": "Chatter",
-                "session_id": session.session_id,
-                "phase": phase,
-                "step": session.current_step,
-                "total": actual_total,
-                "percent": percent,
-                "current_model": current_model,
-                "mode": session.mode,
-                "status": session.status,
-                "updated_at": datetime.now().isoformat(),
-                "eta_s": eta_s,
-            }
-
-            # Write to progress file
-            progress_file = claude_dir / "chatter_progress.json"
-            with open(progress_file, "w") as f:
-                json.dump(progress_data, f, indent=2)
-
-            logger.debug(f"Updated progress file: {progress_file}")
-
-        except Exception as e:
-            # Don't let progress file errors crash the collaboration
-            logger.warning(f"Failed to write progress file: {e}")
-
-    def _cleanup_progress_file(self) -> None:
-        """Clean up progress file when collaboration completes."""
-        try:
-            from ..config import get_settings
-
-            settings = get_settings()
-            project_path = Path(settings.logging.project_path or os.getcwd())
-            progress_file = project_path / ".claude" / "chatter_progress.json"
-
-            if progress_file.exists():
-                progress_file.unlink()
-                logger.debug(f"Cleaned up progress file: {progress_file}")
-
-        except Exception as e:
-            logger.warning(f"Failed to cleanup progress file: {e}")
-
-    async def _ensure_progress_components_installed(self) -> None:
-        """Ensure progress display components are installed, auto-install if needed."""
-        try:
-            from ..config import get_settings
-            from .chatter_progress_installer import ChatterProgressInstaller
-
-            settings = get_settings()
-            project_path = Path(settings.logging.project_path or os.getcwd())
-
-            # Check if already installed
-            chatter_dir = project_path / ".claude" / "chatter"
-            if chatter_dir.exists() and (chatter_dir / "statusline_mux.sh").exists():
-                logger.debug("Progress components already installed")
-                return
-
-            # Auto-install progress components
-            logger.info(
-                "Auto-installing progress display components for group thinking..."
-            )
-            installer = ChatterProgressInstaller()
-            result = await installer.execute(
-                action="install",
-                project_dir=str(project_path),
-                with_hooks=True,
-                dry_run=False,
-            )
-            logger.info(
-                f"Progress components installed: {result.split(chr(10))[0]}"
-            )  # First line only
-
-        except Exception as e:
-            # Don't let installer errors break collaboration
-            logger.warning(f"Failed to auto-install progress components: {e}")
-
     # === MULTI-PHASE GROUP THINK METHODS ===
 
     async def _build_deliverable_contract(
@@ -770,22 +633,14 @@ The whiteboard contains the full conversation history. Use file_search to access
         max_turns: int,
         context: Optional[list[str]],
         priority_context: Optional[list[str]],
-        start_time: float,
         ctx,
         project: str,
         config: CollaborationConfig,
-        total_phases: int,
         direct_context: bool = True,
     ) -> str:
         """Run the discussion phase (Phase 1)."""
 
         logger.info(f"Starting discussion phase: {max_turns} turns")
-        self._write_progress_file(
-            session,
-            phase="discussion",
-            start_time=start_time,
-            total_phases=total_phases,
-        )
 
         discussion_turns = 0
 
@@ -800,15 +655,6 @@ The whiteboard contains the full conversation history. Use file_search to access
                     total=max_turns + 3,  # Estimate total with synthesis + validation
                     message=f"Discussion turn {discussion_turns + 1}/{max_turns} with {next_model}",
                 )
-
-            # Update progress file
-            self._write_progress_file(
-                session,
-                current_model=next_model,
-                phase=f"discussing ({next_model})",
-                start_time=start_time,
-                total_phases=total_phases,
-            )
 
             # Execute model turn
             timeout_per_step = (
@@ -883,12 +729,6 @@ The whiteboard contains the full conversation history. Use file_search to access
         """Run the synthesis phase with large context model (Phase 2)."""
 
         logger.info(f"Starting synthesis phase with {synthesis_model}")
-        self._write_progress_file(
-            session,
-            current_model=synthesis_model,
-            phase="synthesizing",
-            start_time=time.time(),
-        )
 
         # Progress reporting
         if ctx:

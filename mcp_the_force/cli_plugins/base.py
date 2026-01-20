@@ -46,6 +46,7 @@ class CLIPlugin(Protocol):
         context_dirs: List[str],
         role: Optional[str] = None,
         cli_flags: Optional[str] = None,
+        reasoning_effort: Optional[str] = None,
     ) -> List[str]:
         """
         Build command arguments for starting a new CLI session.
@@ -55,6 +56,7 @@ class CLIPlugin(Protocol):
             context_dirs: List of directories to add as context
             role: Optional role/persona for the agent
             cli_flags: Optional additional CLI flags
+            reasoning_effort: Optional reasoning effort level (low/medium/high/xhigh)
 
         Returns:
             List of command arguments (not including executable)
@@ -66,6 +68,7 @@ class CLIPlugin(Protocol):
         session_id: str,
         task: str,
         cli_flags: Optional[str] = None,
+        reasoning_effort: Optional[str] = None,
     ) -> List[str]:
         """
         Build command arguments for resuming an existing CLI session.
@@ -74,6 +77,7 @@ class CLIPlugin(Protocol):
             session_id: The CLI-specific session ID to resume
             task: The continuation prompt
             cli_flags: Optional additional CLI flags
+            reasoning_effort: Optional reasoning effort level (low/medium/high/xhigh)
 
         Returns:
             List of command arguments (not including executable)
@@ -89,5 +93,23 @@ class CLIPlugin(Protocol):
 
         Returns:
             ParsedCLIResponse with session_id and content
+        """
+        ...
+
+    def get_reasoning_env_vars(
+        self,
+        reasoning_effort: Optional[str] = None,
+    ) -> Dict[str, str]:
+        """
+        Get environment variables for reasoning effort configuration.
+
+        Some CLIs (like Claude) use environment variables instead of CLI flags
+        to configure reasoning depth.
+
+        Args:
+            reasoning_effort: Reasoning effort level (low/medium/high/xhigh)
+
+        Returns:
+            Dict of environment variables to set
         """
         ...

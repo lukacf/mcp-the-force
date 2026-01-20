@@ -222,6 +222,198 @@ class TestCodexPluginCommandBuilding:
         assert plugin.executable == "codex"
 
 
+class TestReasoningEffortCodex:
+    """Unit tests for Codex reasoning effort CLI flag support."""
+
+    def test_high_reasoning_effort_adds_config_flag(self):
+        """Codex adds -c model_reasoning_effort flag for high effort."""
+        from mcp_the_force.cli_plugins.codex import CodexPlugin
+
+        plugin = CodexPlugin()
+        args = plugin.build_new_session_args(
+            task="Solve complex problem",
+            context_dirs=[],
+            reasoning_effort="high",
+        )
+
+        assert "-c" in args
+        # Find the config value that follows -c
+        c_idx = args.index("-c")
+        config_value = args[c_idx + 1]
+        assert 'model_reasoning_effort="high"' in config_value
+
+    def test_xhigh_reasoning_effort_adds_config_flag(self):
+        """Codex adds -c model_reasoning_effort flag for xhigh effort."""
+        from mcp_the_force.cli_plugins.codex import CodexPlugin
+
+        plugin = CodexPlugin()
+        args = plugin.build_new_session_args(
+            task="Very complex problem",
+            context_dirs=[],
+            reasoning_effort="xhigh",
+        )
+
+        assert "-c" in args
+        c_idx = args.index("-c")
+        config_value = args[c_idx + 1]
+        assert 'model_reasoning_effort="xhigh"' in config_value
+
+    def test_medium_reasoning_effort_no_flag(self):
+        """Codex doesn't add flag for medium effort (default)."""
+        from mcp_the_force.cli_plugins.codex import CodexPlugin
+
+        plugin = CodexPlugin()
+        args = plugin.build_new_session_args(
+            task="Normal task",
+            context_dirs=[],
+            reasoning_effort="medium",
+        )
+
+        # Medium is default, no flag should be added
+        assert "-c" not in args
+
+    def test_no_reasoning_effort_no_flag(self):
+        """Codex doesn't add flag when reasoning_effort is None."""
+        from mcp_the_force.cli_plugins.codex import CodexPlugin
+
+        plugin = CodexPlugin()
+        args = plugin.build_new_session_args(
+            task="Task",
+            context_dirs=[],
+            reasoning_effort=None,
+        )
+
+        assert "-c" not in args
+
+    def test_resume_with_high_reasoning_effort(self):
+        """Codex resume command includes reasoning effort flag."""
+        from mcp_the_force.cli_plugins.codex import CodexPlugin
+
+        plugin = CodexPlugin()
+        args = plugin.build_resume_args(
+            session_id="thread-123",
+            task="Continue",
+            reasoning_effort="high",
+        )
+
+        assert "-c" in args
+        assert "resume" in args
+
+    def test_get_reasoning_env_vars_returns_empty(self):
+        """Codex uses CLI flags, not env vars, so returns empty dict."""
+        from mcp_the_force.cli_plugins.codex import CodexPlugin
+
+        plugin = CodexPlugin()
+        env_vars = plugin.get_reasoning_env_vars("high")
+
+        assert env_vars == {}
+
+
+class TestReasoningEffortClaude:
+    """Unit tests for Claude reasoning effort MAX_THINKING_TOKENS support."""
+
+    def test_high_reasoning_returns_max_thinking_tokens(self):
+        """Claude returns MAX_THINKING_TOKENS env var for high effort."""
+        from mcp_the_force.cli_plugins.claude import ClaudePlugin
+
+        plugin = ClaudePlugin()
+        env_vars = plugin.get_reasoning_env_vars("high")
+
+        assert "MAX_THINKING_TOKENS" in env_vars
+        assert env_vars["MAX_THINKING_TOKENS"] == "63999"
+
+    def test_xhigh_reasoning_returns_max_thinking_tokens(self):
+        """Claude returns MAX_THINKING_TOKENS env var for xhigh effort."""
+        from mcp_the_force.cli_plugins.claude import ClaudePlugin
+
+        plugin = ClaudePlugin()
+        env_vars = plugin.get_reasoning_env_vars("xhigh")
+
+        assert "MAX_THINKING_TOKENS" in env_vars
+        assert env_vars["MAX_THINKING_TOKENS"] == "127999"
+
+    def test_low_reasoning_returns_reduced_tokens(self):
+        """Claude returns reduced MAX_THINKING_TOKENS for low effort."""
+        from mcp_the_force.cli_plugins.claude import ClaudePlugin
+
+        plugin = ClaudePlugin()
+        env_vars = plugin.get_reasoning_env_vars("low")
+
+        assert "MAX_THINKING_TOKENS" in env_vars
+        assert env_vars["MAX_THINKING_TOKENS"] == "16000"
+
+    def test_medium_reasoning_returns_empty(self):
+        """Claude returns empty dict for medium effort (uses default)."""
+        from mcp_the_force.cli_plugins.claude import ClaudePlugin
+
+        plugin = ClaudePlugin()
+        env_vars = plugin.get_reasoning_env_vars("medium")
+
+        assert env_vars == {}
+
+    def test_none_reasoning_returns_empty(self):
+        """Claude returns empty dict when reasoning_effort is None."""
+        from mcp_the_force.cli_plugins.claude import ClaudePlugin
+
+        plugin = ClaudePlugin()
+        env_vars = plugin.get_reasoning_env_vars(None)
+
+        assert env_vars == {}
+
+    def test_unknown_reasoning_returns_empty(self):
+        """Claude returns empty dict for unknown reasoning effort."""
+        from mcp_the_force.cli_plugins.claude import ClaudePlugin
+
+        plugin = ClaudePlugin()
+        env_vars = plugin.get_reasoning_env_vars("ultra-mega")
+
+        assert env_vars == {}
+
+    def test_build_args_does_not_add_cli_flags(self):
+        """Claude uses env vars, not CLI flags, for reasoning effort."""
+        from mcp_the_force.cli_plugins.claude import ClaudePlugin
+
+        plugin = ClaudePlugin()
+        args = plugin.build_new_session_args(
+            task="Task",
+            context_dirs=[],
+            reasoning_effort="high",
+        )
+
+        # Should not contain any reasoning-related flags
+        assert "-c" not in args
+        assert "--reasoning" not in args
+
+
+class TestReasoningEffortGemini:
+    """Unit tests for Gemini reasoning effort (not supported)."""
+
+    def test_get_reasoning_env_vars_returns_empty(self):
+        """Gemini returns empty dict (not supported)."""
+        from mcp_the_force.cli_plugins.gemini import GeminiPlugin
+
+        plugin = GeminiPlugin()
+        env_vars = plugin.get_reasoning_env_vars("high")
+
+        assert env_vars == {}
+
+    def test_build_args_does_not_add_flags(self):
+        """Gemini doesn't add reasoning flags (not supported)."""
+        from mcp_the_force.cli_plugins.gemini import GeminiPlugin
+
+        plugin = GeminiPlugin()
+        args = plugin.build_new_session_args(
+            task="Task",
+            context_dirs=[],
+            reasoning_effort="high",
+        )
+
+        # Should not contain any reasoning-related flags
+        assert "-c" not in args
+        assert "--reasoning" not in args
+        assert "--thinking" not in args
+
+
 class TestEnvironmentBuilder:
     """Unit tests for environment variable construction."""
 

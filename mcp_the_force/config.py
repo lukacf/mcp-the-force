@@ -152,7 +152,8 @@ class MCPConfig(BaseModel):
         10, description="Max workers for shared thread pool", ge=1, le=100
     )
     default_vector_store_provider: str = Field(
-        "openai", description="Default provider for vector stores"
+        "hnsw",
+        description="Default provider for vector stores (hnsw=local, openai=cloud)",
     )
     max_file_size: int = Field(
         50 * 1024 * 1024,  # 50MB

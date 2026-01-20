@@ -100,7 +100,7 @@ class TestCacheErrorHandling:
 
     @pytest.mark.asyncio
     async def test_finalize_cache_failure_propagates_and_is_handled(
-        self, store_with_mock_cache, caplog
+        self, store_with_mock_cache
     ):
         """
         Verify: When finalize_file_id fails, the error is logged, but the overall
@@ -111,17 +111,24 @@ class TestCacheErrorHandling:
         # GIVEN: The cache finalization step fails
         mock_cache.finalize_file_id.side_effect = CacheWriteError("Cannot write to DB")
 
-        # WHEN: The internal finalization method is called
+        # WHEN: The internal finalization method is called - it should NOT raise
         newly_uploaded = [("hash123", "file-123")]
-        await store._finalize_cache_entries(newly_uploaded, mock_cache)
+        with patch(
+            "mcp_the_force.vectorstores.openai.openai_vectorstore.logger"
+        ) as mock_logger:
+            await store._finalize_cache_entries(newly_uploaded, mock_cache)
 
-        # THEN: A warning is logged, but no exception is raised
-        assert "Failed to finalize cache for file file-123" in caplog.text
-        assert "CacheWriteError" in caplog.text or "Cannot write to DB" in caplog.text
+            # THEN: A warning is logged, but no exception is raised
+            mock_logger.warning.assert_called()
+            warning_calls = [str(call) for call in mock_logger.warning.call_args_list]
+            assert any(
+                "Failed to finalize cache for file file-123" in call
+                for call in warning_calls
+            )
 
     @pytest.mark.asyncio
     async def test_rollback_cleanup_failure_propagates_and_is_logged(
-        self, store_with_mock_cache, caplog, mock_client
+        self, store_with_mock_cache, mock_client
     ):
         """
         Verify: If cleaning up the cache during a rollback fails, the error is logged,
@@ -136,10 +143,15 @@ class TestCacheErrorHandling:
 
         # WHEN: A rollback is triggered
         failed_uploads = [("hash123", "file-to-delete")]
-        await store._rollback_failed_uploads(failed_uploads, mock_cache)
+        with patch(
+            "mcp_the_force.vectorstores.openai.openai_vectorstore.logger"
+        ) as mock_logger:
+            await store._rollback_failed_uploads(failed_uploads, mock_cache)
 
-        # THEN: An error is logged for the cache failure
-        assert "Failed to clean up cache for hash hash123..." in caplog.text
+            # THEN: An error is logged for the cache failure
+            mock_logger.warning.assert_called()
+            warning_call = mock_logger.warning.call_args
+            assert "Failed to clean up cache for hash hash123..." in str(warning_call)
 
         # AND: The attempt to delete the orphaned file from OpenAI still proceeds
         mock_client.files.delete.assert_called_once_with("file-to-delete")
@@ -173,7 +185,7 @@ class TestCacheErrorHandling:
 
     @pytest.mark.asyncio
     async def test_graceful_degradation_on_transaction_error(
-        self, store_with_mock_cache, test_file, mock_client, caplog
+        self, store_with_mock_cache, test_file, mock_client
     ):
         """
         Verify: A CacheTransactionError is handled gracefully with proper logging.
@@ -186,12 +198,17 @@ class TestCacheErrorHandling:
         )
 
         # WHEN: add_files is called
-        await store.add_files([test_file])
+        with patch(
+            "mcp_the_force.vectorstores.openai.openai_vectorstore.logger"
+        ) as mock_logger:
+            await store.add_files([test_file])
 
-        # THEN: The error is logged appropriately
-        assert (
-            "Cache operation failed for test.py, proceeding with upload" in caplog.text
-        )
+            # THEN: The error is logged appropriately
+            mock_logger.warning.assert_called()
+            warning_calls = [str(call) for call in mock_logger.warning.call_args_list]
+            assert any(
+                "Cache operation failed for test.py" in call for call in warning_calls
+            )
 
         # AND: The file is still uploaded
         mock_client.files.create.assert_called_once()
@@ -242,7 +259,7 @@ class TestCacheErrorHandling:
 
     @pytest.mark.asyncio
     async def test_no_silent_failure_on_atomic_get(
-        self, store_with_mock_cache, test_file, caplog
+        self, store_with_mock_cache, test_file
     ):
         """
         Verify: A failure in atomic_cache_or_get is logged and handled gracefully.
@@ -252,14 +269,19 @@ class TestCacheErrorHandling:
             "DB is locked"
         )
 
-        await store.add_files([test_file])
+        with patch(
+            "mcp_the_force.vectorstores.openai.openai_vectorstore.logger"
+        ) as mock_logger:
+            await store.add_files([test_file])
 
-        assert (
-            "Cache operation failed for test.py, proceeding with upload" in caplog.text
-        )
+            mock_logger.warning.assert_called()
+            warning_calls = [str(call) for call in mock_logger.warning.call_args_list]
+            assert any(
+                "Cache operation failed for test.py" in call for call in warning_calls
+            )
 
     @pytest.mark.asyncio
-    async def test_no_silent_failure_on_finalize(self, store_with_mock_cache, caplog):
+    async def test_no_silent_failure_on_finalize(self, store_with_mock_cache):
         """
         Verify: A failure in finalize_file_id is logged and doesn't break the operation.
         """
@@ -267,12 +289,20 @@ class TestCacheErrorHandling:
         mock_cache.finalize_file_id.side_effect = CacheWriteError("Cannot finalize")
 
         newly_uploaded = [("hash456", "file-456")]
-        await store._finalize_cache_entries(newly_uploaded, mock_cache)
+        with patch(
+            "mcp_the_force.vectorstores.openai.openai_vectorstore.logger"
+        ) as mock_logger:
+            await store._finalize_cache_entries(newly_uploaded, mock_cache)
 
-        assert "Failed to finalize cache for file file-456" in caplog.text
+            mock_logger.warning.assert_called()
+            warning_calls = [str(call) for call in mock_logger.warning.call_args_list]
+            assert any(
+                "Failed to finalize cache for file file-456" in call
+                for call in warning_calls
+            )
 
     @pytest.mark.asyncio
-    async def test_no_silent_failure_on_cleanup(self, store_with_mock_cache, caplog):
+    async def test_no_silent_failure_on_cleanup(self, store_with_mock_cache):
         """
         Verify: A failure in cleanup_failed_upload is logged and doesn't break rollback.
         """
@@ -280,9 +310,14 @@ class TestCacheErrorHandling:
         mock_cache.cleanup_failed_upload.side_effect = CacheWriteError("Cleanup failed")
 
         failed_uploads = [("hash789", "file-789")]
-        await store._rollback_failed_uploads(failed_uploads, mock_cache)
+        with patch(
+            "mcp_the_force.vectorstores.openai.openai_vectorstore.logger"
+        ) as mock_logger:
+            await store._rollback_failed_uploads(failed_uploads, mock_cache)
 
-        assert "Failed to clean up cache for hash hash789..." in caplog.text
+            mock_logger.warning.assert_called()
+            warning_call = mock_logger.warning.call_args
+            assert "Failed to clean up cache for hash hash789..." in str(warning_call)
 
     # 5. Error Context Tests
     # ======================

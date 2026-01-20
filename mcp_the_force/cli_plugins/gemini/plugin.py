@@ -5,11 +5,17 @@ Handles command building for Google Gemini CLI.
 Output parsing is in parser.py.
 """
 
-from typing import List, Optional
+import logging
+from typing import Dict, List, Optional
 
 from mcp_the_force.cli_plugins.base import ParsedCLIResponse
 from mcp_the_force.cli_plugins.registry import cli_plugin
 from mcp_the_force.cli_plugins.gemini.parser import GeminiParser
+
+logger = logging.getLogger(__name__)
+
+# Track if we've warned about reasoning effort not being supported
+_reasoning_warning_shown = False
 
 
 @cli_plugin("gemini")
@@ -22,6 +28,10 @@ class GeminiPlugin:
     - Resume: gemini --resume <session_id> --output-format json "<task>"
 
     Output format: JSON object (see parser.py)
+
+    Note: Gemini CLI doesn't support reasoning effort configuration yet.
+    The API supports thinking_level (low/high), but the CLI doesn't expose it.
+    See: https://github.com/google-gemini/gemini-cli/issues/6693
     """
 
     def __init__(self) -> None:
@@ -37,8 +47,13 @@ class GeminiPlugin:
         context_dirs: List[str],
         role: Optional[str] = None,
         cli_flags: Optional[str] = None,
+        reasoning_effort: Optional[str] = None,
     ) -> List[str]:
-        """Build args for a new Gemini CLI session."""
+        """Build args for a new Gemini CLI session.
+
+        Note: reasoning_effort is ignored - Gemini CLI doesn't support it yet.
+        """
+        self._warn_reasoning_not_supported(reasoning_effort)
         args = ["--output-format", "json", "--yolo"]
 
         # Add context directories
@@ -63,8 +78,13 @@ class GeminiPlugin:
         session_id: str,
         task: str,
         cli_flags: Optional[str] = None,
+        reasoning_effort: Optional[str] = None,
     ) -> List[str]:
-        """Build args for resuming a Gemini CLI session."""
+        """Build args for resuming a Gemini CLI session.
+
+        Note: reasoning_effort is ignored - Gemini CLI doesn't support it yet.
+        """
+        self._warn_reasoning_not_supported(reasoning_effort)
         args = ["--resume", session_id, "--output-format", "json", "--yolo"]
 
         # Add any extra CLI flags
@@ -75,6 +95,28 @@ class GeminiPlugin:
         args.append(task)
 
         return args
+
+    def get_reasoning_env_vars(
+        self,
+        reasoning_effort: Optional[str] = None,
+    ) -> Dict[str, str]:
+        """Gemini CLI doesn't support reasoning effort via env vars."""
+        return {}  # Not supported
+
+    def _warn_reasoning_not_supported(self, reasoning_effort: Optional[str]) -> None:
+        """Log a warning if reasoning_effort is set but not 'medium'."""
+        global _reasoning_warning_shown
+        if (
+            reasoning_effort
+            and reasoning_effort != "medium"
+            and not _reasoning_warning_shown
+        ):
+            logger.warning(
+                f"[GEMINI] reasoning_effort='{reasoning_effort}' ignored - "
+                "Gemini CLI doesn't support this parameter yet. "
+                "See: https://github.com/google-gemini/gemini-cli/issues/6693"
+            )
+            _reasoning_warning_shown = True
 
     def parse_output(self, output: str) -> ParsedCLIResponse:
         """Parse Gemini CLI output. Delegates to GeminiParser."""

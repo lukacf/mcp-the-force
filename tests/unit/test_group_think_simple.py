@@ -32,37 +32,31 @@ class TestGroupThinkSimple:
             session_cache=mock_session_cache,
         )
 
-        # Mock the progress installer to avoid installation complexity
-        with patch.object(
-            service, "_ensure_progress_components_installed", new_callable=AsyncMock
-        ) as mock_installer:
-            mock_installer.return_value = None
+        # Mock get_settings to avoid config complexity
+        with patch("mcp_the_force.config.get_settings") as mock_settings:
+            mock_settings.return_value.logging.project_path = "/test/project"
 
-            # Mock get_settings to avoid config complexity
-            with patch("mcp_the_force.config.get_settings") as mock_settings:
-                mock_settings.return_value.logging.project_path = "/test/project"
+            try:
+                result = await service.execute(
+                    session_id="simple-test",
+                    objective="Simple test objective",
+                    models=["chat_with_gpt52_pro"],
+                    output_format="Simple test result",
+                    discussion_turns=1,
+                    validation_rounds=0,  # Skip validation for simplicity
+                )
 
-                try:
-                    result = await service.execute(
-                        session_id="simple-test",
-                        objective="Simple test objective",
-                        models=["chat_with_gpt52_pro"],
-                        output_format="Simple test result",
-                        discussion_turns=1,
-                        validation_rounds=0,  # Skip validation for simplicity
-                    )
+                # If we get here, the basic async mocking works
+                assert result is not None
+                print(f"Success! Result: {result[:100]}...")
 
-                    # If we get here, the basic async mocking works
-                    assert result is not None
-                    print(f"Success! Result: {result[:100]}...")
+            except Exception as e:
+                print(f"Error: {e}")
+                # Print the full traceback for debugging
+                import traceback
 
-                except Exception as e:
-                    print(f"Error: {e}")
-                    # Print the full traceback for debugging
-                    import traceback
-
-                    traceback.print_exc()
-                    raise
+                traceback.print_exc()
+                raise
 
     @pytest.mark.asyncio
     async def test_individual_phases_mocked(self):

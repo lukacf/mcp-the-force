@@ -5,11 +5,14 @@ Handles command building for OpenAI Codex CLI.
 Output parsing is in parser.py.
 """
 
-from typing import List, Optional
+import logging
+from typing import Dict, List, Optional
 
 from mcp_the_force.cli_plugins.base import ParsedCLIResponse
 from mcp_the_force.cli_plugins.registry import cli_plugin
 from mcp_the_force.cli_plugins.codex.parser import CodexParser
+
+logger = logging.getLogger(__name__)
 
 
 @cli_plugin("codex")
@@ -38,6 +41,7 @@ class CodexPlugin:
         context_dirs: List[str],
         role: Optional[str] = None,
         cli_flags: Optional[str] = None,
+        reasoning_effort: Optional[str] = None,
     ) -> List[str]:
         """Build args for a new Codex CLI session.
 
@@ -47,6 +51,12 @@ class CodexPlugin:
         # --skip-git-repo-check allows execution in non-git directories
         # --yolo skips permission prompts
         args = ["exec", "--json", "--skip-git-repo-check", "--yolo"]
+
+        # Add reasoning effort configuration if specified
+        # Codex supports: low, medium, high, xhigh
+        if reasoning_effort and reasoning_effort != "medium":
+            args.extend(["-c", f'model_reasoning_effort="{reasoning_effort}"'])
+            logger.info(f"[CODEX] Setting reasoning effort: {reasoning_effort}")
 
         # Note: Codex CLI doesn't support --context flag
         # Context is provided via working directory instead
@@ -68,6 +78,7 @@ class CodexPlugin:
         session_id: str,
         task: str,
         cli_flags: Optional[str] = None,
+        reasoning_effort: Optional[str] = None,
     ) -> List[str]:
         """Build args for resuming a Codex CLI session.
 
@@ -84,6 +95,12 @@ class CodexPlugin:
             "--yolo",
         ]
 
+        # Add reasoning effort configuration if specified
+        # Codex supports: low, medium, high, xhigh
+        if reasoning_effort and reasoning_effort != "medium":
+            args.extend(["-c", f'model_reasoning_effort="{reasoning_effort}"'])
+            logger.info(f"[CODEX] Setting reasoning effort: {reasoning_effort}")
+
         # Add any extra CLI flags
         if cli_flags:
             args.extend(cli_flags.split())
@@ -92,6 +109,13 @@ class CodexPlugin:
         args.append(task)
 
         return args
+
+    def get_reasoning_env_vars(
+        self,
+        reasoning_effort: Optional[str] = None,
+    ) -> Dict[str, str]:
+        """Codex uses CLI flags, not env vars, for reasoning effort."""
+        return {}  # Codex handles reasoning via -c flag, not env vars
 
     def parse_output(self, output: str) -> ParsedCLIResponse:
         """Parse Codex CLI output. Delegates to CodexParser."""
