@@ -186,16 +186,45 @@ class TestEnvironmentBuilderNoClaudeSymlink:
 class TestToolExecutorProjectPathDerivation:
     """Test that ToolExecutor derives project_path correctly."""
 
-    def test_project_path_is_cwd(self):
-        """project_path should simply be the current working directory.
+    def test_project_path_from_config(self, tmp_path):
+        """project_path should be derived from config file location.
 
-        The MCP server always runs from the project directory, so os.getcwd()
-        is the most reliable way to get the project path.
+        The project directory is the parent of the .mcp-the-force folder
+        where config.yaml lives. This is more reliable than os.getcwd()
+        which could be the MCP server's development directory.
         """
+        from unittest.mock import patch
+        from mcp_the_force.config import get_project_dir, get_settings
+
+        # When config file is at /project/.mcp-the-force/config.yaml,
+        # project_dir should be /project
+        config_path = str(tmp_path / ".mcp-the-force" / "config.yaml")
+
+        with patch.object(get_settings(), "_last_config_path", config_path):
+            # Clear the lru_cache to ensure we get fresh settings
+            from mcp_the_force import config
+
+            config.get_settings.cache_clear()
+
+            # Mock the settings to return our config path
+            with patch("mcp_the_force.config.get_settings") as mock_settings:
+                mock_instance = mock_settings.return_value
+                mock_instance._last_config_path = config_path
+
+                result = get_project_dir()
+                assert result == str(tmp_path)
+
+    def test_project_path_fallback_to_cwd(self, tmp_path):
+        """project_path should fall back to CWD if no config found."""
         import os
+        from unittest.mock import patch
+        from mcp_the_force.config import get_project_dir
 
-        # The executor uses os.getcwd() directly
-        project_path = os.getcwd()
+        # When there's no config file, should fall back to CWD
+        with patch("mcp_the_force.config.get_settings") as mock_settings:
+            mock_instance = mock_settings.return_value
+            mock_instance._last_config_path = None
 
-        # Should be a valid directory path
-        assert os.path.isdir(project_path)
+            result = get_project_dir()
+            # Should be CWD or CWD with .mcp-the-force (depending on whether it exists)
+            assert os.path.isdir(result)

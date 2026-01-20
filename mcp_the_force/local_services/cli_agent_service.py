@@ -201,12 +201,12 @@ class CLIAgentService:
                     f"[CLI-SERVICE] Context injected: {len(compacted)} chars prepended to task"
                 )
 
-        # 5. Auto-inject CWD into task to guide the agent
-        # This ensures the agent knows where to work without requiring manual specification
+        # 5. Auto-inject project directory into task to guide the agent
+        # The project_dir comes from config file location (parent of .mcp-the-force folder)
         if self._project_dir and self._project_dir != "/tmp":
             task = f"Work from this directory: {self._project_dir}\n\n{task}"
             logger.info(
-                f"[CLI-SERVICE] Auto-injected CWD into task: {self._project_dir}"
+                f"[CLI-SERVICE] Auto-injected project dir into task: {self._project_dir}"
             )
 
         # 6. Load role prompt

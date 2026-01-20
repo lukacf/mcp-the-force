@@ -738,3 +738,31 @@ def _deep_merge(a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, Any]:
 def get_settings() -> Settings:
     """Get cached settings instance."""
     return Settings()
+
+
+def get_project_dir() -> str:
+    """Get the project directory from config file location.
+
+    The project directory is the parent of the .mcp-the-force folder where
+    config.yaml lives. This is the directory that should be used as the
+    working context for CLI agents.
+
+    Returns:
+        Project directory path, or current working directory as fallback.
+    """
+    # Try to get from cached settings if available
+    settings = get_settings()
+    if settings._last_config_path:
+        # Config is at .mcp-the-force/config.yaml, so parent.parent is project dir
+        config_path = Path(settings._last_config_path)
+        project_dir = config_path.parent.parent
+        return str(project_dir)
+
+    # Fallback: look for .mcp-the-force folder starting from CWD
+    cwd = Path.cwd()
+    mcp_folder = cwd / ".mcp-the-force"
+    if mcp_folder.exists():
+        return str(cwd)
+
+    # Last resort fallback
+    return str(cwd)

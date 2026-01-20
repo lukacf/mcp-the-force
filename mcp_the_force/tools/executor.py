@@ -21,7 +21,7 @@ from .capability_validator import CapabilityValidator
 
 # Project history imports
 from .safe_history import safe_record_conversation
-from ..config import get_settings
+from ..config import get_settings, get_project_dir
 from ..utils.redaction import redact_secrets
 from ..operation_manager import operation_manager
 
@@ -219,8 +219,9 @@ class ToolExecutor:
             instructions = prompt_params.get("instructions", "")
             output_format = prompt_params.get("output_format", "")
 
-            # Get project path - the MCP server always runs from the project directory
-            project_path = os.getcwd()
+            # Get project path from config file location (parent of .mcp-the-force folder)
+            # This is more reliable than os.getcwd() which could be the MCP server's directory
+            project_path = get_project_dir()
             project_name = os.path.basename(project_path)
             tool_name = metadata.id
 
