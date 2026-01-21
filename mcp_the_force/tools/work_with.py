@@ -42,13 +42,14 @@ def _generate_agent_description() -> str:
 
 @tool
 class WorkWith(ToolSpec):
-    """Execute a task using a CLI agent (Claude, Gemini, or Codex)."""
+    """Agentic collaboration: spawn a CLI agent to work on tasks autonomously."""
 
     model_name = "work_with"
     description = (
-        "Execute a task using a CLI-based AI agent. Supports Claude, Gemini, and Codex. "
-        "Provides session continuity via automatic resume, cross-tool context injection, "
-        "and isolated execution environments."
+        "**DEFAULT TOOL - use this unless user explicitly says 'consult' or 'group think'** - "
+        "Spawns a CLI-based AI agent that can read files, run commands, and take autonomous action. "
+        "When user says 'work with [model]', 'use [model]', or any task involving a model → use this. "
+        "This is AGENTIC: the model gets tools and can explore/modify the codebase."
     )
 
     # Use local service instead of adapter

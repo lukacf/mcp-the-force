@@ -9,14 +9,14 @@ from ..local_services.collaboration_service import CollaborationService
 
 @tool
 class GroupThink(ToolSpec):
-    """Enable multiple AI models to think together on complex problems through structured multi-turn conversations."""
+    """Multi-model brainstorming: multiple AI models collaborate through structured discussion."""
 
     model_name = "group_think"
     description = (
-        "Orchestrate group thinking sessions where multiple AI models (GPT-5, Gemini 3 Pro, Claude, etc.) "
-        "collaborate on complex problems through structured conversations. Models share a whiteboard vector store "
-        "and can build on each other's ideas across multiple turns. Provides comprehensive final reports. "
-        "Supports both round-robin and orchestrated modes."
+        "**ONLY use when user EXPLICITLY says 'group think' or 'brainstorm with multiple models'** - "
+        "Orchestrates multiple AI models (GPT-5, Gemini, Claude, etc.) to collaborate on a problem. "
+        "Use for: complex design decisions needing diverse perspectives. "
+        "DEFAULT TO work_with for all other cases. If user says 'work with X' use work_with, not this."
     )
 
     # This uses our CollaborationService

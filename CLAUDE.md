@@ -58,8 +58,10 @@ The Force provides two primary tools for AI collaboration:
 - **`consult_with(model, question)`** — Advisory tool for quick opinions and analysis. Routes to API models internally. Same model names, but no tool use or file access.
 
 **When to use which:**
-- Use `work_with` when you need the AI to explore code, make changes, or take action
-- Use `consult_with` for quick questions, analysis, or second opinions without file access
+- **`work_with` is the DEFAULT** — use for any task involving a model unless user explicitly says otherwise
+- **User says "work with [model]"** → use `work_with`
+- **User says "consult [model]" ONLY** → use `consult_with` (no file access)
+- **User says "group think" ONLY** → use `group_think` (multi-model collaboration)
 
 **Key models:**
 - **`gpt-5.2-pro`** / **`gpt-5.2`**: Flagship OpenAI models (272k context, advanced reasoning)

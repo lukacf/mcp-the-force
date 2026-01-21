@@ -11,13 +11,13 @@ from ..local_services.cli_agent_service import ConsultationService
 
 @tool
 class ConsultWith(ToolSpec):
-    """Consult with an API model for quick questions and analysis."""
+    """Quick advisory: ask a model for opinions/analysis without file access."""
 
     model_name = "consult_with"
     description = (
-        "Consult with an API model for quick questions, analysis, or advice. "
-        "Routes to internal chat_with_* tools based on the model parameter. "
-        "Supports session continuity for multi-turn conversations."
+        "**ONLY use when user EXPLICITLY says 'consult with [model]' or 'ask [model]'** - "
+        "Calls an API model for quick questions or advice. NO file access, NO tools - just conversation. "
+        "DEFAULT TO work_with for all other cases. If user says 'work with X' use work_with, not this."
     )
 
     # Use local service instead of adapter
