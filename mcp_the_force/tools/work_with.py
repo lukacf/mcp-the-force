@@ -54,7 +54,9 @@ class WorkWith(ToolSpec):
     # Use local service instead of adapter
     service_cls = CLIAgentService
     adapter_class = None  # Signal to executor that this runs locally
-    timeout = 14400  # 4 hour default timeout for CLI execution (agentic tasks can run for hours)
+    # Timeout is controlled by cli_agent.execution_timeout config (default 4 hours)
+    # This value is only used for metadata; actual timeout comes from config
+    timeout = 14400
 
     # Parameters
     agent: str = Route.prompt(  # type: ignore[assignment]
@@ -79,8 +81,7 @@ class WorkWith(ToolSpec):
 
     role: str = Route.prompt(  # type: ignore[assignment]
         description=(
-            "(Optional) Role name for system prompt configuration. "
-            "Default: 'default'"
+            "(Optional) Role name for system prompt configuration. Default: 'default'"
         ),
         default="default",
     )

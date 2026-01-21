@@ -53,8 +53,8 @@ def _ensure_litellm_header_patch() -> None:
 
         return await _orig_acompletion(*args, **kwargs)
 
-    litellm.acompletion = _acompletion_with_ctx_headers  # type: ignore
-    litellm._mcp_header_patch_installed = True
+    litellm.acompletion = _acompletion_with_ctx_headers  # type: ignore[assignment]
+    litellm._mcp_header_patch_installed = True  # type: ignore[attr-defined]
 
 
 def _sanitize_conversation_input(conversation_input: List[Dict[str, Any]]) -> None:
@@ -329,7 +329,7 @@ def _update_litellm_model_limits() -> None:
                     f"Updated {key} max_input_tokens: {old_limit} -> 1,000,000"
                 )
 
-        litellm._mcp_model_limits_patched = True
+        litellm._mcp_model_limits_patched = True  # type: ignore[attr-defined]
 
     except Exception as e:
         logger.warning(f"Failed to update LiteLLM model limits: {e}")

@@ -8,6 +8,7 @@ import logging
 import os
 from typing import Any, Dict, List, Optional
 
+from mcp_the_force.config import get_settings
 from mcp_the_force.cli_agents.availability import (
     CLIAvailabilityChecker,
     CLINotAvailableError,
@@ -64,7 +65,7 @@ class CLIAgentService:
         role: str = "default",
         reasoning_effort: str = "medium",
         cli_flags: Optional[List[str]] = None,
-        timeout: int = 14400,
+        timeout: Optional[int] = None,
         **_kwargs: Any,
     ) -> str:
         """
@@ -77,7 +78,7 @@ class CLIAgentService:
             role: Role name for system prompt (default, planner, codereviewer)
             reasoning_effort: Reasoning effort level (low/medium/high/xhigh)
             cli_flags: Optional additional CLI flags for power users
-            timeout: Execution timeout in seconds
+            timeout: Execution timeout in seconds (default from config: cli_agent.execution_timeout)
             **kwargs: Additional parameters
 
         Returns:
@@ -88,6 +89,9 @@ class CLIAgentService:
             NoCLIAvailableError: If the model exists but has no CLI mapping
             CLINotAvailableError: If the CLI is not installed
         """
+        # Use config default if timeout not specified
+        if timeout is None:
+            timeout = get_settings().cli_agent.execution_timeout
         logger.debug(f"CLIAgentService.execute: agent={agent}, session_id={session_id}")
 
         # 1. Resolve model→CLI

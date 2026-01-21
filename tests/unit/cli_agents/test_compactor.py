@@ -69,10 +69,12 @@ class TestCompactor:
 
     @pytest.mark.asyncio
     async def test_always_targets_30k_tokens(self):
-        """Compactor always targets 30k tokens regardless of max_tokens arg."""
-        from mcp_the_force.cli_agents.compactor import TARGET_TOKENS
+        """Compactor always targets 30k tokens regardless of max_tokens arg (configurable via cli_agent.compaction_target_tokens)."""
+        from mcp_the_force.config import CLIAgentConfig
 
-        assert TARGET_TOKENS == 30_000
+        # Verify the default config value is 30k tokens
+        config = CLIAgentConfig()
+        assert config.compaction_target_tokens == 30_000
 
     @pytest.mark.asyncio
     async def test_formats_output_with_handoff_prefix(self):

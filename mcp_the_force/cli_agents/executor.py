@@ -12,14 +12,19 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from ..config import get_settings
+
 logger = logging.getLogger(__name__)
 
-# Maximum output capture size (10MB)
-MAX_OUTPUT_SIZE = 10 * 1024 * 1024
 
-# Default idle timeout (10 minutes) - kills process if no output for this duration
-# This works around Codex CLI hanging issues: https://github.com/openai/codex/issues/5773
-DEFAULT_IDLE_TIMEOUT = 600
+def _get_max_output_size() -> int:
+    """Get max output size from config."""
+    return get_settings().cli_agent.max_output_size
+
+
+def _get_default_idle_timeout() -> int:
+    """Get default idle timeout from config."""
+    return get_settings().cli_agent.idle_timeout
 
 
 @dataclass
@@ -44,15 +49,17 @@ class CLIExecutor:
     - Idle timeout to detect hung processes (no output for N seconds)
     """
 
-    def __init__(self, idle_timeout: int = DEFAULT_IDLE_TIMEOUT):
+    def __init__(self, idle_timeout: Optional[int] = None):
         """
         Initialize executor with idle timeout.
 
         Args:
             idle_timeout: Kill process if no output for this many seconds.
-                         Default 600 (10 minutes) to handle xhigh reasoning.
+                         Default from config (typically 600 / 10 minutes) to handle xhigh reasoning.
         """
-        self._idle_timeout = idle_timeout
+        self._idle_timeout = (
+            idle_timeout if idle_timeout is not None else _get_default_idle_timeout()
+        )
 
     async def execute(
         self,
@@ -172,7 +179,7 @@ class CLIExecutor:
                 data = await asyncio.wait_for(stream.read(8192), timeout=0.1)
                 if data:
                     last_output_time = time.monotonic()
-                    if current_size < MAX_OUTPUT_SIZE:
+                    if current_size < _get_max_output_size():
                         chunks.append(data)
                         current_size += len(data)
                     return current_size, True
@@ -187,18 +194,18 @@ class CLIExecutor:
                     # Process exited, drain remaining output
                     if process.stdout:
                         remaining = await process.stdout.read()
-                        if remaining and stdout_size < MAX_OUTPUT_SIZE:
+                        if remaining and stdout_size < _get_max_output_size():
                             stdout_chunks.append(remaining)
                     if process.stderr:
                         remaining = await process.stderr.read()
-                        if remaining and stderr_size < MAX_OUTPUT_SIZE:
+                        if remaining and stderr_size < _get_max_output_size():
                             stderr_chunks.append(remaining)
 
                     stdout = b"".join(stdout_chunks).decode("utf-8", errors="replace")[
-                        :MAX_OUTPUT_SIZE
+                        : _get_max_output_size()
                     ]
                     stderr = b"".join(stderr_chunks).decode("utf-8", errors="replace")[
-                        :MAX_OUTPUT_SIZE
+                        : _get_max_output_size()
                     ]
 
                     return CLIResult(
@@ -229,10 +236,10 @@ class CLIExecutor:
                     await process.wait()
 
                     stdout = b"".join(stdout_chunks).decode("utf-8", errors="replace")[
-                        :MAX_OUTPUT_SIZE
+                        : _get_max_output_size()
                     ]
                     stderr = b"".join(stderr_chunks).decode("utf-8", errors="replace")[
-                        :MAX_OUTPUT_SIZE
+                        : _get_max_output_size()
                     ]
 
                     return CLIResult(
@@ -254,10 +261,10 @@ class CLIExecutor:
 
                         stdout = b"".join(stdout_chunks).decode(
                             "utf-8", errors="replace"
-                        )[:MAX_OUTPUT_SIZE]
+                        )[: _get_max_output_size()]
                         stderr = b"".join(stderr_chunks).decode(
                             "utf-8", errors="replace"
-                        )[:MAX_OUTPUT_SIZE]
+                        )[: _get_max_output_size()]
 
                         return CLIResult(
                             stdout=stdout,

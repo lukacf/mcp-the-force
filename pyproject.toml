@@ -68,6 +68,8 @@ dev = [
     "ruff>=0.1",
     "mypy>=1.7",
     "pre-commit>=3.5",
+    "types-PyYAML>=6.0.0",
+    "types-requests>=2.31.0",
 ]
 
 [tool.setuptools]
@@ -115,6 +117,12 @@ warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false
 ignore_missing_imports = true
+plugins = ["pydantic.mypy"]
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
 
 
 [tool.ruff]

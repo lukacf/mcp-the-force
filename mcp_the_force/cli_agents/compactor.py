@@ -1,7 +1,7 @@
 """
 Compactor: History compaction for cross-tool context injection.
 
-ALWAYS compacts using Gemini Flash 3 Preview, targeting 30k tokens.
+ALWAYS compacts using Gemini Flash 3 Preview, targeting configurable token count.
 Uses iterative compaction if first pass exceeds target.
 """
 
@@ -9,12 +9,19 @@ import logging
 import time
 from typing import Any, Dict, List
 
+from ..config import get_settings
+
 logger = logging.getLogger(__name__)
 
-# Compaction settings
+# Compaction settings (non-configurable)
 COMPACTION_TIMEOUT_SECONDS = 90  # Per compaction attempt
-TARGET_TOKENS = 30_000  # Always target this size
 MAX_COMPACTION_ROUNDS = 3  # Prevent infinite loops
+
+
+def _get_target_tokens() -> int:
+    """Get compaction target tokens from config."""
+    return get_settings().cli_agent.compaction_target_tokens
+
 
 # Handoff compaction prompt - designed for cross-tool context injection
 HANDOFF_COMPACTION_PROMPT = """You are creating a HANDOFF SUMMARY for another AI assistant that will continue this task.
@@ -62,7 +69,7 @@ class Compactor:
     """
     Compacts conversation history using Gemini Flash 3 Preview.
 
-    ALWAYS compacts (no threshold), targeting 30k tokens.
+    ALWAYS compacts (no threshold), targeting configurable token count.
     Uses iterative re-compaction if first pass is too large.
     """
 
@@ -79,12 +86,12 @@ class Compactor:
         """
         Compact history for injection into a CLI agent.
 
-        ALWAYS compacts via Gemini Flash, targeting 30k tokens.
+        ALWAYS compacts via Gemini Flash, targeting configurable token count.
 
         Args:
             history: Conversation history to compact
             target_cli: Target CLI name (for logging)
-            max_tokens: Maximum tokens for compacted output (ignored, we use TARGET_TOKENS)
+            max_tokens: Maximum tokens for compacted output (ignored, we use _get_target_tokens())
 
         Returns:
             Compacted history as a string
@@ -99,7 +106,7 @@ class Compactor:
         logger.info(
             f"[COMPACTOR] Compacting {len(history)} turns "
             f"(~{estimated_tokens} tokens, {len(formatted)} chars) "
-            f"→ target {TARGET_TOKENS} tokens for {target_cli}"
+            f"→ target {_get_target_tokens()} tokens for {target_cli}"
         )
 
         # ALWAYS compact via Gemini Flash
@@ -141,7 +148,7 @@ class Compactor:
             )
 
             # If we're within 1.5x target, we're done
-            if compacted_tokens <= TARGET_TOKENS * 1.5:
+            if compacted_tokens <= _get_target_tokens() * 1.5:
                 logger.info(f"[COMPACTOR] Compaction complete after {round_num} rounds")
                 return compacted
 
@@ -149,7 +156,7 @@ class Compactor:
             if round_num == MAX_COMPACTION_ROUNDS:
                 logger.warning(
                     f"[COMPACTOR] Max rounds reached, returning {compacted_tokens} token result "
-                    f"(target was {TARGET_TOKENS})"
+                    f"(target was {_get_target_tokens()})"
                 )
                 return compacted
 
@@ -195,15 +202,15 @@ class Compactor:
                 f"[COMPACTOR] Tool {tool_name} not found, falling back to truncation"
             )
             # Fallback: truncate to approximate target
-            target_chars = TARGET_TOKENS * 4
+            target_chars = _get_target_tokens() * 4
             if len(conversation) > target_chars:
                 return conversation[:target_chars] + "\n\n[... truncated ...]"
             return conversation
 
-        target_chars = TARGET_TOKENS * 4
+        target_chars = _get_target_tokens() * 4
         prompt = HANDOFF_COMPACTION_PROMPT.format(
             conversation=conversation,
-            target_tokens=TARGET_TOKENS,
+            target_tokens=_get_target_tokens(),
             target_chars=target_chars,
         )
 
@@ -237,7 +244,7 @@ class Compactor:
                 f"[COMPACTOR] Compaction failed after {elapsed:.2f}s: {e}, "
                 "falling back to truncation"
             )
-            target_chars = TARGET_TOKENS * 4
+            target_chars = _get_target_tokens() * 4
             if len(conversation) > target_chars:
                 return conversation[:target_chars] + "\n\n[... truncated ...]"
             return conversation

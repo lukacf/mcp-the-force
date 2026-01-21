@@ -409,7 +409,7 @@ class GeminiAdapter:
             )
             response = await client.aio.models.generate_content(
                 model=self.model_name,
-                contents=contents,
+                contents=contents,  # type: ignore[arg-type]  # List[Content] is valid
                 config=config,
             )
 
@@ -532,9 +532,11 @@ class GeminiAdapter:
 
             for fc_part in function_call_parts:
                 fc = fc_part.function_call
+                if fc is None:
+                    continue  # Skip parts without function calls
 
                 # Record function call in history (with thought_signature!)
-                fc_history_item = {
+                fc_history_item: Dict[str, Any] = {
                     "type": "function_call",
                     "name": fc.name,
                     "arguments": json.dumps(fc.args) if fc.args else "{}",
@@ -554,8 +556,9 @@ class GeminiAdapter:
                 # Execute tool
                 try:
                     args_str = json.dumps(fc.args) if fc.args else "{}"
+                    tool_name = fc.name or "unknown"
                     result = await tool_dispatcher.execute(
-                        tool_name=fc.name,
+                        tool_name=tool_name,
                         tool_args=args_str,
                         context=ctx,
                     )
@@ -591,7 +594,7 @@ class GeminiAdapter:
             # Continue conversation
             response = await client.aio.models.generate_content(
                 model=self.model_name,
-                contents=contents,
+                contents=contents,  # type: ignore[arg-type]  # List[Content] is valid
                 config=config,
             )
 

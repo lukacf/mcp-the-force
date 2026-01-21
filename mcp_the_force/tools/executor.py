@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 
 async def _maybe_store_memory(
-    session_id: str,
+    session_id: Optional[str],
     tool_id: str,
     messages: List[Dict[str, Any]],
     response: str,
@@ -43,6 +43,9 @@ async def _maybe_store_memory(
     """Store conversation memory either synchronously or asynchronously based on settings."""
     if disable_history_record:
         return
+
+    if not session_id:
+        return  # Can't store memory without a session
 
     settings = get_settings()
     if not settings.history_enabled:
