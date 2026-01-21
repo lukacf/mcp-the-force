@@ -6,6 +6,7 @@ plus shared types like ParsedCLIResponse.
 """
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Protocol
 
 
@@ -113,3 +114,44 @@ class CLIPlugin(Protocol):
             Dict of environment variables to set
         """
         ...
+
+    def locate_transcript(
+        self,
+        cli_session_id: Optional[str],
+        project_dir: str,
+    ) -> Optional[Path]:
+        """
+        Locate the transcript file for a CLI session.
+
+        Args:
+            cli_session_id: The CLI-native session ID (thread_id for Codex, etc.)
+            project_dir: The project directory (used for path-based lookups)
+
+        Returns:
+            Path to the transcript file, or None if not found
+        """
+        ...
+
+
+class CLIPluginBase:
+    """
+    Base class providing default implementations for optional methods.
+
+    CLI plugins can inherit from this to get default behavior for methods
+    they don't need to customize.
+    """
+
+    def get_reasoning_env_vars(
+        self,
+        reasoning_effort: Optional[str] = None,
+    ) -> Dict[str, str]:
+        """Default: no environment variables needed."""
+        return {}
+
+    def locate_transcript(
+        self,
+        cli_session_id: Optional[str],
+        project_dir: str,
+    ) -> Optional[Path]:
+        """Default: transcript location not supported."""
+        return None

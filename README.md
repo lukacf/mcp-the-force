@@ -101,6 +101,19 @@ providers:
 - Copy your `secrets.yaml` to each project's `./.mcp-the-force/` directory
 - If you want to preserve conversation history, also copy `sessions.sqlite3` from the global config directory
 
+**For local/development setups**: If you run the MCP server from a different directory than your target project (e.g., using `uv run --directory /path/to/mcp-the-force`), you must set `MCP_PROJECT_DIR` to tell the server which project you're working on:
+
+```json
+{
+  "command": "uv",
+  "args": ["run", "--directory", "/path/to/mcp-the-force", "mcp-the-force"],
+  "env": {
+    "MCP_PROJECT_DIR": "/path/to/your/actual/project",
+    "OPENAI_API_KEY": "sk-..."
+  }
+}
+```
+
 ### 3. Run
 
 The server is now ready. Claude Code will start it automatically. To run it manually for development:

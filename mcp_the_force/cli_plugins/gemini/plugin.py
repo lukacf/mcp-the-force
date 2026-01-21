@@ -5,7 +5,10 @@ Handles command building for Google Gemini CLI.
 Output parsing is in parser.py.
 """
 
+import hashlib
 import logging
+import os
+from pathlib import Path
 from typing import Dict, List, Optional
 
 from mcp_the_force.cli_plugins.base import ParsedCLIResponse
@@ -121,3 +124,73 @@ class GeminiPlugin:
     def parse_output(self, output: str) -> ParsedCLIResponse:
         """Parse Gemini CLI output. Delegates to GeminiParser."""
         return self._parser.parse(output)
+
+    def locate_transcript(
+        self,
+        cli_session_id: Optional[str],
+        project_dir: str,
+    ) -> Optional[Path]:
+        """
+        Locate a Gemini CLI transcript file.
+
+        Gemini CLI stores transcripts in: ~/.gemini/tmp/<project-hash>/
+        The project hash is a SHA256 of the project directory path.
+        Session files are in the chats/ subdirectory or as checkpoint-tag-*.json.
+
+        Args:
+            cli_session_id: Optional session tag (from /chat save <tag>)
+            project_dir: The project directory (used to compute hash)
+
+        Returns:
+            Path to the transcript file, or None if not found
+        """
+        home = Path(os.environ.get("HOME", os.path.expanduser("~")))
+        gemini_dir = home / ".gemini" / "tmp"
+
+        if not gemini_dir.exists():
+            return None
+
+        # Compute project hash
+        project_hash = self._compute_project_hash(project_dir)
+        project_sessions_dir = gemini_dir / project_hash
+
+        if not project_sessions_dir.exists():
+            return None
+
+        # If we have a session/tag ID, look for checkpoint-tag-{tag}.json
+        if cli_session_id:
+            tagged_file = project_sessions_dir / f"checkpoint-tag-{cli_session_id}.json"
+            if tagged_file.exists():
+                return tagged_file
+
+        # Look in chats/ subdirectory for latest chat
+        chats_dir = project_sessions_dir / "chats"
+        if chats_dir.exists():
+            chat_files = list(chats_dir.glob("*.json"))
+            if chat_files:
+                # Sort by modification time, newest first
+                chat_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+                return chat_files[0]
+
+        # Fallback: look for any JSON file in the project directory
+        json_files = list(project_sessions_dir.glob("*.json"))
+        if json_files:
+            # Prefer checkpoint files
+            checkpoint_files = [f for f in json_files if "checkpoint" in f.name]
+            if checkpoint_files:
+                checkpoint_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+                return checkpoint_files[0]
+            # Otherwise, most recent JSON
+            json_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+            return json_files[0]
+
+        return None
+
+    def _compute_project_hash(self, project_dir: str) -> str:
+        """
+        Compute Gemini's project hash from a directory path.
+
+        Gemini CLI uses SHA256 hash of the project path.
+        """
+        normalized = os.path.normpath(project_dir)
+        return hashlib.sha256(normalized.encode()).hexdigest()

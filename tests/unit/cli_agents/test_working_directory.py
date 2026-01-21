@@ -186,7 +186,46 @@ class TestEnvironmentBuilderNoClaudeSymlink:
 class TestToolExecutorProjectPathDerivation:
     """Test that ToolExecutor derives project_path correctly."""
 
-    def test_project_path_from_config(self, tmp_path):
+    def test_project_path_from_mcp_project_dir_env_var(self, tmp_path, monkeypatch):
+        """MCP_PROJECT_DIR env var should take highest priority.
+
+        This is the recommended approach when running the MCP server from a
+        different directory than the target project (e.g., using --directory flag).
+        """
+        from mcp_the_force.config import get_project_dir
+
+        project_dir = str(tmp_path / "my-actual-project")
+
+        # Set the env var
+        monkeypatch.setenv("MCP_PROJECT_DIR", project_dir)
+
+        result = get_project_dir()
+        assert result == project_dir
+
+    def test_project_path_env_var_takes_priority_over_config(
+        self, tmp_path, monkeypatch
+    ):
+        """MCP_PROJECT_DIR should take priority over config file location."""
+        from unittest.mock import patch
+        from mcp_the_force.config import get_project_dir
+
+        env_project_dir = str(tmp_path / "env-project")
+        config_project_dir = tmp_path / "config-project"
+        config_path = str(config_project_dir / ".mcp-the-force" / "config.yaml")
+
+        # Set the env var
+        monkeypatch.setenv("MCP_PROJECT_DIR", env_project_dir)
+
+        # Mock config path (should be ignored)
+        with patch("mcp_the_force.config.get_settings") as mock_settings:
+            mock_instance = mock_settings.return_value
+            mock_instance._last_config_path = config_path
+
+            result = get_project_dir()
+            # Env var should win
+            assert result == env_project_dir
+
+    def test_project_path_from_config(self, tmp_path, monkeypatch):
         """project_path should be derived from config file location.
 
         The project directory is the parent of the .mcp-the-force folder
@@ -195,6 +234,9 @@ class TestToolExecutorProjectPathDerivation:
         """
         from unittest.mock import patch
         from mcp_the_force.config import get_project_dir, get_settings
+
+        # Ensure MCP_PROJECT_DIR is not set
+        monkeypatch.delenv("MCP_PROJECT_DIR", raising=False)
 
         # When config file is at /project/.mcp-the-force/config.yaml,
         # project_dir should be /project
@@ -214,11 +256,14 @@ class TestToolExecutorProjectPathDerivation:
                 result = get_project_dir()
                 assert result == str(tmp_path)
 
-    def test_project_path_fallback_to_cwd(self, tmp_path):
+    def test_project_path_fallback_to_cwd(self, monkeypatch):
         """project_path should fall back to CWD if no config found."""
         import os
         from unittest.mock import patch
         from mcp_the_force.config import get_project_dir
+
+        # Ensure MCP_PROJECT_DIR is not set
+        monkeypatch.delenv("MCP_PROJECT_DIR", raising=False)
 
         # When there's no config file, should fall back to CWD
         with patch("mcp_the_force.config.get_settings") as mock_settings:

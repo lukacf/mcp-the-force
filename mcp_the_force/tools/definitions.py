@@ -16,6 +16,7 @@ from . import async_jobs  # noqa: F401
 from . import instructions  # noqa: F401
 from . import work_with  # noqa: F401
 from . import consult_with  # noqa: F401
+from . import live_follow_session  # noqa: F401
 # Note: search_attachments is not imported here to prevent MCP exposure
 # It remains available for internal model function calling
 # Note: logging_tools is imported conditionally in integration.py when developer mode is enabled

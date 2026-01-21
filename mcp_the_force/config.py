@@ -741,16 +741,27 @@ def get_settings() -> Settings:
 
 
 def get_project_dir() -> str:
-    """Get the project directory from config file location.
+    """Get the project directory for CLI agents.
 
-    The project directory is the parent of the .mcp-the-force folder where
-    config.yaml lives. This is the directory that should be used as the
-    working context for CLI agents.
+    Priority order:
+    1. MCP_PROJECT_DIR environment variable (set by MCP client config)
+    2. Config file location (.mcp-the-force/config.yaml parent)
+    3. Current working directory with .mcp-the-force folder
+    4. Current working directory fallback
+
+    The MCP_PROJECT_DIR env var is the recommended approach when using
+    `uv run --directory` to run the MCP server from a different location
+    than the target project.
 
     Returns:
-        Project directory path, or current working directory as fallback.
+        Project directory path.
     """
-    # Try to get from cached settings if available
+    # Priority 1: Explicit environment variable (recommended for MCP config)
+    env_project_dir = os.getenv("MCP_PROJECT_DIR")
+    if env_project_dir:
+        return env_project_dir
+
+    # Priority 2: Config file location
     settings = get_settings()
     if settings._last_config_path:
         # Config is at .mcp-the-force/config.yaml, so parent.parent is project dir
@@ -758,11 +769,11 @@ def get_project_dir() -> str:
         project_dir = config_path.parent.parent
         return str(project_dir)
 
-    # Fallback: look for .mcp-the-force folder starting from CWD
+    # Priority 3: Look for .mcp-the-force folder in CWD
     cwd = Path.cwd()
     mcp_folder = cwd / ".mcp-the-force"
     if mcp_folder.exists():
         return str(cwd)
 
-    # Last resort fallback
+    # Priority 4: Fallback to CWD
     return str(cwd)

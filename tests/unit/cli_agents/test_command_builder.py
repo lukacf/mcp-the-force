@@ -236,11 +236,10 @@ class TestReasoningEffortCodex:
             reasoning_effort="high",
         )
 
-        assert "-c" in args
-        # Find the config value that follows -c
-        c_idx = args.index("-c")
-        config_value = args[c_idx + 1]
-        assert 'model_reasoning_effort="high"' in config_value
+        # Find the -c flag that sets model_reasoning_effort
+        # (there are also -c flags for shell_environment_policy)
+        args_str = " ".join(args)
+        assert 'model_reasoning_effort="high"' in args_str
 
     def test_xhigh_reasoning_effort_adds_config_flag(self):
         """Codex adds -c model_reasoning_effort flag for xhigh effort."""
@@ -253,13 +252,13 @@ class TestReasoningEffortCodex:
             reasoning_effort="xhigh",
         )
 
-        assert "-c" in args
-        c_idx = args.index("-c")
-        config_value = args[c_idx + 1]
-        assert 'model_reasoning_effort="xhigh"' in config_value
+        # Find the -c flag that sets model_reasoning_effort
+        # (there are also -c flags for shell_environment_policy)
+        args_str = " ".join(args)
+        assert 'model_reasoning_effort="xhigh"' in args_str
 
-    def test_medium_reasoning_effort_no_flag(self):
-        """Codex doesn't add flag for medium effort (default)."""
+    def test_medium_reasoning_effort_no_reasoning_flag(self):
+        """Codex doesn't add model_reasoning_effort for medium effort (default)."""
         from mcp_the_force.cli_plugins.codex import CodexPlugin
 
         plugin = CodexPlugin()
@@ -269,11 +268,13 @@ class TestReasoningEffortCodex:
             reasoning_effort="medium",
         )
 
-        # Medium is default, no flag should be added
-        assert "-c" not in args
+        # Medium is default, no reasoning effort flag should be added
+        # Note: -c IS present for shell_environment_policy, just not for reasoning
+        args_str = " ".join(args)
+        assert "model_reasoning_effort" not in args_str
 
-    def test_no_reasoning_effort_no_flag(self):
-        """Codex doesn't add flag when reasoning_effort is None."""
+    def test_no_reasoning_effort_no_reasoning_flag(self):
+        """Codex doesn't add model_reasoning_effort when reasoning_effort is None."""
         from mcp_the_force.cli_plugins.codex import CodexPlugin
 
         plugin = CodexPlugin()
@@ -283,7 +284,10 @@ class TestReasoningEffortCodex:
             reasoning_effort=None,
         )
 
-        assert "-c" not in args
+        # No reasoning effort flag should be added
+        # Note: -c IS present for shell_environment_policy, just not for reasoning
+        args_str = " ".join(args)
+        assert "model_reasoning_effort" not in args_str
 
     def test_resume_with_high_reasoning_effort(self):
         """Codex resume command includes reasoning effort flag."""

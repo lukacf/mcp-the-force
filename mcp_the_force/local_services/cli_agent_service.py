@@ -201,8 +201,11 @@ class CLIAgentService:
                     f"[CLI-SERVICE] Context injected: {len(compacted)} chars prepended to task"
                 )
 
-        # 5. Auto-inject project directory into task to guide the agent
-        # The project_dir comes from config file location (parent of .mcp-the-force folder)
+        # 5. Auto-inject session_id and project directory into task
+        # This allows live_follow_session to find the transcript by searching for session_id
+        task = f"[force_session_id: {session_id}]\n\n{task}"
+
+        # The project directory is set via MCP_PROJECT_DIR env var or config.yaml location
         if self._project_dir and self._project_dir != "/tmp":
             task = f"Work from this directory: {self._project_dir}\n\n{task}"
             logger.info(
@@ -256,7 +259,14 @@ class CLIAgentService:
                     f"[CLI-SERVICE] Added reasoning env vars: {list(reasoning_env.keys())}"
                 )
 
-        # 8. Execute via CLIExecutor
+        # 8. Store pending session mapping BEFORE execution (for live_follow_session)
+        await self._session_bridge.store_pending_session(
+            project=project_name,
+            session_id=session_id,
+            cli_name=cli_name,
+        )
+
+        # 9. Execute via CLIExecutor
         logger.info(f"Executing CLI agent: {cli_name} for session {session_id}")
         result = await self._executor.execute(
             command=full_command,

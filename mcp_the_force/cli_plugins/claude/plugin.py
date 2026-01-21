@@ -6,6 +6,8 @@ Output parsing is in parser.py.
 """
 
 import logging
+import os
+from pathlib import Path
 from typing import Dict, List, Optional
 
 from mcp_the_force.cli_plugins.base import ParsedCLIResponse
@@ -136,3 +138,72 @@ class ClaudePlugin:
     def parse_output(self, output: str) -> ParsedCLIResponse:
         """Parse Claude CLI output. Delegates to ClaudeParser."""
         return self._parser.parse(output)
+
+    def locate_transcript(
+        self,
+        cli_session_id: Optional[str],
+        project_dir: str,
+    ) -> Optional[Path]:
+        """
+        Locate a Claude Code transcript file.
+
+        Claude Code stores transcripts in: ~/.claude/projects/<path-hash>/<session>.jsonl
+        The path hash is the project directory path with / replaced by -.
+
+        Args:
+            cli_session_id: The Claude session ID (used as filename)
+            project_dir: The project directory (used to compute path hash)
+
+        Returns:
+            Path to the transcript file, or None if not found
+        """
+        home = Path(os.environ.get("HOME", os.path.expanduser("~")))
+        projects_dir = home / ".claude" / "projects"
+
+        if not projects_dir.exists():
+            return None
+
+        # Compute project hash from directory path
+        project_hash = self._compute_project_hash(project_dir)
+        project_sessions_dir = projects_dir / project_hash
+
+        if not project_sessions_dir.exists():
+            return None
+
+        # If we have a session ID, look for that specific file
+        if cli_session_id:
+            # Try exact match first
+            session_file = project_sessions_dir / f"{cli_session_id}.jsonl"
+            if session_file.exists():
+                return session_file
+
+            # Try with agent- prefix
+            agent_file = project_sessions_dir / f"agent-{cli_session_id}.jsonl"
+            if agent_file.exists():
+                return agent_file
+
+            # Try without extension
+            for jsonl_file in project_sessions_dir.glob("*.jsonl"):
+                if cli_session_id in jsonl_file.stem:
+                    return jsonl_file
+
+        # If no session ID or not found, return the most recent file
+        jsonl_files = list(project_sessions_dir.glob("*.jsonl"))
+        if jsonl_files:
+            # Sort by modification time, newest first
+            jsonl_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+            return jsonl_files[0]
+
+        return None
+
+    def _compute_project_hash(self, project_dir: str) -> str:
+        """
+        Compute Claude's project hash from a directory path.
+
+        Claude Code uses the path with / replaced by - as the folder name.
+        e.g., /Users/luka/src/raik -> -Users-luka-src-raik
+        """
+        # Normalize the path
+        normalized = os.path.normpath(project_dir)
+        # Replace / with - (and handle leading /)
+        return normalized.replace("/", "-")

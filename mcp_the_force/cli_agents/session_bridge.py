@@ -18,6 +18,9 @@ logger = logging.getLogger(__name__)
 # 6 months TTL for session mappings
 SESSION_MAPPING_TTL = 86400 * 180
 
+# Sentinel value for pending CLI sessions (session started but ID not yet known)
+PENDING_CLI_SESSION = "__PENDING__"
+
 CREATE_TABLE_SQL = """
     CREATE TABLE IF NOT EXISTS cli_session_mappings (
         project TEXT NOT NULL,
@@ -137,3 +140,97 @@ class SessionBridge(BaseSQLiteCache):
 
         logger.debug(f"No CLI session mapping found: {project}/{session_id}/{cli_name}")
         return None
+
+    async def get_cli_name(
+        self,
+        project: str,
+        session_id: str,
+    ) -> Optional[str]:
+        """
+        Retrieve the CLI name for the most recent mapping of a Force session.
+
+        This is useful for live_follow_session where we need to know which CLI
+        was used without specifying it explicitly.
+
+        Args:
+            project: Project identifier
+            session_id: Force session ID
+
+        Returns:
+            The CLI name (e.g., "codex", "claude", "gemini") if found, None otherwise.
+        """
+        rows = await self._execute_async(
+            """
+            SELECT cli_name FROM cli_session_mappings
+            WHERE project = ? AND session_id = ?
+            ORDER BY updated_at DESC
+            LIMIT 1
+            """,
+            (project, session_id),
+        )
+
+        if rows and len(rows) > 0:
+            cli_name: str = rows[0][0]
+            logger.debug(f"Found CLI name for {project}/{session_id} -> {cli_name}")
+            return cli_name
+
+        logger.debug(f"No CLI name found for {project}/{session_id}")
+        return None
+
+    async def store_pending_session(
+        self,
+        project: str,
+        session_id: str,
+        cli_name: str,
+    ) -> None:
+        """
+        Store a pending CLI session mapping (session started, ID not yet known).
+
+        This allows live_follow_session to find running sessions before they complete.
+
+        Args:
+            project: Project identifier
+            session_id: Force session ID
+            cli_name: CLI name (claude, gemini, codex)
+        """
+        await self.store_cli_session_id(
+            project=project,
+            session_id=session_id,
+            cli_name=cli_name,
+            cli_session_id=PENDING_CLI_SESSION,
+        )
+        logger.debug(f"Stored pending session: {project}/{session_id}/{cli_name}")
+
+    async def is_session_pending(
+        self,
+        project: str,
+        session_id: str,
+    ) -> tuple[bool, Optional[str]]:
+        """
+        Check if a session is pending (started but not yet completed).
+
+        Args:
+            project: Project identifier
+            session_id: Force session ID
+
+        Returns:
+            Tuple of (is_pending, cli_name). If not pending, returns (False, None).
+        """
+        rows = await self._execute_async(
+            """
+            SELECT cli_name, cli_session_id FROM cli_session_mappings
+            WHERE project = ? AND session_id = ?
+            ORDER BY updated_at DESC
+            LIMIT 1
+            """,
+            (project, session_id),
+        )
+
+        if rows and len(rows) > 0:
+            cli_name: str = rows[0][0]
+            cli_session_id: str = rows[0][1]
+            if cli_session_id == PENDING_CLI_SESSION:
+                logger.debug(f"Session {session_id} is pending ({cli_name})")
+                return True, cli_name
+
+        return False, None
