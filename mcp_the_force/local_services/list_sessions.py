@@ -3,7 +3,7 @@
 import json
 import os
 from typing import List, Dict, Any, Optional
-from ..config import get_settings
+from ..config import get_project_dir
 from ..unified_session_cache import _get_instance as get_cache_instance
 
 
@@ -27,11 +27,9 @@ class ListSessionsService:
         Returns:
             List of session information
         """
-        # Get current project name
-        settings = get_settings()
-        project_path = settings.logging.project_path or os.getcwd()
-        # Use abspath to resolve "." to actual directory name
-        project_name = os.path.basename(os.path.abspath(project_path))
+        # Get current project name - use same method as work_with/executor
+        project_path = get_project_dir()
+        project_name = os.path.basename(project_path)
 
         # Get cache instance
         cache = get_cache_instance()

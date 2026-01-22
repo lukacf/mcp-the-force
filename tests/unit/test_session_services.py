@@ -12,11 +12,10 @@ from mcp_the_force.unified_session_cache import UnifiedSession, UnifiedSessionCa
 async def populated_session_db(isolate_test_databases):
     """Fixture that populates test database with sessions."""
     import os
-    from mcp_the_force.config import get_settings
+    from mcp_the_force.config import get_project_dir
 
-    # Get the project name that the service will use
-    settings = get_settings()
-    project_path = settings.logging.project_path or os.getcwd()
+    # Get the project name that the service will use (must match ListSessionsService)
+    project_path = get_project_dir()
     project_name = os.path.basename(project_path)
 
     # Create a few test sessions with the correct project name
@@ -119,10 +118,9 @@ class TestListSessionsService:
     async def test_list_sessions_with_summary_join(self, populated_session_db):
         """Test list_sessions with include_summary parameter."""
         # First add a summary to one of the sessions
-        from mcp_the_force.config import get_settings
+        from mcp_the_force.config import get_project_dir
 
-        settings = get_settings()
-        project_name = os.path.basename(settings.logging.project_path or os.getcwd())
+        project_name = os.path.basename(get_project_dir())
 
         await UnifiedSessionCache.set_summary(
             project_name, "test-session-1", "This is a test summary"
@@ -171,11 +169,10 @@ class TestDescribeSessionService:
     async def test_describe_cache_hit(self, populated_session_db, mocker):
         """Test describe_session returns cached summary when available."""
         from mcp_the_force.local_services.describe_session import DescribeSessionService
-        from mcp_the_force.config import get_settings
+        from mcp_the_force.config import get_project_dir
 
         # Get project name
-        settings = get_settings()
-        project_name = os.path.basename(settings.logging.project_path or os.getcwd())
+        project_name = os.path.basename(get_project_dir())
 
         # Mock get_summary to return a cached summary
         mock_get_summary = mocker.patch(
@@ -206,11 +203,10 @@ class TestDescribeSessionService:
     ):
         """Test describe_session duplicates session and calls executor on cache miss."""
         from mcp_the_force.local_services.describe_session import DescribeSessionService
-        from mcp_the_force.config import get_settings
+        from mcp_the_force.config import get_project_dir
 
         # Get project name
-        settings = get_settings()
-        project_name = os.path.basename(settings.logging.project_path or os.getcwd())
+        project_name = os.path.basename(get_project_dir())
 
         # Mock get_summary to return None (cache miss)
         mock_get_summary = mocker.patch(
@@ -422,11 +418,10 @@ class TestDescribeSessionService:
     ):
         """Test that clear_cache=True forces regeneration even with cached summary."""
         from mcp_the_force.local_services.describe_session import DescribeSessionService
-        from mcp_the_force.config import get_settings
+        from mcp_the_force.config import get_project_dir
 
         # Get project name
-        settings = get_settings()
-        project_name = os.path.basename(settings.logging.project_path or os.getcwd())
+        project_name = os.path.basename(get_project_dir())
 
         # First, set up a cached summary
         await UnifiedSessionCache.set_summary(
