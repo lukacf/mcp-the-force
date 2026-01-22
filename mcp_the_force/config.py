@@ -796,7 +796,8 @@ def get_project_dir() -> str:
     settings = get_settings()
     if settings._last_config_path:
         # Config is at .mcp-the-force/config.yaml, so parent.parent is project dir
-        config_path = Path(settings._last_config_path)
+        # Must resolve to absolute path first - relative paths give wrong parent
+        config_path = Path(settings._last_config_path).resolve()
         project_dir = config_path.parent.parent
         return str(project_dir)
 

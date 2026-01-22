@@ -1,5 +1,6 @@
 """Unified session cache for all providers using LiteLLM's message format."""
 
+import os
 import time
 import orjson
 import logging
@@ -357,6 +358,14 @@ def _get_instance() -> _SQLiteUnifiedSessionCache:
             settings = get_settings()
             db_path = settings.session_db_path
             ttl = settings.session_ttl_seconds
+
+            # Resolve relative db_path against project directory, not CWD
+            if not os.path.isabs(db_path):
+                from .config import get_project_dir
+
+                project_dir = get_project_dir()
+                db_path = os.path.join(project_dir, db_path)
+
             try:
                 _instance = _SQLiteUnifiedSessionCache(db_path=db_path, ttl=ttl)
                 logger.info(f"Initialized unified session cache at {db_path}")
