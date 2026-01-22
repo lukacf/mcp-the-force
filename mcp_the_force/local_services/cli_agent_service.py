@@ -111,8 +111,11 @@ class CLIAgentService:
 
         # 4. Check SessionBridge for existing CLI session (for resume)
         # Use project basename for consistent lookups
+        # Note: Use abspath to resolve "." to actual directory name
         project_name = (
-            os.path.basename(self._project_dir) if self._project_dir else "default"
+            os.path.basename(os.path.abspath(self._project_dir))
+            if self._project_dir
+            else "default"
         )
         existing_cli_session = await self._session_bridge.get_cli_session_id(
             project=project_name,
@@ -418,8 +421,11 @@ class ConsultationService:
             raise ValueError(f"Unknown model: {model}")
 
         # Check for existing cross-tool history (for context injection)
+        # Note: Use abspath to resolve "." to actual directory name
         project_name = (
-            os.path.basename(self._project_dir) if self._project_dir else "default"
+            os.path.basename(os.path.abspath(self._project_dir))
+            if self._project_dir
+            else "default"
         )
         existing_session = await UnifiedSessionCache.get_session(
             project=project_name,

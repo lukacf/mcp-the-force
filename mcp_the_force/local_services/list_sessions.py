@@ -30,13 +30,15 @@ class ListSessionsService:
         # Get current project name
         settings = get_settings()
         project_path = settings.logging.project_path or os.getcwd()
-        project_name = os.path.basename(project_path)
+        # Use abspath to resolve "." to actual directory name
+        project_name = os.path.basename(os.path.abspath(project_path))
 
         # Get cache instance
         cache = get_cache_instance()
 
-        # Build query dynamically
-        params: List[Any] = [project_name]
+        # Build query dynamically - include legacy "." project for backwards compatibility
+        # Some sessions were stored with "." due to a bug with os.path.basename(".")
+        params: List[Any] = [project_name, "."]
 
         # Base query - with optional summary join
         # Note: Sessions are now keyed by (project, session_id), tool info is per-turn in history
@@ -46,13 +48,13 @@ class ListSessionsService:
                 FROM unified_sessions s
                 LEFT JOIN session_summaries ss
                     ON s.project = ss.project AND s.session_id = ss.session_id
-                WHERE s.project = ?
+                WHERE s.project IN (?, ?)
             """
         else:
             query = """
                 SELECT session_id
                 FROM unified_sessions
-                WHERE project = ?
+                WHERE project IN (?, ?)
             """
 
         # Add search filter if provided (searches session_id only)
