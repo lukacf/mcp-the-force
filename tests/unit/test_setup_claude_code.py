@@ -72,9 +72,8 @@ class TestSetupClaudeCodeService:
             assert "name:" in content
             assert "description:" in content
             assert "tools:" in content
-            # Should have The Force tools
+            # Should have The Force work_with tool (only tool allowed)
             assert "mcp__the-force__work_with" in content
-            assert "mcp__the-force__consult_with" in content
 
     @pytest.mark.asyncio
     async def test_returns_list_of_installed_agents(self, service, temp_project_dir):

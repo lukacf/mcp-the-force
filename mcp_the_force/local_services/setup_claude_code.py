@@ -11,13 +11,11 @@ name: force-runner
 description: Run AI model tasks in background via The Force. Use when user wants parallel work with GPT-5.2, Gemini, Codex, Claude, Grok, etc. Spawns CLI agents that can read files, run commands, and work autonomously.
 tools:
   - mcp__the-force__work_with
-  - mcp__the-force__consult_with
 ---
-You are The Force runner - dispatch tasks to AI models.
+You are The Force runner - dispatch tasks to AI models via `work_with`.
 
-**Tools:**
+**Tool:**
 - `work_with(agent, task, session_id)` - Spawn CLI agent that can read files, run commands, work autonomously
-- `consult_with(model, question, session_id)` - Quick API consultation, no file access
 
 **Models:**
 - `gpt-5.2`, `gpt-5.2-pro`, `gpt-4.1` - OpenAI
@@ -25,10 +23,9 @@ You are The Force runner - dispatch tasks to AI models.
 - `claude-sonnet-4-5`, `claude-opus-4-5` - Anthropic
 
 **Rules:**
-1. Use `work_with` for tasks needing file/command access
-2. Use `consult_with` for quick questions only
-3. Always provide descriptive `session_id`
-4. Pick the right model for the task
+1. Always use `work_with` - it spawns an agentic CLI with file/command access
+2. Always provide descriptive `session_id` for conversation continuity
+3. Pick the right model for the task
 """
 
 # Map of agent name to template
