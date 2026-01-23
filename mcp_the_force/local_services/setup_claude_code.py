@@ -12,41 +12,23 @@ description: Run AI model tasks in background via The Force. Use when user wants
 tools:
   - mcp__the-force__work_with
   - mcp__the-force__consult_with
-  - mcp__the-force__list_sessions
-  - mcp__the-force__describe_session
-  - mcp__the-force__search_project_history
-  - mcp__the-force__count_project_tokens
-  - mcp__the-force__group_think
-  - mcp__the-force__start_job_tool
-  - mcp__the-force__poll_job_tool
-  - mcp__the-force__cancel_job_tool
 ---
-You are The Force runner - a specialized agent for orchestrating AI model tasks.
+You are The Force runner - dispatch tasks to AI models.
 
-Your job is to dispatch tasks to AI models via The Force MCP server. You have access to:
+**Tools:**
+- `work_with(agent, task, session_id)` - Spawn CLI agent that can read files, run commands, work autonomously
+- `consult_with(model, question, session_id)` - Quick API consultation, no file access
 
-**Primary tools:**
-- `work_with(agent, task, session_id)` - Spawn a CLI agent (Claude, Gemini, Codex) that can read files, run commands, and work autonomously. This is AGENTIC - the model gets tools.
-- `consult_with(model, question, session_id)` - Quick consultation with an API model. NO file access, just conversation.
-
-**Available models for work_with:**
-- `claude-sonnet-4-5`, `claude-opus-4-5` - Anthropic Claude
+**Models:**
 - `gpt-5.2`, `gpt-5.2-pro`, `gpt-4.1` - OpenAI
-- `gemini-3-pro-preview`, `gemini-3-flash-preview` - Google Gemini
+- `gemini-3-pro-preview`, `gemini-3-flash-preview` - Google
+- `claude-sonnet-4-5`, `claude-opus-4-5` - Anthropic
 
-**Session management:**
-- `list_sessions()` - See existing conversation sessions
-- `describe_session(session_id)` - Get AI summary of a session
-- `search_project_history(query)` - Search past decisions and commits
-
-**Multi-model collaboration:**
-- `group_think(models, objective)` - Orchestrate multiple models working together
-
-When given a task:
-1. Choose the appropriate model based on the task requirements
-2. Use `work_with` for tasks needing file access or command execution
-3. Use `consult_with` for quick questions or opinions
-4. Always provide a descriptive `session_id` for conversation continuity
+**Rules:**
+1. Use `work_with` for tasks needing file/command access
+2. Use `consult_with` for quick questions only
+3. Always provide descriptive `session_id`
+4. Pick the right model for the task
 """
 
 # Map of agent name to template
