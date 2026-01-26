@@ -424,6 +424,9 @@ def _generate_and_register_blueprints():
         if capability_info:
             full_description = f"{capabilities.description} [{capability_info}]"
 
+        # Research models are API-only (no CLI), chat models use codex CLI
+        cli_name = None if tool_type == "research" else "codex"
+
         blueprint = ToolBlueprint(
             model_name=model_name,
             adapter_key="openai",
@@ -433,6 +436,7 @@ def _generate_and_register_blueprints():
             context_window=capabilities.max_context_window,
             tool_type=tool_type,
             tool_name=tool_name,
+            cli=cli_name,
         )
         blueprints.append(blueprint)
 

@@ -46,22 +46,21 @@ class TestBasicMCP:
                 # Each session should have required fields
                 for session_data in sessions:
                     assert "session_id" in session_data
-                    assert "tool_name" in session_data
 
-    async def test_gemini_tool_callable(self, mcp_server):
-        """Test that a model tool can be called."""
+    async def test_consult_with_gemini_callable(self, mcp_server):
+        """Test that consult_with can route to Gemini model."""
         from fastmcp import Client
         from fastmcp.client import FastMCPTransport
 
         transport = FastMCPTransport(mcp_server)
         async with Client(transport) as client:
             result = await client.call_tool(
-                "chat_with_gemini3_pro_preview",
+                "consult_with",
                 {
-                    "instructions": "test",
+                    "model": "gemini3_pro_preview",
+                    "question": "test",
                     "output_format": "json",
-                    "context": [],
-                    "session_id": "mcp-gemini",
+                    "session_id": f"mcp-gemini-{uuid.uuid4()}",
                 },
             )
 
@@ -82,19 +81,19 @@ class TestBasicMCP:
                 # If not JSON, just verify we got a response
                 assert len(content[0].text) > 0
 
-    async def test_grok_tool_callable(self, mcp_server):
-        """Test that a Grok tool can be called via MCP."""
+    async def test_consult_with_grok_callable(self, mcp_server):
+        """Test that consult_with can route to Grok model."""
         from fastmcp import Client
         from fastmcp.client import FastMCPTransport
 
         transport = FastMCPTransport(mcp_server)
         async with Client(transport) as client:
             result = await client.call_tool(
-                "chat_with_grok41",
+                "consult_with",
                 {
-                    "instructions": "test",
+                    "model": "grok41",
+                    "question": "test",
                     "output_format": "json",
-                    "context": [],
                     "session_id": f"mcp-grok-{uuid.uuid4()}",
                 },
             )

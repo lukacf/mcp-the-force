@@ -278,7 +278,8 @@ def main():
         # )
 
         # Now let FastMCP handle everything
-        mcp.run()  # Will create its own event loop
+        # CRITICAL: show_banner=False prevents ASCII art on stdout which breaks MCP protocol
+        mcp.run(show_banner=False)  # Will create its own event loop
         logger.info("MCP server exited normally")
 
     except KeyboardInterrupt:

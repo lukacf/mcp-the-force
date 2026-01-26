@@ -55,7 +55,11 @@ class TestToolRegistration:
                     assert metadata.model_config.get(
                         "description"
                     ), f"Tool {tool_id} missing description"
-                assert len(metadata.parameters) > 0, f"Tool {tool_id} has no parameters"
+                # Some utility tools (like setup_claude_code) are parameterless
+                if tool_id not in ("setup_claude_code",):
+                    assert (
+                        len(metadata.parameters) > 0
+                    ), f"Tool {tool_id} has no parameters"
 
     def test_no_duplicate_registrations(self):
         """Test that multiple imports don't duplicate tool registrations."""

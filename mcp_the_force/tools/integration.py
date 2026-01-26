@@ -5,6 +5,7 @@ from inspect import Parameter, Signature
 from fastmcp import FastMCP, Context
 import fastmcp.exceptions
 import logging
+from mcp.types import TextContent
 from pydantic import Field
 from .registry import list_tools, ToolMetadata
 from .executor import executor
@@ -92,10 +93,10 @@ def create_tool_function(metadata: ToolMetadata):
     ordered_params = positional_params + [context_param] + keyword_only_params
 
     # Create signature with correct parameter order
-    signature = Signature(ordered_params, return_annotation=str)
+    signature = Signature(ordered_params, return_annotation=TextContent)
 
     # Create the actual function that can handle positional args
-    async def tool_function(*args, **kwargs) -> str:
+    async def tool_function(*args, **kwargs) -> TextContent:
         """Dynamic tool function."""
         # Bind positional and keyword arguments to the signature
         try:
@@ -135,7 +136,8 @@ def create_tool_function(metadata: ToolMetadata):
                 logger.info(
                     f"[INTEGRATION] Tool {metadata.id} completed, returning result"
                 )
-                return result
+                # Return TextContent directly so FastMCP doesn't wrap in {"result": ...}
+                return TextContent(type="text", text=str(result) if result else "")
         except TypeError as e:
             # Provide helpful error message via MCP error mechanism
             raise fastmcp.exceptions.ToolError(f"Invalid arguments: {e}")
@@ -148,7 +150,7 @@ def create_tool_function(metadata: ToolMetadata):
 
     # CRITICAL: Set annotations for FastMCP 2.x compatibility
     # FastMCP uses pydantic which expects __annotations__ to be set
-    annotations: Dict[str, Any] = {"return": str}
+    annotations: Dict[str, Any] = {"return": TextContent}
     annotations["ctx"] = Context  # so FastMCP recognizes it
 
     for sig_param in sig_params:
@@ -259,6 +261,12 @@ def register_all_tools(mcp: FastMCP) -> None:
         try:
             # Skip aliases (they share the same metadata object)
             if tool_id != metadata.id:
+                continue
+
+            # Skip internal-only tools (they're in TOOL_REGISTRY for internal routing
+            # but not exposed via MCP - e.g., chat_with_* tools routed by consult_with)
+            if metadata.model_config.get("internal_only", False):
+                logger.debug(f"Skipping internal-only tool: {tool_id}")
                 continue
 
             # Create function with proper signature

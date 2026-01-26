@@ -101,6 +101,19 @@ providers:
 - Copy your `secrets.yaml` to each project's `./.mcp-the-force/` directory
 - If you want to preserve conversation history, also copy `sessions.sqlite3` from the global config directory
 
+**For local/development setups**: If you run the MCP server from a different directory than your target project (e.g., using `uv run --directory /path/to/mcp-the-force`), you must set `MCP_PROJECT_DIR` to tell the server which project you're working on:
+
+```json
+{
+  "command": "uv",
+  "args": ["run", "--directory", "/path/to/mcp-the-force", "mcp-the-force"],
+  "env": {
+    "MCP_PROJECT_DIR": "/path/to/your/actual/project",
+    "OPENAI_API_KEY": "sk-..."
+  }
+}
+```
+
 ### 3. Run
 
 The server is now ready. Claude Code will start it automatically. To run it manually for development:
@@ -109,31 +122,63 @@ The server is now ready. Claude Code will start it automatically. To run it manu
 uv run -- mcp-the-force
 ```
 
+### 4. CLI Agents (for `work_with`)
+
+The `work_with` tool spawns CLI agents that can read files, run commands, and take autonomous action. To use it, install at least one of these CLI tools:
+
+**Claude Code** (recommended):
+```bash
+npm install -g @anthropic/claude-code
+```
+
+**Gemini CLI**:
+```bash
+npm install -g @google/gemini-cli
+```
+
+**Codex CLI** (OpenAI):
+```bash
+npm install -g @openai/codex
+```
+
+The Force automatically detects which CLIs are available and routes `work_with` requests accordingly. If no CLI agents are installed, `work_with` will return an error—use `consult_with` instead for API-only access.
+
+**Note**: The Force includes an idle timeout (10 minutes by default) that automatically terminates hung CLI processes. This works around [known Codex CLI hanging issues](https://github.com/openai/codex/issues/5773). If a task is killed due to idle timeout, the partial output is still returned.
+
 ## Usage Examples
 
 Here's how you would instruct an assistant like Claude to use The Force:
 
-### 1. Analyze a large codebase that exceeds any model's context window:
+### 1. Analyze and fix code (agentic):
 
 > "Do we have any circular dependencies? Use The Force Claude!"
 
 The assistant would call:
 ```
-Use the-force chat_with_gpt41 with {"instructions": "Analyze the dependency graph and identify circular dependencies", "context": ["/src", "/packages", "/services"], "session_id": "dep-analysis"}
+work_with(
+    agent="claude-sonnet-4-5",
+    task="Analyze the dependency graph and identify circular dependencies",
+    session_id="dep-analysis"
+)
 ```
 
-*The Force automatically handles splitting the context between an inline prompt and a searchable vector store.*
+*The `work_with` tool spawns a CLI agent that can read files, run commands, and take autonomous action.*
 
-### 2. Ensure a critical file is always in context:
+### 2. Get a quick opinion (advisory):
 
-> "Ask GPT-5.2 Pro to propose an implementation, and make sure you pay close attention to our `security_config.py` file."
+> "Ask GPT-5.2 Pro what they think about our authentication approach."
 
 The assistant would call:
 ```
-Use the-force chat_with_gpt52_pro with {"instructions": "Propose how to implement the new architecture we discussed.", "context": ["/src/api"], "priority_context": ["/src/config/security_config.py"], "session_id": "auth-implementation"}
+consult_with(
+    model="gpt-5.2-pro",
+    question="What are the pros and cons of JWT vs session tokens for our use case?",
+    output_format="markdown",
+    session_id="auth-design"
+)
 ```
 
-*`priority_context` guarantees `security_config.py` is included directly in the prompt.*
+*The `consult_with` tool provides quick API access for opinions without file access.*
 
 ### 3. Search your project's entire history:
 
@@ -141,48 +186,57 @@ Use the-force chat_with_gpt52_pro with {"instructions": "Propose how to implemen
 
 The assistant would call:
 ```
-Use the-force search_project_history with {"query": "JWT implementation decisions; authentication architecture"}
+search_project_history(
+    query="JWT implementation decisions; authentication architecture"
+)
 ```
 
 *This searches a vector database of all past conversations and git commits.*
 
 ## Available Tools
 
-The Force provides access to cutting-edge AI models through `chat_with_*` tools, each with dynamically-generated descriptions showing their capabilities, context limits, and best use cases.
+The Force provides two primary tools for AI collaboration:
 
-### Recommended Models for Most Tasks
-- **`chat_with_gpt52_pro`**: Flagship GPT-5.2 Pro with 400k context. Maximum accuracy for difficult problems.
-- **`chat_with_gpt52`**: GPT-5.2 Thinking with 400k context. Advanced reasoning for coding, math, and planning.
-- **`chat_with_gemini3_pro_preview`**: Powerful multimodal model with 1M context (preview). Fast and reliable for code analysis and long documents.
+### Primary Tools
 
-### Fast Large-Context Models
-- **`chat_with_gemini3_flash_preview`**: Ultra-fast with 1M context. Perfect for quick summaries and initial analysis.
-- **`chat_with_gpt41`**: Fast processing with 1M context and dependable tool use.
+| Tool | Purpose | How It Works |
+|------|---------|--------------|
+| **`work_with`** | Agentic tasks | Spawns CLI agents (Claude Code, Gemini CLI, Codex CLI) that can read files, run commands, and take action |
+| **`consult_with`** | Quick opinions | Routes to API models for fast analysis without file access |
 
-### Complete List of AI Models
+**When to use which:**
+- Use `work_with` when you need the AI to explore code, make changes, or take autonomous action
+- Use `consult_with` for quick questions, analysis, or second opinions
 
-**OpenAI Models:**
-- `chat_with_gpt52_pro`: Flagship GPT-5.2 Pro - maximum accuracy for difficult problems (400k context)
-- `chat_with_gpt52`: GPT-5.2 Thinking - advanced reasoning for coding, math, planning (400k context)
-- `chat_with_gpt41`: Fast long-context processing (1M) with web search
-- `chat_with_gpt51_codex_max`: Long-horizon agentic coding with xhigh reasoning effort (400k context)
+### Supported Models
+
+Use these model names with `work_with` (agent parameter) or `consult_with` (model parameter):
+
+**OpenAI:**
+- `gpt-5.2-pro`: Flagship model - maximum accuracy for difficult problems (400k context)
+- `gpt-5.2`: Advanced reasoning for coding, math, planning (272k context)
+- `gpt-5.1-codex-max`: Elite coding model with xhigh reasoning (272k context)
+- `gpt-4.1`: Fast long-context processing (1M) with web search
+
+**Google:**
+- `gemini-3-pro-preview`: Deep multimodal analysis with 1M context
+- `gemini-3-flash-preview`: Fast summarization and quick analysis with 1M context
+
+**Anthropic:**
+- `claude-opus-4-5`: Premium long-form reasoning with extended thinking (200k context)
+- `claude-sonnet-4-5`: Fast long-context processing with extended thinking (1M context)
+
+**xAI:**
+- `grok-4.1`: Advanced assistant with ~2M context and live search
+
+**Research (special async tools):**
 - `research_with_o3_deep_research`: Ultra-deep research with extensive web search (10-60 min)
 - `research_with_o4_mini_deep_research`: Fast research with web search (2-10 min)
 
-**Google Models:**
-- `chat_with_gemini3_pro_preview`: Deep multimodal analysis with 1M context (preview)
-- `chat_with_gemini3_flash_preview`: Fast summarization and quick analysis with 1M context
-
-**Anthropic Models:**
-- `chat_with_claude45_opus`: Premium long-form reasoning with extended thinking (200k context)
-- `chat_with_claude45_sonnet`: Fast long-context processing with extended thinking (1M context)
-- `chat_with_claude3_opus`: Exceptional theory of mind and deep discussions (200k context)
-
-**xAI Models:**
-- `chat_with_grok41`: Advanced assistant with multi-agent reasoning and ~2M context
-
 **Local Models (if Ollama is installed):**
 The Force automatically detects and provides access to any Ollama models you have installed locally.
+
+> **Note**: The individual `chat_with_*` tools are internal-only. Use `consult_with` to access them.
 
 ### Utility Tools
 - `search_project_history`: Search past conversations and git commits
@@ -236,8 +290,8 @@ bash /path/to/mcp-the-force/scripts/install-history-hook.sh
 ### Multi-Model Collaboration (GroupThink)
 
 GroupThink lets multiple models think together on the same objective with shared memory:
-- **Mix models by strength**: e.g., `chat_with_gpt52_pro` (reasoning), `chat_with_gemini3_pro_preview` (1M-context code analysis), `chat_with_claude45_sonnet` (writing).
-- **Shared whiteboard**: Every turn writes to a vector-store “whiteboard” so later turns see all prior arguments.
+- **Mix models by strength**: e.g., GPT-5.2 Pro (reasoning), Gemini 3 Pro (1M-context code analysis), Claude Opus (writing).
+- **Shared whiteboard**: Every turn writes to a vector-store "whiteboard" so later turns see all prior arguments.
 - **Two phases + validation**: Discussion turns → synthesis by a large-context model → validation rounds by the original panel.
 - **Resume anytime**: Reuse the same `session_id` to continue an ongoing collaboration.
 
@@ -255,6 +309,8 @@ Quick start:
 }
 ```
 Run it by invoking the `group_think` tool from your MCP client (e.g., Claude Code or `mcp-cli`). Keep the `session_id` stable to let the models build on prior turns; change it to start a fresh panel.
+
+> **Note**: GroupThink uses internal `chat_with_*` tool names in the `models` parameter.
 
 ## Advanced Topics
 

@@ -167,8 +167,8 @@ async def test_format_preservation_through_full_cycle():
             # Verify saved conversation preserves format
             assert mock_cache.set_history.called
             saved_messages = mock_cache.set_history.call_args[0][
-                3
-            ]  # Now 4th argument after project, tool, session_id
+                2
+            ]  # 3rd argument after project, session_id (no tool)
 
             # Should have all messages plus assistant response
             assert len(saved_messages) == 7
@@ -251,7 +251,7 @@ async def test_round_trip_integrity():
                 mock_cache.get_history = AsyncMock(return_value=conversation.copy())
                 saved_conversation = None
 
-                def capture_save(project, tool, session_id, messages):
+                def capture_save(project, session_id, messages):
                     nonlocal saved_conversation
                     saved_conversation = messages.copy()
                     return AsyncMock()()

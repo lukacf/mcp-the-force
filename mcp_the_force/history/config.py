@@ -243,22 +243,36 @@ class HistoryStorageConfig:
             # Include raw session data only when explicitly requested via "session" store type
             if "session" in store_types:
                 try:
-                    # Get all Force conversation sessions that have history content
+                    # Get all sessions that have chat_with_* tools in their history.
+                    # The current schema stores tool per-message in the history JSON,
+                    # not as a separate column. We use SQLite's JSON functions to
+                    # extract tools from the history array.
+                    #
+                    # Note: The store_id format is now project||session_id (no tool)
+                    # since sessions can have multiple tools (cross-tool sessions).
                     unified_query = """
-                        SELECT DISTINCT 'session' as store_type, 
-                               (project || '||' || tool || '||' || session_id) as store_id
-                        FROM unified_sessions 
-                        WHERE history IS NOT NULL 
-                          AND LENGTH(TRIM(history)) > 0
-                          AND tool LIKE 'chat_with_%'
+                        SELECT DISTINCT 'session' as store_type,
+                               (project || '||' || session_id) as store_id
+                        FROM unified_sessions
+                        WHERE history IS NOT NULL
+                          AND LENGTH(TRIM(history)) > 2
+                          AND EXISTS (
+                              SELECT 1 FROM json_each(history)
+                              WHERE json_extract(value, '$.tool') LIKE 'chat_with_%'
+                          )
                     """
                     unified_rows = self._db.execute(unified_query).fetchall()
                     results.extend(
                         [(row["store_type"], row["store_id"]) for row in unified_rows]
                     )
                 except sqlite3.OperationalError as e:
-                    # unified_sessions table doesn't exist yet - this is OK for older databases
-                    if "no such table: unified_sessions" not in str(e):
+                    # Handle both missing table and malformed JSON gracefully
+                    error_msg = str(e).lower()
+                    if "no such table" in error_msg:
+                        pass  # Table doesn't exist yet - OK for older databases
+                    elif "malformed json" in error_msg or "json" in error_msg:
+                        logger.warning(f"JSON error in unified_sessions search: {e}")
+                    else:
                         raise  # Re-raise if it's a different error
 
             logger.debug(

@@ -14,9 +14,9 @@ async def test_describe_session_passes_full_history_to_model(isolate_test_databa
     of the target session to the summarization model via the executor.
     """
     # 1. Arrange: Create a session with a known history
+    # Note: Session key is (project, session_id) - tool info is per-turn in history
     original_session = UnifiedSession(
         project="mcp-the-force",
-        tool="chat_with_gpt52",
         session_id="session-to-summarize",
         history=[
             {"role": "user", "content": "This is the conversation to be summarized."},
@@ -73,10 +73,10 @@ async def test_describe_session_cache_key_mismatch_bug(isolate_test_databases):
     Specific test for the cache key mismatch bug where temp session was saved
     under original tool name but looked up under summarization tool name.
     """
-    # Create an original session with chat_with_gpt52
+    # Create an original session
+    # Note: Session key is (project, session_id) - no longer tool-scoped
     original_session = UnifiedSession(
         project="mcp-the-force",
-        tool="chat_with_gpt52",
         session_id="test-key-mismatch",
         history=[{"role": "user", "content": "Test conversation for key mismatch"}],
         updated_at=int(time.time()),

@@ -44,6 +44,7 @@ dependencies = [
     "hnswlib>=0.8.0",
     "sentence-transformers>=2.6.0",
     "requests>=2.28.0",
+    "aiosqlite>=0.22.1",
 ]
 
 [project.scripts]
@@ -67,6 +68,8 @@ dev = [
     "ruff>=0.1",
     "mypy>=1.7",
     "pre-commit>=3.5",
+    "types-PyYAML>=6.0.0",
+    "types-requests>=2.31.0",
 ]
 
 [tool.setuptools]
@@ -80,6 +83,8 @@ asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 timeout = 10  # 10 seconds default timeout for unit tests
 addopts = "--strict-markers --tb=short"
+log_level = "WARNING"
+log_cli_level = "WARNING"
 markers = [
     "asyncio: Mark test as requiring asyncio",
     "anyio: Mark test as requiring anyio",
@@ -91,6 +96,9 @@ markers = [
     "slow: Tests that take more than 10 seconds",
     "timeout: Tests with custom timeout values",
     "no_virtual_clock: Disable virtual clock for tests that need real timing",
+    "cli_agents: Tests for CLI Agents feature (work_with/consult_with)",
+    "rct: Representation Contract Tests (external boundary validation)",
+    "requires_real_cli: Tests that require real CLI tools (claude, gemini, codex) installed",
 ]
 # Note: plugins loading moved to conftest.py for better compatibility
 
@@ -109,6 +117,12 @@ warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false
 ignore_missing_imports = true
+plugins = ["pydantic.mypy"]
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
 
 
 [tool.ruff]

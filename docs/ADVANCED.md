@@ -13,23 +13,23 @@ When The Force MCP is available, Claude operates as an orchestrator of specializ
 #### Phase 1: Broad Surface Scan (5-10s)
 Launch 2-3 cheap, fast queries to map the problem space:
 ```python
-Task 1: gemini3_flash_preview - "What are the main issues here?"
-Task 2: gemini3_flash_preview - "What solutions have worked for similar problems?"
-Task 3: gpt4_1 - "Find all related code patterns"
+# Use consult_with for quick hypothesis generation
+consult_with(model="gemini-3-flash-preview", question="What are the main issues here?", ...)
+consult_with(model="gemini-3-flash-preview", question="What solutions have worked for similar problems?", ...)
 ```
 
 #### Phase 2: Deep Focus (30-60s)
 Based on Phase 1, pursue the most promising angles:
 ```python
-# Pick top 2 insights from Phase 1
-Task 1: gemini3_pro_preview - "Deep dive into [specific issue from Phase 1]"
-Task 2: gpt5_pro (new session) - "Trace execution for [hypothesis from Phase 1]"
+# Use work_with for deep investigation with file access
+work_with(agent="claude-sonnet-4-5", task="Deep dive into [specific issue from Phase 1]", reasoning_effort="high", ...)
+work_with(agent="gpt-5.2-pro", task="Trace execution for [hypothesis from Phase 1]", reasoning_effort="high", ...)
 ```
 
 #### Phase 3: Synthesis & Arbitration (10s)
 Reconcile findings:
 ```python
-gemini3_flash_preview - "Reconcile these analyses: [all findings]. Highlight conflicts, suggest resolution."
+consult_with(model="gemini-3-flash-preview", question="Reconcile these analyses: [all findings]. Highlight conflicts, suggest resolution.", ...)
 ```
 
 ### Parallel Execution Rules
@@ -49,18 +49,21 @@ session_id="debug-jwt-timing-2024-06-22"  # Hypothesis 2
 session_id="debug-jwt"  # Contaminates reasoning paths
 ```
 
-#### Context Optimization
+#### Cross-Tool Session Continuity
 ```python
-# First call: Automatic vector store creation for large contexts
-chat_with_gpt4_1(
-    context=["/large/codebase"],  # Auto-creates vector store if > 85% of context window
+# Sessions work across work_with and consult_with
+work_with(
+    agent="claude-sonnet-4-5",
+    task="Analyze the auth module",
     session_id="analysis-main"
 )
 
-# Subsequent calls: Reference same session for efficient processing
-chat_with_gemini3_pro_preview(
-    context=["/specific/files"],  # Can add new context
-    session_id="analysis-main"  # Reuses vector store from session
+# Continue with consult_with - same session maintains context
+consult_with(
+    model="gpt-5.2-pro",
+    question="Based on our analysis, what's the best approach?",
+    output_format="markdown",
+    session_id="analysis-main"  # Reuses context from work_with
 )
 ```
 
@@ -68,38 +71,38 @@ chat_with_gemini3_pro_preview(
 
 #### For Debugging
 ```python
-# Primary: Fast hypothesis generation
-gemini3_flash_preview("What could cause this error?")
+# Primary: Fast hypothesis generation (consult_with)
+consult_with(model="gemini-3-flash-preview", question="What could cause this error?", ...)
 
-# Secondary: Deep reasoning on top hypothesis
-gpt5_pro("Trace execution of [specific hypothesis]")
+# Secondary: Deep reasoning with file access (work_with)
+work_with(agent="claude-sonnet-4-5", task="Trace execution of [specific hypothesis]", reasoning_effort="high", ...)
 
-# Validation: Different perspective
-gemini3_pro_preview("What did we miss in this analysis?")
+# Validation: Different perspective (consult_with)
+consult_with(model="gpt-5.2-pro", question="What did we miss in this analysis?", ...)
 ```
 
 #### For Architecture Review
 ```python
-# Overview: Large context for patterns
-gpt4_1(context=["/entire/codebase"], "Find architectural inconsistencies")
+# Overview: Use work_with for comprehensive file access
+work_with(agent="claude-sonnet-4-5", task="Find architectural inconsistencies", session_id="arch-review")
 
 # Deep dive: Specific subsystems
-gemini3_pro_preview("Analyze the data layer for ACID compliance issues")
+work_with(agent="gemini-3-pro-preview", task="Analyze the data layer for ACID compliance issues", ...)
 
-# Research: External best practices
-research_with_o3_deep_research("Industry standards for [identified patterns]")
+# Research: External best practices (async)
+research_with_o3_deep_research(instructions="Industry standards for [identified patterns]", ...)
 ```
 
 #### For Code Generation
 ```python
 # Planning: Structure and approach
-gpt5_pro("Design API structure for [requirements]")
+work_with(agent="gpt-5.2-pro", task="Design API structure for [requirements]", role="planner", ...)
 
 # Implementation: Detailed coding
-gemini3_pro_preview("Implement [design] with proper error handling")
+work_with(agent="claude-sonnet-4-5", task="Implement [design] with proper error handling", ...)
 
 # Review: Quality assurance
-gpt4_1("Review implementation for security and performance issues")
+work_with(agent="claude-sonnet-4-5", task="Review implementation for security and performance issues", role="codereviewer", ...)
 ```
 
 ### Error Handling Patterns
@@ -107,15 +110,11 @@ gpt4_1("Review implementation for security and performance issues")
 #### Graceful Degradation
 ```python
 try:
-    # Preferred: Multiple models for robustness
-    results = await parallel_execution([
-        ("gemini3_pro_preview", analysis_prompt),
-        ("gpt5_pro", reasoning_prompt),
-        ("gpt4_1", validation_prompt)
-    ])
+    # Preferred: work_with for comprehensive analysis
+    work_with(agent="claude-sonnet-4-5", task=analysis_task, reasoning_effort="high", ...)
 except TimeoutError:
-    # Fallback: Single fast model
-    result = await chat_with_gemini3_flash_preview(fallback_prompt)
+    # Fallback: Quick consult_with
+    consult_with(model="gemini-3-flash-preview", question=fallback_prompt, ...)
 ```
 
 #### Rate Limit Management
@@ -126,19 +125,6 @@ for i, task in enumerate(tasks):
     launch_task(task)
 ```
 
-#### Context Window Management
-```python
-# Large codebase strategy (handled automatically)
-if codebase_size > (model_context_window * 0.85):
-    # Server automatically creates vector store
-    # No special handling needed - just use context
-    pass
-else:
-    # Server inlines files directly
-    # Again, no special handling needed
-    pass
-```
-
 ### Performance Optimization
 
 #### Smart Caching
@@ -146,29 +132,20 @@ else:
 # Reuse sessions for related queries
 session_id = f"project-analysis-{date.today()}"
 
-# First analysis creates memory
-chat_with_gpt4_1(
-    instructions="Analyze architecture",
-    context=["/src"],
+# First analysis with work_with creates memory
+work_with(
+    agent="claude-sonnet-4-5",
+    task="Analyze architecture",
     session_id=session_id
 )
 
 # Follow-up queries leverage memory
-chat_with_gemini3_pro_preview(
-    instructions="Focus on security aspects",
-    context=[],  # Relies on session memory
-    session_id=session_id
+consult_with(
+    model="gpt-5.2-pro",
+    question="Focus on security aspects of what we found",
+    output_format="markdown",
+    session_id=session_id  # Shares context
 )
-```
-
-#### Resource Management
-```python
-# Monitor token usage
-response = await call_tool("list_models")
-for model in response:
-    if model["context_remaining"] < 0.2:
-        # Switch to fresh session
-        session_id = generate_new_session_id()
 ```
 
 ### Advanced Workflows
@@ -188,52 +165,52 @@ group_think(
 ```
 - Keep `session_id` stable to continue the same panel across turns.
 - Choose a large-context `synthesis_model` (default: `chat_with_gemini3_pro_preview`) for the final merge.
-- Use `mode="round_robin"` (current default) to ensure every model contributes; orchestration smarts build on this.
-- Validation rounds re-open the floor so panelists can critique the synthesized result.
+- Use `mode="round_robin"` (current default) to ensure every model contributes.
+- **Note**: GroupThink uses internal `chat_with_*` tool names in the `models` parameter.
 
 #### Multi-Model Code Review
 ```python
-# 1. Overview (fast)
-overview = await chat_with_gemini3_flash_preview(
-    "Quick security scan of this PR",
-    context=pr_files
+# 1. Overview with work_with (fast)
+work_with(
+    agent="gemini-3-flash-preview",
+    task="Quick security scan of this PR",
+    session_id="pr-review"
 )
 
-# 2. Deep analysis (parallel)
-tasks = [
-    ("gemini3_pro_preview", "Detailed security analysis"),
-    ("gpt5_pro", "Logic flow verification"),
-    ("gpt4_1", "Performance impact assessment")
-]
-analyses = await execute_parallel(tasks)
+# 2. Deep analysis with different perspectives
+work_with(agent="claude-sonnet-4-5", task="Detailed security analysis", session_id="pr-review-security")
+work_with(agent="gpt-5.2-pro", task="Logic flow verification", session_id="pr-review-logic")
 
 # 3. Synthesis
-final_review = await chat_with_gemini3_flash_preview(
-    f"Synthesize these reviews: {analyses}",
-    structured_output_schema=review_schema
+consult_with(
+    model="gemini-3-pro-preview",
+    question="Synthesize these reviews into a final assessment",
+    output_format="structured review with severity ratings",
+    session_id="pr-review-final"
 )
 ```
 
 #### Research-Driven Development
 ```python
-# 1. Research best practices
-best_practices = await research_with_o4_mini_deep_research(
-    "Current best practices for [technology]",
+# 1. Research best practices (async)
+research_with_o4_mini_deep_research(
+    instructions="Current best practices for [technology]",
     session_id="research-session"
 )
 
 # 2. Apply to current codebase
-implementation = await chat_with_gpt52_pro(
-    f"Apply these practices to our code: {best_practices}",
-    context=["/src"],
+work_with(
+    agent="gpt-5.2-pro",
+    task="Apply these practices to our code: [best_practices]",
     session_id="implementation-session"
 )
 
 # 3. Validate approach
-validation = await chat_with_gemini3_pro_preview(
-    "Review implementation for compliance with researched practices",
-    context=[implementation],
-    session_id="validation-session"
+work_with(
+    agent="claude-sonnet-4-5",
+    task="Review implementation for compliance with researched practices",
+    session_id="validation-session",
+    role="codereviewer"
 )
 ```
 
@@ -242,24 +219,28 @@ validation = await chat_with_gemini3_pro_preview(
 max_iterations = 3
 for iteration in range(max_iterations):
     # Generate hypothesis
-    hypothesis = await chat_with_gpt52_pro(
-        f"Iteration {iteration}: Generate testable hypothesis for bug",
-        session_id=f"debug-iteration-{iteration}"
+    work_with(
+        agent="gpt-5.2-pro",
+        task=f"Iteration {iteration}: Generate testable hypothesis for bug",
+        session_id=f"debug-iteration-{iteration}",
+        reasoning_effort="high"
     )
-    
+
     # Test hypothesis
-    test_result = await chat_with_gemini3_pro_preview(
-        f"Test this hypothesis: {hypothesis}",
-        context=["/test", "/src"],
+    work_with(
+        agent="claude-sonnet-4-5",
+        task=f"Test this hypothesis: {hypothesis}",
         session_id=f"test-iteration-{iteration}"
     )
-    
-    if "confirmed" in test_result.lower():
+
+    if confirmed:
         break
-    
+
     # Refine for next iteration
-    await chat_with_gemini3_flash_preview(
-        f"Refine hypothesis based on: {test_result}",
+    consult_with(
+        model="gemini-3-flash-preview",
+        question=f"Refine hypothesis based on: {test_result}",
+        output_format="refined hypothesis",
         session_id=f"refine-iteration-{iteration}"
     )
 ```
@@ -270,18 +251,17 @@ for iteration in range(max_iterations):
 ```python
 # High-priority, time-sensitive
 if priority == "urgent":
-    primary_model = "gemini3_flash_preview"      # Fastest
-    fallback_model = "gemini3_pro_preview"  # If quality needed
+    # Use consult_with for quick opinions
+    consult_with(model="gemini-3-flash-preview", ...)
 
 # Deep analysis, quality critical
 elif task_type == "architecture":
-    primary_model = "gpt5_pro"           # Best reasoning
-    fallback_model = "gpt51_codex_max"   # Long-horizon alternative
+    # Use work_with with high reasoning
+    work_with(agent="gpt-5.2-pro", reasoning_effort="high", ...)
 
-# Large context processing
-elif context_size > 500_kb:
-    primary_model = "gpt4_1"              # Best RAG
-    fallback_model = "gemini3_pro_preview"  # Large context (1M)
+# Large context processing - work_with has native file access
+elif needs_file_access:
+    work_with(agent="claude-sonnet-4-5", ...)
 ```
 
 #### Session Reuse Strategy
@@ -302,19 +282,6 @@ def get_session_id(query):
 
 ### Monitoring and Debugging
 
-#### Performance Tracking
-```python
-import time
-
-async def timed_model_call(model, prompt, **kwargs):
-    start = time.time()
-    result = await call_tool(model, prompt, **kwargs)
-    duration = time.time() - start
-    
-    logger.info(f"{model}: {duration:.2f}s for {len(prompt)} chars")
-    return result
-```
-
 #### Error Pattern Recognition
 ```python
 # Common failure patterns
@@ -334,13 +301,13 @@ def diagnose_error(error_msg):
 
 ### Best Practices Summary
 
-1. **Start Fast, Go Deep**: Use gemini3_flash_preview for initial exploration, then targeted deep models
-2. **Parallel Everything**: Launch multiple models simultaneously when possible
-3. **Session Hygiene**: One session per logical thread of reasoning
-4. **Smart Fallbacks**: Always have a faster/cheaper model as backup
-5. **Monitor Resources**: Track token usage and session memory
-6. **Cache Aggressively**: Reuse sessions for related queries
-7. **Synthesize Results**: Use fast models to reconcile multiple analyses
-8. **Profile Performance**: Measure and optimize model selection
+1. **Choose the Right Tool**: `work_with` for action (file access), `consult_with` for advice
+2. **Start Fast, Go Deep**: Use gemini-3-flash-preview for initial exploration, then targeted deep models
+3. **Parallel Everything**: Launch multiple models simultaneously when possible
+4. **Session Hygiene**: One session per logical thread of reasoning
+5. **Cross-Tool Sessions**: Same session_id works across work_with and consult_with
+6. **Smart Fallbacks**: Always have a faster/cheaper model as backup
+7. **Reasoning Effort**: Use `high`/`xhigh` only for complex problems
+8. **Monitor Resources**: Track token usage and session memory
 9. **Handle Failures Gracefully**: Expect rate limits and context overflows
 10. **Document Decisions**: Use project history to capture reasoning patterns

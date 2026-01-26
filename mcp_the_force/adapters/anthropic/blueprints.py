@@ -13,34 +13,19 @@ def _get_friendly_name(model_name: str) -> str:
     """Generate a friendly tool name from the model name.
 
     Examples:
-    - 'claude-3-opus' -> 'chat_with_claude3_opus'
-    - 'claude-opus-4-5-20251101' -> 'chat_with_claude45_opus'
     - 'claude-sonnet-4-5' -> 'chat_with_claude45_sonnet'
+    - 'claude-opus-4-5' -> 'chat_with_claude45_opus'
     """
-    # Remove -0 suffix if present
-    if model_name.endswith("-0"):
-        model_name = model_name[:-2]
-
     parts = model_name.split("-")
 
-    # Handle different naming patterns
-    if len(parts) >= 3:
-        if parts[0] == "claude" and parts[1].isdigit():
-            # Pattern: claude-3-opus -> claude3_opus
-            result = f"{parts[0]}{parts[1]}_{parts[2]}"
-        elif parts[0] == "claude" and parts[2] == "4" and parts[3] in ["1", "5"]:
-            # Pattern: claude-opus-4-5-20251101 -> claude45_opus
-            #          claude-sonnet-4-5 -> claude45_sonnet
-            result = f"{parts[0]}{parts[2]}{parts[3]}_{parts[1]}"
-        elif parts[0] == "claude" and parts[2] == "4":
-            # Pattern: claude-opus-4 -> claude4_opus
-            result = f"{parts[0]}{parts[2]}_{parts[1]}"
-        else:
-            # Fallback: join with underscores
-            result = "_".join(parts)
-    else:
-        result = "_".join(parts)
+    # Handle claude-{variant}-4-5 pattern
+    if len(parts) >= 4 and parts[0] == "claude" and parts[2] == "4" and parts[3] == "5":
+        # claude-sonnet-4-5 -> claude45_sonnet
+        variant = parts[1]  # sonnet, opus, haiku
+        return f"chat_with_claude45_{variant}"
 
+    # Fallback: join with underscores
+    result = model_name.replace("-", "_")
     return f"chat_with_{result}"
 
 
@@ -50,8 +35,6 @@ def get_anthropic_blueprints() -> List[ToolBlueprint]:
 
     for model_name, capabilities in ANTHROPIC_MODEL_CAPABILITIES.items():
         tool_name = _get_friendly_name(model_name)
-        if model_name == "claude-sonnet-4-5":
-            tool_name = "chat_with_claude45_sonnet"
 
         # Format capabilities and append to description
         capability_info = format_capabilities(capabilities)
@@ -69,6 +52,7 @@ def get_anthropic_blueprints() -> List[ToolBlueprint]:
             context_window=capabilities.max_context_window
             or 200_000,  # All Anthropic models have 200k context
             tool_type="chat",  # All Anthropic models are chat tools
+            cli="claude",  # All Anthropic models use Claude CLI
         )
         blueprints.append(blueprint)
 

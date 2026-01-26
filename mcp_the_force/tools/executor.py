@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import os
 import time
 import uuid
 from typing import Optional, List, Any, Union, Dict
@@ -20,7 +21,7 @@ from .capability_validator import CapabilityValidator
 
 # Project history imports
 from .safe_history import safe_record_conversation
-from ..config import get_settings
+from ..config import get_settings, get_project_dir
 from ..utils.redaction import redact_secrets
 from ..operation_manager import operation_manager
 
@@ -32,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 
 async def _maybe_store_memory(
-    session_id: str,
+    session_id: Optional[str],
     tool_id: str,
     messages: List[Dict[str, Any]],
     response: str,
@@ -42,6 +43,9 @@ async def _maybe_store_memory(
     """Store conversation memory either synchronously or asynchronously based on settings."""
     if disable_history_record:
         return
+
+    if not session_id:
+        return  # Can't store memory without a session
 
     settings = get_settings()
     if not settings.history_enabled:
@@ -218,15 +222,10 @@ class ToolExecutor:
             instructions = prompt_params.get("instructions", "")
             output_format = prompt_params.get("output_format", "")
 
-            # Get project name and tool name for all code paths
-            import os
-
-            project_path = settings.logging.project_path
-            project_name = (
-                os.path.basename(project_path)
-                if project_path
-                else os.path.basename(os.getcwd())
-            )
+            # Get project path from config file location (parent of .mcp-the-force folder)
+            # This is more reliable than os.getcwd() which could be the MCP server's directory
+            project_path = get_project_dir()
+            project_name = os.path.basename(project_path)
             tool_name = metadata.id
 
             # Retry state for max_output_tokens errors
@@ -367,7 +366,12 @@ class ToolExecutor:
                 # This is a local utility service
                 logger.debug(f"[DEBUG] Using local service: {service_cls}")
                 # Service class is already the actual class, not a string
-                service = service_cls()
+                # Pass project_dir from settings if the service accepts it
+                try:
+                    service = service_cls(project_dir=project_path)
+                except TypeError:
+                    # Service doesn't accept project_dir parameter
+                    service = service_cls()
 
                 # For local services, still do full parameter validation
                 # but skip capability checks (pass None for capabilities)
@@ -1036,3 +1040,19 @@ class ToolExecutor:
 # Global executor instance
 # Set strict_mode=True if you want to reject unknown parameters
 executor = ToolExecutor(strict_mode=False)
+
+
+async def execute(metadata: ToolMetadata, **kwargs) -> str:
+    """Convenience function to execute a tool using the global executor.
+
+    This is a wrapper around executor.execute() for cleaner imports in tests
+    and client code.
+
+    Args:
+        metadata: Tool metadata containing routing information
+        **kwargs: User-provided arguments
+
+    Returns:
+        Response from the model as a string
+    """
+    return await executor.execute(metadata, **kwargs)

@@ -2,157 +2,168 @@
 
 ## Basic Patterns
 
-### Simple Analysis
+### Code Investigation (work_with)
 ```
-chat_with_gpt52_pro(
-    instructions="Analyze this codebase for potential issues",
-    context=["/absolute/path/to/src"],
-    session_id="analysis-YYYY-MM-DD",
-    output_format="Markdown report"
+work_with(
+    agent="claude-sonnet-4-5",
+    task="Analyze this codebase for potential issues",
+    session_id="analysis-YYYY-MM-DD"
 )
 ```
 
-### Code Review
+### Code Review (work_with)
 ```
-chat_with_gemini3_pro_preview(
-    instructions="Review this code for security vulnerabilities and performance issues",
-    context=["/absolute/path/to/file.py"],
-    priority_context=["/absolute/path/to/security_config.py"],
+work_with(
+    agent="claude-sonnet-4-5",
+    task="Review this code for security vulnerabilities and performance issues",
     session_id="code-review-YYYY-MM-DD",
-    output_format="List of issues with severity and recommendations"
+    role="codereviewer"
 )
 ```
 
-### Quick Question
+### Quick Question (consult_with)
 ```
-chat_with_gemini3_flash_preview(
-    instructions="What does this function do?",
-    context=["/absolute/path/to/module.py"],
-    session_id="quick-q-YYYY-MM-DD",
-    output_format="Plain text explanation"
+consult_with(
+    model="gemini-3-flash-preview",
+    question="What does this function do? [paste code]",
+    output_format="Plain text explanation",
+    session_id="quick-q-YYYY-MM-DD"
+)
+```
+
+### Deep Analysis (consult_with)
+```
+consult_with(
+    model="gpt-5.2-pro",
+    question="Analyze this architecture for potential issues: [description]",
+    output_format="Markdown report",
+    session_id="analysis-YYYY-MM-DD"
 )
 ```
 
 ## Session Continuity
 
-### Multi-Turn Conversation
+### Cross-Tool Conversation
 ```
-# Turn 1: Initial analysis
-chat_with_gpt52_pro(
-    instructions="Analyze the authentication flow",
-    context=["/src/auth"],
+# Turn 1: Agentic exploration
+work_with(
+    agent="claude-sonnet-4-5",
+    task="Analyze the authentication flow in src/auth",
     session_id="auth-deep-dive"
 )
 
-# Turn 2: Follow-up (same session)
-chat_with_gpt52_pro(
-    instructions="Now focus on the JWT validation logic",
+# Turn 2: Quick opinion (same session)
+consult_with(
+    model="gpt-5.2-pro",
+    question="Based on our analysis, what's the best approach to fix the issues?",
+    output_format="markdown",
     session_id="auth-deep-dive"  # Remembers Turn 1
 )
 
-# Turn 3: Switch models (same session still works)
-chat_with_gemini3_pro_preview(
-    instructions="Summarize what we found",
-    session_id="auth-deep-dive"  # Works across models
+# Turn 3: Implement the fix
+work_with(
+    agent="claude-sonnet-4-5",
+    task="Implement the recommended fix",
+    session_id="auth-deep-dive"  # Full context preserved
 )
 ```
 
-## Structured Output
+### Multi-Turn with Same Tool
+```
+# Turn 1: Initial analysis
+work_with(
+    agent="claude-sonnet-4-5",
+    task="Analyze the JWT validation logic",
+    session_id="jwt-analysis"
+)
+
+# Turn 2: Follow-up
+work_with(
+    agent="claude-sonnet-4-5",
+    task="Now focus on the token refresh mechanism",
+    session_id="jwt-analysis"  # Remembers Turn 1
+)
+
+# Turn 3: Different model, same session
+work_with(
+    agent="gemini-3-pro-preview",
+    task="Summarize what we found",
+    session_id="jwt-analysis"  # Works across models
+)
+```
+
+## Structured Output (consult_with)
 
 ### JSON Response
 ```
-chat_with_gpt52_pro(
-    instructions="Find all API endpoints in this codebase",
-    context=["/src"],
-    session_id="api-analysis",
-    output_format="JSON",
-    structured_output_schema={
-        "type": "object",
-        "properties": {
-            "endpoints": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "path": {"type": "string"},
-                        "method": {"type": "string"},
-                        "handler": {"type": "string"}
-                    },
-                    "required": ["path", "method", "handler"],
-                    "additionalProperties": false
-                }
-            }
-        },
-        "required": ["endpoints"],
-        "additionalProperties": false
-    }
+consult_with(
+    model="gpt-5.2-pro",
+    question="List all the API endpoints in this description: [paste route definitions]",
+    output_format="JSON with schema: {endpoints: [{path: string, method: string, handler: string}]}",
+    session_id="api-analysis"
 )
 ```
 
-### Severity Classification
+### Classification
 ```
-chat_with_gpt41(
-    instructions="Classify these issues by severity",
-    context=["/analysis-results.txt"],
-    session_id="classify",
-    structured_output_schema={
-        "type": "object",
-        "properties": {
-            "critical": {"type": "array", "items": {"type": "string"}},
-            "high": {"type": "array", "items": {"type": "string"}},
-            "medium": {"type": "array", "items": {"type": "string"}},
-            "low": {"type": "array", "items": {"type": "string"}}
-        },
-        "required": ["critical", "high", "medium", "low"],
-        "additionalProperties": false
-    }
+consult_with(
+    model="gpt-5.2",
+    question="Classify these issues by severity: [paste issues]",
+    output_format="JSON with schema: {critical: string[], high: string[], medium: string[], low: string[]}",
+    session_id="classify"
 )
 ```
 
 ## Three-Phase Analysis
 
-### Phase 1: Surface Scan (parallel)
+### Phase 1: Surface Scan (parallel consult_with)
 ```
-# Launch in parallel
-chat_with_gemini3_flash_preview(
-    instructions="What are the main architectural patterns?",
-    context=["/src"],
+# Launch in parallel - fast hypothesis generation
+consult_with(
+    model="gemini-3-flash-preview",
+    question="What are the main architectural patterns in this code? [paste overview]",
+    output_format="bullet list",
     session_id="arch-scan-patterns"
 )
 
-chat_with_gemini3_flash_preview(
-    instructions="What are potential performance bottlenecks?",
-    context=["/src"],
+consult_with(
+    model="gemini-3-flash-preview",
+    question="What are potential performance bottlenecks? [paste code]",
+    output_format="bullet list",
     session_id="arch-scan-perf"
 )
 
-chat_with_gemini3_flash_preview(
-    instructions="What security concerns do you see?",
-    context=["/src"],
+consult_with(
+    model="gemini-3-flash-preview",
+    question="What security concerns do you see? [paste code]",
+    output_format="bullet list",
     session_id="arch-scan-security"
 )
 ```
 
-### Phase 2: Deep Dive
+### Phase 2: Deep Dive (work_with)
 ```
-chat_with_gpt52_pro(
-    instructions="Deep analysis of [specific finding from Phase 1]",
-    context=["/src/relevant/module"],
+work_with(
+    agent="claude-sonnet-4-5",
+    task="Deep analysis of [specific finding from Phase 1]. Investigate the root cause and propose fixes.",
     session_id="arch-deep-dive",
     reasoning_effort="high"
 )
 ```
 
-### Phase 3: Synthesis
+### Phase 3: Synthesis (consult_with)
 ```
-chat_with_gemini3_flash_preview(
-    instructions="Synthesize these findings into a cohesive report: [Phase 1 + Phase 2 results]",
-    session_id="arch-synthesis",
-    output_format="Executive summary with key findings and recommendations"
+consult_with(
+    model="gemini-3-pro-preview",
+    question="Synthesize these findings into a cohesive report: [Phase 1 + Phase 2 results]",
+    output_format="Executive summary with key findings and recommendations",
+    session_id="arch-synthesis"
 )
 ```
 
 ## GroupThink Collaboration
+
+Note: GroupThink uses internal `chat_with_*` tool names.
 
 ### Design Review Panel
 ```
@@ -258,61 +269,48 @@ search_project_history(
 )
 ```
 
-## Error Handling Patterns
-
-### Fallback Chain
-```
-# Try primary model
-try:
-    chat_with_gpt52_pro(...)
-except:
-    # Fallback to faster model
-    chat_with_gemini3_pro_preview(...)
-```
-
-### Context Overflow Recovery
-```
-# Check token count first
-count_project_tokens(items=["/src"])
-
-# If too large, use priority_context for essentials
-chat_with_gemini3_pro_preview(
-    instructions="...",
-    context=["/src"],  # Will auto-split to vector store
-    priority_context=["/src/critical_module.py"]  # Always inline
-)
-```
-
 ## Debugging Patterns
 
 ### Hypothesis Testing
 ```
-# Generate hypotheses
-chat_with_gemini3_flash_preview(
-    instructions="What could cause this error: [error message]?",
-    context=["/src"],
+# Generate hypotheses (fast)
+consult_with(
+    model="gemini-3-flash-preview",
+    question="What could cause this error: [error message]?",
+    output_format="bullet list of hypotheses",
     session_id="debug-hypothesis"
 )
 
-# Deep trace on top hypothesis
-chat_with_gpt52_pro(
-    instructions="Trace execution path for hypothesis: [hypothesis]",
-    context=["/src"],
-    session_id="debug-trace",
+# Deep investigation (agentic)
+work_with(
+    agent="claude-sonnet-4-5",
+    task="Investigate hypothesis: [top hypothesis]. Find the root cause and fix it.",
+    session_id="debug-hypothesis",  # Same session for context
     reasoning_effort="high"
 )
 
-# Validate fix
-chat_with_gemini3_pro_preview(
-    instructions="Review this fix for unintended side effects",
-    context=["/src/fix.py"],
-    session_id="debug-validate"
+# Validate fix (opinion)
+consult_with(
+    model="gpt-5.2-pro",
+    question="Review this fix for unintended side effects: [fix summary]",
+    output_format="markdown with concerns",
+    session_id="debug-hypothesis"
+)
+```
+
+### Race Condition Debugging
+```
+work_with(
+    agent="gpt-5.2-pro",
+    task="Analyze potential race conditions in the concurrent upload handler",
+    session_id="race-debug",
+    reasoning_effort="xhigh"  # Maximum reasoning for complex concurrency
 )
 ```
 
 ## Research Patterns
 
-### Deep Research
+### Deep Research (async)
 ```
 research_with_o3_deep_research(
     instructions="Comprehensive analysis of modern authentication patterns for microservices",
@@ -321,12 +319,22 @@ research_with_o3_deep_research(
 )
 ```
 
-### Quick Research
+### Quick Research (async)
 ```
 research_with_o4_mini_deep_research(
     instructions="Quick overview of GraphQL subscription patterns",
     session_id="graphql-research",
     output_format="Summary with key points and top 3 recommendations"
+)
+```
+
+### Live Context (Grok)
+```
+consult_with(
+    model="grok-4.1",
+    question="What's the current sentiment about [technology] on Twitter?",
+    output_format="summary with examples",
+    session_id="social-research"
 )
 ```
 
@@ -342,5 +350,96 @@ list_sessions(limit=10, include_summary=true)
 describe_session(
     session_id="auth-analysis",
     extra_instructions="Focus on the key decisions made"
+)
+```
+
+## Reasoning Effort Patterns
+
+### Simple Task (low)
+```
+work_with(
+    agent="claude-sonnet-4-5",
+    task="Add a log statement to track API calls",
+    session_id="quick-fix",
+    reasoning_effort="low"
+)
+```
+
+### Standard Task (medium - default)
+```
+work_with(
+    agent="claude-sonnet-4-5",
+    task="Implement input validation for the user registration form",
+    session_id="validation-impl"
+    # reasoning_effort defaults to "medium"
+)
+```
+
+### Complex Problem (high)
+```
+work_with(
+    agent="gpt-5.2-pro",
+    task="Debug the intermittent timeout in the payment processing flow",
+    session_id="payment-debug",
+    reasoning_effort="high"
+)
+```
+
+### Hardest Problems (xhigh)
+```
+work_with(
+    agent="gpt-5.2-pro",
+    task="Design and implement a distributed rate limiting system",
+    session_id="rate-limit-design",
+    reasoning_effort="xhigh"
+)
+```
+
+## Role-Based Patterns
+
+### Planner Role
+```
+work_with(
+    agent="gpt-5.2-pro",
+    task="Create a detailed implementation plan for migrating to microservices",
+    session_id="migration-plan",
+    role="planner"
+)
+```
+
+### Code Reviewer Role
+```
+work_with(
+    agent="claude-sonnet-4-5",
+    task="Review the changes in the auth module for security issues",
+    session_id="security-review",
+    role="codereviewer"
+)
+```
+
+## Combining Tools Effectively
+
+### Investigation → Opinion → Action
+```
+# Step 1: Investigate (agentic)
+work_with(
+    agent="claude-sonnet-4-5",
+    task="Find all places where user input is not sanitized",
+    session_id="security-audit"
+)
+
+# Step 2: Get opinion on priorities (advisory)
+consult_with(
+    model="gpt-5.2-pro",
+    question="Given these unsanitized inputs, which should we fix first?",
+    output_format="prioritized list",
+    session_id="security-audit"
+)
+
+# Step 3: Fix highest priority (agentic)
+work_with(
+    agent="claude-sonnet-4-5",
+    task="Fix the highest priority sanitization issue we identified",
+    session_id="security-audit"
 )
 ```

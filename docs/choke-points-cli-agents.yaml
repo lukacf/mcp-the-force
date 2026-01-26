@@ -1,0 +1,264 @@
+# Choke Point Matrix: CLI Agents Feature
+# =======================================
+# Maps critical integration seams to their tests and validation criteria.
+# Used by Gate Review to verify all choke points are covered.
+
+choke_points:
+
+  CP-CLI-SESSION:
+    description: |
+      Session ID mapping between Force session_id and CLI-native session identifiers.
+      Handles the fact that different CLIs use different session concepts:
+      - Claude: session_id in JSON output
+      - Gemini: session_id in JSON output
+      - Codex: thread_id (NOT session_id) in JSONL output
+
+    components:
+      - SessionBridge (SQLite persistence)
+      - CLIExecutor (subprocess management)
+      - CLI Plugins (command building + output parsing via plugin.parse_output())
+
+    invariants:
+      - "Same Force session_id + CLI → same CLI session (resume works)"
+      - "Different CLIs with same session_id → separate CLI sessions"
+      - "CLI session IDs survive process restart (SQLite)"
+      - "Missing mapping returns None (not exception)"
+
+    tests:
+      integration:
+        - tests/integration/cli_agents/test_session_bridge.py::test_store_and_retrieve_cli_session_mapping
+        - tests/integration/cli_agents/test_session_bridge.py::test_different_clis_have_separate_mappings
+        - tests/integration/cli_agents/test_session_bridge.py::test_nonexistent_mapping_returns_none
+        - tests/integration/cli_agents/test_session_bridge.py::test_mapping_update_overwrites_previous
+        - tests/integration/cli_agents/test_session_bridge.py::test_session_bridge_persists_across_instances
+        - tests/integration/cli_agents/test_executor.py::test_resume_flag_added_when_mapping_exists
+
+      e2e:
+        - tests/e2e/test_cli_agents.py::test_resume_same_cli_uses_resume_flag
+
+    rct_findings:
+      - "Claude uses --resume <session_id> flag"
+      - "Gemini uses --resume <session_id> flag"
+      - "Codex uses 'exec resume <thread_id>' subcommand"
+      - "Codex output field is thread_id, not session_id"
+
+  CP-CROSS-TOOL:
+    description: |
+      Cross-tool context injection when switching between CLI agents or
+      from API models to CLI agents within the same session.
+
+    components:
+      - Compactor (history summarization)
+      - CLIAgentService (context injection)
+      - UnifiedSessionCache (history retrieval)
+
+    invariants:
+      - "History that fits → injected verbatim (not summarized)"
+      - "History that exceeds limit → summarized via API model"
+      - "Cross-tool handoff records metadata (context_injected, context_source)"
+      - "API→CLI handoff compacts API history for CLI consumption"
+
+    tests:
+      integration:
+        - tests/integration/cli_agents/test_cross_tool.py::test_compactor_formats_history_when_fits
+        - tests/integration/cli_agents/test_cross_tool.py::test_compactor_summarizes_when_exceeds_limit
+        - tests/integration/cli_agents/test_cross_tool.py::test_cross_cli_handoff_injects_compacted_context
+        - tests/integration/cli_agents/test_cross_tool.py::test_api_to_cli_handoff_compacts_api_history
+        - tests/integration/cli_agents/test_cross_tool.py::test_handoff_metadata_recorded
+
+      e2e:
+        - tests/e2e/test_cli_agents.py::test_cross_cli_handoff_injects_context
+        - tests/e2e/test_cli_agents.py::test_api_to_cli_handoff_compacts_history
+
+    rct_findings:
+      - "CLI context limits vary: Claude ~200k, Gemini 1M+, Codex 128k"
+      - "Summarization should use fast API model (e.g., gemini3_flash)"
+
+  CP-MCP-WIRING:
+    description: |
+      MCP tool registration and dispatch through LocalService pattern.
+      Ensures work_with/consult_with are properly wired to services.
+
+    components:
+      - TOOL_REGISTRY (tool metadata)
+      - execute() (dispatcher)
+      - CLIAgentService (LocalService for work_with)
+      - ConsultationService (LocalService for consult_with)
+      - UnifiedSessionCache (turn persistence)
+
+    invariants:
+      - "work_with registered with service_cls, not adapter_class"
+      - "consult_with routes to internal chat_with_* tools"
+      - "chat_with_* tools have internal_only=True"
+      - "chat_with_* tools still in TOOL_REGISTRY (for routing)"
+      - "Completed turns stored in UnifiedSessionCache"
+
+    tests:
+      integration:
+        - tests/integration/cli_agents/test_mcp_tool.py::test_work_with_registered_in_tool_registry
+        - tests/integration/cli_agents/test_mcp_tool.py::test_consult_with_registered_in_tool_registry
+        - tests/integration/cli_agents/test_mcp_tool.py::test_work_with_dispatches_to_cli_agent_service
+        - tests/integration/cli_agents/test_mcp_tool.py::test_consult_with_routes_to_internal_chat_tool
+        - tests/integration/cli_agents/test_mcp_tool.py::test_chat_with_tools_not_exposed_via_mcp
+        - tests/integration/cli_agents/test_mcp_tool.py::test_chat_with_tools_still_in_registry_for_routing
+        - tests/integration/cli_agents/test_mcp_tool.py::test_work_with_stores_turn_in_session_cache
+
+      e2e:
+        - tests/e2e/test_cli_agents.py::test_work_with_anthropic_model_returns_response
+        - tests/e2e/test_cli_agents.py::test_work_with_google_model_returns_response
+        - tests/e2e/test_cli_agents.py::test_work_with_openai_model_returns_response
+        - tests/e2e/test_cli_agents.py::test_consult_with_routes_to_model
+        - tests/e2e/test_cli_agents.py::test_consult_with_multi_turn_preserves_session
+
+    rct_findings:
+      - "LocalService pattern validated: subprocess orchestration, not HTTP"
+      - "Different JSON output formats per CLI require custom parsers"
+
+  CP-EXECUTOR:
+    description: |
+      CLIExecutor subprocess management and output capture pipeline.
+
+    components:
+      - CLIExecutor (subprocess spawning)
+      - Environment isolation (HOME manipulation)
+      - Output capture (stdout/stderr)
+      - Timeout handling
+
+    invariants:
+      - "Custom environment passed to subprocess"
+      - "stdout captured in CLIResult"
+      - "stderr captured separately"
+      - "Timeout kills process, returns partial output, timed_out=True"
+      - "Non-zero exit codes captured"
+
+    tests:
+      integration:
+        - tests/integration/cli_agents/test_executor.py::test_executor_spawns_subprocess_with_correct_env
+        - tests/integration/cli_agents/test_executor.py::test_executor_captures_stdout
+        - tests/integration/cli_agents/test_executor.py::test_executor_handles_timeout
+        - tests/integration/cli_agents/test_executor.py::test_executor_handles_nonzero_exit
+        - tests/integration/cli_agents/test_executor.py::test_executor_captures_stderr
+
+    rct_findings:
+      - "HOME isolation works via env override"
+      - "--add-dir flag verified working for context injection"
+
+  CP-PARSER:
+    description: |
+      CLI output parsing to extract session IDs and response content.
+
+    components:
+      - ClaudeParser (JSON array format)
+      - GeminiParser (JSON object format)
+      - CodexParser (JSONL multi-line format)
+      - ParsedCLIResponse (unified result type)
+
+    invariants:
+      - "Claude JSON array → session_id from init event, content from result"
+      - "Gemini JSON object → session_id and response fields"
+      - "Codex JSONL → thread_id from thread.started, content aggregated"
+      - "All parsers produce ParsedCLIResponse with session_id and content"
+
+    tests:
+      integration:
+        - tests/integration/cli_agents/test_executor.py::TestParserPipeline::test_claude_output_parsed_correctly
+        - tests/integration/cli_agents/test_executor.py::TestParserPipeline::test_gemini_output_parsed_correctly
+        - tests/integration/cli_agents/test_executor.py::TestParserPipeline::test_codex_jsonl_parsed_correctly
+
+    rct_findings:
+      - "Claude output: JSON array with init event containing session_id"
+      - "Gemini output: JSON object with session_id field"
+      - "Codex output: JSONL with thread_id (not session_id)"
+
+  CP-CLI-PLUGIN:
+    description: |
+      CLI plugin registration, discovery, and validation.
+      Uses @cli_plugin decorator pattern (similar to @tool for tools).
+      Links model blueprints (with `cli` attribute) to CLI implementations.
+
+    components:
+      - CLI_PLUGIN_REGISTRY (plugin storage)
+      - @cli_plugin decorator (registration)
+      - get_cli_plugin() (lookup)
+      - list_cli_plugins() (discovery)
+      - Model blueprints with `cli` attribute
+
+    invariants:
+      - "@cli_plugin decorator registers plugin in CLI_PLUGIN_REGISTRY"
+      - "get_cli_plugin returns None for unknown CLI (not exception)"
+      - "All model blueprints with cli attribute point to valid plugins"
+      - "Plugins registered at import time (like @tool)"
+      - "list_cli_plugins() returns all registered CLI names"
+
+    tests:
+      rct:
+        - tests/rct/test_cli_plugin_registration.py::test_cli_plugin_decorator_registers_plugin
+        - tests/rct/test_cli_plugin_registration.py::test_cli_plugin_registry_roundtrip
+        - tests/rct/test_cli_plugin_registration.py::test_unknown_cli_returns_none
+        - tests/rct/test_cli_plugin_registration.py::test_production_plugins_registered_on_package_import
+
+      integration:
+        - tests/integration/cli_agents/test_model_cli_map.py::test_all_cli_mappings_are_valid_plugins
+        - tests/integration/cli_agents/test_cli_plugin.py::test_claude_plugin_registered
+        - tests/integration/cli_agents/test_cli_plugin.py::test_gemini_plugin_registered
+        - tests/integration/cli_agents/test_cli_plugin.py::test_codex_plugin_registered
+        - tests/integration/cli_agents/test_cli_plugin.py::test_plugin_implements_protocol
+        - tests/integration/cli_agents/test_cli_plugin.py::test_all_blueprints_with_cli_have_valid_plugins
+        - tests/integration/cli_agents/test_cli_plugin.py::test_plugin_parse_output_delegates_to_parser
+
+    rct_findings:
+      - "Decorator pattern ensures import-time registration"
+      - "Similar to @tool pattern for consistency"
+      - "Plugin validation can happen at startup"
+
+  CP-MODEL-CLI-MAP:
+    description: |
+      Model name to CLI plugin resolution via adapter registry.
+      Users specify model names (e.g., "gpt-5.2"), system resolves to CLI.
+
+    components:
+      - Model blueprints with `cli` attribute
+      - get_adapter_metadata() (model lookup)
+      - resolve_model_to_cli() (resolution function)
+      - CLI_PLUGIN_REGISTRY (target of resolution)
+
+    invariants:
+      - "resolve_model_to_cli(model_name) returns CLI name from blueprint"
+      - "Unknown model raises ModelNotFoundError"
+      - "Model without cli attribute raises NoCLIAvailableError"
+      - "Same resolution works for all providers (openai→codex, google→gemini, anthropic→claude)"
+
+    tests:
+      integration:
+        - tests/integration/cli_agents/test_model_cli_map.py::test_openai_models_resolve_to_codex_cli
+        - tests/integration/cli_agents/test_model_cli_map.py::test_anthropic_models_resolve_to_claude_cli
+        - tests/integration/cli_agents/test_model_cli_map.py::test_google_models_resolve_to_gemini_cli
+        - tests/integration/cli_agents/test_model_cli_map.py::test_unknown_model_raises_error
+        - tests/integration/cli_agents/test_model_cli_map.py::test_model_without_cli_raises_error
+        - tests/integration/cli_agents/test_model_cli_map.py::test_resolver_uses_model_registry_blueprints
+
+    rct_findings:
+      - "Blueprint.cli is the single source of truth for model→CLI mapping"
+      - "Resolution reuses existing adapter registry infrastructure"
+
+# Summary Statistics
+summary:
+  total_choke_points: 7
+  total_integration_tests: 36
+  total_e2e_tests: 9
+  total_rct_tests: 3  # CLI plugin registration
+  total_unit_tests: 47
+
+  coverage_by_component:
+    SessionBridge: 6 tests
+    CLIExecutor: 5 tests
+    CLI_Plugins: 23 tests (13 parser unit + 10 command builder unit)
+    Compactor: 5 tests (integration) + 7 tests (unit)
+    Summarizer: 8 tests (unit)
+    Environment: 9 tests (unit)
+    CLIAgentService: 4 tests
+    ConsultationService: 2 tests
+    TOOL_REGISTRY: 4 tests
+    UnifiedSessionCache: 3 tests
+    CLI_PLUGIN_REGISTRY: 10 tests (4 RCT + 6 integration)
+    ModelCLIResolver: 6 tests (integration)

@@ -29,7 +29,7 @@ class LoggingConfig(BaseModel):
 
     level: str = Field("INFO", description="Logging level")
     developer_mode: DeveloperLoggingConfig = Field(
-        default_factory=DeveloperLoggingConfig
+        default_factory=lambda: DeveloperLoggingConfig()
     )
     victoria_logs_url: str = Field(
         default="http://localhost:9428", description="Victoria Logs URL"
@@ -152,7 +152,8 @@ class MCPConfig(BaseModel):
         10, description="Max workers for shared thread pool", ge=1, le=100
     )
     default_vector_store_provider: str = Field(
-        "openai", description="Default provider for vector stores"
+        "hnsw",
+        description="Default provider for vector stores (hnsw=local, openai=cloud)",
     )
     max_file_size: int = Field(
         50 * 1024 * 1024,  # 50MB
@@ -245,6 +246,32 @@ class ToolsConfig(BaseModel):
     )
 
 
+class CLIAgentConfig(BaseModel):
+    """CLI agent execution configuration."""
+
+    max_output_size: int = Field(
+        10 * 1024 * 1024,  # 10MB
+        description="Maximum output capture size in bytes",
+        ge=1024 * 1024,  # Min 1MB
+        le=100 * 1024 * 1024,  # Max 100MB
+    )
+    idle_timeout: int = Field(
+        600,  # 10 minutes
+        description="Kill CLI process if no output for this many seconds",
+        ge=60,  # Min 1 minute
+    )
+    execution_timeout: int = Field(
+        14400,  # 4 hours
+        description="Maximum total CLI execution time in seconds",
+        ge=300,  # Min 5 minutes
+    )
+    compaction_target_tokens: int = Field(
+        30_000,  # 30k tokens
+        description="Target token count for history compaction",
+        ge=1000,  # Min 1k tokens
+    )
+
+
 class FeaturesConfig(BaseModel):
     """Feature flags configuration."""
 
@@ -319,8 +346,8 @@ class Settings(BaseSettings):
     _last_config_path: Optional[str] = None
 
     # Top-level configs
-    mcp: MCPConfig = Field(default_factory=MCPConfig)
-    logging: LoggingConfig = Field(default_factory=LoggingConfig)
+    mcp: MCPConfig = Field(default_factory=lambda: MCPConfig())
+    logging: LoggingConfig = Field(default_factory=lambda: LoggingConfig())
 
     # Provider configs with legacy environment variable support
     openai: ProviderConfig = Field(
@@ -329,23 +356,28 @@ class Settings(BaseSettings):
     vertex: ProviderConfig = Field(
         default_factory=lambda: ProviderConfig(max_output_tokens=65536)
     )
-    gemini: ProviderConfig = Field(default_factory=ProviderConfig)
-    anthropic: ProviderConfig = Field(default_factory=ProviderConfig)
-    xai: ProviderConfig = Field(default_factory=ProviderConfig)
-    litellm: ProviderConfig = Field(default_factory=ProviderConfig)
-    ollama: OllamaConfig = Field(default_factory=OllamaConfig)
+    gemini: ProviderConfig = Field(default_factory=lambda: ProviderConfig())
+    anthropic: ProviderConfig = Field(default_factory=lambda: ProviderConfig())
+    xai: ProviderConfig = Field(default_factory=lambda: ProviderConfig())
+    litellm: ProviderConfig = Field(default_factory=lambda: ProviderConfig())
+    ollama: OllamaConfig = Field(default_factory=lambda: OllamaConfig())
 
     # Feature configs
-    session: SessionConfig = Field(default_factory=SessionConfig)
-    retry: RetryConfig = Field(default_factory=RetryConfig)
-    vector_stores: VectorStoreConfig = Field(default_factory=VectorStoreConfig)
-    history: HistoryStorageConfig = Field(default_factory=HistoryStorageConfig)
-    tools: ToolsConfig = Field(default_factory=ToolsConfig)
-    features: FeaturesConfig = Field(default_factory=FeaturesConfig)
-    backup: BackupConfig = Field(default_factory=BackupConfig)
-    security: SecurityConfig = Field(default_factory=SecurityConfig)
-    services: ServicesConfig = Field(default_factory=ServicesConfig)
-    dev: DevConfig = Field(default_factory=DevConfig)
+    session: SessionConfig = Field(default_factory=lambda: SessionConfig())
+    retry: RetryConfig = Field(default_factory=lambda: RetryConfig())
+    vector_stores: VectorStoreConfig = Field(
+        default_factory=lambda: VectorStoreConfig()
+    )
+    history: HistoryStorageConfig = Field(
+        default_factory=lambda: HistoryStorageConfig()
+    )
+    tools: ToolsConfig = Field(default_factory=lambda: ToolsConfig())
+    cli_agent: CLIAgentConfig = Field(default_factory=lambda: CLIAgentConfig())
+    features: FeaturesConfig = Field(default_factory=lambda: FeaturesConfig())
+    backup: BackupConfig = Field(default_factory=lambda: BackupConfig())
+    security: SecurityConfig = Field(default_factory=lambda: SecurityConfig())
+    services: ServicesConfig = Field(default_factory=lambda: ServicesConfig())
+    dev: DevConfig = Field(default_factory=lambda: DevConfig())
 
     # Testing - backward compatibility alias
     @property
@@ -737,3 +769,43 @@ def _deep_merge(a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, Any]:
 def get_settings() -> Settings:
     """Get cached settings instance."""
     return Settings()
+
+
+def get_project_dir() -> str:
+    """Get the project directory for CLI agents.
+
+    Priority order:
+    1. MCP_PROJECT_DIR environment variable (set by MCP client config)
+    2. Config file location (.mcp-the-force/config.yaml parent)
+    3. Current working directory with .mcp-the-force folder
+    4. Current working directory fallback
+
+    The MCP_PROJECT_DIR env var is the recommended approach when using
+    `uv run --directory` to run the MCP server from a different location
+    than the target project.
+
+    Returns:
+        Project directory path.
+    """
+    # Priority 1: Explicit environment variable (recommended for MCP config)
+    env_project_dir = os.getenv("MCP_PROJECT_DIR")
+    if env_project_dir:
+        return env_project_dir
+
+    # Priority 2: Config file location
+    settings = get_settings()
+    if settings._last_config_path:
+        # Config is at .mcp-the-force/config.yaml, so parent.parent is project dir
+        # Must resolve to absolute path first - relative paths give wrong parent
+        config_path = Path(settings._last_config_path).resolve()
+        project_dir = config_path.parent.parent
+        return str(project_dir)
+
+    # Priority 3: Look for .mcp-the-force folder in CWD
+    cwd = Path.cwd()
+    mcp_folder = cwd / ".mcp-the-force"
+    if mcp_folder.exists():
+        return str(cwd)
+
+    # Priority 4: Fallback to CWD
+    return str(cwd)

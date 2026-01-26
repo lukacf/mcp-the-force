@@ -89,8 +89,9 @@ class TestGrokAdapterUnit:
                 assert result["content"] == "Hello! How can I help you today?"
 
                 # Verify adapter called session cache correctly
+                # Note: Session key is now (project, session_id) - no tool in key
                 mock_cache_class.get_history.assert_called_once_with(
-                    "test-project", "chat_with_grok41", "test-session-simple"
+                    "test-project", "test-session-simple"
                 )
                 mock_cache_class.set_history.assert_called_once()
 
@@ -228,17 +229,16 @@ class TestGrokAdapterUnit:
                 )
 
                 # Verify session cache was called with correct session ID
+                # Note: Session key is now (project, session_id) - no tool in key
                 mock_cache_class.get_history.assert_called_once_with(
-                    "test-project", "chat_with_grok41", "test-session-123"
+                    "test-project", "test-session-123"
                 )
                 mock_cache_class.set_history.assert_called_once()
 
                 # Check that history was stored with correct session ID
                 call_args = mock_cache_class.set_history.call_args
-                # Arguments are now: project, tool, session_id, history
+                # Arguments are now: project, session_id, history (no tool)
                 project_arg = call_args[0][0]
-                tool_arg = call_args[0][1]
-                session_id_arg = call_args[0][2]
+                session_id_arg = call_args[0][1]
                 assert project_arg == "test-project"
-                assert tool_arg == "chat_with_grok41"
                 assert session_id_arg == "test-session-123"

@@ -2,7 +2,7 @@
 
 import json
 import uuid
-from typing import Optional, Tuple
+from typing import Optional
 from ..unified_session_cache import (
     _get_instance as get_cache_instance,
     UnifiedSessionCache,
@@ -14,22 +14,23 @@ from ..config import get_settings
 class DescribeSessionService:
     """Service for generating AI-powered summaries of sessions."""
 
-    async def _find_session_context(self, session_id: str) -> Optional[Tuple[str, str]]:
-        """Find the project and tool for a session by its ID.
+    async def _find_session_project(self, session_id: str) -> Optional[str]:
+        """Find the project for a session by its ID.
 
         Returns:
-            Tuple of (project, tool) if found, None otherwise
+            Project name if found, None otherwise
         """
         cache = get_cache_instance()
 
         # Query to find the session by ID only
         rows = await cache._execute_async(
-            "SELECT project, tool FROM unified_sessions WHERE session_id = ? LIMIT 1",
+            "SELECT project FROM unified_sessions WHERE session_id = ? LIMIT 1",
             (session_id,),
         )
 
         if rows:
-            return (rows[0][0], rows[0][1])
+            result: str = rows[0][0]
+            return result
         return None
 
     async def execute(self, session_id: str, **kwargs) -> str:
@@ -52,27 +53,21 @@ class DescribeSessionService:
         if model_to_use == "describe_session":
             return "Error: Recursive summarization is not allowed."
 
-        # First, find the session context
-        session_context = await self._find_session_context(session_id)
-        if not session_context:
+        # First, find the session's project
+        project = await self._find_session_project(session_id)
+        if not project:
             return f"Error: Session '{session_id}' not found."
-
-        project, tool = session_context
 
         # Check if we have a cached summary (unless clear_cache is True)
         clear_cache = kwargs.get("clear_cache", False)
         if not clear_cache:
-            cached_summary = await UnifiedSessionCache.get_summary(
-                project, tool, session_id
-            )
+            cached_summary = await UnifiedSessionCache.get_summary(project, session_id)
             if cached_summary:
                 return cached_summary
 
         # Cache miss - need to generate summary
         # 1. Get the original session
-        original_session = await UnifiedSessionCache.get_session(
-            project, tool, session_id
-        )
+        original_session = await UnifiedSessionCache.get_session(project, session_id)
         if not original_session:
             return f"Error: Session '{session_id}' not found in cache."
 
@@ -80,7 +75,6 @@ class DescribeSessionService:
         temp_session_id = f"temp-summary-{session_id}-{uuid.uuid4().hex[:8]}"
         temp_session = UnifiedSession(
             project=original_session.project,
-            tool=model_to_use,  # FIX: Use the summarization model's name, not the original tool
             session_id=temp_session_id,
             updated_at=original_session.updated_at,
             history=original_session.history.copy(),
@@ -392,12 +386,10 @@ Generate a structured JSON summary of this conversation following the schema and
                 )
 
             # 5. Cache the summary under the original session ID
-            await UnifiedSessionCache.set_summary(project, tool, session_id, summary)
+            await UnifiedSessionCache.set_summary(project, session_id, summary)
 
             return summary
 
         finally:
-            # Clean up the temporary session using the correct tool name
-            await UnifiedSessionCache.delete_session(
-                project, model_to_use, temp_session_id
-            )
+            # Clean up the temporary session
+            await UnifiedSessionCache.delete_session(project, temp_session_id)

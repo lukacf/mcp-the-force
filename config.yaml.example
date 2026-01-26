@@ -13,7 +13,7 @@ mcp:
   context_percentage: 0.85
   default_temperature: 1.0  # 0=deterministic, 2=creative
   thread_pool_workers: 10
-  default_vector_store_provider: openai  # Options: openai, hnsw, inmemory, pinecone
+  default_vector_store_provider: hnsw  # Options: hnsw (local), openai, inmemory, pinecone
 
 # Provider configuration
 # API keys should go in secrets.yaml, not here
@@ -71,6 +71,21 @@ session:
   ttl_seconds: 15552000  # 6 months
   db_path: .mcp_sessions.sqlite3
   cleanup_probability: 0.01  # 1% chance to cleanup expired sessions
+
+# CLI agents configuration (work_with tool)
+cli_agents:
+  # Default execution timeout in seconds
+  timeout: 300
+  # Default role for system prompts (default, planner, codereviewer)
+  default_role: default
+  # Default reasoning effort level (low, medium, high, xhigh)
+  default_reasoning_effort: medium
+  # Session bridge database path for CLI session ID mapping
+  session_db_path: ~/.mcp-the-force/cli_sessions.db
+  # Compactor settings for cross-tool context handoff
+  compactor:
+    timeout: 90  # Timeout per compaction attempt
+    target_tokens: 30000  # Target token count for compacted history
 
 # Vector store lifecycle management
 vector_stores:

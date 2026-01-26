@@ -139,15 +139,20 @@ To enforce code quality and prevent regressions, the repository uses pre-commit 
 │  │  │ Capability   │  │    Parameter    │  │   Tool Factory   │   │   │
 │  │  │  Validator   │  │     Router      │  │    (autogen)     │   │   │
 │  │  └──────────────┘  └─────────────────┘  └──────────────────┘   │   │
-│  └───────────────────────────────┬────────────────────────────────┘   │
-│                                  │                                    │
-│  ┌───────────────────────────────┴────────────────────────────────┐   │
-│  │                        Adapter Registry                        │   │
-│  │  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────────────┐    │   │
-│  │  │  OpenAI │  │  Gemini │  │   xAI   │  │    Anthropic    │    │   │
-│  │  │ Adapter │  │ Adapter │  │ Adapter │  │     Adapter     │    │   │
-│  │  └─────────┘  └─────────┘  └─────────┘  └─────────────────┘    │   │
-│  └───────────────────────────────┬────────────────────────────────┘   │
+│  └───────────────────┬────────────────────────────┬───────────────┘   │
+│                      │                            │                   │
+│         ┌────────────┴────────────┐  ┌────────────┴───────────────┐   │
+│         │   CLI Agent Executor    │  │      Adapter Registry      │   │
+│         │      (work_with)        │  │     (consult_with, etc)    │   │
+│         └────────────┬────────────┘  └────────────┬───────────────┘   │
+│                      │                            │                   │
+│  ┌───────────────────┴────────────┐  ┌────────────┴───────────────┐   │
+│  │          CLI Plugins           │  │         Adapters           │   │
+│  │  ┌────────┐ ┌───────┐ ┌─────┐  │  │ ┌──────┐ ┌──────┐ ┌─────┐  │   │
+│  │  │ Claude │ │Gemini │ │Codex│  │  │ │OpenAI│ │Gemini│ │ xAI │  │   │
+│  │  │  Code  │ │  CLI  │ │ CLI │  │  │ │  API │ │  API │ │ API │  │   │
+│  │  └────────┘ └───────┘ └─────┘  │  │ └──────┘ └──────┘ └─────┘  │   │
+│  └────────────────────────────────┘  └────────────────────────────┘   │
 │                                  │                                    │
 │  ┌───────────────────────────────┴────────────────────────────────┐   │
 │  │                      Context Management                        │   │
@@ -163,9 +168,9 @@ To enforce code quality and prevent regressions, the repository uses pre-commit 
 │  │  │ UnifiedSession  │  │   VectorStore   │  │  Long-term   │    │   │
 │  │  │  Cache (SQLite) │  │    Manager      │  │    History   │    │   │
 │  │  └─────────────────┘  └─────────────────┘  └──────────────┘    │   │
-│  └───────────────────────────────────────────────────────┬────────┘   │
-│                                                           │            │
-│  ┌────────────────────────────────────────────────────────┴───────┐   │
+│  └───────────────────────────────────────────────────┬────────────┘   │
+│                                                       │               │
+│  ┌───────────────────────────────────────────────────┴────────────┐   │
 │  │                    Logging & Debugging                         │   │
 │  │  ┌─────────────────┐  ┌─────────────────┐                      │   │
 │  │  │  VictoriaLogs   │  │   LogsQL Tool   │                      │   │
@@ -178,11 +183,44 @@ To enforce code quality and prevent regressions, the repository uses pre-commit 
 <details>
 <summary>Adapters</summary>
 
-`mcp_the_force/adapters/` defines how MCP The-Force communicates with different AI providers.
+`mcp_the_force/adapters/` defines how MCP The-Force communicates with different AI providers via their APIs.
 
 - All adapters implement the `MCPAdapter` protocol for seamless swapping
 - The central registry (`registry.py`) is the single truth source for available adapters
 - Each adapter owns its definitions, capabilities and implementations as a self-contained package
+- Used by `consult_with` and internal `chat_with_*` tools for API-based model access
+</details>
+
+<details>
+<summary>CLI Agents</summary>
+
+`mcp_the_force/cli_agents/` enables the `work_with` tool to spawn external CLI agents that can read files, run commands, and take autonomous action.
+
+**Core Components:**
+- `executor.py`: Main orchestration - spawns CLI processes, captures output, handles timeouts
+- `model_cli_resolver.py`: Maps model names (e.g., `claude-sonnet-4-5`) to CLI tools (e.g., Claude Code)
+- `session_bridge.py`: Maps unified session IDs to CLI-specific session states (SQLite-backed)
+- `compactor.py`: Compacts conversation history for cross-tool handoff when switching between CLI agents
+- `summarizer.py`: AI-powered conversation summarization for context injection
+- `environment.py`: Manages execution environment (working directory, env vars)
+- `roles.py`: System prompt roles (`default`, `planner`, `codereviewer`)
+- `availability.py`: Detects which CLIs are installed and available
+
+**CLI Plugins** (`mcp_the_force/cli_plugins/`):
+Each supported CLI has a self-contained plugin:
+- `claude/`: Claude Code plugin - uses `--resume` for session continuity
+- `gemini/`: Gemini CLI plugin - uses `--session` for continuity
+- `codex/`: Codex CLI plugin - uses `--conversation-id` for continuity
+- `base.py`: Base plugin protocol that all plugins implement
+- `registry.py`: Plugin registration and discovery
+
+**How it works:**
+1. `work_with` receives a model name and task
+2. `model_cli_resolver` maps the model to an available CLI
+3. `session_bridge` retrieves or creates CLI-specific session state
+4. The appropriate CLI plugin builds the command with proper flags
+5. `executor` spawns the process, streams output, and captures the result
+6. Session state is updated for future continuation
 </details>
 
 <details>
@@ -240,17 +278,41 @@ The `UnifiedSessionCache` enables stateful conversations:
 ## Extending MCP The-Force
 
 <details>
-<summary>Adding a New Adapter</summary>
+<summary>Adding a New Adapter (for consult_with)</summary>
 
-To add support for a new AI provider "Mistral":
+To add support for a new AI provider "Mistral" for API-based access via `consult_with`:
 
 1. Create `mcp_the_force/adapters/mistral/` with `__init__.py`, `adapter.py`, `definitions.py`
-2. Define capabilities, parameters, tool blueprints in `definitions.py`  
+2. Define capabilities, parameters, tool blueprints in `definitions.py`
 3. Implement `MCPAdapter` protocol in `adapter.py` for Mistral API calls
 4. Expose adapter class and definitions in `__init__.py`
 5. Add adapter to `mcp_the_force/adapters/registry.py`
 
-The system will automatically pick up the new adapter and generate corresponding tool classes.  
+The system will automatically pick up the new adapter and generate corresponding tool classes.
+</details>
+
+<details>
+<summary>Adding a New CLI Plugin (for work_with)</summary>
+
+To add support for a new CLI tool (e.g., "Cursor CLI") for agentic access via `work_with`:
+
+1. Create `mcp_the_force/cli_plugins/cursor/` with `__init__.py`, `plugin.py`, `parser.py`
+2. Implement the `CLIPlugin` protocol in `plugin.py`:
+   ```python
+   class CursorPlugin(CLIPlugin):
+       name = "cursor"
+
+       def build_command(self, task: str, session_state: dict, env: Environment) -> list[str]:
+           # Return command args: ["cursor", "--prompt", task, ...]
+
+       def get_session_flag(self, session_id: str) -> list[str]:
+           # Return session continuity flags: ["--session", session_id]
+   ```
+3. Implement output parsing in `parser.py` to extract the assistant response
+4. Register the plugin in `mcp_the_force/cli_plugins/registry.py`
+5. Add model-to-CLI mappings in `mcp_the_force/cli_agents/model_cli_resolver.py`
+
+The `work_with` tool will automatically detect and use the new CLI when available.
 </details>
 
 <details>

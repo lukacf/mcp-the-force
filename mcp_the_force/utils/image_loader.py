@@ -243,7 +243,7 @@ async def _resolve_hostname(hostname: str) -> List[str]:
 
         # Extract unique IP addresses and sort for deterministic ordering
         # Using a set for uniqueness, then sorting for reproducibility
-        ips = sorted({result[4][0] for result in results})
+        ips: List[str] = sorted({str(result[4][0]) for result in results})
         return ips
 
     except asyncio.TimeoutError:
@@ -633,6 +633,10 @@ class _SafeResolver:
         self.resolved_ips = resolved_ips
         self.port = port
 
+    async def close(self) -> None:
+        """Close the resolver (required by aiohttp AbstractResolver interface)."""
+        pass
+
     async def resolve(
         self, host: str, port: int = 0, family: int = socket.AF_INET
     ) -> List[dict]:
@@ -671,10 +675,6 @@ class _SafeResolver:
 
         # For any other hostname (shouldn't happen), raise error
         raise OSError(f"DNS rebinding attempt blocked: unexpected hostname '{host}'")
-
-    async def close(self) -> None:
-        """Required by aiohttp but we have nothing to clean up."""
-        pass
 
 
 async def _load_from_url(url: str, max_size_bytes: int) -> LoadedImage:
@@ -722,7 +722,7 @@ async def _load_from_url(url: str, max_size_bytes: int) -> LoadedImage:
                 current_hostname, current_resolved_ips, current_port
             )
             connector = aiohttp.TCPConnector(
-                resolver=safe_resolver,
+                resolver=safe_resolver,  # type: ignore[arg-type]  # Custom resolver with compatible API
                 ttl_dns_cache=0,
                 use_dns_cache=False,
             )

@@ -213,13 +213,13 @@ def content_to_responses(content: types.Content) -> List[Dict[str, Any]]:
     Returns:
         List of Responses API format dictionaries
     """
-    items = []
+    items: List[Dict[str, Any]] = []
     role = content.role if content.role else "model"
     responses_role = "user" if role == "user" else "assistant"
 
-    text_parts = []
-    function_calls = []
-    function_responses = []
+    text_parts: List[Dict[str, str]] = []
+    function_calls: List[Dict[str, Any]] = []
+    function_responses: List[Dict[str, Any]] = []
 
     for part in content.parts or []:
         if part.text:

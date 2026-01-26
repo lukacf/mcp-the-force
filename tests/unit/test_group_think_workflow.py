@@ -3,13 +3,9 @@
 import pytest
 import asyncio
 from unittest.mock import AsyncMock, Mock, patch
-import time
 
 from mcp_the_force.local_services.collaboration_service import CollaborationService
-from mcp_the_force.types.collaboration import (
-    CollaborationSession,
-    DeliverableContract,
-)
+from mcp_the_force.types.collaboration import DeliverableContract
 
 
 class TestGroupThinkMultiPhaseWorkflow:
@@ -56,21 +52,13 @@ class TestGroupThinkMultiPhaseWorkflow:
         # Simple mock that returns consistent responses
         mock_executor.execute.return_value = "Mock model response"
 
-        # Mock progress component installation and config
+        # Mock config
         with (
-            patch.object(
-                service, "_ensure_progress_components_installed", new_callable=AsyncMock
-            ) as mock_installer,
             patch("mcp_the_force.config.get_settings") as mock_settings,
             patch.object(
                 service, "_get_tool_metadata", return_value=mock_tool_metadata
             ),
-            patch("pathlib.Path.mkdir"),  # Mock progress file operations
-            patch("builtins.open", create=True),
-            patch("json.dump"),
-            patch("pathlib.Path.exists", return_value=False),
         ):
-            mock_installer.return_value = None
             mock_settings.return_value.logging.project_path = "/test/mcp-the-force"
 
             result = await service.execute(
@@ -125,13 +113,7 @@ class TestGroupThinkMultiPhaseWorkflow:
 
         mock_executor.execute = mock_execute
 
-        with (
-            patch.object(
-                service, "_ensure_progress_components_installed", new_callable=AsyncMock
-            ) as mock_installer,
-            patch("mcp_the_force.config.get_settings") as mock_settings,
-        ):
-            mock_installer.return_value = None
+        with patch("mcp_the_force.config.get_settings") as mock_settings:
             mock_settings.return_value.logging.project_path = "/test/mcp-the-force"
 
             await service.execute(
@@ -181,13 +163,7 @@ class TestGroupThinkMultiPhaseWorkflow:
 
         mock_executor.execute = mock_execute
 
-        with (
-            patch.object(
-                service, "_ensure_progress_components_installed", new_callable=AsyncMock
-            ) as mock_installer,
-            patch("mcp_the_force.config.get_settings") as mock_settings,
-        ):
-            mock_installer.return_value = None
+        with patch("mcp_the_force.config.get_settings") as mock_settings:
             mock_settings.return_value.logging.project_path = "/test/mcp-the-force"
 
             await service.execute(
@@ -235,13 +211,7 @@ class TestGroupThinkMultiPhaseWorkflow:
 
         mock_executor.execute = mock_execute
 
-        with (
-            patch.object(
-                service, "_ensure_progress_components_installed", new_callable=AsyncMock
-            ) as mock_installer,
-            patch("mcp_the_force.config.get_settings") as mock_settings,
-        ):
-            mock_installer.return_value = None
+        with patch("mcp_the_force.config.get_settings") as mock_settings:
             mock_settings.return_value.logging.project_path = "/test/mcp-the-force"
 
             await service.execute(
@@ -296,13 +266,7 @@ class TestGroupThinkMultiPhaseWorkflow:
         }
         mock_executor.execute.return_value = "Continued response"
 
-        with (
-            patch.object(
-                service, "_ensure_progress_components_installed", new_callable=AsyncMock
-            ) as mock_installer,
-            patch("mcp_the_force.config.get_settings") as mock_settings,
-        ):
-            mock_installer.return_value = None
+        with patch("mcp_the_force.config.get_settings") as mock_settings:
             mock_settings.return_value.logging.project_path = "/test/mcp-the-force"
 
             result = await service.execute(
@@ -355,58 +319,6 @@ class TestCollaborationServiceUnitMethods:
                 objective="Test", output_format="", user_input="", session_id="test"
             )
 
-    def test_write_progress_file(self, service):
-        """Test progress file creation and content."""
-        session = CollaborationSession(
-            session_id="progress-test",
-            objective="Test progress",
-            models=["chat_with_gpt52_pro"],
-            messages=[],
-            current_step=2,
-            mode="round_robin",
-            max_steps=5,
-            status="active",
-        )
-
-        with (
-            patch("pathlib.Path.mkdir"),
-            patch("builtins.open", create=True) as mock_open,
-            patch("json.dump") as mock_json_dump,
-        ):
-            service._write_progress_file(
-                session=session,
-                current_model="chat_with_gpt52_pro",
-                phase="discussing",
-                start_time=time.time() - 60,  # 60 seconds ago
-                total_phases=5,
-            )
-
-        # Verify file was written
-        mock_open.assert_called_once()
-        mock_json_dump.assert_called_once()
-
-        # Verify progress data structure
-        progress_data = mock_json_dump.call_args[0][0]
-        assert progress_data["owner"] == "Chatter"
-        assert progress_data["session_id"] == "progress-test"
-        assert progress_data["phase"] == "discussing"
-        assert progress_data["step"] == 2
-        assert progress_data["total"] == 5
-        assert progress_data["percent"] == 40  # 2/5 * 100
-        assert progress_data["current_model"] == "chat_with_gpt52_pro"
-        assert "eta_s" in progress_data
-
-    def test_cleanup_progress_file(self, service):
-        """Test progress file cleanup."""
-        with (
-            patch("pathlib.Path.exists", return_value=True) as mock_exists,
-            patch("pathlib.Path.unlink") as mock_unlink,
-        ):
-            service._cleanup_progress_file()
-
-        mock_exists.assert_called_once()
-        mock_unlink.assert_called_once()
-
 
 class TestGroupThinkErrorScenarios:
     """Test error handling and recovery scenarios."""
@@ -440,13 +352,7 @@ class TestGroupThinkErrorScenarios:
         # Mock timeout exception
         mock_executor.execute.side_effect = asyncio.TimeoutError("Model timed out")
 
-        with (
-            patch.object(
-                service, "_ensure_progress_components_installed", new_callable=AsyncMock
-            ) as mock_installer,
-            patch("mcp_the_force.config.get_settings") as mock_settings,
-        ):
-            mock_installer.return_value = None
+        with patch("mcp_the_force.config.get_settings") as mock_settings:
             mock_settings.return_value.logging.project_path = "/test/mcp-the-force"
 
             result = await service.execute(
@@ -471,38 +377,6 @@ class TestGroupThinkErrorScenarios:
             print(f"Call {i}: {call}")
 
         # The service should attempt to mark session as failed in the error handler
-
-    @pytest.mark.asyncio
-    async def test_progress_component_installation_failure(self, collaboration_service):
-        """Test that collaboration continues even if progress installation fails."""
-        service, mock_executor, mock_whiteboard, mock_session_cache = (
-            collaboration_service
-        )
-
-        mock_whiteboard.get_or_create_store.return_value = {
-            "store_id": "vs_test",
-            "provider": "openai",
-        }
-        mock_session_cache.get_metadata.return_value = None
-        mock_executor.execute.return_value = "Success despite installer failure"
-
-        # Mock installer failure
-        with patch.object(
-            service,
-            "_ensure_progress_components_installed",
-            side_effect=Exception("Installer failed"),
-        ):
-            result = await service.execute(
-                session_id="installer-failure-test",
-                objective="Test installer failure handling",
-                models=["chat_with_gpt52_pro"],
-                output_format="Test result",
-                discussion_turns=1,
-                validation_rounds=0,
-            )
-
-        # Verify collaboration succeeded despite installer failure
-        assert "Success despite installer failure" in result
 
 
 if __name__ == "__main__":

@@ -34,3 +34,19 @@ def get_adapter_class(key: str) -> Type[Any]:
 def list_adapters() -> list[str]:
     """List all registered adapter keys."""
     return list(_ADAPTER_REGISTRY.keys())
+
+
+def get_adapter_metadata(model_name: str) -> Any:
+    """
+    Get adapter metadata for a model name.
+
+    Args:
+        model_name: The model identifier (e.g., "gpt-5.2", "claude-sonnet-4-5")
+
+    Returns:
+        Adapter metadata including blueprint with cli attribute
+
+    Note:
+        This is a Phase 2 implementation. Currently raises NotImplementedError.
+    """
+    raise NotImplementedError("get_adapter_metadata not implemented")

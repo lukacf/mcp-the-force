@@ -335,7 +335,6 @@ Conversation to summarize:
 
         await UnifiedSessionCache.delete_session(
             project="history-system",
-            tool="gemini3_flash_preview",
             session_id=unique_session_id,
         )
         logger.debug(f"Cleaned up temporary summarization session: {unique_session_id}")

@@ -53,8 +53,8 @@ def _ensure_litellm_header_patch() -> None:
 
         return await _orig_acompletion(*args, **kwargs)
 
-    litellm.acompletion = _acompletion_with_ctx_headers  # type: ignore
-    litellm._mcp_header_patch_installed = True
+    litellm.acompletion = _acompletion_with_ctx_headers  # type: ignore[assignment]
+    litellm._mcp_header_patch_installed = True  # type: ignore[attr-defined]
 
 
 def _sanitize_conversation_input(conversation_input: List[Dict[str, Any]]) -> None:
@@ -329,7 +329,7 @@ def _update_litellm_model_limits() -> None:
                     f"Updated {key} max_input_tokens: {old_limit} -> 1,000,000"
                 )
 
-        litellm._mcp_model_limits_patched = True
+        litellm._mcp_model_limits_patched = True  # type: ignore[attr-defined]
 
     except Exception as e:
         logger.warning(f"Failed to update LiteLLM model limits: {e}")
@@ -384,19 +384,18 @@ class LiteLLMBaseAdapter:
         pass
 
     async def _load_session_history(
-        self, project: str, tool: str, session_id: str
+        self, project: str, session_id: str
     ) -> List[Dict[str, Any]]:
         """Load session history from cache.
 
         Args:
             project: Project identifier
-            tool: Tool identifier
             session_id: Session identifier
 
         Returns:
             Conversation history in Responses API format
         """
-        history = await UnifiedSessionCache.get_history(project, tool, session_id)
+        history = await UnifiedSessionCache.get_history(project, session_id)
         if history:
             logger.debug(
                 f"[{self.display_name}] Loaded {len(history)} items from session {session_id}"
@@ -719,7 +718,6 @@ class LiteLLMBaseAdapter:
             # Save to cache
             await UnifiedSessionCache.set_history(
                 ctx.project,
-                ctx.tool,
                 ctx.session_id,
                 sanitized_conversation,
             )
@@ -815,7 +813,7 @@ class LiteLLMBaseAdapter:
             conversation_input = []
             if ctx.session_id:
                 conversation_input = await self._load_session_history(
-                    ctx.project, ctx.tool, ctx.session_id
+                    ctx.project, ctx.session_id
                 )
 
             # Build conversation for current turn

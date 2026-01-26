@@ -3,7 +3,7 @@
 import json
 import os
 from typing import List, Dict, Any, Optional
-from ..config import get_settings
+from ..config import get_project_dir
 from ..unified_session_cache import _get_instance as get_cache_instance
 
 
@@ -21,47 +21,48 @@ class ListSessionsService:
 
         Args:
             limit: Maximum number of sessions to return (default: 5)
-            search: Optional substring search on session_id and tool_name
+            search: Optional substring search on session_id
             include_summary: Whether to include summary in results (default: False)
 
         Returns:
             List of session information
         """
-        # Get current project name
-        settings = get_settings()
-        project_path = settings.logging.project_path or os.getcwd()
+        # Get current project name - use same method as work_with/executor
+        project_path = get_project_dir()
         project_name = os.path.basename(project_path)
 
         # Get cache instance
         cache = get_cache_instance()
 
-        # Build query dynamically
-        params: List[Any] = [project_name]
+        # Build query dynamically - include legacy "." project for backwards compatibility
+        # Some sessions were stored with "." due to a bug with os.path.basename(".")
+        params: List[Any] = [project_name, "."]
 
         # Base query - with optional summary join
+        # Note: Sessions are now keyed by (project, session_id), tool info is per-turn in history
         if include_summary:
             query = """
-                SELECT s.tool as tool_name, s.session_id, ss.summary
+                SELECT s.session_id, ss.summary
                 FROM unified_sessions s
-                LEFT JOIN session_summaries ss 
-                    ON s.project = ss.project AND s.tool = ss.tool AND s.session_id = ss.session_id
-                WHERE s.project = ?
+                LEFT JOIN session_summaries ss
+                    ON s.project = ss.project AND s.session_id = ss.session_id
+                WHERE s.project IN (?, ?)
             """
         else:
             query = """
-                SELECT tool as tool_name, session_id
+                SELECT session_id
                 FROM unified_sessions
-                WHERE project = ?
+                WHERE project IN (?, ?)
             """
 
-        # Add search filter if provided
+        # Add search filter if provided (searches session_id only)
         if search:
             if include_summary:
-                query += " AND (s.session_id LIKE ? OR s.tool LIKE ?)"
+                query += " AND s.session_id LIKE ?"
             else:
-                query += " AND (session_id LIKE ? OR tool LIKE ?)"
+                query += " AND session_id LIKE ?"
             like_pattern = f"%{search}%"
-            params.extend([like_pattern, like_pattern])
+            params.append(like_pattern)
 
         # Add ordering and limit
         if include_summary:
@@ -77,10 +78,10 @@ class ListSessionsService:
         results = []
         if rows:
             for row in rows:
-                session_data = {"tool_name": row[0], "session_id": row[1]}
+                session_data = {"session_id": row[0]}
                 if include_summary:
-                    # The summary is the third column (index 2), may be None
-                    summary_raw = row[2]
+                    # The summary is the second column (index 1), may be None
+                    summary_raw = row[1]
                     if summary_raw:
                         try:
                             # Try to parse as JSON and extract one_liner
